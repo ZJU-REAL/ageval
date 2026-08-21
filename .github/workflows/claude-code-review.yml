@@ -6,6 +6,7 @@ name: Claude Code Review (GLM)
 
 on:
   pull_request:
+    branches: [main, canary, dev]
     types: [opened, synchronize, ready_for_review, reopened]
 
 concurrency:
