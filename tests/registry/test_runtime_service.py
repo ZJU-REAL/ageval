@@ -136,6 +136,15 @@ def _suite_meta(
     return meta, _as_path(tmp_path, archive, f"{suite_run_id}.bin")
 
 
+def _consent(results: ResultService, suite_run_id: str, package_id: str) -> None:
+    results.meta.grant_agent_consent(
+        suite_run_id=suite_run_id,
+        package_id=package_id,
+        granted_by="alice",
+        source="attach",
+    )
+
+
 def _upload(
     results: ResultService,
     tmp_path: Path,
@@ -161,6 +170,7 @@ def test_official_public_suite_appears_community_does_not(tmp_path: Path) -> Non
         dataset_id="official/gaia",
         agent_profiles={"solver": binding},
     )
+    _consent(results, "suite_official", "official/http-default")
     _upload(
         results,
         tmp_path,
@@ -168,6 +178,7 @@ def test_official_public_suite_appears_community_does_not(tmp_path: Path) -> Non
         dataset_id="acme/looks-official",
         agent_profiles={"solver": binding},
     )
+    _consent(results, "suite_community", "official/http-default")
     auth = TokenInfo(scopes=frozenset(), user_id="")
     rows = runtimes.appearances_for_agent("official/http-default", auth)
     assert [r["suite_run_id"] for r in rows] == ["suite_official"]
@@ -250,6 +261,7 @@ def test_two_agents_same_entry_stay_separate(tmp_path: Path) -> None:
         dataset_id="official/gaia",
         agent_profiles={"solver": _bound("official/foo", entry="claude-code")},
     )
+    _consent(results, "suite_a", "official/foo")
     _upload(
         results,
         tmp_path,
@@ -257,6 +269,7 @@ def test_two_agents_same_entry_stay_separate(tmp_path: Path) -> None:
         dataset_id="official/gaia",
         agent_profiles={"solver": _bound("official/bar", entry="claude-code")},
     )
+    _consent(results, "suite_b", "official/bar")
     auth = TokenInfo(scopes=frozenset(), user_id="")
     foo = runtimes.appearances_for_agent("official/foo", auth)
     bar = runtimes.appearances_for_agent("official/bar", auth)
@@ -274,6 +287,7 @@ def test_versions_group_on_same_package(tmp_path: Path) -> None:
         dataset_id="official/gaia",
         agent_profiles={"solver": _bound("official/foo", version="0.1.0")},
     )
+    _consent(results, "suite_v1", "official/foo")
     _upload(
         results,
         tmp_path,
@@ -281,6 +295,7 @@ def test_versions_group_on_same_package(tmp_path: Path) -> None:
         dataset_id="official/gaia",
         agent_profiles={"solver": _bound("official/foo", version="0.2.0")},
     )
+    _consent(results, "suite_v2", "official/foo")
     rows = runtimes.appearances_for_agent("official/foo", TokenInfo(scopes=frozenset(), user_id=""))
     versions = {r["suite_run_id"]: r["agent_version"] for r in rows}
     assert versions == {"suite_v1": "0.1.0", "suite_v2": "0.2.0"}
@@ -338,6 +353,8 @@ def test_appearance_overlays_and_teammates(tmp_path: Path) -> None:
         pass_rate=0.5,
         mean_score=0.5,
     )
+    _consent(results, "suite_overlays", "official/foo")
+    _consent(results, "suite_overlays", "official/bar")
     auth = TokenInfo(scopes=frozenset(), user_id="")
     foo = runtimes.appearances_for_agent("official/foo", auth)
     assert len(foo) == 1
@@ -383,6 +400,7 @@ def test_appearances_on_package_versions(tmp_path: Path) -> None:
         dataset_id="official/gaia",
         agent_profiles={"solver": _bound("official/http-default")},
     )
+    _consent(results, "suite_pkg", "official/http-default")
     state, token = build_default_state(tmp_path / "http2", bootstrap_token="tok", memory_blob=True)
     # Reuse the same sqlite? build_default_state is a new empty registry.
     # Call the service directly for this assertion; HTTP wiring is covered above.
@@ -391,3 +409,19 @@ def test_appearances_on_package_versions(tmp_path: Path) -> None:
     )
     assert rows[0]["agent_version"] == "0.1.0"
     assert rows[0]["package_id"] == "official/http-default"
+
+
+def test_agent_ref_without_consent_does_not_appear(tmp_path: Path) -> None:
+    packages, results, runtimes = _services(tmp_path)
+    _publish(packages, tmp_path, dataset_id="official/gaia", org_id="official")
+    _upload(
+        results,
+        tmp_path,
+        suite_run_id="suite_no_consent",
+        dataset_id="official/gaia",
+        agent_profiles={"solver": _bound("official/http-default")},
+    )
+    auth = TokenInfo(scopes=frozenset(), user_id="")
+    assert runtimes.appearances_for_agent("official/http-default", auth) == []
+    suites = results.list_suites(auth=auth, dataset_id=None)
+    assert "agent_refs" not in suites["items"][0]

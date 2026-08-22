@@ -395,15 +395,15 @@ export function AgentDetailPage() {
           <section className="space-y-3">
             <h2 className="text-sm font-medium text-ink">Appearances</h2>
             <p className="text-xs text-mute">
-              Official public complete release-bound suites that named this Agent
-              via <span className="font-mono">agent_ref</span>. Observational
-              metrics only — PASS stays on the independent evaluator.
+              Official public complete release-bound suites with this Agent org’s
+              consent (direct attach or an approved appearance request).
+              Observational metrics only — PASS stays on the independent evaluator.
             </p>
             {appearancesByVersion.length === 0 ? (
               <p className="text-sm text-mute">
-                No Hub appearances yet. Run with{" "}
-                <span className="font-mono">--agent {agentId}@&lt;version&gt;</span>{" "}
-                and upload a complete official suite.
+                No Hub appearances yet. Attach a published{" "}
+                <span className="font-mono">org/name@version</span> as this
+                Agent’s org owner, or approve an appearance request.
               </p>
             ) : (
               appearancesByVersion.map(([version, rows]) => (

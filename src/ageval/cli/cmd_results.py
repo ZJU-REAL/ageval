@@ -560,4 +560,133 @@ def register(app: typer.Typer) -> None:
             raise typer.Exit(code=2) from exc
         typer.echo(json.dumps(summary, ensure_ascii=False, separators=(",", ":"), sort_keys=True))
 
+    @sub.command("attach-agent")
+    def results_attach_agent_command(
+        suite_run: Annotated[
+            str,
+            typer.Option("--suite-run", help="Uploaded suite_run_id on the Registry."),
+        ],
+        agent: Annotated[
+            str,
+            typer.Option(
+                "--agent",
+                help="Published org/name@version (optional role= prefix, like run --agent).",
+            ),
+        ],
+        role: Annotated[
+            str | None,
+            typer.Option("--role", help="Attach one overlay role only."),
+        ] = None,
+        registry_url: Annotated[
+            str | None,
+            typer.Option("--registry-url", help="Override registry / results URL."),
+        ] = None,
+    ) -> None:
+        """Stamp a published agent_ref onto a stored suite overlay after upload."""
+        from ageval.application.composition import build_results_commands
+
+        attach_suite_agent = build_results_commands().attach_suite_agent
+        from ageval.config.errors import ConfigError
+
+        try:
+            summary = attach_suite_agent(
+                suite_run_id=suite_run,
+                agent=agent,
+                role=role,
+                registry_url=registry_url,
+            )
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        typer.echo(json.dumps(summary, ensure_ascii=False, separators=(",", ":"), sort_keys=True))
+
+    @sub.command("request")
+    def results_request_command(
+        kind: Annotated[
+            str,
+            typer.Option("--kind", help="leaderboard_list | agent_appearance"),
+        ],
+        suite_run: Annotated[
+            str,
+            typer.Option("--suite-run", help="Uploaded suite_run_id."),
+        ],
+        agent: Annotated[
+            str | None,
+            typer.Option("--agent", help="Published org/name@version (appearance kind)."),
+        ] = None,
+        registry_url: Annotated[
+            str | None,
+            typer.Option("--registry-url", help="Override registry / results URL."),
+        ] = None,
+    ) -> None:
+        """Apply for Public board listing or Agent appearance consent."""
+        from ageval.application.composition import build_results_commands
+
+        apply_request = build_results_commands().apply_request
+        from ageval.config.errors import ConfigError
+
+        try:
+            summary = apply_request(
+                kind=kind,
+                suite_run_id=suite_run,
+                agent=agent,
+                registry_url=registry_url,
+            )
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        typer.echo(json.dumps(summary, ensure_ascii=False, separators=(",", ":"), sort_keys=True))
+
+    @sub.command("inbox")
+    def results_inbox_command(
+        registry_url: Annotated[
+            str | None,
+            typer.Option("--registry-url", help="Override registry / results URL."),
+        ] = None,
+    ) -> None:
+        """List pending listing and appearance requests this caller can decide."""
+        from ageval.application.composition import build_results_commands
+
+        list_inbox = build_results_commands().list_inbox
+        from ageval.config.errors import ConfigError
+
+        try:
+            summary = list_inbox(registry_url=registry_url)
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        typer.echo(json.dumps(summary, ensure_ascii=False, separators=(",", ":"), sort_keys=True))
+
+    @sub.command("decide")
+    def results_decide_command(
+        request_id: Annotated[
+            list[str] | None,
+            typer.Option("--id", help="Request id (repeatable)."),
+        ] = None,
+        action: Annotated[
+            str,
+            typer.Option("--action", help="approve | reject"),
+        ] = "approve",
+        registry_url: Annotated[
+            str | None,
+            typer.Option("--registry-url", help="Override registry / results URL."),
+        ] = None,
+    ) -> None:
+        """Approve or reject pending Inbox requests (same use case as Hub)."""
+        from ageval.application.composition import build_results_commands
+
+        decide_requests = build_results_commands().decide_requests
+        from ageval.config.errors import ConfigError
+
+        try:
+            summary = decide_requests(
+                ids=request_id or [],
+                action=action,
+                registry_url=registry_url,
+            )
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        typer.echo(json.dumps(summary, ensure_ascii=False, separators=(",", ":"), sort_keys=True))
+
     app.add_typer(sub, name="results")

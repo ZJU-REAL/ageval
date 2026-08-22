@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -617,12 +618,21 @@ class ResultService:
             )
             visible = [] if not want else [r for r in visible if r.uploaded_by == want]
         if board:
-            visible = [r for r in visible if r.complete and r.bound_kind == BOUND_RELEASE]
+            visible = [
+                r
+                for r in visible
+                if r.complete and r.bound_kind == BOUND_RELEASE and r.board_listed
+            ]
         attempt_ids = self._suite_visible_attempt_ids(visible, auth=auth)
         official = official_dataset_ids(self.meta.list_releases(include_private=True))
+        consents = self.meta.list_agent_consents_for_suites([r.suite_run_id for r in visible])
         return {
             "items": [
-                attach_agent_refs(suite_to_dict(r, attempt_content_ids=attempt_ids), official)
+                attach_agent_refs(
+                    suite_to_dict(r, attempt_content_ids=attempt_ids),
+                    official,
+                    consented=consents.get(r.suite_run_id) or set(),
+                )
                 for r in visible
             ]
         }
@@ -631,7 +641,129 @@ class ResultService:
         row = self._require_visible_suite(suite_run_id, auth)
         attempt_ids = self._suite_visible_attempt_ids([row], auth=auth)
         official = official_dataset_ids(self.meta.list_releases(include_private=True))
-        return attach_agent_refs(suite_to_dict(row, attempt_content_ids=attempt_ids), official)
+        consented = set(self.meta.list_agent_consents(suite_run_id))
+        return attach_agent_refs(
+            suite_to_dict(row, attempt_content_ids=attempt_ids),
+            official,
+            consented=consented,
+        )
+
+    def attach_agent(
+        self,
+        *,
+        suite_run_id: str,
+        agent: str,
+        auth: TokenInfo,
+        role: str | None = None,
+        grant_consent: bool | None = None,
+        skip_owner_check: bool = False,
+    ) -> dict[str, Any]:
+        """Write published ``agent_ref`` onto the stored suite overlay.
+
+        Compare/write is this method only. Callers (CLI, Hub, appearance
+        approve) must not reimplement ``_binding_role_key``. Lock bytes and
+        ``config_fingerprint`` stay as uploaded. Agent-org owners also grant
+        appearance consent; other uploaders only stamp provenance.
+        """
+        from services.registry.package_service import _agent_preview_from_archive
+        from services.registry.store import package_kind_for_media_type
+
+        from ageval.application.suite.attach_agent_ref import (
+            AttachAgentRefError,
+            format_published_agent_ref,
+            inject_published_agent_ref,
+            parse_published_agent_spec,
+        )
+
+        row = self.meta.get_suite(suite_run_id)
+        if row is None or (
+            not skip_owner_check
+            and not self.access.can_manage_result("suite", suite_run_id, auth, for_read=False)
+        ):
+            raise RegistryAppError("not_found", "suite not found", http_status=404)
+        try:
+            spec_role, package_id, version = parse_published_agent_spec(agent)
+        except AttachAgentRefError as exc:
+            raise RegistryAppError(exc.error_code, exc.message, http_status=400) from exc
+        want_role = (role or "").strip() or spec_role
+        if role and spec_role and role.strip() != spec_role:
+            raise RegistryAppError(
+                "invalid_request",
+                "conflicting role in --agent and --role",
+                http_status=400,
+            )
+        release = self.meta.get_by_version(package_id, version)
+        if release is None or not self.access.visible_package(release, auth):
+            raise RegistryAppError("not_found", "agent package not found", http_status=404)
+        try:
+            kind = package_kind_for_media_type(release.media_type)
+        except ValueError as exc:
+            raise RegistryAppError("invalid_request", str(exc), http_status=400) from exc
+        if kind != "agent":
+            raise RegistryAppError(
+                "invalid_request",
+                "agent ref must name an agent package",
+                http_status=400,
+            )
+        data = read_blob(self.blobs, release.blob_digest, prefix="packages")
+        if data is None:
+            raise RegistryAppError("not_found", "agent package blob missing", http_status=404)
+        preview = _agent_preview_from_archive(data)
+        binding = preview.get("binding")
+        if not isinstance(binding, Mapping):
+            raise RegistryAppError(
+                "invalid_request",
+                "published agent binding is missing",
+                http_status=400,
+            )
+        agent_ref = format_published_agent_ref(package_id, version, release.package_digest)
+        try:
+            cfg = json.loads(row.config_json or "{}")
+        except (json.JSONDecodeError, TypeError):
+            cfg = {}
+        if not isinstance(cfg, dict):
+            cfg = {}
+        overlay = cfg.get("job_overlay")
+        fingerprint_before = cfg.get("config_fingerprint")
+        try:
+            result = inject_published_agent_ref(
+                overlay if isinstance(overlay, Mapping) else None,
+                published_binding=binding,
+                agent_ref=agent_ref,
+                role=want_role,
+            )
+        except AttachAgentRefError as exc:
+            raise RegistryAppError(exc.error_code, exc.message, http_status=400) from exc
+        if result.changed:
+            cfg["job_overlay"] = result.overlay
+            if fingerprint_before is not None:
+                cfg["config_fingerprint"] = fingerprint_before
+            self.meta.update_suite_config_json(suite_run_id, json.dumps(cfg, sort_keys=True))
+        agent_org_owner = bool(
+            release.org_id
+            and self.access.org_owner_status(org_id=release.org_id, auth=auth) == "ok"
+        )
+        if grant_consent is True or (grant_consent is None and agent_org_owner):
+            self.meta.grant_agent_consent(
+                suite_run_id=suite_run_id,
+                package_id=package_id,
+                granted_by=auth.user_id or "",
+                source="attach",
+            )
+        if skip_owner_check:
+            stored = self.meta.get_suite(suite_run_id)
+            if stored is None:
+                raise RegistryAppError("not_found", "suite not found", http_status=404)
+            official = official_dataset_ids(self.meta.list_releases(include_private=True))
+            consented = set(self.meta.list_agent_consents(suite_run_id))
+            payload = attach_agent_refs(suite_to_dict(stored), official, consented=consented)
+        else:
+            payload = self.serve_suite_meta(suite_run_id=suite_run_id, auth=auth)
+        payload["attached"] = True
+        payload["idempotent"] = not result.changed
+        payload["attached_roles"] = list(result.roles)
+        payload["agent_ref"] = result.agent_ref
+        return payload
 
     def serve_suite_content(
         self, *, suite_run_id: str, auth: TokenInfo

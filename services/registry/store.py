@@ -94,6 +94,22 @@ class SuiteResultRow:
     complete: bool = False
     bound_kind: str = "unknown"
     task_set_digest: str = ""
+    board_listed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ResourceRequestRow:
+    request_id: str
+    kind: str
+    status: str
+    suite_run_id: str
+    dataset_id: str
+    applicant: str
+    owner_org_id: str
+    agent_ref: str
+    created_at: float
+    decided_at: float | None = None
+    decided_by: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -777,12 +793,14 @@ class MetadataStore(MetadataStoreProtocol):
         return updated
 
     def delete_suite(self, suite_run_id: str) -> SuiteResultRow:
-        """Delete suite row and its shares (does not cascade attempts)."""
+        """Delete suite row, shares, consents, and requests (does not cascade attempts)."""
         row = self.get_suite(suite_run_id)
         if row is None:
             raise LookupError("suite not found")
         with self._connect() as conn:
             self._exec(conn, Q.DELETE_SUITE_SHARES, (suite_run_id,))
+            self._exec(conn, Q.DELETE_SUITE_CONSENTS, (suite_run_id,))
+            self._exec(conn, Q.DELETE_SUITE_REQUESTS, (suite_run_id,))
             self._exec(conn, Q.DELETE_SUITE, (suite_run_id,))
             conn.commit()
         return row
@@ -820,6 +838,172 @@ class MetadataStore(MetadataStoreProtocol):
         updated = self.get_suite(suite_run_id)
         assert updated is not None
         return updated
+
+    def update_suite_config_json(self, suite_run_id: str, config_json: str) -> SuiteResultRow:
+        """Patch stored suite config_json (overlay provenance). Lock bytes stay put."""
+        row = self.get_suite(suite_run_id)
+        if row is None:
+            raise LookupError("suite not found")
+        with self._connect() as conn:
+            self._exec(conn, Q.UPDATE_SUITE_CONFIG_JSON, (config_json, suite_run_id))
+            conn.commit()
+        updated = self.get_suite(suite_run_id)
+        assert updated is not None
+        return updated
+
+    def grant_agent_consent(
+        self,
+        *,
+        suite_run_id: str,
+        package_id: str,
+        granted_by: str,
+        source: str,
+    ) -> None:
+        with self._connect() as conn:
+            self._exec(
+                conn,
+                Q.UPSERT_SUITE_AGENT_CONSENT,
+                (suite_run_id, package_id, granted_by, source, now()),
+            )
+            conn.commit()
+
+    def has_agent_consent(self, suite_run_id: str, package_id: str) -> bool:
+        with self._connect() as conn:
+            cur = self._exec(conn, Q.SELECT_SUITE_AGENT_CONSENT, (suite_run_id, package_id))
+            return cur.fetchone() is not None
+
+    def list_agent_consents(self, suite_run_id: str) -> list[str]:
+        with self._connect() as conn:
+            cur = self._exec(conn, Q.LIST_SUITE_AGENT_CONSENTS, (suite_run_id,))
+            return [str(r["package_id"]) for r in cur.fetchall()]
+
+    def set_suite_board_listed(self, suite_run_id: str, listed: bool) -> SuiteResultRow:
+        row = self.get_suite(suite_run_id)
+        if row is None:
+            raise LookupError("suite not found")
+        with self._connect() as conn:
+            self._exec(conn, Q.UPDATE_SUITE_BOARD_LISTED, (1 if listed else 0, suite_run_id))
+            conn.commit()
+        updated = self.get_suite(suite_run_id)
+        assert updated is not None
+        return updated
+
+    def insert_resource_request(self, row: ResourceRequestRow) -> None:
+        with self._connect() as conn:
+            try:
+                self._exec(
+                    conn,
+                    Q.INSERT_RESOURCE_REQUEST,
+                    (
+                        row.request_id,
+                        row.kind,
+                        row.status,
+                        row.suite_run_id,
+                        row.dataset_id,
+                        row.applicant,
+                        row.owner_org_id,
+                        row.agent_ref,
+                        row.created_at,
+                        row.decided_at,
+                        row.decided_by,
+                    ),
+                )
+                conn.commit()
+            except self._adapter.integrity_error as exc:
+                raise ValueError("request already exists") from exc
+
+    def get_resource_request(self, request_id: str) -> ResourceRequestRow | None:
+        with self._connect() as conn:
+            cur = self._exec(conn, Q.SELECT_RESOURCE_REQUEST, (request_id,))
+            r = cur.fetchone()
+            return self._request_row(r) if r else None
+
+    def get_pending_request(
+        self, *, kind: str, suite_run_id: str, agent_ref: str = ""
+    ) -> ResourceRequestRow | None:
+        with self._connect() as conn:
+            cur = self._exec(conn, Q.SELECT_PENDING_REQUEST, (kind, suite_run_id, agent_ref))
+            r = cur.fetchone()
+            return self._request_row(r) if r else None
+
+    def list_resource_requests_by_ids(self, request_ids: list[str]) -> list[ResourceRequestRow]:
+        ids = [i for i in request_ids if i]
+        if not ids:
+            return []
+        placeholders = ",".join("?" * len(ids))
+        sql = Q.LIST_RESOURCE_REQUESTS_BY_IDS.format(placeholders=placeholders)
+        with self._connect() as conn:
+            cur = self._exec(conn, sql, tuple(ids))
+            return [self._request_row(r) for r in cur.fetchall()]
+
+    def list_inbox_requests(
+        self, *, org_ids: list[str], status: str = "pending"
+    ) -> list[ResourceRequestRow]:
+        ids = [o for o in org_ids if o]
+        if not ids:
+            return []
+        placeholders = ",".join("?" * len(ids))
+        sql = Q.LIST_INBOX_REQUESTS.format(placeholders=placeholders)
+        with self._connect() as conn:
+            cur = self._exec(conn, sql, (*ids, status))
+            return [self._request_row(r) for r in cur.fetchall()]
+
+    def list_suite_requests(self, suite_run_id: str) -> list[ResourceRequestRow]:
+        with self._connect() as conn:
+            cur = self._exec(conn, Q.LIST_SUITE_REQUESTS, (suite_run_id,))
+            return [self._request_row(r) for r in cur.fetchall()]
+
+    def update_resource_request_status(
+        self, request_id: str, *, status: str, decided_by: str
+    ) -> ResourceRequestRow:
+        with self._connect() as conn:
+            self._exec(
+                conn,
+                Q.UPDATE_RESOURCE_REQUEST_STATUS,
+                (status, now(), decided_by, request_id),
+            )
+            conn.commit()
+        row = self.get_resource_request(request_id)
+        if row is None:
+            raise LookupError("request not found")
+        return row
+
+    @staticmethod
+    def _request_row(r: sqlite3.Row) -> ResourceRequestRow:
+        keys = r.keys()
+        decided_at: float | None = None
+        if "decided_at" in keys and r["decided_at"] is not None:
+            try:
+                decided_at = float(r["decided_at"])
+            except (TypeError, ValueError):
+                decided_at = None
+        return ResourceRequestRow(
+            request_id=str(r["request_id"]),
+            kind=str(r["kind"]),
+            status=str(r["status"]),
+            suite_run_id=str(r["suite_run_id"]),
+            dataset_id=str(r["dataset_id"]),
+            applicant=str(r["applicant"]),
+            owner_org_id=str(r["owner_org_id"]),
+            agent_ref=str(r["agent_ref"] or ""),
+            created_at=float(r["created_at"]),
+            decided_at=decided_at,
+            decided_by=str(r["decided_by"] or "") if "decided_by" in keys else "",
+        )
+
+    def list_agent_consents_for_suites(self, suite_run_ids: list[str]) -> dict[str, set[str]]:
+        out: dict[str, set[str]] = {sid: set() for sid in suite_run_ids}
+        ids = [sid for sid in suite_run_ids if sid]
+        if not ids:
+            return out
+        placeholders = ",".join("?" * len(ids))
+        sql = Q.LIST_AGENT_CONSENTS_FOR_SUITES.format(placeholders=placeholders)
+        with self._connect() as conn:
+            cur = self._exec(conn, sql, tuple(ids))
+            for r in cur.fetchall():
+                sid = str(r["suite_run_id"])
+                out.setdefault(sid, set()).add(str(r["package_id"]))
+        return out
 
     def set_suite_visibility(self, suite_run_id: str, visibility: str) -> SuiteResultRow:
         if visibility not in {"public", "private"}:
@@ -1071,6 +1255,9 @@ class MetadataStore(MetadataStoreProtocol):
         task_set_digest = (
             str(r["task_set_digest"]) if "task_set_digest" in keys and r["task_set_digest"] else ""
         )
+        board_listed = False
+        if "board_listed" in keys and r["board_listed"] is not None:
+            board_listed = bool(int(r["board_listed"]))
         return SuiteResultRow(
             suite_run_id=r["suite_run_id"],
             dataset_id=r["dataset_id"],
@@ -1091,6 +1278,7 @@ class MetadataStore(MetadataStoreProtocol):
             complete=complete,
             bound_kind=bound_kind,
             task_set_digest=task_set_digest,
+            board_listed=board_listed,
         )
 
     # ---- organizations ---------------------------------------------------
@@ -2024,6 +2212,26 @@ def share_to_dict(row: ResultShareRow) -> dict[str, Any]:
     }
 
 
+def request_to_dict(row: ResourceRequestRow) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "request_id": row.request_id,
+        "kind": row.kind,
+        "status": row.status,
+        "suite_run_id": row.suite_run_id,
+        "dataset_id": row.dataset_id,
+        "applicant": row.applicant,
+        "owner_org_id": row.owner_org_id,
+        "created_at": row.created_at,
+    }
+    if row.agent_ref:
+        out["agent_ref"] = row.agent_ref
+    if row.decided_at is not None:
+        out["decided_at"] = row.decided_at
+    if row.decided_by:
+        out["decided_by"] = row.decided_by
+    return out
+
+
 def suite_to_dict(
     row: SuiteResultRow,
     *,
@@ -2084,6 +2292,7 @@ def suite_to_dict(
         out["task_set_digest"] = row.task_set_digest
     if row.uploaded_by:
         out["uploaded_by"] = row.uploaded_by
+    out["board_listed"] = bool(row.board_listed)
     # #42 config fingerprint projection (absent on legacy rows)
     try:
         cfg = json.loads(row.config_json or "{}")

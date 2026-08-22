@@ -442,7 +442,7 @@ export function LeaderboardTable({
         </p>
         <p className="text-sm text-mute">
           {emptyBody ||
-            "Public board lists complete, release-bound suite uploads only. Incomplete or draft-bound runs stay on Internal and the task Jobs list. Upload with ageval results upload-suite. Metrics are observational, not a suite-level PASS."}
+            "Public board lists complete, release-bound suites after Dataset org listing approval. Incomplete or draft-bound runs stay on Internal and the task Jobs list. Upload with ageval results upload-suite, then request listing. Metrics are observational, not a suite-level PASS."}
         </p>
       </div>
     );
@@ -755,12 +755,18 @@ export function LeaderboardTable({
                               kind="suite"
                               resultId={s.suite_run_id}
                               visibility={s.visibility}
+                              complete={s.complete}
+                              boundKind={s.bound_kind}
+                              boardListed={s.board_listed}
                               canManage
                               token={getToken()}
                               onVisibility={(next) =>
                                 onSuiteUpdated?.(s.suite_run_id, {
                                   visibility: next,
                                 })
+                              }
+                              onAttached={(row) =>
+                                onSuiteUpdated?.(s.suite_run_id, row)
                               }
                               onDeleted={() => {
                                 setOpenId(null);

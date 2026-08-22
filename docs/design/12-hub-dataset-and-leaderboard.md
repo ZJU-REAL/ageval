@@ -2,11 +2,13 @@
 
 字段是 `dataset_id`。无 `database_id` 双读。Hub / Viewer 文案用 dataset，不是 Database。无 `ageval submit`；上传走 `ageval results upload` / `upload-suite`。
 
-公开 Leaderboard：完备 suite + 绑定 **release**。draft 或不完备只出现在 Jobs。
+公开 Leaderboard：完备 suite + 绑定 **release** + Dataset 包所属 org 的 owner 批准 listing（`board_listed`）。官方与非官方 Dataset 同一道门。`public` 不是上榜：可见性与 listing 分开。新上传默认未列出；不祖父旧行。Internal（调用方可见的不完备 / draft-bound）不变。
 
-单 Attempt `results upload` 通常上不了榜。正确路径：`ageval run <dataset>`（无 `--task`）→ `ageval results upload-suite --suite-run <id> --with-attempts`。
+单 Attempt `results upload` 通常上不了榜。正确路径：`ageval run <dataset>`（无 `--task`）→ `ageval results upload-suite --suite-run <id> --with-attempts`。申请人是 suite `uploaded_by`；不完备或 draft-bound 申请 listing fail closed。批准只写 listing 标记，不改 lock / fingerprint / overlay。
 
-`--agent` 投影进 profiles 通道，与 `--profiles` 互斥。`agent_ref` 是溯源不是身份。
+`--agent` 投影进 profiles 通道，与 `--profiles` 互斥。`agent_ref` 是溯源不是身份，不进 `config_fingerprint`。已上传 suite 允许延后把 published `org/name@version` 写入 **Registry 存的** `job_overlay`（对齐 `_binding_role_key`：executor、ACP entry、model、secret-free plugin options）。不改 Attempt `lock.json`、digest、PASS。`local/` 与 `file:` 不能当 Hub 溯源。plaza 出场（官方 Dataset + public + complete + release）不变；仅 overlay 有 `agent_ref` 不够 —— Appearances 还要 Agent 包 org 同意。
+
+Inbox：Registry 一等 request 行（`pending` / `approved` / `rejected`）。两种 kind：`leaderboard_list`（收件人 = Dataset org owner）、`agent_appearance`（收件人 = Agent 包 org owner）。批准只跑已有写入（listing 标记，或同一条 attach 路径）。申请人已是该 Agent org owner 时出场走 attach、不建请求。加入 org 仍是 invite key。
 
 ## 身份页
 

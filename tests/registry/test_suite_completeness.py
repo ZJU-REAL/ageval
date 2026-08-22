@@ -92,6 +92,10 @@ def test_fail_on_all_tasks_is_complete_and_on_board(tmp_path: Path) -> None:
     payload = results.upload_suite(meta=meta, archive=archive, auth=auth)
     assert payload["complete"] is True
     assert payload["bound_kind"] == "release"
+    assert payload["board_listed"] is False
+    board = results.list_suites(auth=auth, dataset_id="test/publish-min", board=True)
+    assert board["items"] == []
+    results.meta.set_suite_board_listed("suite_fail_all", True)
     board = results.list_suites(auth=auth, dataset_id="test/publish-min", board=True)
     assert [i["suite_run_id"] for i in board["items"]] == ["suite_fail_all"]
 
@@ -193,6 +197,7 @@ def test_later_draft_task_does_not_drop_old_release_run(tmp_path: Path) -> None:
         task_refs=[{"task_id": "hello", "status": "PASS", "score": 1.0}],
     )
     results.upload_suite(meta=meta, archive=archive, auth=auth)
+    results.meta.set_suite_board_listed("suite_release", True)
     # Later draft adds a task; stored release fingerprint must not be rewritten.
     wider = tmp_path / "wider"
     shutil.copytree(FIXTURE, wider)

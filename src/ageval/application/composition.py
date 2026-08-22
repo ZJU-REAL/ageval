@@ -81,7 +81,7 @@ def build_suite_runner() -> Any:
 
 
 def build_results_commands() -> Any:
-    """Attempt and suite result upload / get / list / share / delete."""
+    """Attempt and suite result upload / get / list / share / delete / attach / inbox."""
     from ageval.application.registry_ops.results_command import ResultsCommands
 
     return ResultsCommands(client_factory=build_registry_client)

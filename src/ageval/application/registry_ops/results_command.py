@@ -828,6 +828,97 @@ class ResultsCommands:
             raise ConfigError(exc.code, exc.message, location="registry") from exc
         return {"ok": True, "items": items, "count": len(items), "source": "registry"}
 
+    def attach_suite_agent(
+        self,
+        *,
+        suite_run_id: str,
+        agent: str,
+        role: str | None = None,
+        registry_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Attach a published ``org/name@version`` onto a Registry suite overlay."""
+        sid = suite_run_id.strip()
+        spec = agent.strip()
+        if not sid:
+            raise ConfigError("invalid_request", "suite-run is required", location="--suite-run")
+        if not spec:
+            raise ConfigError("invalid_request", "agent is required", location="--agent")
+        client = self._client_factory(
+            registry_url=registry_url, require_token=True, accept_results_url=True
+        )
+        try:
+            payload = client.attach_suite_agent(
+                suite_run_id=sid,
+                agent=spec,
+                role=role.strip() if isinstance(role, str) and role.strip() else None,
+            )
+        except RegistryError as exc:
+            raise ConfigError(exc.code, exc.message, location="registry") from exc
+        return {"ok": True, **payload}
+
+    def apply_request(
+        self,
+        *,
+        kind: str,
+        suite_run_id: str,
+        agent: str | None = None,
+        registry_url: str | None = None,
+    ) -> dict[str, Any]:
+        kind_s = kind.strip()
+        sid = suite_run_id.strip()
+        if kind_s not in {"leaderboard_list", "agent_appearance"}:
+            raise ConfigError("invalid_request", "unknown request kind", location="--kind")
+        if not sid:
+            raise ConfigError("invalid_request", "suite-run is required", location="--suite-run")
+        if kind_s == "agent_appearance" and not (agent or "").strip():
+            raise ConfigError("invalid_request", "agent is required", location="--agent")
+        client = self._client_factory(
+            registry_url=registry_url, require_token=True, accept_results_url=True
+        )
+        try:
+            payload = client.apply_request(
+                kind=kind_s,
+                suite_run_id=sid,
+                agent=agent.strip() if isinstance(agent, str) and agent.strip() else None,
+            )
+        except RegistryError as exc:
+            raise ConfigError(exc.code, exc.message, location="registry") from exc
+        return {"ok": True, **payload}
+
+    def list_inbox(self, *, registry_url: str | None = None) -> dict[str, Any]:
+        client = self._client_factory(
+            registry_url=registry_url, require_token=True, accept_results_url=True
+        )
+        try:
+            items = client.list_inbox()
+        except RegistryError as exc:
+            raise ConfigError(exc.code, exc.message, location="registry") from exc
+        return {"ok": True, "items": items, "count": len(items)}
+
+    def decide_requests(
+        self,
+        *,
+        ids: list[str],
+        action: str,
+        registry_url: str | None = None,
+    ) -> dict[str, Any]:
+        action_s = action.strip()
+        if action_s not in {"approve", "reject"}:
+            raise ConfigError(
+                "invalid_request", "action must be approve or reject", location="--action"
+            )
+        want = [i.strip() for i in ids if i.strip()]
+        if not want:
+            raise ConfigError("invalid_request", "id is required", location="--id")
+        client = self._client_factory(
+            registry_url=registry_url, require_token=True, accept_results_url=True
+        )
+        try:
+            payload = client.decide_requests(ids=want, action=action_s)
+        except RegistryError as exc:
+            raise ConfigError(exc.code, exc.message, location="registry") from exc
+        return {"ok": True, **payload}
+
     def share_result(
         self,
         *,

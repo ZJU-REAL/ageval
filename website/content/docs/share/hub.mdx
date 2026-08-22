@@ -14,7 +14,7 @@ Hub（`apps/hub`）是连 Registry 的网页端，用来浏览共享的包与跑
 - Task 下的 **Jobs**：已上传运行产物时可点进详情（界面与本机 Viewer 相近，含轨迹）  
 - Dataset 版本切换：有权限的人能看到 **draft (current)**，其他人只能切已发布 release。org owner 可改当前版本可见性、删除该版本，或把 draft 发布成 release  
 - Tasks 表：README 是否存在、近期 job 数、最近一次分数/状态  
-- Leaderboard：**Public**（默认）只列完备且绑定 release 的 suite；**Internal** 用同一张表列出当前可见的缺题 / draft 绑定跑次。可点表头排序；观测指标，非 suite PASS。展开行有 **profiles** / **plugin** 页签（无密钥 YAML 与再跑命令；插件进 marketplace）。上传者可在 **share** 页签改可见性、分享给 org/user、或删除。Task Jobs 不变。  
+- Leaderboard：**Public**（默认）只列完备、绑定 release、且经 Dataset 所属 org 的 owner 批准上榜的 suite。`public` 不等于上榜。**Internal** 用同一张表列出当前可见的缺题 / draft 绑定跑次。可点表头排序；观测指标，非 suite PASS。展开行有 **profiles** / **plugin** 页签（无密钥 YAML 与再跑命令；插件进 marketplace）。上传者可在 **share** 页签改可见性、分享给 org/user、挂 published `agent_ref`、或申请上榜 / 出场。Task Jobs 不变。  
 - 插件 / Agent 市场用 **卡片**（说明、标签、同一行的累计下载量与收藏量）；Dataset、Jobs、成员、suite 仍是细线表  
 - 插件详情：独占 / 链 **声明槽**时间线，点开跳到包内文件预览；浏览器不执行插件  
 - 官方组织、这些组织的成员、以及这些组织上的插件显示已验证对勾  
@@ -24,7 +24,8 @@ Hub（`apps/hub`）是连 Registry 的网页端，用来浏览共享的包与跑
 - 登录后的 **Home**：你上传的 Jobs、组织、可维护 Dataset / Task、你上传的插件与 Agent（标记与标题同 marketplace）。未登录会去登录页。无 publish / upload / release 按钮  
 - 列表搜索与 scope tab 同一组；文件树分栏高度固定；轨迹按密封文件顺序展示、tool-call 可折叠；步骤头只在密封行带 `elapsed_ms` 时显示耗时  
 
-- Agent 详情：已发布包（binding + 文件，含 bundled `overlays/`），加上用 `agent_ref` 点名该 Agent 的官方公开 suite 出场。只用 `--profiles` 的 suite 留在 Dataset Leaderboard。
+- Agent 详情：已发布包（binding + 文件，含 bundled `overlays/`），加上官方公开 suite 上已同意的 `agent_ref` 出场（Agent 包 org owner 直写 attach，或批准出场申请）。只用 `--profiles` 的 suite 留在 Dataset Leaderboard，直到挂上溯源。
+- **Inbox**：Dataset / Agent org owner 批量同意或拒绝待处理的上榜与出场申请。加入组织仍是邀请码。
 
 - **用 GitHub 登录**（浏览器 OAuth；CLI 仍是 Device Flow）
 
@@ -50,6 +51,7 @@ pnpm dev   # http://127.0.0.1:5174
 | `/plugins` | 插件 marketplace |
 | `/plugins/:id` | 插件详情（声明槽时间线 · 文件预览 · CLI 安装命令） |
 | `/agents` | 已发布 Agent 目录 |
+| `/inbox` | 调用方可决定的待处理上榜 / 出场申请 |
 | `/agents/:id` | 绑定、文件、按 version 分组的出场 |
 | `/organizations` | 我的组织 · 创建 / 加入 · Dataset / 插件 / Agent 计数 |
 | `/organizations/:orgId` | 概览（成员 · Dataset · 插件 · Agent）· 设置 |
@@ -72,7 +74,7 @@ Jobs 列表里，已有运行产物的行可以点进去看；没上传的会显
 
 | 你想看 | 需要上传 | 怎么跑 / 传 |
 | --- | --- | --- |
-| Dataset **Public Leaderboard** 一行 | **完备**且绑定 **release** 的 suite | 先 `ageval publish --draft` 再 `ageval release`（或直接 `ageval publish`）→ 省略 `--task` 的 `ageval run` → `upload-suite --suite-run <id>` |
+| Dataset **Public Leaderboard** 一行 | **完备**、绑定 **release**、且 Dataset org owner 已批准上榜的 suite | 先 `ageval publish --draft` 再 `ageval release`（或直接 `ageval publish`）→ 省略 `--task` 的 `ageval run` → `upload-suite --suite-run <id>` → `ageval results request --kind leaderboard_list --suite-run <id>`（owner 在 Hub Inbox 批准） |
 | Leaderboard **Internal** | 当前可见的缺题或 draft 绑定 suite | 同样 `upload-suite`；不会出现在 Public |
 | Task **Jobs** 可点开 Attempt / 轨迹 | suite + **attempt 证据** | `upload-suite --with-attempts`（或等价挂上 task_refs 的 attempt）；缺题 / draft 绑定也出现在这里 |
 | 给已上传 suite 换一格 finished 槽 | 新 Attempt + suite 现行指针 | 本机 `--resume-suite --replace-slot`，再 `upload-suite --suite-run <id> --task <id> [--run <run_id>]`。Hub / Viewer 默认现行；版本列表是 `patch N` + 该 Attempt 开始时间 |

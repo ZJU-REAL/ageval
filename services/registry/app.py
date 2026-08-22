@@ -36,8 +36,12 @@ Endpoints:
   GET  /v1/results/suites/{suite_run_id}
   DELETE /v1/results/suites/{suite_run_id}[?with_attempts=1]
   PATCH /v1/results/suites/{suite_run_id}  (visibility)
+  PATCH /v1/results/suites/{suite_run_id}/agent-ref
   GET  /v1/results/suites/{suite_run_id}/content
   GET|POST|DELETE /v1/results/suites/{suite_run_id}/shares
+  GET  /v1/requests
+  POST /v1/requests
+  POST /v1/requests/decide
 
 Scopes: registry:publish | results:upload | admin (read-private legacy ignored for ACL)
 Visibility: public | private. Package private → org member; result private → owner/share.
@@ -125,6 +129,7 @@ class RegistryState:
         from services.registry.auth_service import AuthService
         from services.registry.org_service import OrgService
         from services.registry.package_service import PackageService
+        from services.registry.request_service import RequestService
         from services.registry.result_service import ResultService
         from services.registry.runtime_service import RuntimeService
         from services.registry.user_service import UserService
@@ -139,6 +144,7 @@ class RegistryState:
         self.packages = PackageService(meta, blobs, self.access, max_upload=max_upload)
         self.results = ResultService(meta, blobs, self.access, max_upload=max_upload)
         self.runtimes = RuntimeService(meta, self.results)
+        self.requests = RequestService(meta, self.access, self.results)
         self.orgs = OrgService(meta, self.access)
         self.users = UserService(meta)
         self.max_upload = max_upload

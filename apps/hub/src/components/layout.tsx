@@ -12,6 +12,7 @@ import {
   Building2,
   Database,
   House,
+  Inbox,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -262,14 +263,23 @@ function SidebarNav({
         </SidebarGroup>
         <SidebarGroup label="Workspace" collapsed={collapsed}>
           {token ? (
-            <SidebarLink
-              to="/home"
-              end
-              icon={House}
-              label="Home"
-              onNavigate={onNavigate}
-              collapsed={collapsed}
-            />
+            <>
+              <SidebarLink
+                to="/home"
+                end
+                icon={House}
+                label="Home"
+                onNavigate={onNavigate}
+                collapsed={collapsed}
+              />
+              <SidebarLink
+                to="/inbox"
+                icon={Inbox}
+                label="Inbox"
+                onNavigate={onNavigate}
+                collapsed={collapsed}
+              />
+            </>
           ) : null}
           <SidebarLink
             to="/organizations"

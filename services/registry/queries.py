@@ -297,6 +297,35 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
         updated_at REAL NOT NULL
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS suite_agent_consents (
+        suite_run_id TEXT NOT NULL,
+        package_id TEXT NOT NULL,
+        granted_by TEXT NOT NULL,
+        source TEXT NOT NULL,
+        created_at REAL NOT NULL,
+        PRIMARY KEY (suite_run_id, package_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS resource_requests (
+        request_id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        suite_run_id TEXT NOT NULL,
+        dataset_id TEXT NOT NULL,
+        applicant TEXT NOT NULL,
+        owner_org_id TEXT NOT NULL,
+        agent_ref TEXT NOT NULL DEFAULT '',
+        created_at REAL NOT NULL,
+        decided_at REAL,
+        decided_by TEXT NOT NULL DEFAULT ''
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_resource_requests_inbox
+    ON resource_requests(owner_org_id, status, created_at)
+    """,
 )
 
 # ---- dataset draft / ACL ---------------------------------------------------
@@ -346,7 +375,10 @@ LIST_DATASET_ACL_FOR_USER = (
 DELETE_DATASET_ACL = "DELETE FROM dataset_acl WHERE dataset_id=? AND user_id=?"
 
 # Live Postgres may have created these as BOOLEAN; inserts bind 0/1 (INTEGER).
-SCHEMA_INTEGER_FLAGS: tuple[tuple[str, str], ...] = (("organizations", "is_claimable"),)
+SCHEMA_INTEGER_FLAGS: tuple[tuple[str, str], ...] = (
+    ("organizations", "is_claimable"),
+    ("suite_results", "board_listed"),
+)
 
 # (table, column, sqlite/postgres-compatible type clause)
 SCHEMA_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
@@ -362,6 +394,7 @@ SCHEMA_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("suite_results", "complete", "INTEGER NOT NULL DEFAULT 0"),
     ("suite_results", "bound_kind", "TEXT NOT NULL DEFAULT 'unknown'"),
     ("suite_results", "task_set_digest", "TEXT NOT NULL DEFAULT ''"),
+    ("suite_results", "board_listed", "INTEGER NOT NULL DEFAULT 0"),
     ("releases", "uploaded_by", "TEXT NOT NULL DEFAULT ''"),
     ("organizations", "description", "TEXT NOT NULL DEFAULT ''"),
     ("user_profiles", "description", "TEXT NOT NULL DEFAULT ''"),
@@ -387,6 +420,8 @@ DELETE_ATTEMPT_SHARES = "DELETE FROM result_shares WHERE result_kind='attempt' A
 DELETE_ATTEMPT = "DELETE FROM attempt_results WHERE run_id=?"
 UPDATE_ATTEMPT_VISIBILITY = "UPDATE attempt_results SET visibility=? WHERE run_id=?"
 DELETE_SUITE_SHARES = "DELETE FROM result_shares WHERE result_kind='suite' AND result_id=?"
+DELETE_SUITE_CONSENTS = "DELETE FROM suite_agent_consents WHERE suite_run_id=?"
+DELETE_SUITE_REQUESTS = "DELETE FROM resource_requests WHERE suite_run_id=?"
 DELETE_SUITE = "DELETE FROM suite_results WHERE suite_run_id=?"
 UPDATE_SUITE_VISIBILITY = "UPDATE suite_results SET visibility=? WHERE suite_run_id=?"
 UPDATE_SUITE_SLOT = """
@@ -394,6 +429,46 @@ UPDATE suite_results SET
     pass_rate=?, mean_score=?, metrics_json=?, tasks_json=?,
     exit_code=?, complete=?
 WHERE suite_run_id=?
+"""
+UPDATE_SUITE_CONFIG_JSON = "UPDATE suite_results SET config_json=? WHERE suite_run_id=?"
+UPSERT_SUITE_AGENT_CONSENT = """
+INSERT INTO suite_agent_consents(
+    suite_run_id, package_id, granted_by, source, created_at
+) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(suite_run_id, package_id) DO NOTHING
+"""
+SELECT_SUITE_AGENT_CONSENT = (
+    "SELECT * FROM suite_agent_consents WHERE suite_run_id=? AND package_id=?"
+)
+LIST_SUITE_AGENT_CONSENTS = "SELECT * FROM suite_agent_consents WHERE suite_run_id=?"
+LIST_AGENT_CONSENTS_FOR_SUITES = (
+    "SELECT * FROM suite_agent_consents WHERE suite_run_id IN ({placeholders})"
+)
+UPDATE_SUITE_BOARD_LISTED = "UPDATE suite_results SET board_listed=? WHERE suite_run_id=?"
+INSERT_RESOURCE_REQUEST = """
+INSERT INTO resource_requests(
+    request_id, kind, status, suite_run_id, dataset_id, applicant,
+    owner_org_id, agent_ref, created_at, decided_at, decided_by
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+SELECT_RESOURCE_REQUEST = "SELECT * FROM resource_requests WHERE request_id=?"
+LIST_RESOURCE_REQUESTS_BY_IDS = (
+    "SELECT * FROM resource_requests WHERE request_id IN ({placeholders})"
+)
+LIST_INBOX_REQUESTS = (
+    "SELECT * FROM resource_requests WHERE owner_org_id IN ({placeholders}) "
+    "AND status=? ORDER BY created_at DESC"
+)
+LIST_SUITE_REQUESTS = (
+    "SELECT * FROM resource_requests WHERE suite_run_id=? ORDER BY created_at DESC"
+)
+SELECT_PENDING_REQUEST = """
+SELECT * FROM resource_requests
+WHERE kind=? AND suite_run_id=? AND status='pending' AND agent_ref=?
+"""
+UPDATE_RESOURCE_REQUEST_STATUS = """
+UPDATE resource_requests SET status=?, decided_at=?, decided_by=?
+WHERE request_id=? AND status='pending'
 """
 SELECT_ATTEMPTS_FOR_SUITE = (
     "SELECT * FROM attempt_results WHERE suite_run_id=? ORDER BY created_at DESC"

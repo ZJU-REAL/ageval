@@ -579,6 +579,71 @@ class RegistryClient:
             raise RegistryError("not_found", f"suite not found ({status})", status=status)
         return json.loads(raw.decode("utf-8"))
 
+    def attach_suite_agent(
+        self,
+        *,
+        suite_run_id: str,
+        agent: str,
+        role: str | None = None,
+    ) -> dict[str, Any]:
+        """PATCH published agent_ref onto a stored suite overlay. Owner only."""
+        body: dict[str, Any] = {"agent": agent}
+        if role:
+            body["role"] = role
+        raw_body = json.dumps(body, sort_keys=True).encode("utf-8")
+        path = f"/v1/results/suites/{quote(suite_run_id, safe='')}/agent-ref"
+        status, raw, _ = self._request(
+            "PATCH",
+            path,
+            body=raw_body,
+            headers=self._headers(content_type="application/json", auth=True),
+            auth=True,
+        )
+        if status != 200:
+            raise RegistryError("attach_failed", f"unexpected status {status}", status=status)
+        return json.loads(raw.decode("utf-8"))
+
+    def apply_request(
+        self, *, kind: str, suite_run_id: str, agent: str | None = None
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {"kind": kind, "suite_run_id": suite_run_id}
+        if agent:
+            body["agent"] = agent
+        raw_body = json.dumps(body, sort_keys=True).encode("utf-8")
+        status, raw, _ = self._request(
+            "POST",
+            "/v1/requests",
+            body=raw_body,
+            headers=self._headers(content_type="application/json", auth=True),
+            auth=True,
+        )
+        if status != 200:
+            raise RegistryError("request_failed", f"unexpected status {status}", status=status)
+        return json.loads(raw.decode("utf-8"))
+
+    def list_inbox(self) -> list[dict[str, Any]]:
+        status, raw, _ = self._request("GET", "/v1/requests?inbox=1", auth=True)
+        if status != 200:
+            raise RegistryError("list_failed", f"status {status}", status=status)
+        data = json.loads(raw.decode("utf-8"))
+        items = data.get("items") if isinstance(data, dict) else None
+        if not isinstance(items, list):
+            raise RegistryError("list_failed", "invalid list response")
+        return [item for item in items if isinstance(item, dict)]
+
+    def decide_requests(self, *, ids: list[str], action: str) -> dict[str, Any]:
+        raw_body = json.dumps({"ids": ids, "action": action}, sort_keys=True).encode("utf-8")
+        status, raw, _ = self._request(
+            "POST",
+            "/v1/requests/decide",
+            body=raw_body,
+            headers=self._headers(content_type="application/json", auth=True),
+            auth=True,
+        )
+        if status != 200:
+            raise RegistryError("decide_failed", f"unexpected status {status}", status=status)
+        return json.loads(raw.decode("utf-8"))
+
     def fetch_suite_content(self, suite_run_id: str, dest: Path) -> Path:
         path = f"/v1/results/suites/{quote(suite_run_id, safe='')}/content"
         return self._download_to(path, dest)

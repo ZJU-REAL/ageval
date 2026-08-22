@@ -14,7 +14,7 @@ Hub (`apps/hub`) is the web UI on top of Registry—browse shared packages and r
 - Task **Jobs**: open a row when run artifacts were uploaded (layout close to the local Viewer, including trajectory)  
 - Dataset version switcher: entitled users see **draft (current)**; everyone else switches among published releases. Org owners can flip the current version public/private, delete it, or promote a draft to a release  
 - Tasks table: README present, recent job count, last score/status  
-- Leaderboard: **Public** (default) lists complete, release-bound suite rows only. **Internal** lists caller-visible incomplete or draft-bound runs in the same table. Sortable headers. Observational metrics, not suite PASS. Expand a row for **profiles** / **plugin** tabs (secret-free YAML and rehydrate commands; plugins open the marketplace). The uploader gets a **share** tab to flip visibility, share with an org/user, or delete. Task Jobs stay as they are.  
+- Leaderboard: **Public** (default) lists complete, release-bound suite rows that the Dataset org owner approved for listing. `public` is not the same as listed. **Internal** lists caller-visible incomplete or draft-bound runs in the same table. Sortable headers. Observational metrics, not suite PASS. Expand a row for **profiles** / **plugin** tabs (secret-free YAML and rehydrate commands; plugins open the marketplace). The uploader gets a **share** tab to flip visibility, share with an org/user, attach a published `agent_ref`, or request listing / appearance. Task Jobs stay as they are.  
 - Plugin / Agent marketplace uses **cards** (description, tags, download and favorite counts on one row); datasets, jobs, members, and suites stay hairline tables  
 - Plugin detail: exclusive / chain **declared-slot** timeline; expand jumps into the in-package file preview. The browser never executes plugin code  
 - Official orgs, members of those orgs, and plugins from those orgs show a verified check  
@@ -24,7 +24,8 @@ Hub (`apps/hub`) is the web UI on top of Registry—browse shared packages and r
 - Signed-in **Home**: jobs you uploaded, orgs, datasets/tasks you can maintain, plugins and agents you uploaded (same official mark and title as the marketplace). Signed-out visitors go to sign-in. No publish / upload / release buttons  
 - List search sits with the scope tabs; file-tree pane height is stable; trajectory tool-call rows collapse; steps follow sealed file order; a step shows duration only when `elapsed_ms` is on the sealed row  
 
-- Agent detail: published package (binding + files, including bundled `overlays/`) plus appearances from official public suites that named it with `agent_ref`. Suites run with `--profiles` only stay on the Dataset Leaderboard.
+- Agent detail: published package (binding + files, including bundled `overlays/`) plus appearances from official public suites that named it with a consented `agent_ref` (Agent org owner attach, or an approved appearance request). Suites run with `--profiles` only stay on the Dataset Leaderboard until attached.
+- **Inbox**: Dataset and Agent org owners batch-approve or reject pending listing and appearance requests. Org join stays invite keys.
 
 - **Sign in with GitHub** (browser OAuth; CLI stays on Device Flow)
 
@@ -50,6 +51,7 @@ pnpm dev   # http://127.0.0.1:5174
 | `/plugins` | Plugin marketplace |
 | `/plugins/:id` | Plugin detail (declared-slot timeline · file preview · CLI install) |
 | `/agents` | Published Agent catalog |
+| `/inbox` | Pending listing and appearance requests the caller can decide |
 | `/agents/:id` | Binding, files, appearances grouped by version |
 | `/organizations` | Your orgs · Create / Join · dataset / plugin / agent counts |
 | `/organizations/:orgId` | Overview (members · datasets · plugins · agents) · Settings |
@@ -72,7 +74,7 @@ Jobs rows with uploaded run artifacts open detail; others show **Not uploaded**.
 
 | You want | Upload | How |
 | --- | --- | --- |
-| A **Public Leaderboard** row | A **complete**, **release-bound** suite | `ageval publish --draft` then `ageval release` (or a direct `ageval publish`) → `ageval run <dataset>` **without** `--task` → `upload-suite --suite-run <id>` |
+| A **Public Leaderboard** row | A **complete**, **release-bound** suite **listed** by the Dataset org owner | `ageval publish --draft` then `ageval release` (or a direct `ageval publish`) → `ageval run <dataset>` **without** `--task` → `upload-suite --suite-run <id>` → `ageval results request --kind leaderboard_list --suite-run <id>` (owner approves in Hub Inbox) |
 | Leaderboard **Internal** | A caller-visible incomplete or draft-bound suite | Same `upload-suite`; does not appear on Public |
 | Task **Jobs** with openable Attempt / trajectory | Suite + **attempt** evidence | `upload-suite --with-attempts`; incomplete / draft-bound suites stay here |
 | Patch one finished slot on an uploaded suite | New Attempt + suite slot pointer | Local `--resume-suite --replace-slot`, then `upload-suite --suite-run <id> --task <id> [--run <run_id>]`. Hub/Viewer default to current; the version list is `patch N` plus that Attempt’s start time |

@@ -30,13 +30,20 @@ def is_plaza_source_suite(payload: Mapping[str, Any], official_ids: frozenset[st
     )
 
 
-def attach_agent_refs(payload: dict[str, Any], official_ids: frozenset[str]) -> dict[str, Any]:
-    """Add ``agent_refs`` only on plaza-source suite rows with published refs."""
+def attach_agent_refs(
+    payload: dict[str, Any],
+    official_ids: frozenset[str],
+    *,
+    consented: set[str] | None = None,
+) -> dict[str, Any]:
+    """Add ``agent_refs`` only on plaza-source rows with consented published refs."""
     if not is_plaza_source_suite(payload, official_ids):
         return payload
     refs = _agent_refs_from_overlay(
         payload.get("job_overlay") if isinstance(payload.get("job_overlay"), Mapping) else None
     )
+    if consented is not None:
+        refs = [r for r in refs if r.get("package_id") in consented]
     if refs:
         payload["agent_refs"] = refs
     return payload
@@ -66,15 +73,20 @@ class RuntimeService:
     def _reduce(self, auth: TokenInfo) -> dict[str, list[dict[str, Any]]]:
         official = official_dataset_ids(self.meta.list_releases(include_private=True))
         listed = self.results.list_suites(auth=auth, dataset_id=None)
+        items = [s for s in (listed.get("items") or []) if isinstance(s, Mapping)]
+        suite_ids = [str(s.get("suite_run_id") or "") for s in items]
+        consents = self.meta.list_agent_consents_for_suites(suite_ids)
         grouped: dict[str, list[dict[str, Any]]] = {}
         digest_cache: dict[tuple[str, str], str] = {}
-        for suite in listed.get("items") or []:
-            if not isinstance(suite, Mapping) or not is_plaza_source_suite(suite, official):
+        for suite in items:
+            if not is_plaza_source_suite(suite, official):
                 continue
+            sid = str(suite.get("suite_run_id") or "")
+            allowed = consents.get(sid) or set()
             package_digest = _package_digest_for_suite(self.meta, suite, digest_cache)
             for appearance in _appearances_from_suite(suite, package_digest=package_digest):
                 pid = str(appearance.get("package_id") or "")
-                if not pid:
+                if not pid or pid not in allowed:
                     continue
                 grouped.setdefault(pid, []).append(appearance)
         return grouped

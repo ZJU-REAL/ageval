@@ -262,14 +262,22 @@ files (no `..`, 2 MiB cap, **413** when larger):
 | GET | `/v1/results/suites/{suite_run_id}` | same visibility rules as attempts |
 | DELETE | `/v1/results/suites/{suite_run_id}` | uploader (or `admin`); `?with_attempts=1` cascades owned attempts |
 | PATCH | `/v1/results/suites/{suite_run_id}` | uploader (or `admin`); `{ "visibility" }` |
+| PATCH | `/v1/results/suites/{suite_run_id}/agent-ref` | uploader (or `admin`); `{ "agent", "role?" }` after `_binding_role_key` match |
 | GET | `/v1/results/suites/{suite_run_id}/content` | same |
+| GET | `/v1/requests` | Inbox (`?inbox=1`) or suite (`?suite_run_id=`) |
+| POST | `/v1/requests` | `{ "kind", "suite_run_id", "agent?" }` |
+| POST | `/v1/requests/decide` | `{ "ids", "action": "approve"|"reject" }` |
+
+Public board (`board=1`) is complete + release-bound + `board_listed`. Listing is
+not visibility.
 
 ### Agent appearances (derived)
 
 Read-only. No Runtime table, no appearance table, and no upload. Source rows
-are **public**, **complete**, **release-bound** suites on an official Dataset.
-Group key is the published Hub id ``org/name`` parsed from
-``job_overlay.bindings.*.agent_ref``. ``file:`` / ``local/`` refs and
+are **public**, **complete**, **release-bound** suites on an official Dataset
+**with Agent-org consent** (owner attach or an approved `agent_appearance`
+request). Group key is the published Hub id ``org/name`` parsed from
+``job_overlay.agent_profiles.*.agent_ref``. ``file:`` / ``local/`` refs and
 hand-written ``--profiles`` suites do not attach. ``GET /v1/runtimes`` is gone
 (404). Scores are the source suite's observational metrics.
 
