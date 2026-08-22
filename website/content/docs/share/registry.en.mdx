@@ -8,7 +8,7 @@ It is **not** the local Viewer and **not** ageval Core.
 
 ## Flow
 
-1. Start it per [`services/registry/README.md`](https://github.com/ZJU-REAL/ageval/blob/main/services/registry/README.md). Public mode needs Postgres + S3 behind a reverse proxy — do not expose the Python port. Use `--local` only for development
+1. Start it per [`services/registry/README.md`](https://github.com/ZJU-REAL/ageval/blob/main/services/registry/README.md). Release tags push Registry and Hub images to GHCR; compose starts Postgres, object storage, Registry, and Hub together. Public mode needs Postgres + S3. Put TLS in front of Hub — do not expose the Python port. Use `--local` only for development
 2. After CLI login: create an org. Upload a Dataset draft with `ageval publish --draft`; an owner promotes it with `ageval release`. Direct `ageval publish` still creates a release. Upload suite / Attempt results as needed
 3. Share private results with an org or user when you want
 4. Browse in [Hub](/docs/share/hub); Hub uses browser OAuth, CLI uses Device Flow

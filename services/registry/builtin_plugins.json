@@ -1,0 +1,51 @@
+[
+  {
+    "plugin_id": "local",
+    "description": "Run the Attempt on this machine's filesystem. Ships with ageval.",
+    "host_requires": [],
+    "exclusive": ["environment"],
+    "chain": []
+  },
+  {
+    "plugin_id": "docker",
+    "description": "Run the Attempt in a container built from the task recipe. Ships with ageval.",
+    "host_requires": [],
+    "exclusive": ["environment"],
+    "chain": []
+  },
+  {
+    "plugin_id": "e2b",
+    "description": "Run the Attempt in an E2B cloud sandbox. Ships with ageval; this host still needs the extra and a key to run.",
+    "host_requires": ["uv sync --extra e2b"],
+    "exclusive": ["environment"],
+    "chain": []
+  },
+  {
+    "plugin_id": "ssh",
+    "description": "Run the Attempt on a remote host over SSH. Ships with ageval; lock still fail-closes without credentials.",
+    "host_requires": [],
+    "exclusive": ["environment"],
+    "chain": []
+  },
+  {
+    "plugin_id": "daytona",
+    "description": "Run the Attempt in a Daytona sandbox from an OCI snapshot. Ships with ageval; this host still needs the extra and a key to run.",
+    "host_requires": ["uv sync --extra daytona"],
+    "exclusive": ["environment"],
+    "chain": []
+  },
+  {
+    "plugin_id": "acp",
+    "description": "Parent ACP JSON-RPC client for coding-agent executors. Ships with ageval; not installed from the Hub.",
+    "host_requires": [],
+    "exclusive": ["executor"],
+    "chain": ["after_environment_ready", "trajectory_collect"]
+  },
+  {
+    "plugin_id": "openai-http",
+    "description": "OpenAI-compatible HTTP executor. Ships with ageval; no Attempt box required.",
+    "host_requires": [],
+    "exclusive": ["executor"],
+    "chain": []
+  }
+]

@@ -42,11 +42,22 @@ def plugin_install(
     """Install a plugin into the local cache (never edits profiles)."""
     from ageval.config.errors import ConfigError
     from ageval.plugins.install import install_from_local
-    from ageval.plugins.manifest import PluginManifestError
+    from ageval.plugins.manifest import MANIFEST_NAMES, PluginManifestError
     from ageval.plugins.plugin_requires import PluginRequiresError
+    from ageval.plugins.reserved import reject_reserved_plugin_id
 
     # Registry locator: contains @ and does not exist as a local path.
     src_path = Path(source)
+    plugin_dir = src_path.is_dir() and any((src_path / name).is_file() for name in MANIFEST_NAMES)
+    if not plugin_dir:
+        try:
+            reject_reserved_plugin_id(source)
+        except PluginManifestError as exc:
+            typer.echo(
+                json.dumps({"ok": False, "error": exc.kind, "message": exc.message}),
+                err=True,
+            )
+            raise typer.Exit(code=2) from exc
     if "@" in source and not src_path.exists():
         from ageval.application.composition import build_plugin_commands
 

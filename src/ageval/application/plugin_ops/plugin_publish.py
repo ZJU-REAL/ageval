@@ -7,6 +7,7 @@ from typing import Any
 
 from ageval.config.errors import ConfigError
 from ageval.plugins.manifest import PluginManifestError, hub_plugin_package_id, load_manifest
+from ageval.plugins.reserved import reject_reserved_plugin_id
 from ageval.registry.client import RegistryError
 from ageval.registry.plugin_package import (
     PLUGIN_MEDIA_TYPE,
@@ -38,6 +39,11 @@ class PluginPublishCommand:
                 str(exc),
                 location=str(root),
             ) from exc
+
+        try:
+            reject_reserved_plugin_id(manifest.plugin_id)
+        except PluginManifestError as exc:
+            raise ConfigError(exc.kind, exc.message, location="plugin.yaml:/plugin_id") from exc
 
         org_id = (org or "").strip()
         if not org_id:

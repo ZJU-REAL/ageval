@@ -109,6 +109,10 @@ jobs:
         if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
         run: uv run pyright
 
+      - name: Builtin plugin catalog
+        if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
+        run: uv run python scripts/check_builtin_plugins.py
+
       # Offline core: no Docker L1, no real agent CLIs, no registry suite.
       - name: Pytest (core, exclude registry)
         if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'

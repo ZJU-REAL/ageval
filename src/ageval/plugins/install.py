@@ -13,6 +13,7 @@ from ageval.plugins.manifest import (
     split_plugin_id,
 )
 from ageval.plugins.plugin_requires import PluginRequiresError, assert_no_plugin_requires_cycle
+from ageval.plugins.reserved import reject_reserved_plugin_id
 from ageval.plugins.store import IndexEntry, install_from_path, load_index
 
 HubFetch = Callable[[str], Path]
@@ -56,6 +57,7 @@ def install_from_local(source: Path, *, hub_fetch: HubFetch | None = None) -> In
     """Install a local plugin directory and its ``plugin_requires``."""
     root = source.expanduser().resolve(strict=False)
     manifest = load_manifest(root)
+    reject_reserved_plugin_id(manifest.plugin_id)
     return _install_tree(
         root,
         index_id=manifest.plugin_id,
@@ -72,6 +74,7 @@ def install_extracted_hub(
     hub_fetch: HubFetch | None = None,
 ) -> InstallResult:
     """Install an extracted Hub tree under the exact ``org/name`` cache id."""
+    reject_reserved_plugin_id(plugin_id)
     root = source.expanduser().resolve(strict=False)
     return _install_tree(
         root,

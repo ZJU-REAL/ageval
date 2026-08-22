@@ -92,7 +92,7 @@ ageval 把 **Harness** 作为一等评测维度。
 
 - **本机 Viewer。** 按 Jobs → Tasks → Attempt 查阅轨迹、环境与评分。
 - **密封轨迹。** 导出副本，不修改分数。
-- **Hub。** 发布 dataset、插件与 Agent 包，上传 suite。组织管理成员、可见性与版本；公开榜仅收录完备且绑定 release 的 suite。
+- **Hub。** 发布 dataset、插件与 Agent 包，上传 suite。组织管理成员、可见性与版本；公开榜仅收录完备且绑定 release 的 suite。部署可用 `docker compose -f services/registry/docker-compose.yml up -d`（Postgres、对象存储、Registry、Hub），发版标签会把 `ghcr.io/zju-real/ageval-hub` / `ageval-registry` 推到 GHCR。
 
 **编写**
 

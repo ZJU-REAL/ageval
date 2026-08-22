@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import { BrandMark } from "@/components/brand-mark";
+import { BuiltinMark } from "@/components/builtin-mark";
 import { MarketplaceCounts } from "@/components/marketplace-counts";
 import { OfficialMark } from "@/components/official-mark";
 import { markFromPackage } from "@/lib/brand-marks";
@@ -18,6 +19,7 @@ import {
 } from "@/lib/catalog-cache";
 import {
   getPackageByDigest,
+  isBuiltinPackage,
   packageDisplayTitle,
   type PackageRelease,
 } from "@/lib/api";
@@ -84,11 +86,13 @@ export function CatalogCard({
   row: PackageRelease;
   onOpen: (id: string) => void;
 }) {
+  const builtin = isBuiltinPackage(row);
   const title = packageDisplayTitle(row.dataset_id, row.display_name);
   const chips = kind === "plugin" ? pluginChips(row) : agentChips(row);
   const description = descriptionOf(kind, row);
   const previewReady = hasPreview(kind, row);
-  const updated = row.created_at != null ? formatDay(row.created_at) : null;
+  const updated =
+    !builtin && row.created_at != null ? formatDay(row.created_at) : null;
 
   function open() {
     onOpen(row.dataset_id);
@@ -120,7 +124,7 @@ export function CatalogCard({
           <p className="inline-flex min-w-0 items-end gap-2 font-medium leading-none text-ink">
             <BrandMark mark={markFromPackage(row)} size={24} />
             <span className="truncate leading-none">{title}</span>
-            {row.official ? <OfficialMark /> : null}
+            {builtin ? <BuiltinMark /> : row.official ? <OfficialMark /> : null}
           </p>
           {updated ? (
             <span className="shrink-0 font-mono text-[11px] leading-none tabular-nums text-mute">
@@ -161,12 +165,16 @@ export function CatalogCard({
         ) : (
           <span />
         )}
-        <MarketplaceCounts
-          downloadCount={row.download_count}
-          favoriteCount={row.favorite_count}
-          compact
-          className="shrink-0"
-        />
+        {builtin ? (
+          <span />
+        ) : (
+          <MarketplaceCounts
+            downloadCount={row.download_count}
+            favoriteCount={row.favorite_count}
+            compact
+            className="shrink-0"
+          />
+        )}
       </div>
     </article>
   );
@@ -198,7 +206,10 @@ export function CatalogCardGrid({
 
   useEffect(() => {
     const pending = rowsRef.current.filter(
-      (row) => !hasPreview(kind, hydrateCatalogRow(row)),
+      (row) =>
+        !isBuiltinPackage(row) &&
+        Boolean(row.package_digest) &&
+        !hasPreview(kind, hydrateCatalogRow(row)),
     );
     if (!pending.length) return;
     let cancelled = false;
@@ -264,7 +275,7 @@ export function CatalogCardGrid({
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {resolved.map((row) => (
         <CatalogCard
-          key={`${row.dataset_id}@${row.version}`}
+          key={`${row.dataset_id}@${row.version ?? "builtin"}`}
           kind={kind}
           row={row}
           onOpen={onOpen}

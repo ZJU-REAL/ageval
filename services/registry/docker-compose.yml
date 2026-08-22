@@ -1,13 +1,16 @@
-# Local Registry stack (Postgres metadata + RustFS S3-compatible blob).
+# Hub + Registry stack (Postgres metadata + RustFS S3-compatible blob).
 # Production-shaped defaults for operator smoke; zero-dep unit tests still use
 # SQLite + memory via --local / --memory-blob.
 #
-# Usage:
-#   docker compose -f services/registry/docker-compose.yml up -d
-#   cp services/registry/.env.example services/registry/.env  # fill secrets
-#   uv sync --extra registry
-#   uv run --extra registry python -m services.registry.app
-#   export AGEVAL_REGISTRY_URL=http://127.0.0.1:8700
+# Usage (from repo root, with secrets in services/registry/.env):
+#   docker compose -f services/registry/docker-compose.yml up -d --build
+#   open http://127.0.0.1:8080
+#   export AGEVAL_REGISTRY_URL=http://127.0.0.1:8080
+#
+# Released tags: docker compose pull && docker compose up -d
+# Do not publish the Python port. TLS stays on operator Caddy/nginx in front of Hub.
+
+name: ageval-hub
 
 services:
   postgres:
@@ -36,6 +39,43 @@ services:
       - "9000:9000"
     volumes:
       - rustfs-data:/data
+
+  registry:
+    image: ghcr.io/zju-real/ageval-registry:${AGEVAL_IMAGE_TAG:-0.6.1}
+    build:
+      context: ../..
+      dockerfile: services/registry/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      AGEVAL_REGISTRY_HOST: "0.0.0.0"
+      AGEVAL_REGISTRY_PORT: "8700"
+      AGEVAL_REGISTRY_DATABASE_URL: postgresql://ageval:ageval@postgres:5432/ageval_registry
+      AGEVAL_REGISTRY_S3_ENDPOINT: http://rustfs:9000
+      AGEVAL_REGISTRY_S3_ACCESS_KEY: ageval
+      AGEVAL_REGISTRY_S3_SECRET_KEY: agevalageval
+      AGEVAL_REGISTRY_S3_BUCKET: ageval
+      AGEVAL_REGISTRY_S3_REGION: us-east-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rustfs:
+        condition: service_started
+    expose:
+      - "8700"
+    restart: unless-stopped
+
+  hub:
+    image: ghcr.io/zju-real/ageval-hub:${AGEVAL_IMAGE_TAG:-0.6.1}
+    build:
+      context: ../..
+      dockerfile: apps/hub/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - registry
+    restart: unless-stopped
 
 volumes:
   rustfs-data:

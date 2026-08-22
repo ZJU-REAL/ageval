@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { CatalogHead } from "@/components/page-head";
+import { BuiltinMark } from "@/components/builtin-mark";
 import { CommandStrip } from "@/components/command-strip";
 import { DisplayNameEditor } from "@/components/display-name-editor";
 import { EntityMarkControl } from "@/components/entity-mark-control";
@@ -22,6 +23,7 @@ import {
   getOrg,
   getPackageByDigest,
   getPackageFile,
+  isBuiltinPackage,
   isDraftRelease,
   listPackageFiles,
   listPackageVersions,
@@ -71,14 +73,25 @@ export function PluginDetailPage() {
         if (cancelled) return;
 
         let meta: PackageRelease = latest;
-        try {
-          meta = await getPackageByDigest(
-            pluginId,
-            latest.package_digest,
-            token,
-          );
-        } catch {
-          /* list meta is enough for non-preview fields */
+        if (isBuiltinPackage(latest)) {
+          setRelease(latest);
+          setPreview(latest.plugin_preview || null);
+          setCanEditName(false);
+          setTree([]);
+          setFilePaths([]);
+          setSelectedPath(null);
+          return;
+        }
+        if (latest.package_digest) {
+          try {
+            meta = await getPackageByDigest(
+              pluginId,
+              latest.package_digest,
+              token,
+            );
+          } catch {
+            /* list meta is enough for non-preview fields */
+          }
         }
         if (cancelled) return;
 
@@ -107,7 +120,7 @@ export function PluginDetailPage() {
 
         const files = await listPackageFiles(
           pluginId,
-          latest.package_digest,
+          latest.package_digest || "",
           token,
         );
         if (cancelled) return;
@@ -196,6 +209,7 @@ export function PluginDetailPage() {
 
   const declared = useMemo(() => declaredSlotsFromPreview(preview), [preview]);
   const previewFiles = filePaths.length ? filePaths : preview?.files || [];
+  const builtin = isBuiltinPackage(release);
 
   function openSlotPath(path: string) {
     setSelectedPath(path);
@@ -219,7 +233,7 @@ export function PluginDetailPage() {
             <DisplayNameEditor
               value={release?.display_name?.trim() || packageParts.name}
               prefix={packageParts.org ? `${packageParts.org}/` : null}
-              canEdit={Boolean(token && canEditName && release)}
+              canEdit={Boolean(token && canEditName && release && !builtin)}
               headingClassName="text-xl font-semibold tracking-tight text-ink"
               beforeTitle={
                 release ? (
@@ -227,7 +241,7 @@ export function PluginDetailPage() {
                     hint={entityHintFromPackage(release)}
                     packageId={pluginId}
                     token={token}
-                    canEdit={Boolean(token && canEditName)}
+                    canEdit={Boolean(token && canEditName && !builtin)}
                     onUpdated={(patch) => {
                       setRelease((prev) =>
                         prev
@@ -242,7 +256,13 @@ export function PluginDetailPage() {
                   />
                 ) : null
               }
-              afterTitle={release?.official ? <OfficialMark /> : null}
+              afterTitle={
+                builtin ? (
+                  <BuiltinMark />
+                ) : release?.official ? (
+                  <OfficialMark />
+                ) : null
+              }
               onSave={async (next) => {
                 const updated = await updatePackageDisplayName(pluginId, next, token);
                 setRelease((prev) =>
@@ -250,7 +270,7 @@ export function PluginDetailPage() {
                 );
               }}
             />
-            {formatBadge ? (
+            {!builtin && formatBadge ? (
               <span className="text-[11px] font-medium font-mono px-2 py-0.5 rounded border border-hairline bg-canvas-soft text-body">
                 {formatBadge}
               </span>
@@ -259,15 +279,24 @@ export function PluginDetailPage() {
           {release ? (
             <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-mute">
               <span className="font-mono">@{pluginId}</span>
-              <span aria-hidden>·</span>
-              <span>
-                {isDraftRelease(release) ? "draft" : `v${release.version}`}
-              </span>
-              <span aria-hidden>·</span>
-              <MarketplaceCounts
-                downloadCount={release.download_count}
-                favoriteCount={release.favorite_count}
-              />
+              {builtin ? (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>ships with ageval</span>
+                </>
+              ) : (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>
+                    {isDraftRelease(release) ? "draft" : `v${release.version}`}
+                  </span>
+                  <span aria-hidden>·</span>
+                  <MarketplaceCounts
+                    downloadCount={release.download_count}
+                    favoriteCount={release.favorite_count}
+                  />
+                </>
+              )}
               {release.org_id ? (
                 <>
                   <span aria-hidden>·</span>
@@ -286,7 +315,7 @@ export function PluginDetailPage() {
             </div>
           ) : null}
         </div>
-        {release ? (
+        {release && !builtin ? (
           <div className="flex flex-wrap items-center justify-end gap-2">
             <PackageStarButton
               packageId={pluginId}
@@ -340,10 +369,24 @@ export function PluginDetailPage() {
             <InlineMarkdown source={preview.description} />
           ) : null}
 
-          <section className="space-y-2">
-            <h2 className="text-sm font-medium text-ink">Install (CLI)</h2>
-            <CommandStrip command={installCmd} />
-          </section>
+          {builtin ? (
+            <div className="space-y-1">
+              <p className="text-sm text-mute">
+                Ships with ageval. Listing here does not mean this host can run
+                it.
+              </p>
+              {release.host_requires?.length ? (
+                <p className="font-mono text-xs text-body">
+                  {release.host_requires.join(" · ")}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <section className="space-y-2">
+              <h2 className="text-sm font-medium text-ink">Install (CLI)</h2>
+              <CommandStrip command={installCmd} />
+            </section>
+          )}
 
           <section className="space-y-2">
             <h2 className="text-sm font-medium text-ink">Declared slots</h2>
@@ -354,6 +397,7 @@ export function PluginDetailPage() {
             />
           </section>
 
+          {builtin ? null : (
           <section id="plugin-files" className="space-y-2">
             <h2 className="text-sm font-medium text-ink">Files</h2>
             <p className="text-xs text-mute">
@@ -371,6 +415,7 @@ export function PluginDetailPage() {
               />
             </div>
           </section>
+          )}
         </div>
       )}
     </>

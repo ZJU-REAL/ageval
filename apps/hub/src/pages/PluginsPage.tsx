@@ -38,7 +38,8 @@ export function PluginsPage() {
     return latest.filter(
       (r) =>
         r.dataset_id.toLowerCase().includes(q) ||
-        (r.org_id && r.org_id.toLowerCase().includes(q)),
+        (r.org_id && r.org_id.toLowerCase().includes(q)) ||
+        (r.plugin_preview?.description || "").toLowerCase().includes(q),
     );
   }, [items, query]);
 

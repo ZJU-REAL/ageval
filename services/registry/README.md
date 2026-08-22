@@ -4,20 +4,31 @@ Standalone HTTP(S) JSON service for **Dataset package** publish/get/list and
 **Attempt result** upload/get. **Not** ageval Core. Local path workflows never
 require this process.
 
-## Quick start (compose: Postgres + RustFS)
+## Quick start (compose: Postgres + object store + Registry + Hub)
 
 ```bash
 # from repo root
-docker compose -f services/registry/docker-compose.yml up -d
-
-# optional: copy and fill secrets
 cp services/registry/.env.example services/registry/.env
-# set AGEVAL_GITHUB_CLIENT_ID / AGEVAL_GITHUB_CLIENT_SECRET for ageval login
+# set AGEVAL_GITHUB_CLIENT_ID / AGEVAL_GITHUB_CLIENT_SECRET for login
+# optional closed Hub: AGEVAL_GITHUB_LOGIN_ALLOWLIST=yourlogin
+# GitHub OAuth App callback must include http://127.0.0.1:8080/login/callback (compose Hub)
 
+docker compose -f services/registry/docker-compose.yml up -d --build
+# Hub: http://127.0.0.1:8080  (proxies /v1 and /health to Registry)
+export AGEVAL_REGISTRY_URL=http://127.0.0.1:8080
+```
+
+Released images: `ghcr.io/zju-real/ageval-registry:<ver>` and
+`ghcr.io/zju-real/ageval-hub:<ver>` (pushed on a version tag). Set
+`AGEVAL_IMAGE_TAG` and `docker compose pull && docker compose up -d`.
+Local trees without a matching tag use `build:`.
+
+Host `uv run` against compose Postgres/RustFS only is still valid for
+debugging (bind `127.0.0.1:8700`; DSN hosts in `.env.example` stay loopback).
+
+```bash
 uv sync --extra registry
-# Public start is fail-closed: Postgres + S3 env must be set (see .env.example).
 uv run --extra registry python -m services.registry.app --host 127.0.0.1 --port 8700
-# stderr prints bootstrap token once — or use ageval login after OAuth is configured
 ```
 
 Public mode **refuses to start** without `AGEVAL_REGISTRY_DATABASE_URL` and
@@ -39,8 +50,9 @@ dev and tests, not a public Hub.
 
 ## Public deploy (proxy + workers)
 
-Do **not** put the Python port on the public internet. Terminate TLS and
-connection limits on nginx or Caddy, then proxy to uvicorn workers.
+Do **not** put the Python port on the public internet. Terminate TLS on nginx
+or Caddy in front of **Hub** (compose publishes Hub `:8080`). Hub reverse-proxies
+`/v1` and `/health` to Registry on the compose network.
 
 | Knob | Where | Same number |
 | --- | --- | --- |
@@ -67,7 +79,7 @@ client_max_body_size 512m;
 proxy_read_timeout 900s;
 proxy_send_timeout 900s;
 location / {
-    proxy_pass http://127.0.0.1:8700;
+    proxy_pass http://127.0.0.1:8080;
 }
 ```
 
@@ -77,7 +89,7 @@ public mode on SQLite.
 ## CLI
 
 ```bash
-export AGEVAL_REGISTRY_URL=http://127.0.0.1:8700
+export AGEVAL_REGISTRY_URL=http://127.0.0.1:8080
 
 # Interactive (GitHub Device Flow) — writes ~/.ageval/credentials (0600)
 uv run ageval login
@@ -312,20 +324,20 @@ Create a **GitHub OAuth App** (Settings → Developer settings → OAuth Apps).
 
 | Setting | Local Hub / CLI |
 | --- | --- |
-| Homepage URL | e.g. `http://127.0.0.1:8700/` (informational) |
-| Authorization callback URL | **`http://127.0.0.1:5174/login/callback`** (and `http://localhost:5174/login/callback` if you use that host) |
+| Homepage URL | e.g. `http://127.0.0.1:8080/` (informational) |
+| Authorization callback URL | **`http://127.0.0.1:5174/login/callback`** (Vite), `http://127.0.0.1:8080/login/callback` (compose Hub), and `http://localhost:5174/login/callback` if you use that host |
 | Enable Device Flow | **On** (required for CLI `ageval login`) |
 
 Put in `services/registry/.env` (gitignored):
 
 - `AGEVAL_GITHUB_CLIENT_ID` / `AGEVAL_GITHUB_CLIENT_SECRET`
-- `AGEVAL_GITHUB_LOGIN_ALLOWLIST=yourlogin` (comma-separated; **required** — empty deny)
+- optional `AGEVAL_GITHUB_LOGIN_ALLOWLIST=yourlogin` (comma-separated). Unset or empty allows any GitHub user who completes OAuth; non-empty restricts to that list. Closed Hub: set the list.
 - optional `AGEVAL_GITHUB_WEB_REDIRECT_URIS=…` for extra Hub callback origins
 
 ### CLI — Device Flow
 
 ```bash
-export AGEVAL_REGISTRY_URL=http://127.0.0.1:8700
+export AGEVAL_REGISTRY_URL=http://127.0.0.1:8080
 uv run ageval login
 # Open https://github.com/login/device and enter the printed user code
 ```

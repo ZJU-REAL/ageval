@@ -38,8 +38,6 @@ export type SuitePluginRef = {
   version?: string;
 };
 
-const BUILTIN_EXECUTOR_KINDS = new Set(["acp", "openai-http"]);
-
 export type PackageRelease = {
   dataset_id: string;
   version: string;
@@ -52,6 +50,10 @@ export type PackageRelease = {
   package_kind?: "dataset" | "plugin" | "agent" | string;
   created_at?: number;
   org_id?: string;
+  /** First-party contrib overlay (not an upload). */
+  builtin?: boolean;
+  /** Catalog copy for builtin rows (e.g. ``uv sync --extra e2b``). */
+  host_requires?: string[];
   /** Registry marketplace display: upload org is on the official-org allowlist. */
   official?: boolean;
   /** Present on by-digest / version get for plugins. */
@@ -570,6 +572,10 @@ export async function getPackageByDigest(
 
 export function isDraftRelease(row: PackageRelease): boolean {
   return Boolean(row.is_draft || row.slot === "draft" || row.version === "draft");
+}
+
+export function isBuiltinPackage(row: PackageRelease | null | undefined): boolean {
+  return Boolean(row?.builtin);
 }
 
 export function versionLabel(row: PackageRelease): string {
@@ -1244,7 +1250,7 @@ export function resolveMarketplacePluginId(
   );
 }
 
-/** Marketplace plugins for a suite row (stored list, else executor inference). */
+/** Marketplace plugins for a suite row (stored list, extensions, environment, executor). */
 export function pluginsUsedBySuite(
   suite: SuiteRow,
   catalog: PackageRelease[] = [],
@@ -1256,7 +1262,7 @@ export function pluginsUsedBySuite(
   for (const raw of stored) {
     const id = String(raw?.plugin_id || "").trim();
     const key = id.toLowerCase();
-    if (!id || seen.has(key) || BUILTIN_EXECUTOR_KINDS.has(key) || key === "default") {
+    if (!id || seen.has(key) || key === "default") {
       continue;
     }
     seen.add(key);
@@ -1279,7 +1285,7 @@ export function pluginsUsedBySuite(
     for (const row of rows) {
       const id = String(row?.plugin || "").trim();
       const key = id.toLowerCase();
-      if (!id || seen.has(key) || BUILTIN_EXECUTOR_KINDS.has(key) || key === "default") {
+      if (!id || seen.has(key) || key === "default") {
         continue;
       }
       seen.add(key);
@@ -1288,12 +1294,20 @@ export function pluginsUsedBySuite(
       });
     }
   }
-  if (fromStore.length) return fromStore;
-  if (!Object.keys(profiles).length) return [];
+  const env = environmentFromOverlay(suite.job_overlay);
+  if (env) {
+    const key = env.toLowerCase();
+    if (!seen.has(key) && key !== "default") {
+      seen.add(key);
+      fromStore.push({
+        plugin_id: resolveMarketplacePluginId(env, catalog, preferredOrgId),
+      });
+    }
+  }
   for (const raw of Object.values(profiles)) {
     const exec = String(raw?.executor || "").trim();
     const key = exec.toLowerCase();
-    if (!exec || seen.has(key) || BUILTIN_EXECUTOR_KINDS.has(key) || key === "default") {
+    if (!exec || seen.has(key) || key === "default") {
       continue;
     }
     seen.add(key);

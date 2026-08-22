@@ -43,14 +43,7 @@ class AuthService:
     def issue_registry_session(self, identity: Any) -> dict[str, Any]:
         allow = self.github_login_allowlist
         login = str(getattr(identity, "login", "") or "")
-        if not allow:
-            raise RegistryAppError(
-                "login_not_allowed",
-                "AGEVAL_GITHUB_LOGIN_ALLOWLIST is empty; "
-                "set comma-separated GitHub logins before login",
-                http_status=403,
-            )
-        if login.casefold() not in {u.casefold() for u in allow}:
+        if allow and login.casefold() not in {u.casefold() for u in allow}:
             raise RegistryAppError(
                 "login_not_allowed",
                 f"GitHub user {login!r} is not on AGEVAL_GITHUB_LOGIN_ALLOWLIST "
@@ -153,7 +146,7 @@ class AuthService:
             raise RegistryAppError(
                 "invalid_redirect_uri",
                 "redirect_uri not allowed "
-                "(default: http://127.0.0.1:5174/login/callback; "
+                "(default: localhost Vite :5174 and compose Hub :8080; "
                 "extend via AGEVAL_GITHUB_WEB_REDIRECT_URIS)",
                 http_status=400,
             )
@@ -226,6 +219,8 @@ class AuthService:
         defaults = {
             "http://127.0.0.1:5174/login/callback",
             "http://localhost:5174/login/callback",
+            "http://127.0.0.1:8080/login/callback",
+            "http://localhost:8080/login/callback",
         }
         extra = os.environ.get("AGEVAL_GITHUB_WEB_REDIRECT_URIS") or ""
         for part in extra.split(","):

@@ -92,7 +92,7 @@ ageval treats **Harness** as a first-class evaluation axis.
 
 - **Local Viewer.** Inspect trajectory, environment, and score along Jobs → Tasks → Attempt.
 - **Sealed trajectory.** Export a copy without modifying the score.
-- **Hub.** Publish datasets, plugins, and Agent packages; upload suites. Organizations manage members, visibility, and versions. The public Leaderboard lists complete, release-bound suites only.
+- **Hub.** Publish datasets, plugins, and Agent packages; upload suites. Organizations manage members, visibility, and versions. The public Leaderboard lists complete, release-bound suites only. Operators can `docker compose -f services/registry/docker-compose.yml up -d` (Postgres, object store, Registry, Hub) and pull `ghcr.io/zju-real/ageval-hub` / `ageval-registry` from a release tag.
 
 **Authoring**
 

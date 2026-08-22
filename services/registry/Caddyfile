@@ -1,5 +1,5 @@
-# Example reverse proxy in front of Registry workers.
-# Do not expose the Python process on the public internet.
+# Example reverse proxy in front of the Hub published port (compose Hub :8080).
+# Do not expose the Python Registry process on the public internet.
 #
 # Align client_max_body / request_body with the application cap
 # (512 MiB after whole-object streaming).
@@ -10,7 +10,7 @@
 }
 
 :443 {
-	reverse_proxy 127.0.0.1:8700 {
+	reverse_proxy 127.0.0.1:8080 {
 		flush_interval -1
 		transport http {
 			read_timeout 15m

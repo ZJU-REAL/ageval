@@ -8,7 +8,9 @@ from typing import Any
 
 from ageval.config.errors import ConfigError
 from ageval.plugins.install import install_extracted_hub
+from ageval.plugins.manifest import PluginManifestError
 from ageval.plugins.plugin_requires import PluginRequiresError
+from ageval.plugins.reserved import reject_reserved_plugin_id
 from ageval.registry.archive import extract_archive
 from ageval.registry.client import RegistryError
 from ageval.registry.plugin_package import PLUGIN_MEDIA_TYPE
@@ -38,6 +40,10 @@ class PluginInstallCommand:
         ver_or_digest = ver_or_digest.strip()
         if not package_id or not ver_or_digest:
             raise ConfigError("invalid_ref", "empty package_id or version", location=locator)
+        try:
+            reject_reserved_plugin_id(package_id)
+        except PluginManifestError as exc:
+            raise ConfigError(exc.kind, exc.message, location=locator) from exc
 
         client = self._bind_client(registry_url=registry_url, token=token)
         try:
@@ -73,6 +79,10 @@ class PluginInstallCommand:
         token: str | None = None,
     ) -> Path:
         """Extract the latest published plugin release of *package_id* (exact Hub id)."""
+        try:
+            reject_reserved_plugin_id(package_id)
+        except PluginManifestError as exc:
+            raise ConfigError(exc.kind, exc.message, location=package_id) from exc
         client = self._bind_client(registry_url=registry_url, token=token)
         try:
             versions = client.list_package_versions(package_id)

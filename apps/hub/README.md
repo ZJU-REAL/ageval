@@ -33,6 +33,12 @@ pnpm install
 pnpm dev   # http://127.0.0.1:5174  — proxies /v1 → registry
 ```
 
+Production-shaped stack (Postgres, object store, Registry, Hub) is
+`docker compose -f services/registry/docker-compose.yml up -d --build`.
+Hub is `http://127.0.0.1:8080` with same-origin `/v1`. Released tags push
+`ghcr.io/zju-real/ageval-hub` and `ageval-registry`. Leave `VITE_REGISTRY_URL`
+empty in the image.
+
 | Env | Meaning |
 | --- | --- |
 | `VITE_REGISTRY_URL` | Absolute Registry origin (production SPA). Empty = same origin (dev proxy). |

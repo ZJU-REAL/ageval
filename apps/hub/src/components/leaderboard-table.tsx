@@ -2,6 +2,7 @@ import { Check, Copy } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { BuiltinMark } from "@/components/builtin-mark";
 import { Button } from "@/components/ui/button";
 import { UnderlineTabs } from "@/components/underline-tabs";
 import {
@@ -727,26 +728,37 @@ export function LeaderboardTable({
                             <div className="space-y-2">
                               {plugins.length === 0 ? (
                                 <p className="text-sm text-mute">
-                                  No marketplace plugins recorded for this job.
-                                  Builtin executors stay off this list.
+                                  No plugins recorded for this job.
                                 </p>
                               ) : (
                                 <ul className="divide-y divide-hairline rounded-[6px] border border-hairline bg-canvas">
-                                  {plugins.map((p) => (
+                                  {plugins.map((p) => {
+                                    const bundled = pluginCatalog.some(
+                                      (row) =>
+                                        row.dataset_id === p.plugin_id &&
+                                        row.builtin,
+                                    );
+                                    return (
                                     <li key={p.plugin_id}>
                                       <Link
                                         to={`/plugins/${encodeDatasetId(p.plugin_id)}`}
                                         className="flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-row-hover"
                                       >
-                                        <span className="font-mono text-xs text-ink">
+                                        <span className="inline-flex min-w-0 items-center gap-1.5 font-mono text-xs text-ink">
                                           {p.plugin_id}
+                                          {bundled ? <BuiltinMark /> : null}
                                         </span>
                                         <span className="font-mono text-[11px] text-mute">
-                                          {p.version ? `v${p.version}` : "marketplace"}
+                                          {bundled
+                                            ? "bundled"
+                                            : p.version
+                                              ? `v${p.version}`
+                                              : "marketplace"}
                                         </span>
                                       </Link>
                                     </li>
-                                  ))}
+                                    );
+                                  })}
                                 </ul>
                               )}
                             </div>

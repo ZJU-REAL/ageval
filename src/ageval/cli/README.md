@@ -219,9 +219,8 @@ Coding-agent packages use `executor: acp` + `- plugin: acp` / `options.entry: â€
 ## Registry workflow (optional service)
 
 ```bash
-docker compose -f services/registry/docker-compose.yml up -d
-uv run --extra registry python -m services.registry.app
-export AGEVAL_REGISTRY_URL=http://127.0.0.1:8700
+docker compose -f services/registry/docker-compose.yml up -d --build
+export AGEVAL_REGISTRY_URL=http://127.0.0.1:8080
 ```
 
 ### Login, org, and publish
@@ -230,7 +229,7 @@ Packages **must** belong to an organization (`--org`). Results belong to the
 uploader and can later be shared to an org or user.
 
 ```bash
-# Interactive GitHub Device Flow (server needs AGEVAL_GITHUB_* + LOGIN_ALLOWLIST)
+# Interactive GitHub Device Flow (server needs AGEVAL_GITHUB_CLIENT_ID/SECRET)
 uv run ageval login
 
 # CI: no browser

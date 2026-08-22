@@ -67,7 +67,7 @@ landing 的 oklch 系(`oklch(15.4% 0.018 264)` 底等)是本表的 oklch 等值�
 | Toast | 底中 Overshoot 进场;只用于没有本地成功态的写操作。Copy / star 等控件自身已有反馈的不要再 toast。hairline + `--viewer-shadow-pop`,无第三方面包 |
 | Select / 下拉 | `Select` / `DropdownMenu` 用 `data-ageval-menu` 进场(220ms smooth, 随 `data-side` 上下),触发器 chevron 旋转 + squish;选项 `data-highlighted` 色过渡,选中勾 `ease-spring` pop |
 | Floating Label | 描述填写框(plugin / org 等):placeholder 在 focus 或有值时抬成 label;焦点色走 `link` |
-| Catalog 卡 | plugin / agent 市场包用 `CatalogCard`:12px 圆角、hairline、hover `canvas-soft`。标题为 20px 实体标 + `org/name`(+ official),右侧更新日期。描述固定两行高,tag 贴底；`download_count` 与 star 数为 mute 计量，**同一行**贴在 tag 行右侧（lucide `Download` / `Star` + 数字，卡上不可点 star）。Star 操作只在详情页头右侧无描边 icon;填实用 `star` 金。Datasets / jobs / leaderboard / members 用表 |
+| Catalog 卡 | plugin / agent 市场包用 `CatalogCard`:12px 圆角、hairline、hover `canvas-soft`。标题为 20px 实体标 + `org/name`(+ official),右侧更新日期。**first-party contrib overlay** 走短 id（无 `org/` 前缀）+ lucide builtin 标（现有令牌，不复用 OfficialMark / BadgeCheck），无 `created_at` 就不要画更新日期。描述固定两行高,tag 贴底；`download_count` 与 star 数为 mute 计量，**同一行**贴在 tag 行右侧（lucide `Download` / `Star` + 数字，卡上不可点 star）。Star 操作只在详情页头右侧无描边 icon;填实用 `star` 金。Datasets / jobs / leaderboard / members 用表 |
 | 页头(PageHead) | h1 + 可选 sub + hairline(无编号 kicker) |
 | 相位/耗时图谱 | `--viewer-phase-1..6`(IKB 主导 + 中性梯度),禁 zinc 等外部灰阶 |
 | 弹层(tooltip/select/dropdown/dialog) | hairline 边框 + `--viewer-shadow-pop` |

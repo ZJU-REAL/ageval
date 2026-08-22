@@ -10,6 +10,11 @@ from typing import Any
 from services.registry.access import AccessPolicy
 from services.registry.blob_io import read_blob, sha256_file
 from services.registry.brand_marks import normalize_icon_github, normalize_icon_key
+from services.registry.builtin_plugins import (
+    builtin_plugin_item,
+    builtin_plugin_items,
+    is_builtin_plugin_id,
+)
 from services.registry.dataset import DRAFT_SLOT, is_draft_version
 from services.registry.errors import RegistryAppError
 from services.registry.store import (
@@ -123,6 +128,16 @@ class PackageService:
         user_id = auth.user_id or ""
         if visibility not in {"private", "public"}:
             raise RegistryAppError("invalid_request", "bad visibility", http_status=400)
+        package_kind = str(meta.get("package_kind") or "dataset").strip().casefold()
+        leaf = dataset_id.rsplit("/", 1)[-1]
+        if is_builtin_plugin_id(dataset_id) or (
+            package_kind == "plugin" and is_builtin_plugin_id(leaf)
+        ):
+            raise RegistryAppError(
+                "plugin_id_reserved",
+                f"{leaf} ships with ageval; it is not a Hub package",
+                http_status=400,
+            )
         if slot == DRAFT_SLOT or is_draft_version(version):
             return self.upsert_draft(meta=meta, archive=archive, auth=auth)
         if not org_id:
@@ -142,7 +157,6 @@ class PackageService:
                 "blob digest or size mismatch",
                 http_status=400,
             )
-        package_kind = str(meta.get("package_kind") or "dataset").strip().casefold()
         if package_kind not in {"dataset", "plugin", "agent"}:
             raise RegistryAppError(
                 "invalid_request",
@@ -373,6 +387,14 @@ class PackageService:
         self._with_download_counts(items, auth=auth)
         if favorited:
             items = [i for i in items if i.get("favorited")]
+        if (
+            package_kind == "plugin"
+            and not mine
+            and not orgs
+            and not favorited
+            and visibility != "private"
+        ):
+            items = builtin_plugin_items(prefix=prefix) + items
         return {"items": items}
 
     def _filter_orgs(self, items: list[dict[str, Any]], auth: TokenInfo) -> list[dict[str, Any]]:
@@ -406,6 +428,9 @@ class PackageService:
         return out
 
     def list_versions(self, *, dataset_id: str, auth: TokenInfo) -> dict[str, Any]:
+        builtin = builtin_plugin_item(dataset_id)
+        if builtin is not None:
+            return {"dataset_id": dataset_id, "items": [builtin]}
         rows = self.meta.list_versions(dataset_id, include_private=True)
         items = [release_to_dict(r) for r in rows if self.access.visible_package(r, auth)]
         draft = self.meta.get_draft(dataset_id)
@@ -427,6 +452,15 @@ class PackageService:
         package_digest: str | None,
         auth: TokenInfo,
     ) -> dict[str, Any]:
+        builtin = builtin_plugin_item(dataset_id)
+        if builtin is not None:
+            if package_digest:
+                raise RegistryAppError("not_found", "builtin plugin has no blob", http_status=404)
+            if version:
+                raise RegistryAppError(
+                    "not_found", "builtin plugin has no version", http_status=404
+                )
+            return builtin
         row = self._visible_release(
             dataset_id=dataset_id,
             auth=auth,
