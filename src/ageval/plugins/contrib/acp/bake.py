@@ -13,8 +13,12 @@ from ageval.plugins.errors import ExtensionMaterializeError
 PACKAGES_MARKER = "__ACP_ENTRY_PACKAGES__"
 DETECT_MARKER = "__ACP_DETECT_BINARIES__"
 
+# BuildKit runs a shell-form RUN as `/bin/sh -c` (dash on ubuntu/debian). This
+# loop uses bash process substitution, so switch SHELL for the remaining RUNs.
+# Official Attempt base runs the same logic under `bash /tmp/install-executors.sh`.
 _CODEX_NATIVE_RUN = r"""
 # Codex ACP vendors a nested @openai/codex; the platform native must sit next to it.
+SHELL ["/bin/bash", "-c"]
 RUN set -eu; \
     case "$(uname -m)" in \
       aarch64|arm64) pkg="@openai/codex-linux-arm64"; tag="linux-arm64" ;; \

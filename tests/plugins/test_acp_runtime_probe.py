@@ -48,11 +48,12 @@ class _ScriptedHost:
         self._probes = list(probes)
         self.install_code = install_code
         self.commands: list[list[str]] = []
+        self.kwargs: list[dict[str, Any]] = []
 
     async def exec(self, command, **kwargs: Any) -> ExecResult:  # noqa: ANN001
-        del kwargs
         argv = [str(part) for part in command]
         self.commands.append(argv)
+        self.kwargs.append(dict(kwargs))
         if len(argv) >= 3 and argv[1] == "-c":
             payload = self._probes.pop(0)
             return ExecResult(exit_code=0, stdout=json.dumps(payload), stderr="")
@@ -107,6 +108,10 @@ async def test_probe_hit_skips_install() -> None:
     assert host.commands[0][1] == "-c"
     assert ctx.facts[0][0] == "acp_runtime_probe"
     assert ctx.facts[0][1]["ok"] is True
+    env = host.kwargs[0].get("env") or {}
+    assert env.get("HOME")
+    assert env.get("XDG_CONFIG_HOME", "").endswith("/.config")
+    assert env.get("TERM") == "dumb"
 
 
 @pytest.mark.asyncio

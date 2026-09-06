@@ -12,8 +12,9 @@ import json
 import shlex
 from typing import Any
 
-from ageval.environments.protocol import EnvironmentFailure
+from ageval.environments.protocol import HOME_PATH, EnvironmentFailure
 from ageval.plugins.contrib.acp.child_env import entry_credentials_missing
+from ageval.plugins.contrib.acp.home import home_env
 from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, get_entry
 from ageval.plugins.errors import ExtensionMaterializeError
 from ageval.plugins.protocol import NextFn
@@ -384,11 +385,26 @@ def _probe_reason(probe: dict[str, Any]) -> str:
     return f"initialize {init.get('reason') or 'failed'}"
 
 
+def _probe_env(host: Any, descriptor: AcpEntryDescriptor) -> dict[str, str]:
+    """HOME the entry will use at attach_stdio. Probe initialize writes XDG dirs."""
+    visible = getattr(host, "visible_path", None)
+    home = str(visible(HOME_PATH) if callable(visible) else HOME_PATH)
+    env = home_env(descriptor, home)
+    for key, value in descriptor.fixed_env.items():
+        if value:
+            env[str(key)] = str(value)
+    return env
+
+
 async def _run_probe(ctx: Any, descriptor: AcpEntryDescriptor) -> dict[str, Any]:
     host = _box_host(ctx)
     timeout = min(float(ctx.remaining_seconds()), float(_PROBE_EXEC_TIMEOUT_SEC))
     try:
-        result = await host.exec(_probe_argv(host, descriptor), timeout_sec=timeout)
+        result = await host.exec(
+            _probe_argv(host, descriptor),
+            timeout_sec=timeout,
+            env=_probe_env(host, descriptor),
+        )
     except Exception as exc:  # noqa: BLE001 — probe is fail-closed
         return {"ok": False, "reason": type(exc).__name__, "missing": _needed_commands(descriptor)}
     parsed = _parse_probe_stdout(result.stdout)
