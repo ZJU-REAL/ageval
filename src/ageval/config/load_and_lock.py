@@ -459,9 +459,7 @@ def _apply_evaluate_job(job: JobDocument, resolved_refs: dict[str, Any]) -> None
     )
 
 
-def _require_docker_egress_keys(
-    kind: str, options: Mapping[str, Any], *, location: str
-) -> None:
+def _require_docker_egress_keys(kind: str, options: Mapping[str, Any], *, location: str) -> None:
     for key in ("egress", "egress_allow"):
         if key not in options:
             continue
