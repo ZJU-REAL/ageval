@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ageval.application.suite import ensure_suite_metrics, ensure_suite_task_refs
+from ageval.application.suite.suite_usage import merge_suite_usage
 from ageval.config.errors import ConfigError
 from ageval.evidence.identity import dataset_identity
 from ageval.evidence.locators import default_runs_root, resolve_attempt_run_dir
@@ -415,6 +416,15 @@ class ResultsCommands:
         _refuse_in_progress_snapshot(summary, suite_dir, suite_run_id)
 
         metrics, task_refs = _suite_metrics_and_refs(summary)
+        usage_probe = dict(summary)
+        usage_probe["task_refs"] = task_refs
+        metrics = merge_suite_usage(metrics, usage_probe, root)
+        if metrics.get("usage") != (summary.get("metrics") or {}).get("usage"):
+            summary["metrics"] = metrics
+            (suite_dir / "summary.json").write_text(
+                json.dumps(summary, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
         try:
             pass_rate = float(metrics.get("pass_rate", 0.0))
             mean_score = float(metrics.get("mean_score", 0.0))

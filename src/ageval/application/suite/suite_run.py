@@ -29,6 +29,7 @@ from ageval.application.suite.suite_metrics import (
     slot_key,
     task_refs_for_summary,
 )
+from ageval.application.suite.suite_usage import collect_suite_usage
 from ageval.attempt.ctx import PhaseObserver
 from ageval.config.dataset import list_tasks, load_dataset_manifest
 from ageval.config.errors import ConfigError
@@ -543,7 +544,6 @@ def _build_summary(
     # Single shape for k==1 and k>1. Full samples live under ``attempts[]``.
     tasks_out = [_task_row_from_rollup(t) for t in task_rows]
     metrics = _metrics_from_k_agg(k_agg, n_attempts=plan.n_attempts)
-
     counts, exit_code = _counts_and_exit_code(tasks_out)
 
     # Fingerprint from one row per task (prefer a PASS attempt's run_id).
@@ -573,6 +573,15 @@ def _build_summary(
         task_ids=plan.task_ids,
         profiles_path=profiles_path,
     )
+    usage_probe = {
+        "attempts": attempts,
+        "task_refs": task_refs_for_summary(tasks_out, attempts=attempts),
+        "job_overlay": config_fields.get("job_overlay"),
+        "model_label": config_fields.get("model_label") or "",
+    }
+    usage = collect_suite_usage(plan.dataset_root, usage_probe)
+    if usage:
+        metrics["usage"] = usage
 
     summary: dict[str, Any] = {
         "schema": "ageval.suite.summary/1",
