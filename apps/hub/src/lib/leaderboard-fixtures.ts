@@ -30,6 +30,12 @@ export const LEADERBOARD_K_FIXTURES: SuiteRow[] = [
       n_error: 0,
       missing_score_as: 0.0,
       n_attempts: 4,
+      usage: {
+        prompt_tokens: 820_000,
+        completion_tokens: 310_000,
+        cost_usd: 3.1,
+        duration_s: 24 * 60,
+      },
       k_values: [1, 2, 4],
       pass_at_k: {
         "1": kCell(0.5),
@@ -55,6 +61,12 @@ export const LEADERBOARD_K_FIXTURES: SuiteRow[] = [
         n: 4,
         c: 3,
         attempt_run_ids: ["a0", "a1", "a2", "a3"],
+        has_attempt_content: true,
+        previous: [
+          { run_id: "a0", status: "PASS", attempt_index: 0 },
+          { run_id: "a1", status: "FAIL", attempt_index: 1 },
+          { run_id: "a2", status: "PASS", attempt_index: 2 },
+        ],
       },
       {
         task_id: "b",
@@ -64,6 +76,12 @@ export const LEADERBOARD_K_FIXTURES: SuiteRow[] = [
         n: 4,
         c: 1,
         attempt_run_ids: ["b0", "b1", "b2", "b3"],
+        has_attempt_content: true,
+        previous: [
+          { run_id: "b1", status: "FAIL", attempt_index: 0 },
+          { run_id: "b2", status: "ERROR", attempt_index: 1 },
+          { run_id: "b3", status: "FAIL", attempt_index: 2 },
+        ],
       },
     ],
     job_overlay: {
@@ -98,12 +116,17 @@ export const LEADERBOARD_K_FIXTURES: SuiteRow[] = [
       n_fail: 1,
       n_error: 0,
       missing_score_as: 0.0,
+      usage: {
+        prompt_tokens: 410_000,
+        completion_tokens: 120_000,
+        duration_s: 18 * 60,
+      },
     },
     task_refs: [
-      { task_id: "a", status: "PASS", score: 1.0, run_id: "r1" },
-      { task_id: "b", status: "PASS", score: 1.0, run_id: "r2" },
-      { task_id: "c", status: "PASS", score: 0.8, run_id: "r3" },
-      { task_id: "d", status: "FAIL", score: 0.0, run_id: "r4" },
+      { task_id: "a", status: "PASS", score: 1.0, run_id: "r1", has_attempt_content: true },
+      { task_id: "b", status: "PASS", score: 1.0, run_id: "r2", has_attempt_content: true },
+      { task_id: "c", status: "PASS", score: 0.8, run_id: "r3", has_attempt_content: true },
+      { task_id: "d", status: "FAIL", score: 0.0, run_id: "r4", has_attempt_content: true },
     ],
     job_overlay: {
       environment: "local",
@@ -116,6 +139,53 @@ export const LEADERBOARD_K_FIXTURES: SuiteRow[] = [
       },
     },
     created_at: 1_700_000_000,
+    note: "per-task evaluator verdicts only; no suite-level PASS",
+  },
+  {
+    suite_run_id: "suite_demo_no_usage",
+    dataset_id: "demo/pass-at-k",
+    dataset_version: "0.1.0",
+    visibility: "public",
+    pass_rate: 0.5,
+    mean_score: 0.5,
+    agent_label: "opencode@acp",
+    model_label: "deepseek-v4-pro",
+    metrics: {
+      pass_rate: 0.5,
+      mean_score: 0.5,
+      n_tasks: 2,
+      n_pass: 1,
+      n_fail: 0,
+      n_error: 1,
+      missing_score_as: 0.0,
+    },
+    task_refs: [
+      {
+        task_id: "a",
+        status: "PASS",
+        score: 1.0,
+        run_id: "z1",
+        has_attempt_content: false,
+      },
+      {
+        task_id: "b",
+        status: "ERROR",
+        score: 0.0,
+        run_id: "z2",
+        has_attempt_content: false,
+      },
+    ],
+    job_overlay: {
+      environment: "docker",
+      agent_profiles: {
+        solver: {
+          executor: "acp",
+          options: { entry: "opencode" },
+          model: "deepseek/deepseek-v4-pro",
+        },
+      },
+    },
+    created_at: 1_700_000_050,
     note: "per-task evaluator verdicts only; no suite-level PASS",
   },
 ];
