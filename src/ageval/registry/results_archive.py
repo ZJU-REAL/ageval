@@ -16,7 +16,7 @@ import tarfile
 from pathlib import Path
 from typing import Any
 
-from ageval.evidence.locators import run_locator, suite_run_locator
+from ageval.evidence.locators import default_suite_runs_root, run_locator, suite_run_locator
 from ageval.evidence.slim import is_vendor_raw_rel
 from ageval.registry.media_types import ATTEMPT_RESULT_MEDIA_TYPE, SUITE_RESULT_MEDIA_TYPE
 
@@ -184,7 +184,7 @@ def extract_suite_archive(archive: bytes | Path, dest_root: Path) -> Path:
     finally:
         if closer is not None:
             closer.close()
-    suites = dest / ".ageval" / "suite-runs"
+    suites = default_suite_runs_root(dest)
     if suites.is_dir():
         children = [p for p in suites.iterdir() if p.is_dir()]
         if len(children) == 1:

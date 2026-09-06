@@ -13,8 +13,8 @@ from ageval.application.composition import build_results_commands
 from ageval.application.registry_ops.results_command import (
     ResultsCommands,
     _run_ids_from_task_refs,
-    _suite_metrics_and_refs,
 )
+from ageval.application.suite.document import metrics_and_refs as _suite_metrics_and_refs
 
 _results = build_results_commands()
 get_suite_result = _results.get_suite_result

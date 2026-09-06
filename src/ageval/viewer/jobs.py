@@ -13,11 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ageval.application.phase_timing import format_duration_ms
-from ageval.application.suite import (
-    aggregate_task_metrics,
-    ensure_suite_task_refs,
-    task_refs_for_summary,
-)
+from ageval.application.suite import document as suite_document
 from ageval.application.suite.suite_metrics import attempt_started_at
 from ageval.config.dataset import load_dataset_manifest
 from ageval.config.errors import ConfigError
@@ -36,62 +32,21 @@ def _suite_root(dataset_root: Path) -> Path:
 
 
 def _load_summary(path: Path) -> dict[str, Any]:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ConfigError(
-            "invalid_package",
-            f"unreadable suite summary: {exc}",
-            location=str(path),
-        ) from exc
-    if not isinstance(data, dict):
-        raise ConfigError(
-            "invalid_package",
-            "suite summary must be a JSON object",
-            location=str(path),
-        )
-    return data
+    return suite_document.load_summary_file(
+        path, missing_code="invalid_package", invalid_code="invalid_package"
+    )
 
 
 def _task_dicts(summary: dict[str, Any]) -> list[dict[str, Any]]:
-    raw = summary.get("tasks")
-    if not isinstance(raw, list):
-        return []
-    return [t for t in raw if isinstance(t, dict)]
+    return suite_document.task_rows(summary)
 
 
 def _ensure_metrics(summary: dict[str, Any]) -> dict[str, Any]:
-    from ageval.application.suite.suite_metrics import ensure_suite_metrics
-
-    metrics = summary.get("metrics")
-    if isinstance(metrics, dict) and metrics:
-        n_tasks = metrics.get("n_tasks")
-        if n_tasks:
-            return metrics
-    rows = _task_dicts(summary)
-    if rows:
-        return aggregate_task_metrics(rows)
-    rebuilt = ensure_suite_metrics(summary)
-    if isinstance(rebuilt, dict) and rebuilt.get("n_tasks"):
-        return rebuilt
-    return {
-        "pass_rate": 0.0,
-        "mean_score": 0.0,
-        "n_tasks": 0,
-        "n_pass": 0,
-        "n_fail": 0,
-        "n_error": 0,
-        "missing_score_as": 0.0,
-    }
+    return suite_document.metrics_and_refs(summary)[0]
 
 
 def _ensure_task_refs(summary: dict[str, Any]) -> list[dict[str, Any]]:
-    raw = summary.get("task_refs")
-    existing = [r for r in raw if isinstance(r, dict)] if isinstance(raw, list) else None
-    refs = ensure_suite_task_refs(summary, existing_refs=existing)
-    if refs:
-        return refs
-    return task_refs_for_summary(_task_dicts(summary))
+    return suite_document.metrics_and_refs(summary)[1]
 
 
 def _attempt_dicts(summary: dict[str, Any]) -> list[dict[str, Any]]:
