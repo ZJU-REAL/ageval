@@ -65,6 +65,8 @@ role 上可选 `label`。缺省：ACP 用 `options.entry`，其它路径用 `exe
 
 可选 `evaluate_host.isolated: true`（Current：docker）：另起打分环境。与成员 `evaluation.environments` 一起用时，Core 按名懒启动多个 Host。
 
+docker 可选 `environment_options`：`image` / `platform` / `network` / `user` / `egress` / `python_version`。`python_version` 是官方 Attempt 基座的 CPython minor（如 `"3.13"`；省略 = 3.12，形状 `^\d+\.\d+$`）；上游 tag 拉不到一次失败，不回退。`evaluate_host.environment_options` 可写 `network` / `egress` / `platform` / `user` / `python_version`（不是 `image`）；省略时打分 Host 只继承 job 的 `platform` / `user` / `python_version`，不继承 agent 的 `egress` / `network`。
+
 ## 成员一级目录白名单
 
 `prompts` · `schemas` · `environment` · `evaluation` · `data` · `lib` · `upstream` · `solution`

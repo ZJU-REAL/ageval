@@ -6,9 +6,11 @@ description: 发布 Dataset、组织权限、结果归档与分享。
 Registry 是独立的 HTTP 服务：发包、管组织、存结果、登录。  
 它**不是**本机 Viewer，也**不是** ageval Core。
 
+CLI 默认连公开 Hub，登录不必先填 URL。自托管再用 `AGEVAL_REGISTRY_URL` 或 `--registry-url` 覆盖。
+
 ## 怎么用
 
-1. 按仓库 [`services/registry/README.md`](https://github.com/ZJU-REAL/ageval/blob/main/services/registry/README.md) 启动服务。发版标签会把 Registry 与 Hub 镜像推到 GHCR，本机可用 compose 一次拉起 Postgres、对象存储、Registry 与 Hub
+1. 按仓库 [`services/registry/README.md`](https://github.com/ZJU-REAL/ageval/blob/main/services/registry/README.md) 启动**自托管**服务。发版标签会把 Registry 与 Hub 镜像推到 GHCR，本机可用 compose 一次拉起 Postgres、对象存储、Registry 与 Hub
 2. CLI 登录后创建组织。Dataset 用 `ageval publish --draft` 覆盖当前工作树，owner 再用 `ageval release` 固化为不可变版本；也可直接 `ageval publish` 发 release。按需上传 suite / Attempt 结果
 3. 私有结果可以分享给某个组织或用户
 4. 用浏览器打开 [Hub](/docs/share/hub) 浏览；Hub 走浏览器 OAuth，CLI 走 Device Flow

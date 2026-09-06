@@ -6,9 +6,11 @@ description: Publish Datasets, org access, result archives, and sharing.
 Registry is a standalone HTTP service: publish packages, manage orgs, store results, sign in.  
 It is **not** the local Viewer and **not** ageval Core.
 
+The CLI defaults to the public Hub; login does not require a URL first. Override with `AGEVAL_REGISTRY_URL` or `--registry-url` to self-host.
+
 ## Flow
 
-1. Start it per [`services/registry/README.md`](https://github.com/ZJU-REAL/ageval/blob/main/services/registry/README.md). Release tags push Registry and Hub images to GHCR; compose starts Postgres, object storage, Registry, and Hub together
+1. Start a **self-hosted** service per [`services/registry/README.md`](https://github.com/ZJU-REAL/ageval/blob/main/services/registry/README.md). Release tags push Registry and Hub images to GHCR; compose starts Postgres, object storage, Registry, and Hub together
 2. After CLI login: create an org. Upload a Dataset draft with `ageval publish --draft`; an owner promotes it with `ageval release`. Direct `ageval publish` still creates a release. Upload suite / Attempt results as needed
 3. Share private results with an org or user when you want
 4. Browse in [Hub](/docs/share/hub); Hub uses browser OAuth, CLI uses Device Flow

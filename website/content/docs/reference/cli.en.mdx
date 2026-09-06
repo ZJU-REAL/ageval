@@ -37,7 +37,7 @@ ageval results upload-suite <dataset|id@version> --suite-run <8-hex>
 ageval results upload|attach-agent|request|inbox|decide|share|unshare|set-visibility|delete …
 ```
 
-Path = dataset root. `run` / `lock` / `view` / `upload-suite` also accept a Hub ref (`id@version`); `--dir` only with a Hub ref. `tasks` / `campaign` stay local directories. `--agent` and `--profiles` are mutually exclusive. `--model` requires `--agent`. `ageval agent install` also installs declared non-contrib plugins. Destructive commands require `--yes`; overwrite same identity requires `--replace` (default 409).
+Path = dataset root. `run` / `lock` / `view` / `upload-suite` also accept a Hub ref (`id@version`); `--dir` only with a Hub ref. `tasks` / `campaign` stay local directories. `--agent` and `--profiles` are mutually exclusive. `--model` requires `--agent`. `ageval agent install` also installs declared non-contrib plugins. Destructive commands require `--yes`; overwrite same identity requires `--replace` (default 409). `AGEVAL_REGISTRY_URL` / `--registry-url` override the Registry origin; omit them to use the public Hub.
 
 ## Common `ageval run` flags
 

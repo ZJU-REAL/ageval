@@ -48,7 +48,7 @@ evaluation:
 | artifact id | 必须和 `run.py` 实际写出的文件对上 |
 | `tmpfs_mb` | 只改环境内 evaluator `/tmp`；省略 32 MiB。大 snapshot 在 **task** 上声明，不要写进 `limits` |
 
-`evaluator.py` 在 **parent 子进程**里跑（与 `run.py` 同一形态）。PASS 仍只由引擎写入结果。读结果时，执行与评测是分开的事实。配置可写 `evaluate_host.isolated: true`（Current：docker）另起打分环境；参考答案只上打分 Host。需要**多个、安装内容不同**的打分镜像时，在 `task.yaml` 写 `evaluation.environments`，用 `inputs["scoring"].exec(<name>, argv)` 或 `Agent.session(..., environment=<name>)` 指定名字；未用到的名字不 start。省略该表 = 单个打分 Host（或同一环境）。`scoring.exec` 只在有名表时可用。
+`evaluator.py` 在 **parent 子进程**里跑（与 `run.py` 同一形态）。PASS 仍只由引擎写入结果。读结果时，执行与评测是分开的事实。配置可写 `evaluate_host.isolated: true`（Current：docker）另起打分环境；参考答案只上打分 Host。需要**多个、安装内容不同**的打分镜像时，在 `task.yaml` 写 `evaluation.environments`，用 `inputs["scoring"].exec(<name>, argv)` 或 `Agent.session(..., environment=<name>)` 指定名字；未用到的名字不 start。省略该表 = 单个打分 Host（或同一环境）；此时 `scoring.exec` 打这只缺省 Host。写出有名表则必须点名；未知名一次失败，不 start。
 
 ## 两种评测
 

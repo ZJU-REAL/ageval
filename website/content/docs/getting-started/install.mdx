@@ -14,7 +14,7 @@ ageval -V
 - 真实 coding agent 路径需要本机 ACP 入口与凭据。仅 `ageval lock` 不需要。
 - 升级：`uv tool upgrade ageval-cli`
 
-CLI 装好即可用：dataset 用 registry ref（`<dataset_id>@<version>`）从 Hub 获取，或指向任意本地 dataset 根目录。
+CLI 装好即可用：dataset 用 registry ref（`<dataset_id>@<version>`）从 Hub 获取，或指向任意本地 dataset 根目录。默认连公开 Hub，不必先设 `AGEVAL_REGISTRY_URL`；自托管或 compose 再用该变量 / `--registry-url` 覆盖。
 
 ## 可选 extras
 

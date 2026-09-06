@@ -130,7 +130,7 @@ uv run python scripts/check_shared_lib_collisions.py examples/datasets/tau3-airl
 
 Package-local detail: [`datasets/tau3-airline-5/README.md`](datasets/tau3-airline-5/README.md).
 Regenerate the in-repo cut:
-`python examples/datasets/tau3-airline-5-5/scripts/generate_package.py --ids 0,1,2,3,4`.
+`python examples/datasets/tau3-airline-5/scripts/generate_package.py --ids 0,1,2,3,4`.
 
 ## `agents/` (`ageval.agent/1`)
 
