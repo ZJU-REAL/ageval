@@ -299,7 +299,7 @@ export function FileSplitPanel({
         )}
       >
         <div className="flex items-center justify-between px-3 py-2 border-b border-hairline shrink-0">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-mute">
+          <span className="text-sm font-medium text-ink">
             Files
           </span>
           <span className="text-[11px] tabular-nums text-mute">

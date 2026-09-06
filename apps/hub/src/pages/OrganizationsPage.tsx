@@ -481,7 +481,7 @@ export function OrganizationsPage() {
             <div>
               <label
                 htmlFor="org-name-input"
-                className="text-xs font-medium text-mute uppercase tracking-wide"
+                className="text-sm font-medium text-ink"
               >
                 Slug
               </label>
@@ -505,7 +505,7 @@ export function OrganizationsPage() {
             <div>
               <label
                 htmlFor="org-display-input"
-                className="text-xs font-medium text-mute uppercase tracking-wide"
+                className="text-sm font-medium text-ink"
               >
                 Display name
               </label>
@@ -577,7 +577,7 @@ export function OrganizationsPage() {
             <div>
               <label
                 htmlFor="invite-key-input"
-                className="text-xs font-medium text-mute uppercase tracking-wide"
+                className="text-sm font-medium text-ink"
               >
                 Invite key
               </label>

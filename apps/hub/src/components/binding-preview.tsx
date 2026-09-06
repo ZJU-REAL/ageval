@@ -50,7 +50,7 @@ function Field({
 }) {
   return (
     <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-4 gap-y-1 px-4 py-2.5">
-      <div className="text-[11px] uppercase tracking-wide text-mute pt-0.5">
+      <div className="pt-0.5 text-sm font-medium text-ink">
         {label}
       </div>
       <div className="min-w-0 text-sm text-ink">{children}</div>
@@ -149,12 +149,12 @@ export function BindingPreview({
     >
       <div className="divide-y divide-hairline">
         {executor ? (
-          <Field label="executor">
+          <Field label="Executor">
             <span className="text-[13px]">{executor}</span>
           </Field>
         ) : null}
         {model || modelOverride ? (
-          <Field label="model">
+          <Field label="Model">
             {model ? (
               <span className="text-[13px]">{model}</span>
             ) : (
@@ -169,17 +169,17 @@ export function BindingPreview({
           </Field>
         ) : null}
         {label ? (
-          <Field label="label">
+          <Field label="Label">
             <span className="text-sm text-ink">{label}</span>
           </Field>
         ) : null}
         {overlays.length ? (
-          <Field label="overlays">
+          <Field label="Overlays">
             <OverlayChips paths={overlays} onOpen={onOpenOverlay} />
           </Field>
         ) : null}
         {extensions.length ? (
-          <Field label="extensions">
+          <Field label="Extensions">
             <ChipList items={extensions.map((ext) => ext.plugin)} />
           </Field>
         ) : null}

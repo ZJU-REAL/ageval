@@ -205,7 +205,7 @@ export function PackageOwnerOps({
             <div>
               <label
                 htmlFor="release-version"
-                className="text-xs font-medium text-mute uppercase tracking-wide"
+                className="text-sm font-medium text-ink"
               >
                 Version
               </label>
@@ -219,7 +219,7 @@ export function PackageOwnerOps({
               />
             </div>
             <div>
-              <p className="text-xs font-medium text-mute uppercase tracking-wide">
+              <p className="text-sm font-medium text-ink">
                 Visibility
               </p>
               <Select
