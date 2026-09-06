@@ -13,8 +13,12 @@ import {
   LEADERBOARD_OPTIONAL_COLUMNS,
   LEADERBOARD_OPTIONAL_DEFAULT,
   LEADERBOARD_OPTIONAL_IDS,
+  LeaderboardInspector,
   LeaderboardTable,
 } from "@/components/leaderboard-table";
+import { LeaderboardPareto } from "@/components/leaderboard-pareto";
+import { LeaderboardWaffle } from "@/components/leaderboard-waffle";
+import { PillTabs } from "@/components/ui/pill-tabs";
 import {
   Select,
   SelectContent,
@@ -65,6 +69,14 @@ import {
 } from "@/lib/api";
 import { getGithubUser, getToken } from "@/lib/auth";
 import { buildNestedTree } from "@/lib/file-tree";
+import {
+  BOARD_CHARTS,
+  PARETO_AXES,
+  parseBoardChart,
+  parseParetoAxis,
+  type BoardChart,
+  type ParetoAxis,
+} from "@/lib/leaderboard-charts";
 import { LEADERBOARD_K_FIXTURES } from "@/lib/leaderboard-fixtures";
 import { formatDay, formatScore } from "@/lib/utils";
 
@@ -141,6 +153,8 @@ export function DatasetDetailPage() {
   const requestedVersion = search.get("v");
   const boardView: BoardView =
     search.get("board") === "internal" ? "internal" : "public";
+  const boardChart: BoardChart = parseBoardChart(search.get("chart"));
+  const paretoAxis: ParetoAxis = parseParetoAxis(search.get("axis"));
   /** Local smoke: `?tab=leaderboard&demo=1` injects mock k-metric rows. */
   const demoLeaderboard = search.get("demo") === "1";
   const requestedBoardVersion = (search.get("dataset_version") || "").trim();
@@ -424,6 +438,8 @@ export function DatasetDetailPage() {
       n.delete("board");
       n.delete("suite");
       n.delete("dataset_version");
+      n.delete("chart");
+      n.delete("axis");
     }
     if (next !== "tasks") n.delete("offset");
     setSearch(n, { replace: true });
@@ -451,6 +467,24 @@ export function DatasetDetailPage() {
     n.set("tab", "leaderboard");
     if (id) n.set("suite", id);
     else n.delete("suite");
+    setSearch(n, { replace: true });
+  }
+
+  function setBoardChart(next: BoardChart) {
+    const n = new URLSearchParams(search);
+    n.set("tab", "leaderboard");
+    if (next === "table") n.delete("chart");
+    else n.set("chart", next);
+    if (next !== "pareto") n.delete("axis");
+    setSearch(n, { replace: true });
+  }
+
+  function setParetoAxis(next: ParetoAxis) {
+    const n = new URLSearchParams(search);
+    n.set("tab", "leaderboard");
+    n.set("chart", "pareto");
+    if (next === "cost") n.delete("axis");
+    else n.set("axis", next);
     setSearch(n, { replace: true });
   }
 
@@ -893,13 +927,45 @@ export function DatasetDetailPage() {
                   </SelectContent>
                 </Select>
               ) : null}
+              <PillTabs
+                items={BOARD_CHARTS}
+                value={boardChart}
+                onChange={setBoardChart}
+                ariaLabel="Leaderboard chart"
+              />
+              {boardChart === "pareto" ? (
+                <Select
+                  value={paretoAxis}
+                  onValueChange={(next) => {
+                    if (next === "cost" || next === "tokens" || next === "time") {
+                      setParetoAxis(next);
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    aria-label="Pareto axis"
+                    className="h-9 w-auto min-w-[7.5rem]"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PARETO_AXES.map((item) => (
+                      <SelectItem key={item.id} value={item.id} mono={false}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
             </div>
+            {boardChart === "table" ? (
             <TableColumnPicker
               options={LEADERBOARD_OPTIONAL_COLUMNS}
               value={leaderboardColumns}
               onChange={setLeaderboardColumns}
               ariaLabel="Optional leaderboard columns"
             />
+            ) : null}
           </div>
           {boardView === "internal" && !demoLeaderboard ? (
             <p className="text-xs text-mute">
@@ -907,6 +973,61 @@ export function DatasetDetailPage() {
               metrics only — not suite PASS. Public board still needs Dataset org listing approval.
             </p>
           ) : null}
+          {boardChart === "waffle" ? (
+            <LeaderboardWaffle
+              suites={
+                demoLeaderboard
+                  ? visibleDemoSuites
+                  : boardView === "internal"
+                    ? visibleInternalSuites
+                    : visiblePublicSuites
+              }
+              datasetId={datasetId}
+              openSuiteId={demoLeaderboard ? null : search.get("suite")}
+              onOpenSuite={demoLeaderboard ? undefined : setSuite}
+              emptyTitle={
+                boardVersion
+                  ? `No suite runs for ${boardVersionLabel(boardVersion, versions)}`
+                  : boardView === "internal" && !demoLeaderboard
+                    ? "No internal suite runs"
+                    : undefined
+              }
+              emptyBody={
+                boardVersion
+                  ? "No matching suite runs for this Dataset version on this board. All versions still lists every row that passed the board gate."
+                  : boardView === "internal" && !demoLeaderboard
+                    ? "Caller-visible incomplete or draft-bound suite uploads appear here. Complete, release-bound rows stay on Public after listing approval. Task Jobs and attempt evidence are unchanged."
+                    : undefined
+              }
+            />
+          ) : boardChart === "pareto" ? (
+            <LeaderboardPareto
+              suites={
+                demoLeaderboard
+                  ? visibleDemoSuites
+                  : boardView === "internal"
+                    ? visibleInternalSuites
+                    : visiblePublicSuites
+              }
+              axis={paretoAxis}
+              openSuiteId={demoLeaderboard ? null : search.get("suite")}
+              onOpenSuite={demoLeaderboard ? undefined : setSuite}
+              emptyTitle={
+                boardVersion
+                  ? `No suite runs for ${boardVersionLabel(boardVersion, versions)}`
+                  : boardView === "internal" && !demoLeaderboard
+                    ? "No internal suite runs"
+                    : undefined
+              }
+              emptyBody={
+                boardVersion
+                  ? "No matching suite runs for this Dataset version on this board. All versions still lists every row that passed the board gate."
+                  : boardView === "internal" && !demoLeaderboard
+                    ? "Caller-visible incomplete or draft-bound suite uploads appear here. Complete, release-bound rows stay on Public after listing approval. Task Jobs and attempt evidence are unchanged."
+                    : undefined
+              }
+            />
+          ) : (
           <LeaderboardTable
             suites={
               demoLeaderboard
@@ -952,6 +1073,7 @@ export function DatasetDetailPage() {
                   : undefined
             }
           />
+          )}
           {boardView === "public" && !demoLeaderboard && visibleAwaitingListing.length > 0 ? (
             <div className="space-y-2">
               <p className="text-xs text-mute">
@@ -986,6 +1108,37 @@ export function DatasetDetailPage() {
               />
             </div>
           ) : null}
+          {demoLeaderboard ? null : (
+            <LeaderboardInspector
+              suites={[
+                ...(boardView === "internal"
+                  ? visibleInternalSuites
+                  : visiblePublicSuites),
+                ...(boardView === "public" ? visibleAwaitingListing : []),
+              ]}
+              datasetId={datasetId}
+              orgId={release?.org_id}
+              packageDigest={release?.package_digest}
+              versions={versions}
+              openSuiteId={search.get("suite")}
+              onOpenSuite={setSuite}
+              onSuiteUpdated={(id, patch) => {
+                const apply = (rows: SuiteRow[]) =>
+                  rows.map((row) =>
+                    row.suite_run_id === id ? { ...row, ...patch } : row,
+                  );
+                setJobSuites(apply);
+                setBoardSuites(apply);
+              }}
+              onSuiteDeleted={(id) => {
+                const drop = (rows: SuiteRow[]) =>
+                  rows.filter((row) => row.suite_run_id !== id);
+                setJobSuites(drop);
+                setBoardSuites(drop);
+                if (search.get("suite") === id) setSuite(null);
+              }}
+            />
+          )}
         </div>
       )}
     </>

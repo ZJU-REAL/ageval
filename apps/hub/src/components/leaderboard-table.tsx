@@ -61,6 +61,69 @@ export const LEADERBOARD_OPTIONAL_IDS = LEADERBOARD_OPTIONAL_COLUMNS.map(
 export const LEADERBOARD_OPTIONAL_DEFAULT: readonly LeaderboardOptionalColumn[] =
   [];
 
+export function LeaderboardInspector({
+  suites,
+  datasetId,
+  orgId,
+  openSuiteId,
+  onOpenSuite,
+  packageDigest,
+  versions,
+  onSuiteUpdated,
+  onSuiteDeleted,
+}: {
+  suites: SuiteRow[];
+  datasetId: string;
+  orgId?: string | null;
+  openSuiteId?: string | null;
+  onOpenSuite?: (suiteRunId: string | null) => void;
+  packageDigest?: string;
+  versions?: PackageRelease[];
+  onSuiteUpdated?: (suiteRunId: string, patch: Partial<SuiteRow>) => void;
+  onSuiteDeleted?: (suiteRunId: string) => void;
+}) {
+  const selfLogin = (getGithubUser() || "").toLowerCase();
+  const [pluginCatalog, setPluginCatalog] = useState<PackageRelease[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    const token = getToken();
+    listPackages(token, { packageKind: "plugin" })
+      .then((items) => {
+        if (!cancelled) setPluginCatalog(latestPackageByDataset(items));
+      })
+      .catch(() => {
+        if (!cancelled) setPluginCatalog([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const openSuite =
+    openSuiteId && suites.some((s) => s.suite_run_id === openSuiteId)
+      ? (suites.find((s) => s.suite_run_id === openSuiteId) ?? null)
+      : null;
+  if (!openSuite) return null;
+  return (
+    <SuiteInspector
+      suite={openSuite}
+      datasetId={datasetId}
+      overlayDigest={
+        versions?.find((row) => row.version === openSuite.dataset_version)
+          ?.package_digest || packageDigest
+      }
+      pluginCatalog={pluginCatalog}
+      orgId={orgId}
+      canManage={
+        Boolean(selfLogin) &&
+        (openSuite.uploaded_by || "").toLowerCase() === selfLogin
+      }
+      onClose={() => onOpenSuite?.(null)}
+      onSuiteUpdated={onSuiteUpdated}
+      onSuiteDeleted={onSuiteDeleted}
+    />
+  );
+}
+
 type SortKey =
   | "agent_label"
   | "model_label"
@@ -125,15 +188,10 @@ function defaultCompare(a: SuiteRow, b: SuiteRow): number {
 export function LeaderboardTable({
   suites,
   datasetId,
-  orgId,
   emptyTitle,
   emptyBody,
   openSuiteId,
   onOpenSuite,
-  packageDigest,
-  versions,
-  onSuiteUpdated,
-  onSuiteDeleted,
   optionalColumns = [],
 }: {
   suites: SuiteRow[];
@@ -152,36 +210,16 @@ export function LeaderboardTable({
   onSuiteDeleted?: (suiteRunId: string) => void;
   optionalColumns?: readonly LeaderboardOptionalColumn[];
 }) {
-  const selfLogin = (getGithubUser() || "").toLowerCase();
   const [localOpenId, setLocalOpenId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<string | null>("pass_rate");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [pluginCatalog, setPluginCatalog] = useState<PackageRelease[]>([]);
   const controlled = typeof onOpenSuite === "function";
-
-  useEffect(() => {
-    let cancelled = false;
-    const token = getToken();
-    listPackages(token, { packageKind: "plugin" })
-      .then((items) => {
-        if (!cancelled) setPluginCatalog(latestPackageByDataset(items));
-      })
-      .catch(() => {
-        if (!cancelled) setPluginCatalog([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const requested = controlled ? (openSuiteId ?? null) : localOpenId;
   const openId =
     requested && suites.some((s) => s.suite_run_id === requested)
       ? requested
       : null;
-  const openSuite = openId
-    ? (suites.find((s) => s.suite_run_id === openId) ?? null)
-    : null;
 
   function toggleRow(id: string) {
     const next = openId === id ? null : id;
@@ -331,6 +369,7 @@ export function LeaderboardTable({
               const environmentKey = resolveMechanismMark(environment);
 
               return (
+                  <HoverTip content="Click to open suite run">
                   <TableRow
                     key={s.suite_run_id}
                     className="cursor-pointer"
@@ -338,6 +377,7 @@ export function LeaderboardTable({
                     data-state={open ? "selected" : undefined}
                     aria-haspopup="dialog"
                     aria-expanded={open}
+                    aria-label="Click to open suite run"
                   >
                     {runtimeLinks.length ? (
                       <TableCell className={COL_TEXT}>
@@ -451,30 +491,12 @@ export function LeaderboardTable({
                       </TableCell>
                     ) : null}
                   </TableRow>
+                  </HoverTip>
               );
             })}
           </TableBody>
         </Table>
       </div>
-      {openSuite ? (
-        <SuiteInspector
-          suite={openSuite}
-          datasetId={datasetId}
-          overlayDigest={
-            versions?.find((row) => row.version === openSuite.dataset_version)
-              ?.package_digest || packageDigest
-          }
-          pluginCatalog={pluginCatalog}
-          orgId={orgId}
-          canManage={
-            Boolean(selfLogin) &&
-            (openSuite.uploaded_by || "").toLowerCase() === selfLogin
-          }
-          onClose={() => toggleRow(openSuite.suite_run_id)}
-          onSuiteUpdated={onSuiteUpdated}
-          onSuiteDeleted={onSuiteDeleted}
-        />
-      ) : null}
     </div>
   );
 }
