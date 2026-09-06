@@ -82,9 +82,13 @@ def register(app: typer.Typer) -> None:
         if rec is not None:
             out.update(rec)
         if db_root is not None and is_suite:
-            from ageval.application.suite.document import suite_dir
+            from ageval.evidence.locators import default_suite_runs_root
 
-            prog = suite_dir(db_root.expanduser().resolve(strict=False), run_id) / "progress.json"
+            prog = (
+                default_suite_runs_root(db_root.expanduser().resolve(strict=False))
+                / run_id
+                / "progress.json"
+            )
             if prog.is_file():
                 with contextlib.suppress(OSError, ValueError, TypeError):
                     data = _json.loads(prog.read_text(encoding="utf-8"))

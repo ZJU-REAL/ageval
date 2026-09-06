@@ -6,9 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ageval.evidence.locators import safe_id_segment
 from ageval.evidence.trajectory import OBSERVATION_REL, TRAJECTORY_FILENAME
 from ageval.evidence.usage import terminal_extra
-from ageval.viewer.jobs import get_job, safe_id_segment
+from ageval.viewer.jobs import get_job
 from ageval.viewer.trials.constants import MAX_JSONL_LINE, MAX_TRAJECTORY_STEPS
 from ageval.viewer.trials.paths import (
     _read_json_object,

@@ -9,8 +9,9 @@ from typing import Any
 
 from ageval.config.dataset import load_dataset_manifest
 from ageval.config.errors import ConfigError
+from ageval.evidence.locators import safe_id_segment
 from ageval.viewer.browse import commands_for
-from ageval.viewer.jobs import get_job, get_job_task, safe_id_segment
+from ageval.viewer.jobs import get_job, get_job_task
 from ageval.viewer.trials.paths import (
     _safe_run_id,
     resolve_evidence_root,
