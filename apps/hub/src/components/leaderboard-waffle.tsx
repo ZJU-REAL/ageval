@@ -9,8 +9,7 @@ import {
   type TrialKind,
   type WaffleTrial,
 } from "@/lib/leaderboard-charts";
-import { displayLabelsFromOverlay } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { cn, displayLabelsFromOverlay } from "@/lib/utils";
 
 const KIND_CLASS: Record<TrialKind, string> = {
   pass: "bg-ink",
