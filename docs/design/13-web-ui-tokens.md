@@ -123,7 +123,7 @@ landing 的 oklch 系(`oklch(15.4% 0.018 264)` 底等)是本表的 oklch 等值�
 6. 焦点可见性不妥协,但扫描与编辑不是同一条。按钮 / 链接 / 卡用 2px IKB 环(landing 3px outline);编辑字段用 1px IKB 描边;搜索与过滤保持 hairline 描边,不换焦点色。
 7. 选区、hover、active 的色彩表达一律引用令牌,不自调 hex / opacity 组合。
 8. 动效默认 `--ease-smooth` 200ms。`--ease-spring` / `--ease-glide`、按下 80ms、toast 550ms、landing hero/章节揭示 400ms、Hub/Viewer `ThinkingLogo` canvas、Hub/Viewer `liquid-gooey` Move 是已记录的例外。其它曲线、时长或运动库先改本文件。
-9. 图标三用途:产品品牌用 owl 系列(`owl-flat.tsx` / `OwlIcon`);功能用 lucide;plugin/agent 实体标默认 GitHub 头像(`uploaded_by`),可改闭包彩色标或另一个 GitHub login。闭包 SVG/PNG 在 `apps/hub/src/lib/brand-marks/assets/`,彩色,不把第三方 logo 组件库当运行时依赖。模型百科的 **lab** 标是 pin 里 vendored 的 lab SVG,缺则字母标;不进 plugin/agent 闭包、不装 `@lobehub/icons`。Lab ≠ Hub org。文件树仍用 `material-icon-theme`(既有例外)。
+9. 图标三用途:产品品牌用 owl 系列(`owl-flat.tsx` / `OwlIcon`);功能用 lucide;plugin/agent 实体标默认 GitHub 头像(`uploaded_by`),**official / builtin 默认仓内 `zju-real`**(不在打开列表时 fetch GitHub)。可改闭包彩色标或另一个 GitHub login。闭包 SVG/PNG 在 `apps/hub/src/lib/brand-marks/assets/`,彩色,不把第三方 logo 组件库当运行时依赖。模型百科的 **lab** 标是 pin 里 vendored 的 lab SVG,缺则字母标;不进 plugin/agent 闭包、不装 `@lobehub/icons`。Lab ≠ Hub org。文件树仍用 `material-icon-theme`(既有例外)。
 10. 深度感只用 `--viewer-shadow-pop`;blur 分档封顶,不为单个组件发明新档或第二套阴影令牌。
 
 ## 品牌资产入口
@@ -134,7 +134,7 @@ landing 的 oklch 系(`oklch(15.4% 0.018 264)` 底等)是本表的 oklch 等值�
 | `OwlIcon`(面标) | `apps/hub/src/components/owl-icon.tsx`、`apps/viewer/src/components/owl-icon.tsx` | 两 SPA 导航品牌位。与 website `OwlFlatIcon` 同一 path |
 | `ThinkingLogo` | `apps/hub/src/components/thinking-logo.tsx`、`apps/viewer/src/components/thinking-logo.tsx` | Hub / Viewer 拉取中的工作态点云(owl 面标烘焙点,canvas 2D)。empty 与导航 logo 仍用静态 SVG |
 | favicon | `website/src/app/favicon.ico` + `website/public/favicon.svg`；`apps/{hub,viewer}/public/favicon.{ico,svg}` | 黑方底板 + 白面标。只用 ico（浏览器默认 `/favicon.ico`）和 svg，不另备 png |
-| 实体/机制标 | `apps/hub/src/lib/brand-marks/` | plugin / agent 卡片与详情、Leaderboard。默认 uploader GitHub 头像;闭包为彩色真实标。ink 标固定白底，paper 标固定黑底 |
+| 实体/机制标 | `apps/hub/src/lib/brand-marks/` | plugin / agent 卡片与详情、Leaderboard。默认 uploader GitHub 头像;official / builtin 用闭包 `zju-real`。闭包为彩色真实标。ink 标固定白底，paper 标固定黑底 |
 | 模型 lab 标 | 随 pin 提交的 lab SVG | `/models` 与 harness 模型目录。缺 SVG 字母标。不进 `brand-marks/`。Lab ≠ Hub org |
 
 `owl-flat` 与 `owl-icon` 内的 IKB、墨、纸、奶油 hex 是品牌资产允许值,纳入机检 allowlist。预设彩色图标 hex 只许出现在 `brand-marks/assets/`(svg/png),不进 ts/tsx。模型 lab SVG hex 只许出现在 pin 资产目录,同样不进 ts/tsx。

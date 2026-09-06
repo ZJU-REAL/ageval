@@ -47,7 +47,11 @@ export const BRAND_MARKS: readonly BrandMarkEntry[] = [
   { id: "upstage", label: "Upstage", file: "upstage.svg", tone: "color" },
   { id: "xiaomi", label: "Xiaomi", file: "xiaomi.svg", tone: "color" },
   { id: "zhipu", label: "GLM", file: "zhipu.svg", tone: "color" },
+  { id: "zju-real", label: "REAL Lab", file: "zju-real.svg", tone: "color" },
 ];
+
+/** Bundled first-party mark (ZJU-REAL / ageval). No GitHub avatar fetch. */
+export const FIRST_PARTY_MARK_ID = "zju-real";
 
 export const BRAND_MARK_IDS: ReadonlySet<string> = new Set(
   BRAND_MARKS.map((row) => row.id),

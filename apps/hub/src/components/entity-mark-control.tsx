@@ -82,6 +82,7 @@ export function EntityMarkControl({
         open={open}
         current={draftFromHint(hint)}
         uploadedBy={hint.uploadedBy}
+        firstParty={Boolean(hint.official || hint.builtin)}
         defaultLetter={defaultLetter}
         busy={busy}
         onCancel={() => {

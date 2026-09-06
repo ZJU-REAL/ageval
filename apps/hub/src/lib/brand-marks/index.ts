@@ -2,6 +2,7 @@ export {
   BRAND_MARKS,
   BRAND_MARK_IDS,
   BRAND_MARK_BY_ID,
+  FIRST_PARTY_MARK_ID,
   type BrandMarkEntry,
   type BrandMarkTone,
 } from "@/lib/brand-marks/catalog";

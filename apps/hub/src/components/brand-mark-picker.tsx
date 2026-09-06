@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { buttonVariants } from "@/components/ui/button";
 import {
   BRAND_MARKS,
+  FIRST_PARTY_MARK_ID,
   githubAvatarUrl,
   parseGithubLogin,
 } from "@/lib/brand-marks";
@@ -20,6 +21,7 @@ export function BrandMarkPicker({
   open,
   current,
   uploadedBy,
+  firstParty = false,
   defaultLetter,
   busy = false,
   onCancel,
@@ -28,6 +30,8 @@ export function BrandMarkPicker({
   open: boolean;
   current: MarkDraft;
   uploadedBy?: string | null;
+  /** Official / builtin packages default to the bundled first-party mark. */
+  firstParty?: boolean;
   defaultLetter?: string;
   busy?: boolean;
   onCancel: () => void;
@@ -60,7 +64,7 @@ export function BrandMarkPicker({
     <ConfirmDialog
       open={open}
       title="Choose icon"
-      description="Default is the uploader GitHub avatar. Search the catalog, or paste a GitHub profile / org URL."
+      description="Search the catalog, or paste a GitHub profile / org URL."
       confirmLabel="Save"
       confirmVariant="default"
       busy={busy}
@@ -96,13 +100,15 @@ export function BrandMarkPicker({
         >
           <BrandMark
             mark={
-              uploader
-                ? {
-                    kind: "github",
-                    login: uploader,
-                    src: githubAvatarUrl(uploader),
-                  }
-                : { kind: "letter", letter: defaultLetter || "?" }
+              firstParty
+                ? { kind: "catalog", id: FIRST_PARTY_MARK_ID }
+                : uploader
+                  ? {
+                      kind: "github",
+                      login: uploader,
+                      src: githubAvatarUrl(uploader),
+                    }
+                  : { kind: "letter", letter: defaultLetter || "?" }
             }
             size={20}
           />

@@ -10,8 +10,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { BuiltinMark } from "@/components/builtin-mark";
 import { MarketplaceCounts } from "@/components/marketplace-counts";
 import { OfficialMark } from "@/components/official-mark";
-import { markFromGithubRepoLink, markFromPackage } from "@/lib/brand-marks";
-import { githubRepoUrl } from "@/lib/public-links";
+import { markFromPackage } from "@/lib/brand-marks";
 import {
   catalogPreviewKey,
   hydrateCatalogRow,
@@ -87,19 +86,7 @@ export function CatalogCard({
       )}
     >
       <p className="inline-flex min-w-0 items-end gap-2 font-medium leading-none text-ink">
-        <BrandMark
-          mark={
-            builtin && kind === "plugin"
-              ? markFromGithubRepoLink()
-              : markFromPackage(row)
-          }
-          size={24}
-          title={
-            builtin && kind === "plugin"
-              ? githubRepoUrl() || undefined
-              : undefined
-          }
-        />
+        <BrandMark mark={markFromPackage(row)} size={24} />
         <span className="truncate leading-none">{title}</span>
         {builtin ? <BuiltinMark /> : row.official ? <OfficialMark /> : null}
       </p>

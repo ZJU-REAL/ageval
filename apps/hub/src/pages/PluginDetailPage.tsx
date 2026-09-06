@@ -8,8 +8,7 @@ import { CommandStrip } from "@/components/command-strip";
 import { DisplayNameEditor } from "@/components/display-name-editor";
 import { EntityMarkControl } from "@/components/entity-mark-control";
 import { BrandMark } from "@/components/brand-mark";
-import { entityHintFromPackage, markFromGithubRepoLink } from "@/lib/brand-marks";
-import { githubRepoUrl } from "@/lib/public-links";
+import { entityHintFromPackage, markFromPackage } from "@/lib/brand-marks";
 import { OfficialMark } from "@/components/official-mark";
 import { FileSplitPanel } from "@/components/file-split-panel";
 import { MarketplaceCounts } from "@/components/marketplace-counts";
@@ -254,12 +253,8 @@ export function PluginDetailPage() {
               canEdit={Boolean(token && canEditName && release && !builtin)}
               headingClassName="text-xl font-semibold tracking-tight text-ink"
               beforeTitle={
-                builtin ? (
-                  <BrandMark
-                    mark={markFromGithubRepoLink()}
-                    size={24}
-                    title={githubRepoUrl() || undefined}
-                  />
+                builtin && release ? (
+                  <BrandMark mark={markFromPackage(release)} size={24} />
                 ) : release ? (
                   <EntityMarkControl
                     hint={entityHintFromPackage(release)}

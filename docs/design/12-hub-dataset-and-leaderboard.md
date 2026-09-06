@@ -83,7 +83,7 @@ Owner `PATCH /v1/packages/{id}` 可改写（与 `display_name` 同权，不进 b
 
 空字符串清除该字段。两个都空 = 回到 uploader 头像。一次 PATCH 可同时带两键（picker 保存时：选用录则清 github，填 link 则清 key）。
 
-解析顺序：已存 `icon_key` → 已存 `icon_github` → `uploaded_by` 的 `https://github.com/{login}.png?size=64` → 字母占位。裂图走字母。不把图片字节写入 Registry。
+解析顺序：已存 `icon_key` → 已存 `icon_github` → **official / builtin 包用闭包 `zju-real`（仓内 SVG，不 fetch GitHub）** → `uploaded_by` 的 `https://github.com/{login}.png?size=64` → 字母占位。裂图走字母。不把图片字节写入 Registry。`zju-real` 是 REAL Lab / ZJU-REAL 组织标，出现在图标 picker 里，owner 可改成其它目录标或 GitHub login。
 
 图标目录是 **彩色真实标**（官方 kit / Lobe static SVG / Simple Icons 路径 + 官方 hex）。禁止自造厂商 logo。黑标（ink，如 OpenAI）固定白底；白标（paper，如 Kimi）固定黑底。底板不跟主题反相。改标是包级写，不在列表卡上开 picker。Viewer 本轮不做。
 

@@ -1,4 +1,7 @@
-import { BRAND_MARK_IDS } from "@/lib/brand-marks/catalog";
+import {
+  BRAND_MARK_IDS,
+  FIRST_PARTY_MARK_ID,
+} from "@/lib/brand-marks/catalog";
 import { githubAvatarUrl, parseGithubLogin } from "@/lib/brand-marks/github";
 
 export type ResolvedMark =
@@ -12,6 +15,10 @@ export type EntityMarkHint = {
   uploadedBy?: string | null;
   displayName?: string | null;
   packageId?: string | null;
+  /** Official-org package: default the bundled first-party mark, not GitHub. */
+  official?: boolean | null;
+  /** Builtin plugin / agent: same bundled default when no icon_key. */
+  builtin?: boolean | null;
 };
 
 function firstLetter(raw: string): string {
@@ -31,6 +38,10 @@ export function resolveEntityMark(hint: EntityMarkHint): ResolvedMark {
   const github = parseGithubLogin(hint.iconGithub);
   if (github) {
     return { kind: "github", login: github, src: githubAvatarUrl(github) };
+  }
+
+  if (hint.official || hint.builtin) {
+    return { kind: "catalog", id: FIRST_PARTY_MARK_ID };
   }
 
   const uploader = parseGithubLogin(hint.uploadedBy);
