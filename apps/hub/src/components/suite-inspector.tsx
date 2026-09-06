@@ -491,7 +491,10 @@ export function SuiteInspector({
               <SuiteJobsList
                 suite={suite}
                 datasetId={datasetId}
-                onOpen={(href) => navigate(href)}
+                onOpen={(href) => {
+                  onClose();
+                  navigate(href);
+                }}
               />
             )}
           </div>

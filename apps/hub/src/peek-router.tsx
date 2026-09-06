@@ -69,7 +69,7 @@ export function PeekRouter({
       navigator: history,
       static: false,
       future: {},
-      useTransitions: undefined,
+      useTransitions: false,
     }),
     [history],
   );
