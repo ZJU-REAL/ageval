@@ -8,22 +8,38 @@ Visibility is only ``public`` | ``private``.
 Packages require ``org_id`` on new publishes; results carry ``uploaded_by``
 and optional share targets (org / user). Private read is ownership/membership
 based (admin bypass); scopes alone no longer grant global private sight.
+
+Blob and token adapters live in ``blobs.py`` / ``tokens.py`` and are
+re-exported here while importers migrate.
 """
 
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import json
 import sqlite3
-import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from services.registry import queries as Q
-from services.registry.protocols import MetadataStoreProtocol, TokenStoreProtocol
+from services.registry.blobs import (  # noqa: F401
+    FilesystemBlobStore,
+    MemoryBlobStore,
+    S3BlobStore,
+)
+from services.registry.protocols import MetadataStoreProtocol
+from services.registry.tokens import (  # noqa: F401
+    ADMIN_SCOPES,
+    DEFAULT_LOGIN_SCOPES,
+    PersistentTokenStore,
+    PostgresTokenStore,
+    SqliteTokenStore,
+    TokenInfo,
+    TokenStore,
+    _normalize_user_id,
+)
 
 # ---------------------------------------------------------------------------
 # Rows
@@ -185,14 +201,6 @@ class UserProfileRow:
 
 
 @dataclass(frozen=True, slots=True)
-class TokenInfo:
-    """Resolved bearer token: scopes + optional user identity (github login)."""
-
-    scopes: frozenset[str]
-    user_id: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class ResultShareRow:
     result_kind: str  # attempt | suite
     result_id: str
@@ -220,336 +228,6 @@ class OrgInviteKeyRow:
     expires_at: float | None
     revoked_at: float | None
     created_at: float
-
-
-# ---------------------------------------------------------------------------
-# Blob
-# ---------------------------------------------------------------------------
-
-
-class MemoryBlobStore:
-    """Unit-test only blob backend (bytes adapter behind a Path/fileobj put)."""
-
-    def __init__(self) -> None:
-        self._data: dict[str, bytes] = {}
-        self._lock = threading.Lock()
-
-    def _key(self, blob_digest: str, prefix: str) -> str:
-        return f"{prefix}/{blob_digest}"
-
-    def put_if_absent(
-        self, blob_digest: str, source: Path | Any, *, prefix: str = "packages"
-    ) -> None:
-        payload = source.read_bytes() if isinstance(source, Path) else source.read()
-        with self._lock:
-            self._data.setdefault(self._key(blob_digest, prefix), payload)
-
-    def open(self, blob_digest: str, *, prefix: str = "packages") -> Any:
-        import io
-
-        with self._lock:
-            data = self._data.get(self._key(blob_digest, prefix))
-        if data is None:
-            return None
-        return io.BytesIO(data)
-
-    def size(self, blob_digest: str, *, prefix: str = "packages") -> int | None:
-        with self._lock:
-            data = self._data.get(self._key(blob_digest, prefix))
-        return None if data is None else len(data)
-
-    def delete(self, blob_digest: str, *, prefix: str = "packages") -> bool:
-        """Remove blob if present. Returns True when a key was deleted."""
-        with self._lock:
-            return self._data.pop(self._key(blob_digest, prefix), None) is not None
-
-
-class FilesystemBlobStore:
-    """Dev fallback: local directory. Prefer S3 for compose e2e."""
-
-    def __init__(self, root: Path) -> None:
-        self.root = root
-        self.root.mkdir(parents=True, exist_ok=True)
-
-    def _path(self, blob_digest: str, prefix: str) -> Path:
-        key = blob_digest.replace(":", "_")
-        return self.root / prefix / key
-
-    def put_if_absent(
-        self, blob_digest: str, source: Path | Any, *, prefix: str = "packages"
-    ) -> None:
-        import shutil
-
-        path = self._path(blob_digest, prefix)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists():
-            return
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        try:
-            if isinstance(source, Path):
-                shutil.copyfile(source, tmp)
-            else:
-                with tmp.open("wb") as out:
-                    shutil.copyfileobj(source, out)
-            tmp.replace(path)
-        except Exception:
-            tmp.unlink(missing_ok=True)
-            raise
-
-    def open(self, blob_digest: str, *, prefix: str = "packages") -> Any:
-        path = self._path(blob_digest, prefix)
-        if not path.is_file():
-            return None
-        return path.open("rb")
-
-    def size(self, blob_digest: str, *, prefix: str = "packages") -> int | None:
-        path = self._path(blob_digest, prefix)
-        if not path.is_file():
-            return None
-        return path.stat().st_size
-
-    def delete(self, blob_digest: str, *, prefix: str = "packages") -> bool:
-        path = self._path(blob_digest, prefix)
-        if not path.is_file():
-            return False
-        path.unlink()
-        return True
-
-
-class S3BlobStore:
-    """S3-compatible blob store (RustFS / AWS). Credentials stay server-side only."""
-
-    def __init__(
-        self,
-        *,
-        endpoint: str,
-        access_key: str,
-        secret_key: str,
-        bucket: str,
-        region: str = "us-east-1",
-    ) -> None:
-        try:
-            import boto3
-            from botocore.client import Config
-            from botocore.exceptions import ClientError
-        except ImportError as exc:
-            raise RuntimeError(
-                "boto3 required for S3 blob backend; install with: uv sync --extra registry"
-            ) from exc
-        self._ClientError = ClientError
-        self.bucket = bucket
-        self._client = boto3.client(
-            "s3",
-            endpoint_url=endpoint.rstrip("/"),
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-            region_name=region,
-            config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
-        )
-        self._ensure_bucket()
-
-    def _ensure_bucket(self) -> None:
-        import contextlib
-
-        try:
-            self._client.head_bucket(Bucket=self.bucket)
-        except self._ClientError:
-            with contextlib.suppress(self._ClientError):
-                self._client.create_bucket(Bucket=self.bucket)
-
-    def _object_key(self, blob_digest: str, prefix: str) -> str:
-        return f"{prefix}/{blob_digest.replace(':', '_')}"
-
-    def put_if_absent(
-        self, blob_digest: str, source: Path | Any, *, prefix: str = "packages"
-    ) -> None:
-        key = self._object_key(blob_digest, prefix)
-        try:
-            self._client.head_object(Bucket=self.bucket, Key=key)
-            return
-        except self._ClientError:
-            pass
-        if isinstance(source, Path):
-            self._client.upload_file(str(source), self.bucket, key)
-            return
-        self._client.upload_fileobj(source, self.bucket, key)
-
-    def open(self, blob_digest: str, *, prefix: str = "packages") -> Any:
-        key = self._object_key(blob_digest, prefix)
-        try:
-            resp = self._client.get_object(Bucket=self.bucket, Key=key)
-        except self._ClientError:
-            return None
-        return resp["Body"]
-
-    def size(self, blob_digest: str, *, prefix: str = "packages") -> int | None:
-        key = self._object_key(blob_digest, prefix)
-        try:
-            resp = self._client.head_object(Bucket=self.bucket, Key=key)
-        except self._ClientError:
-            return None
-        return int(resp["ContentLength"])
-
-    def delete(self, blob_digest: str, *, prefix: str = "packages") -> bool:
-        key = self._object_key(blob_digest, prefix)
-        try:
-            self._client.head_object(Bucket=self.bucket, Key=key)
-        except self._ClientError:
-            return False
-        try:
-            self._client.delete_object(Bucket=self.bucket, Key=key)
-        except self._ClientError:
-            return False
-        return True
-
-
-# ---------------------------------------------------------------------------
-# Tokens
-# ---------------------------------------------------------------------------
-
-
-DEFAULT_LOGIN_SCOPES: frozenset[str] = frozenset(
-    {
-        "registry:publish",
-        "read-private",
-        "results:upload",
-        "results:read",
-    }
-)
-
-ADMIN_SCOPES: frozenset[str] = frozenset(
-    {
-        "admin",
-        "registry:publish",
-        "read-private",
-        "results:upload",
-        "results:read",
-    }
-)
-
-
-def _normalize_user_id(raw: str | None) -> str | None:
-    if raw is None:
-        return None
-    u = str(raw).strip()
-    if not u:
-        return None
-    return u.casefold()
-
-
-class TokenStore(TokenStoreProtocol):
-    """In-memory tokens (tests). Prefer SqliteTokenStore / PostgresTokenStore."""
-
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._tokens: dict[str, TokenInfo] = {}
-
-    def hash_token(self, raw: str) -> str:
-        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-    def add(
-        self,
-        raw_token: str,
-        scopes: set[str] | frozenset[str],
-        *,
-        github_user: str | None = None,
-    ) -> None:
-        with self._lock:
-            self._tokens[self.hash_token(raw_token)] = TokenInfo(
-                scopes=frozenset(scopes),
-                user_id=_normalize_user_id(github_user),
-            )
-
-    def auth_for(self, raw_token: str | None) -> TokenInfo:
-        if not raw_token:
-            return TokenInfo(scopes=frozenset())
-        with self._lock:
-            return self._tokens.get(self.hash_token(raw_token), TokenInfo(scopes=frozenset()))
-
-    def scopes_for(self, raw_token: str | None) -> frozenset[str]:
-        return self.auth_for(raw_token).scopes
-
-
-class PersistentTokenStore(TokenStoreProtocol):
-    """One token repository; SQLite / Postgres only differ in the adapter."""
-
-    def __init__(self, *, adapter: Any) -> None:
-        self._adapter = adapter
-        self.db_path = getattr(adapter, "db_path", None)
-        self._init()
-
-    def _connect(self) -> Any:
-        return self._adapter.connect()
-
-    def _exec(self, conn: Any, sql: str, params: Any = ()) -> Any:
-        return self._adapter.execute(conn, sql, params)
-
-    def _init(self) -> None:
-        with self._connect() as conn:
-            self._adapter.lock_schema(conn)
-            for stmt in Q.SCHEMA_STATEMENTS:
-                if "api_tokens" in stmt:
-                    self._exec(conn, stmt)
-            conn.commit()
-
-    def hash_token(self, raw: str) -> str:
-        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-    def add(
-        self,
-        raw_token: str,
-        scopes: set[str] | frozenset[str],
-        *,
-        github_user: str | None = None,
-    ) -> None:
-        scopes_json = json.dumps(sorted(scopes))
-        with self._connect() as conn:
-            self._exec(
-                conn,
-                Q.UPSERT_TOKEN,
-                (self.hash_token(raw_token), scopes_json, github_user),
-            )
-            conn.commit()
-
-    def auth_for(self, raw_token: str | None) -> TokenInfo:
-        if not raw_token:
-            return TokenInfo(scopes=frozenset())
-        with self._connect() as conn:
-            cur = self._exec(conn, Q.SELECT_TOKEN, (self.hash_token(raw_token),))
-            row = cur.fetchone()
-            if row is None or row.get("revoked_at") is not None:
-                return TokenInfo(scopes=frozenset())
-            scopes_raw = row["scopes"]
-            try:
-                data = scopes_raw if isinstance(scopes_raw, list) else json.loads(scopes_raw)
-            except (TypeError, json.JSONDecodeError):
-                return TokenInfo(scopes=frozenset())
-            return TokenInfo(
-                scopes=frozenset(str(s) for s in data),
-                user_id=_normalize_user_id(row["github_user"]),
-            )
-
-    def scopes_for(self, raw_token: str | None) -> frozenset[str]:
-        return self.auth_for(raw_token).scopes
-
-
-class SqliteTokenStore(PersistentTokenStore):
-    """Persistent tokens in the same SQLite file as metadata."""
-
-    def __init__(self, db_path: Path) -> None:
-        from services.registry.sql_adapter import SqliteAdapter
-
-        PersistentTokenStore.__init__(self, adapter=SqliteAdapter(db_path))
-
-
-class PostgresTokenStore(PersistentTokenStore):
-    """Persistent tokens in Postgres."""
-
-    def __init__(self, database_url: str) -> None:
-        from services.registry.sql_adapter import PostgresAdapter
-
-        PersistentTokenStore.__init__(self, adapter=PostgresAdapter(database_url))
-        self.database_url = database_url
 
 
 # ---------------------------------------------------------------------------
@@ -1036,9 +714,7 @@ class MetadataStore(MetadataStoreProtocol):
             created_at=float(r["created_at"]),
             decided_at=decided_at,
             decided_by=str(r["decided_by"] or "") if "decided_by" in keys else "",
-            canonical_model=(
-                str(r["canonical_model"] or "") if "canonical_model" in keys else ""
-            ),
+            canonical_model=(str(r["canonical_model"] or "") if "canonical_model" in keys else ""),
         )
 
     def list_agent_consents_for_suites(self, suite_run_ids: list[str]) -> dict[str, set[str]]:
@@ -1550,9 +1226,7 @@ class MetadataStore(MetadataStoreProtocol):
         with self._connect() as conn:
             cur = self._exec(
                 conn,
-                Q.update_org_query(
-                    display_name=has_name, description=has_desc, icons=has_icons
-                ),
+                Q.update_org_query(display_name=has_name, description=has_desc, icons=has_icons),
                 tuple(params),
             )
             if getattr(cur, "rowcount", 1) == 0:
