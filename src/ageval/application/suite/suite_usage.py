@@ -62,11 +62,54 @@ def usage_from_mapping(usage: Mapping[str, Any] | None) -> dict[str, Any]:
     return out
 
 
+def _sum_usage_parts(parts: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Add first-class token/cost fields. Missing keys stay omitted."""
+    prompt = 0
+    completion = 0
+    cached = 0
+    cost = 0.0
+    saw_prompt = False
+    saw_completion = False
+    saw_cached = False
+    n_cost = 0
+    for part in parts:
+        p = _as_int(part.get("prompt_tokens"))
+        c = _as_int(part.get("completion_tokens"))
+        k = _as_int(part.get("cached_tokens"))
+        usd = _as_float(part.get("cost_usd"))
+        if p is not None:
+            prompt += p
+            saw_prompt = True
+        if c is not None:
+            completion += c
+            saw_completion = True
+        if k is not None:
+            cached += k
+            saw_cached = True
+        if usd is not None:
+            cost += usd
+            n_cost += 1
+    out: dict[str, Any] = {}
+    if saw_prompt:
+        out["prompt_tokens"] = prompt
+    if saw_completion:
+        out["completion_tokens"] = completion
+    if saw_cached:
+        out["cached_tokens"] = cached
+    if n_cost:
+        out["cost_usd"] = cost
+    return out
+
+
 def usage_from_trajectory(path: Path) -> dict[str, Any]:
-    """Last ``terminal.usage`` on an Attempt trajectory (one file per Attempt)."""
+    """Sum every ``terminal.usage`` on an Attempt trajectory.
+
+    ACP writes per-turn usage, not a session cumulative. The last terminal is
+    often a short wrap-up, so taking only that row undercounts the Attempt.
+    """
     if not path.is_file():
         return {}
-    last: dict[str, Any] = {}
+    parts: list[dict[str, Any]] = []
     try:
         with path.open("r", encoding="utf-8", errors="replace") as fh:
             for line in fh:
@@ -83,10 +126,10 @@ def usage_from_trajectory(path: Path) -> dict[str, Any]:
                     obj.get("usage") if isinstance(obj.get("usage"), dict) else None
                 )
                 if parsed:
-                    last = parsed
+                    parts.append(parsed)
     except OSError:
         return {}
-    return last
+    return _sum_usage_parts(parts)
 
 
 def duration_s_from_run_dir(run_dir: Path) -> float | None:
@@ -102,9 +145,11 @@ def duration_s_from_run_dir(run_dir: Path) -> float | None:
             continue
         timing = raw.get("phase_timing")
         if not isinstance(timing, dict):
-            timing = (raw.get("result") or {}).get("phase_timing") if isinstance(
-                raw.get("result"), dict
-            ) else None
+            timing = (
+                (raw.get("result") or {}).get("phase_timing")
+                if isinstance(raw.get("result"), dict)
+                else None
+            )
         if not isinstance(timing, dict):
             continue
         total_ms = _as_float(timing.get("total_ms"))
@@ -272,16 +317,12 @@ def merge_suite_usage(
     summary: Mapping[str, Any],
     dataset_root: Path,
 ) -> dict[str, Any]:
-    """Attach ``metrics.usage`` when missing and local Attempt dirs can fill it."""
+    """Write ``metrics.usage`` from local Attempt dirs when they can be read.
+
+    Re-upload refreshes the bag (sum of every job). If local dirs are missing,
+    keep whatever was already on the summary.
+    """
     out = dict(metrics)
-    existing = out.get("usage")
-    if isinstance(existing, dict) and (
-        existing.get("prompt_tokens") is not None
-        or existing.get("completion_tokens") is not None
-        or existing.get("cost_usd") is not None
-        or existing.get("cost_usd_estimated") is not None
-    ):
-        return out
     collected = collect_suite_usage(dataset_root, summary)
     if collected:
         out["usage"] = collected

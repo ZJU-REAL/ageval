@@ -18,20 +18,25 @@ def _write_traj(run_dir: Path, usage: dict) -> None:
     (run_dir / "trajectory.jsonl").write_text(line + "\n", encoding="utf-8")
 
 
-def test_usage_from_trajectory_last_terminal(tmp_path: Path) -> None:
+def test_usage_from_trajectory_sums_terminals(tmp_path: Path) -> None:
     p = tmp_path / "trajectory.jsonl"
     p.write_text(
         json.dumps({"type": "assistant", "content": "hi"})
         + "\n"
         + json.dumps({"type": "terminal", "usage": {"prompt_tokens": 10, "completion_tokens": 2}})
         + "\n"
-        + json.dumps({"type": "terminal", "usage": {"prompt_tokens": 40, "completion_tokens": 8, "cost_usd": 0.02}})
+        + json.dumps(
+            {
+                "type": "terminal",
+                "usage": {"prompt_tokens": 40, "completion_tokens": 8, "cost_usd": 0.02},
+            }
+        )
         + "\n",
         encoding="utf-8",
     )
     got = usage_from_trajectory(p)
-    assert got["prompt_tokens"] == 40
-    assert got["completion_tokens"] == 8
+    assert got["prompt_tokens"] == 50
+    assert got["completion_tokens"] == 10
     assert got["cost_usd"] == 0.02
 
 
@@ -54,6 +59,34 @@ def test_aggregate_usage_estimates_when_no_agent_cost() -> None:
         assert bag.get("cost_source") == "missing"
 
 
+def test_collect_suite_usage_sums_every_terminal(tmp_path: Path) -> None:
+    db = tmp_path / "ds"
+    db.mkdir()
+    (db / "ageval.yaml").write_text(
+        "format: ageval.dataset/1\nid: t/ds\nversion: 0.1.0\n",
+        encoding="utf-8",
+    )
+    run_dir = db / ".ageval" / "runs" / "r1"
+    run_dir.mkdir(parents=True)
+    (run_dir / "trajectory.jsonl").write_text(
+        json.dumps({"type": "terminal", "usage": {"prompt_tokens": 10, "completion_tokens": 2}})
+        + "\n"
+        + json.dumps({"type": "terminal", "usage": {"prompt_tokens": 40, "completion_tokens": 8}})
+        + "\n",
+        encoding="utf-8",
+    )
+    bag = collect_suite_usage(
+        db,
+        {
+            "task_refs": [{"task_id": "a", "run_id": "r1"}],
+            "job_overlay": {"agent_profiles": {"solver": {"model": "deepseek/deepseek-v4-pro"}}},
+        },
+    )
+    assert bag is not None
+    assert bag["prompt_tokens"] == 50
+    assert bag["completion_tokens"] == 10
+
+
 def test_collect_suite_usage_from_run_dirs(tmp_path: Path) -> None:
     db = tmp_path / "ds"
     db.mkdir()
@@ -71,9 +104,7 @@ def test_collect_suite_usage_from_run_dirs(tmp_path: Path) -> None:
     )
     summary = {
         "task_refs": [{"task_id": "a", "run_id": "r1"}],
-        "job_overlay": {
-            "agent_profiles": {"solver": {"model": "deepseek/deepseek-v4-pro"}}
-        },
+        "job_overlay": {"agent_profiles": {"solver": {"model": "deepseek/deepseek-v4-pro"}}},
     }
     bag = collect_suite_usage(db, summary)
     assert bag is not None
@@ -82,7 +113,7 @@ def test_collect_suite_usage_from_run_dirs(tmp_path: Path) -> None:
     assert bag["duration_s"] == 1.5
 
 
-def test_merge_suite_usage_keeps_existing(tmp_path: Path) -> None:
+def test_merge_suite_usage_keeps_existing_without_local_runs(tmp_path: Path) -> None:
     metrics = {
         "pass_rate": 1.0,
         "usage": {"prompt_tokens": 9, "cost_source": "reported", "cost_usd": 0.1},
@@ -90,6 +121,34 @@ def test_merge_suite_usage_keeps_existing(tmp_path: Path) -> None:
     out = merge_suite_usage(metrics, {"task_refs": []}, tmp_path)
     assert out["usage"]["prompt_tokens"] == 9
     assert out["usage"]["cost_usd"] == 0.1
+
+
+def test_merge_suite_usage_refreshes_from_local_runs(tmp_path: Path) -> None:
+    db = tmp_path / "ds"
+    db.mkdir()
+    (db / "ageval.yaml").write_text(
+        "format: ageval.dataset/1\nid: t/ds\nversion: 0.1.0\n",
+        encoding="utf-8",
+    )
+    _write_traj(
+        db / ".ageval" / "runs" / "r1",
+        {"prompt_tokens": 100, "completion_tokens": 20},
+    )
+    metrics = {
+        "pass_rate": 1.0,
+        "usage": {
+            "prompt_tokens": 9,
+            "cost_source": "estimated",
+            "cost_usd_estimated": 0.01,
+        },
+    }
+    summary = {
+        "task_refs": [{"task_id": "a", "run_id": "r1"}],
+        "job_overlay": {"agent_profiles": {"solver": {"model": "deepseek/deepseek-v4-pro"}}},
+    }
+    out = merge_suite_usage(metrics, summary, db)
+    assert out["usage"]["prompt_tokens"] == 100
+    assert out["usage"]["completion_tokens"] == 20
 
 
 def test_estimate_cost_usd_none_without_tokens() -> None:
