@@ -1,51 +1,74 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
-import { ModelItem } from "@/components/model-item";
+import { AgentItem } from "@/components/agent-item";
 import { SearchPalette } from "@/components/search-palette";
-import { encodeDatasetId } from "@/lib/api";
-import { loadModelPin } from "@/lib/model-pin";
+import {
+  isBuiltinPackage,
+  latestPackageByDataset,
+  listPackages,
+  type PackageRelease,
+} from "@/lib/api";
 
 const MAX_RESULTS = 50;
 
-/** Cmd/Ctrl+F palette over the model pin. `onPick` selects instead of navigating. */
-export function ModelSearchModal({
+export function attachSpecFromPackage(row: PackageRelease): string {
+  const id = (row.dataset_id || "").trim();
+  if (!id) return "";
+  if (isBuiltinPackage(row)) return id;
+  const version = (row.version || "").trim();
+  return version ? `${id}@${version}` : id;
+}
+
+/** Search palette over published / builtin agent packages. */
+export function AgentSearchModal({
   open,
   onClose,
   onPick,
+  token,
 }: {
   open: boolean;
   onClose: () => void;
-  onPick?: (canonical: string) => void;
+  onPick: (spec: string, row: PackageRelease) => void;
+  token: string | null;
 }) {
-  const navigate = useNavigate();
-  const pin = loadModelPin();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const [catalog, setCatalog] = useState<PackageRelease[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const rows = useMemo(() => {
-    if (!open) return [];
-    const q = query.trim().toLowerCase();
-    const out: {
-      canonical: string;
-      info: (typeof pin.models)[string];
-    }[] = [];
-    for (const [canonical, info] of Object.entries(pin.models)) {
-      const hay =
-        `${canonical} ${info.name} ${info.family} ${info.lab} ${info.description}`.toLowerCase();
-      if (q && !hay.includes(q)) continue;
-      out.push({ canonical, info });
-    }
-    return out.slice(0, MAX_RESULTS);
-  }, [open, query, pin]);
-
-  const current = Math.min(active, Math.max(0, rows.length - 1));
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    listPackages(token, { packageKind: "agent" })
+      .then((items) => {
+        if (!cancelled) setCatalog(latestPackageByDataset(items));
+      })
+      .catch(() => {
+        if (!cancelled) setCatalog([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, token]);
 
   useEffect(() => {
     if (!open) setQuery("");
   }, [open]);
+
+  const rows = useMemo(() => {
+    if (!open) return [];
+    const q = query.trim().toLowerCase();
+    const out = catalog.filter((row) => {
+      if (!q) return true;
+      const hay =
+        `${row.dataset_id} ${row.display_name || ""} ${row.org_id || ""} ${row.agent_preview?.label || ""}`.toLowerCase();
+      return hay.includes(q);
+    });
+    return out.slice(0, MAX_RESULTS);
+  }, [open, query, catalog]);
+
+  const current = Math.min(active, Math.max(0, rows.length - 1));
 
   useEffect(() => {
     if (!open) return;
@@ -60,18 +83,14 @@ export function ModelSearchModal({
         const row = rows[Math.min(active, Math.max(0, rows.length - 1))];
         if (!row) return;
         event.preventDefault();
-        if (onPick) {
-          onPick(row.canonical);
-          onClose();
-        } else {
-          onClose();
-          navigate(`/models/${encodeDatasetId(row.canonical)}`);
-        }
+        const spec = attachSpecFromPackage(row);
+        if (spec) onPick(spec, row);
+        onClose();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, rows, active, onClose, navigate, onPick]);
+  }, [open, rows, active, onClose, onPick]);
 
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>(
@@ -80,27 +99,17 @@ export function ModelSearchModal({
     el?.scrollIntoView({ block: "nearest" });
   }, [current]);
 
-  function choose(canonical: string) {
-    if (onPick) {
-      onPick(canonical);
-      onClose();
-      return;
-    }
-    onClose();
-    navigate(`/models/${encodeDatasetId(canonical)}`);
-  }
-
   return (
     <SearchPalette
       open={open}
       onClose={onClose}
-      label="Search models"
+      label="Search agents"
       query={query}
       onQuery={(next) => {
         setQuery(next);
         setActive(0);
       }}
-      placeholder="Search models…"
+      placeholder="Search agents…"
       countLabel={
         open
           ? `${rows.length} result${rows.length === 1 ? "" : "s"}`
@@ -110,21 +119,21 @@ export function ModelSearchModal({
       listRef={listRef}
       empty={
         rows.length === 0 ? (
-          <p className="px-3 py-6 text-sm text-mute">No models match</p>
+          <p className="px-3 py-6 text-sm text-mute">No agents match</p>
         ) : null
       }
     >
       {rows.map((row, i) => (
-        <ModelItem
-          key={row.canonical}
-          canonical={row.canonical}
-          overlay={row.canonical}
+        <AgentItem
+          key={row.dataset_id}
+          row={row}
           selected={i === current}
-          title={row.info.description}
-          role="option"
-          aria-selected={i === current}
-          data-index={i}
-          onClick={() => choose(row.canonical)}
+          index={i}
+          onClick={() => {
+            const spec = attachSpecFromPackage(row);
+            if (spec) onPick(spec, row);
+            onClose();
+          }}
           onMouseEnter={() => setActive(i)}
         />
       ))}

@@ -32,6 +32,21 @@ The look is already chosen. Shared anti-slop (copy, type, reject list, landing-p
 - Search on a catalog list copies `CatalogScopeBar`.
 - Layout: Viewer DESIGN.md **Composition**. New chrome joins the band already scanning the page. Density 6/10 is not an excuse for a vacant half-row.
 
+### DashButton (fill-in slot)
+
+Hairline **dashed underline**, not a boxed button. Used for Attach role / agent / model.
+
+Motion is the same CSS budget as the rest of Hub (`200ms` / `--ease-smooth`). Do not unmount the hover list on leave (that kills the exit). Do not add GSAP / Motion.
+
+| State | What happens |
+| --- | --- |
+| Rest | Underline `border-hairline` dashed |
+| Hover / open | Underline → `border-mute`, **200ms ease-smooth** |
+| Hover list in | List stays mounted. Reveals **downward** (`grid-template-rows` `0fr` → `1fr`) and fades `opacity` 0 → 1, same **200ms ease-smooth**, origin top. Cap `max-h-56` then scroll |
+| Hover list out | Reverse of the same curve. Pointer leaves the slot **or** the list |
+| Click the slot | Opens the search palette (agent / model). Role has no palette; pick from the list |
+| `prefers-reduced-motion: reduce` | Skip duration; jump to the open / closed state |
+
 ## Reuse first
 
 Before drawing a control:
@@ -53,6 +68,7 @@ Token values, type stacks, radii, and motion curves: the YAML in Viewer `DESIGN.
 | In-page exclusive choice | `Select` |
 | Compact in-panel segment | `PillTabs` |
 | Wrapping label | `Chip` (overlay paths, plugin names in a preview — **not** model browse) |
+| Fill-in slot (Attach role / agent / model) | `DashButton` (hairline dashed underline → mute on hover, 200ms ease-smooth; hover list expands downward 0fr→1fr + fade; click opens the search palette) |
 | Marketplace plugin / agent | `CatalogCard` / `CatalogCardGrid` |
 | Model encyclopedia detail | `/models/{canonical}`: identity then `UnderlineTabs` Overview / Performance. Overview is a BindingPreview-style `blob-panel` spec list. HF mark + link only when the pin has a Hugging Face URL. No per-gateway price table. Performance `blob-panel` + `Table`. Not `CatalogCard`. |
 | Model encyclopedia | `/models` plaza: one `blob-panel` + `Table` **per lab** (shared `colgroup` + `table-fixed` so columns align; `Table` wrap is `overflow-visible` so sticky is still `#main`). Lab title is a row above the panel (`LabGroupHead`, `text-base`) with mark + official link + `lab-info` blurb. Model cell: name links `/models/{canonical}` with modality badges, canonical id below in mute. Columns: Model / Released / Context / Output / Price per MTok. `SortableHead` shared across labs. `#main` is the only scroller. Toolbar is `sticky top-0` (`-mt-5 pt-0`, opaque `bg-canvas` plus an upward canvas cap) so it sits flush under the shell header at rest and when stuck, covering `#main`’s `pt-5` gap; `--models-stick-top` is the toolbar’s visible bottom vs `#main`; lab head / `th` stick flush under that. Not `CatalogCard`. Not wrapping `Chip`. Lab ≠ Hub `org_id`. Scope is `CatalogScopeBar variant="select"` (Explore All / With Performance); modality `UnderlineTabs` follow. Liquid fill stays `canvas-soft-2`; selected/hover tints the icon only. Param counts are not in the pin; do not fake them. |

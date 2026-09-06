@@ -1,7 +1,13 @@
 import { CircleMinus, Settings, Share2, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { AgentSearchModal, attachSpecFromPackage } from "@/components/agent-search-modal";
+import { FieldLabel } from "@/components/field-label";
+import { LabMark } from "@/components/lab-mark";
+import { ModelSearchModal } from "@/components/model-search-modal";
+import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
+import { DashButton, DashMenuItem } from "@/components/ui/dash-button";
 import { ConfirmDialog, Modal } from "@/components/ui/confirm-dialog";
 import {
   DropdownMenu,
@@ -25,27 +31,132 @@ import {
   applyRequest,
   deleteResult,
   isBuiltinPackage,
+  latestPackageByDataset,
+  listPackages,
   listPackageVersionsWithPerformances,
   listResultShares,
   listSuiteRequests,
+  packageDisplayTitle,
   removeResultShare,
   setResultVisibility,
   type JobOverlay,
+  type PackageRelease,
   type ResourceRequest,
   type ResultShare,
   type SuiteRow,
   RegistryHttpError,
 } from "@/lib/api";
-import { CanonicalSelect } from "@/components/canonical-select";
 import {
   ATTACH_ROLE_ALL,
+  attachSpecBody,
   composeAttachSpec,
   defaultAttachChoice,
   overlayModelsForAttach,
   overlayRoles,
 } from "@/lib/agent-attach";
-import { joinOverlay, loadModelPin } from "@/lib/model-pin";
+import { markFromPackage } from "@/lib/brand-marks";
+import { joinOverlay, loadModelPin, pinnedModel } from "@/lib/model-pin";
 import { overlayHarnessIds } from "@/lib/utils";
+
+function SentenceBlank({
+  value,
+  placeholder,
+  icon,
+  onClick,
+  disabled,
+  menu,
+}: {
+  value: string;
+  placeholder: string;
+  icon?: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  menu?: ReactNode;
+}) {
+  const empty = !value.trim();
+  return (
+    <DashButton
+      empty={empty}
+      onClick={onClick}
+      disabled={disabled}
+      menu={menu}
+    >
+      {icon}
+      <span className="truncate">{empty ? placeholder : value}</span>
+    </DashButton>
+  );
+}
+
+function agentSpecId(spec: string): string {
+  return attachSpecBody(spec).split("@")[0]?.trim() || "";
+}
+
+function agentBlankLabel(spec: string, catalog: PackageRelease[]): string {
+  const body = attachSpecBody(spec);
+  if (!body) return "";
+  const id = body.split("@")[0]?.trim() || body;
+  const hit = catalog.find((row) => row.dataset_id === id);
+  if (hit) return packageDisplayTitle(hit.dataset_id, hit.display_name);
+  return id;
+}
+
+function modelBlankLabel(canonical: string): string {
+  const id = canonical.trim();
+  if (!id) return "";
+  return pinnedModel(id, loadModelPin())?.name || id;
+}
+
+function agentBlankIcon(spec: string, catalog: PackageRelease[]): ReactNode {
+  const body = attachSpecBody(spec);
+  if (!body) return null;
+  const id = body.split("@")[0]?.trim() || body;
+  const hit = catalog.find((row) => row.dataset_id === id);
+  if (!hit) return null;
+  return <BrandMark mark={markFromPackage(hit)} size={16} />;
+}
+
+function modelBlankIcon(canonical: string): ReactNode {
+  const info = pinnedModel(canonical.trim(), loadModelPin());
+  if (!info?.lab) return null;
+  return <LabMark lab={info.lab} size={16} />;
+}
+
+function AttachModelMenu({
+  selected,
+  hits,
+  onPick,
+}: {
+  selected: string;
+  hits: string[];
+  onPick: (id: string) => void;
+}) {
+  const pin = loadModelPin();
+  const hitSet = new Set(hits);
+  const ids = [
+    ...hits.filter((id) => pin.models[id]),
+    ...Object.keys(pin.models).filter((id) => !hitSet.has(id)),
+  ];
+  if (!ids.length) {
+    return <p className="px-2.5 py-2 text-sm text-mute">No models</p>;
+  }
+  return (
+    <>
+      {ids.map((id) => {
+        const info = pin.models[id];
+        return (
+          <DashMenuItem
+            key={id}
+            selected={selected === id}
+            onClick={() => onPick(id)}
+          >
+            {info?.lab ? <LabMark lab={info.lab} size={16} /> : null}
+            <span className="truncate">{info?.name || id}</span>
+          </DashMenuItem>
+        );
+      })}
+    </>
+  );
+}
 
 /** Compare Hub Performance specs: optional `role=`, ignore `+digest`. */
 function performanceKey(value: string | undefined): string {
@@ -109,6 +220,9 @@ export function ResultOwnerOps({
   const [harnessAgents, setHarnessAgents] = useState<Record<string, string>>(
     {},
   );
+  const [agentCatalog, setAgentCatalog] = useState<PackageRelease[]>([]);
+  const [pickAgentOpen, setPickAgentOpen] = useState(false);
+  const [pickModelOpen, setPickModelOpen] = useState(false);
 
   const loadShares = variant === "panel" || shareOpen;
 
@@ -123,6 +237,13 @@ export function ResultOwnerOps({
     setAttachRole(ATTACH_ROLE_ALL);
     setAttachCanonical("");
     setHarnessAgents({});
+    listPackages(token, { packageKind: "agent" })
+      .then((items) => {
+        if (!cancelled) setAgentCatalog(latestPackageByDataset(items));
+      })
+      .catch(() => {
+        if (!cancelled) setAgentCatalog([]);
+      });
     const roles = kind === "suite" ? overlayRoles(jobOverlay) : [];
     const ids = kind === "suite" ? overlayHarnessIds(jobOverlay) : [];
     const builtinLoad =
@@ -394,9 +515,7 @@ export function ResultOwnerOps({
   const shareForm = (
     <div className="space-y-4">
       <div className="space-y-2">
-        <p className="text-xs font-medium text-mute uppercase tracking-wide">
-          Visibility
-        </p>
+        <FieldLabel>Visibility</FieldLabel>
         <Select
           value={current}
           onValueChange={(value) => {
@@ -408,7 +527,7 @@ export function ResultOwnerOps({
         >
           <SelectTrigger
             aria-label="Result visibility"
-            className="h-8 min-w-0 w-auto text-xs"
+            className="h-8 min-w-0 w-auto"
           >
             <SelectValue />
           </SelectTrigger>
@@ -421,74 +540,102 @@ export function ResultOwnerOps({
 
       {kind === "suite" ? (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-mute uppercase tracking-wide">
+          <FieldLabel
+            hint="Which published agent and model this suite run used."
+          >
             Attach agent
-          </p>
-          <div className="space-y-2">
-            {roleChoices.length > 0 ? (
-              <Select
-                value={attachRole}
-                onValueChange={onAttachRoleChange}
-                disabled={busy}
-              >
-                <SelectTrigger
-                  aria-label="Attach role"
-                  className="h-8 min-w-0 w-auto shrink-0 text-xs"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ATTACH_ROLE_ALL} mono={false}>
-                    all
-                  </SelectItem>
-                  {roleChoices.map((row) => (
-                    <SelectItem key={row.id} value={row.id} mono={false}>
-                      {row.id}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-            <CanonicalSelect
-              value={attachCanonical}
-              onChange={setAttachCanonical}
-              hits={attachModelHits}
-              allowEmpty={attachModelHits.length !== 1}
-              includePin
-              allowCustom
-              variant="panel"
+          </FieldLabel>
+          <p className="text-sm leading-9 text-ink">
+            Register{" "}
+            <SentenceBlank
+              value={attachRole || "all"}
+              placeholder="role"
               disabled={busy}
+              menu={
+                <>
+                  <DashMenuItem
+                    selected={attachRole === ATTACH_ROLE_ALL}
+                    onClick={() => onAttachRoleChange(ATTACH_ROLE_ALL)}
+                  >
+                    all
+                  </DashMenuItem>
+                  {roleChoices.map((row) => (
+                    <DashMenuItem
+                      key={row.id}
+                      selected={attachRole === row.id}
+                      onClick={() => onAttachRoleChange(row.id)}
+                    >
+                      {row.id}
+                    </DashMenuItem>
+                  ))}
+                </>
+              }
+            />{" "}
+            as{" "}
+            <SentenceBlank
+              value={agentBlankLabel(agentRef, agentCatalog)}
+              placeholder="agent"
+              icon={agentBlankIcon(agentRef, agentCatalog)}
+              disabled={busy}
+              onClick={() => setPickAgentOpen(true)}
+              menu={
+                agentCatalog.length ? (
+                  agentCatalog.map((row) => (
+                    <DashMenuItem
+                      key={row.dataset_id}
+                      selected={agentSpecId(agentRef) === row.dataset_id}
+                      onClick={() =>
+                        setAgentRef(attachSpecFromPackage(row))
+                      }
+                    >
+                      <BrandMark mark={markFromPackage(row)} size={16} />
+                      <span className="truncate">
+                        {packageDisplayTitle(row.dataset_id, row.display_name)}
+                      </span>
+                    </DashMenuItem>
+                  ))
+                ) : (
+                  <p className="px-2.5 py-2 text-sm text-mute">No agents</p>
+                )
+              }
             />
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                value={agentRef}
-                onChange={(e) => setAgentRef(e.target.value)}
-                placeholder="org/name@version"
-                className="h-8 min-w-0 flex-1 text-xs"
-                disabled={busy}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void attachOrRequest();
-                }}
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={busy || !agentRef.trim() || Boolean(matchingPerformance)}
-                onClick={() => void attachOrRequest()}
-              >
-                {matchingPerformance ? "Pending" : "Attach"}
-              </Button>
-            </div>
+            &apos;s{" "}
+            <SentenceBlank
+              value={modelBlankLabel(attachCanonical)}
+              placeholder="model"
+              icon={modelBlankIcon(attachCanonical)}
+              disabled={busy}
+              onClick={() => setPickModelOpen(true)}
+              menu={
+                <AttachModelMenu
+                  selected={attachCanonical}
+                  hits={attachModelHits}
+                  onPick={setAttachCanonical}
+                />
+              }
+            />
+            .
+          </p>
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              disabled={
+                busy || !agentRef.trim() || Boolean(matchingPerformance)
+              }
+              onClick={() => void attachOrRequest()}
+            >
+              {matchingPerformance ? "Pending" : "Apply"}
+            </Button>
           </div>
           {matchingPerformance ? (
-            <p className="text-xs text-body">
+            <p className="text-sm text-body">
               Performance request pending for{" "}
               <span>{matchingPerformance.agent_ref}</span>
               . Waiting on the agent org owner.
             </p>
           ) : pendingPerformance.length > 0 ? (
-            <ul className="space-y-1 text-xs text-body">
+            <ul className="space-y-1 text-sm text-body">
               {pendingPerformance.map((row) => (
                 <li key={row.request_id}>
                   Pending:{" "}
@@ -499,6 +646,17 @@ export function ResultOwnerOps({
               ))}
             </ul>
           ) : null}
+          <AgentSearchModal
+            open={pickAgentOpen}
+            onClose={() => setPickAgentOpen(false)}
+            token={token}
+            onPick={(spec) => setAgentRef(spec)}
+          />
+          <ModelSearchModal
+            open={pickModelOpen}
+            onClose={() => setPickModelOpen(false)}
+            onPick={setAttachCanonical}
+          />
         </div>
       ) : null}
 
@@ -506,11 +664,9 @@ export function ResultOwnerOps({
       ((complete && boundKind === "release" && !boardListed) ||
         pendingListing) ? (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-mute uppercase tracking-wide">
-            Public board
-          </p>
+          <FieldLabel>Public board</FieldLabel>
           {pendingListing ? (
-            <p className="text-xs text-pretty break-words text-body">
+            <p className="text-sm text-pretty break-words text-body">
               Listing request pending. Waiting on the dataset org owner.
             </p>
           ) : (
@@ -528,9 +684,9 @@ export function ResultOwnerOps({
       ) : null}
 
       <div className="space-y-2">
-        <p className="text-xs font-medium text-mute uppercase tracking-wide">
+        <FieldLabel hint="Share this suite with an organization or GitHub user.">
           Share with
-        </p>
+        </FieldLabel>
         <div className="flex flex-wrap items-center gap-2">
           <Select
             value={targetType}
@@ -656,9 +812,7 @@ export function ResultOwnerOps({
         open={shareOpen}
         title="Share"
         description={
-          kind === "suite"
-            ? "Who can see this suite, and whether it is listed."
-            : "Who can see this attempt."
+          kind === "suite" ? undefined : "Who can see this attempt."
         }
         onClose={() => {
           if (!busy) {
