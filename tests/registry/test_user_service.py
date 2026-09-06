@@ -11,18 +11,21 @@ from pathlib import Path
 import pytest
 from services.registry.app import build_default_state, make_handler
 from services.registry.errors import RegistryAppError
-from services.registry.store import DEFAULT_LOGIN_SCOPES, MetadataStore
+from services.registry.store import DEFAULT_LOGIN_SCOPES
+from services.registry.store_schema import (
+    open_sqlite_stores,
+)
 from services.registry.user_service import UserService
 
 
 def _users(tmp_path: Path) -> UserService:
-    return UserService(MetadataStore(tmp_path / "meta.sqlite3"))
+    return UserService(open_sqlite_stores(tmp_path / "meta.sqlite3").orgs)
 
 
 def test_official_member_is_marked(tmp_path: Path) -> None:
     svc = _users(tmp_path)
-    svc.meta.create_org(name="official", owner_user_id="alice", display_name="Official")
-    svc.meta.upsert_user_profile(
+    svc.orgs.create_org(name="official", owner_user_id="alice", display_name="Official")
+    svc.orgs.upsert_user_profile(
         user_id="Alice",
         display_name="Alice Chen",
         avatar_url="https://example.test/a.png",
@@ -40,8 +43,8 @@ def test_official_member_is_marked(tmp_path: Path) -> None:
 
 def test_unofficial_member_has_no_user_mark(tmp_path: Path) -> None:
     svc = _users(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
-    svc.meta.upsert_user_profile(user_id="alice", display_name="Alice")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.upsert_user_profile(user_id="alice", display_name="Alice")
     payload = svc.get_public("alice")
     assert payload["official"] is False
     assert payload["official_orgs"] == []
@@ -49,9 +52,9 @@ def test_unofficial_member_has_no_user_mark(tmp_path: Path) -> None:
 
 def test_public_payload_lists_only_official_orgs(tmp_path: Path) -> None:
     svc = _users(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
-    svc.meta.create_org(name="official", owner_user_id="bootstrap", display_name="Official")
-    svc.meta.add_member("official", "alice", role="member")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="official", owner_user_id="bootstrap", display_name="Official")
+    svc.orgs.add_member("official", "alice", role="member")
     payload = svc.get_public("alice")
     assert payload["official"] is True
     assert [row["org_id"] for row in payload["official_orgs"]] == ["official"]
@@ -59,8 +62,8 @@ def test_public_payload_lists_only_official_orgs(tmp_path: Path) -> None:
 
 def test_admin_added_never_logged_in_still_200(tmp_path: Path) -> None:
     svc = _users(tmp_path)
-    svc.meta.create_org(name="official", owner_user_id="bootstrap", display_name="Official")
-    svc.meta.add_member("official", "bob", role="member")
+    svc.orgs.create_org(name="official", owner_user_id="bootstrap", display_name="Official")
+    svc.orgs.add_member("official", "bob", role="member")
     payload = svc.get_public("bob")
     assert payload["user_id"] == "bob"
     assert payload["official"] is True
@@ -71,7 +74,7 @@ def test_admin_added_never_logged_in_still_200(tmp_path: Path) -> None:
 
 def test_profile_without_membership_is_not_official(tmp_path: Path) -> None:
     svc = _users(tmp_path)
-    svc.meta.upsert_user_profile(user_id="solo", display_name="Solo")
+    svc.orgs.upsert_user_profile(user_id="solo", display_name="Solo")
     payload = svc.get_public("solo")
     assert payload["official"] is False
     assert payload["official_orgs"] == []
@@ -84,11 +87,11 @@ def test_maintainer_flag_is_independent_of_official(
 ) -> None:
     monkeypatch.setenv("AGEVAL_REGISTRY_MAINTAINERS", "solo")
     svc = _users(tmp_path)
-    svc.meta.upsert_user_profile(user_id="solo", display_name="Solo")
+    svc.orgs.upsert_user_profile(user_id="solo", display_name="Solo")
     payload = svc.get_public("solo")
     assert payload["official"] is False
     assert payload["maintainer"] is True
-    svc.meta.create_org(name="official", owner_user_id="alice", display_name="Official")
+    svc.orgs.create_org(name="official", owner_user_id="alice", display_name="Official")
     official = svc.get_public("alice")
     assert official["official"] is True
     assert official["maintainer"] is False
@@ -106,7 +109,7 @@ def test_self_can_patch_description(tmp_path: Path) -> None:
     from services.registry.store import TokenInfo
 
     svc = _users(tmp_path)
-    svc.meta.upsert_user_profile(user_id="alice", display_name="Alice")
+    svc.orgs.upsert_user_profile(user_id="alice", display_name="Alice")
     payload = svc.patch(
         user_id="Alice",
         description="  hello\nworld  ",
@@ -120,8 +123,8 @@ def test_patch_other_user_is_forbidden(tmp_path: Path) -> None:
     from services.registry.store import TokenInfo
 
     svc = _users(tmp_path)
-    svc.meta.upsert_user_profile(user_id="alice", display_name="Alice")
-    svc.meta.upsert_user_profile(user_id="bob", display_name="Bob")
+    svc.orgs.upsert_user_profile(user_id="alice", display_name="Alice")
+    svc.orgs.upsert_user_profile(user_id="bob", display_name="Bob")
     with pytest.raises(RegistryAppError) as ei:
         svc.patch(
             user_id="bob",
@@ -134,9 +137,9 @@ def test_patch_other_user_is_forbidden(tmp_path: Path) -> None:
 
 def test_login_upsert_preserves_description(tmp_path: Path) -> None:
     svc = _users(tmp_path)
-    svc.meta.upsert_user_profile(user_id="alice", display_name="Alice")
-    svc.meta.set_user_description("alice", "keeps this")
-    stored = svc.meta.upsert_user_profile(
+    svc.orgs.upsert_user_profile(user_id="alice", display_name="Alice")
+    svc.orgs.set_user_description("alice", "keeps this")
+    stored = svc.orgs.upsert_user_profile(
         user_id="alice",
         display_name="Alice Chen",
         avatar_url="https://example.test/a.png",
@@ -160,8 +163,8 @@ def test_get_user_http_is_public(tmp_path: Path) -> None:
     state, _token = build_default_state(
         tmp_path / "reg", bootstrap_token="admin-tok", memory_blob=True
     )
-    state.meta.create_org(name="official", owner_user_id="alice", display_name="Official")
-    state.meta.upsert_user_profile(user_id="alice", display_name="Alice")
+    state.stores.orgs.create_org(name="official", owner_user_id="alice", display_name="Official")
+    state.stores.orgs.upsert_user_profile(user_id="alice", display_name="Alice")
     handler = make_handler(state)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -192,8 +195,8 @@ def test_patch_user_http_self_only(tmp_path: Path) -> None:
     state, _token = build_default_state(
         tmp_path / "reg", bootstrap_token="admin-tok", memory_blob=True
     )
-    state.meta.upsert_user_profile(user_id="alice", display_name="Alice")
-    state.meta.upsert_user_profile(user_id="bob", display_name="Bob")
+    state.stores.orgs.upsert_user_profile(user_id="alice", display_name="Alice")
+    state.stores.orgs.upsert_user_profile(user_id="bob", display_name="Bob")
     state.tokens.add("alice-tok", DEFAULT_LOGIN_SCOPES, github_user="alice")
     handler = make_handler(state)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)

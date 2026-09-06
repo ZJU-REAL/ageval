@@ -11,8 +11,10 @@ from services.registry.errors import RegistryAppError
 from services.registry.package_service import PackageService
 from services.registry.store import (
     MemoryBlobStore,
-    MetadataStore,
     TokenInfo,
+)
+from services.registry.store_schema import (
+    open_sqlite_stores,
 )
 
 from ageval.registry.archive import MEDIA_TYPE, build_archive
@@ -29,9 +31,15 @@ PLUGIN_FIXTURE = REPO / "tests" / "fixtures" / "plugins" / "sample-echo"
 
 
 def _service(tmp_path: Path) -> PackageService:
-    meta = MetadataStore(tmp_path / "meta.sqlite3")
+    meta = open_sqlite_stores(tmp_path / "meta.sqlite3")
     blobs = MemoryBlobStore()
-    return PackageService(meta, blobs, AccessPolicy(meta=meta), max_upload=64 * 1024 * 1024)
+    return PackageService(
+        meta.packages,
+        meta.orgs,
+        blobs,
+        AccessPolicy(orgs=meta.orgs, packages=meta.packages, results=meta.results),
+        max_upload=64 * 1024 * 1024,
+    )
 
 
 def _meta_archive(tmp_path: Path) -> tuple[dict[str, object], Path, bytes]:
@@ -66,7 +74,7 @@ def test_publish_missing_org(tmp_path: Path) -> None:
 
 def test_publish_requires_membership(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="owner", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="owner", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     with pytest.raises(RegistryAppError) as ei:
@@ -77,7 +85,7 @@ def test_publish_requires_membership(tmp_path: Path) -> None:
 
 def test_publish_happy_path(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     payload = svc.publish(meta=meta, archive=archive, auth=auth)
@@ -111,7 +119,7 @@ def test_publish_happy_path(tmp_path: Path) -> None:
 
 def test_list_packages_attaches_dataset_description(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     svc.publish(meta=meta, archive=archive, auth=auth)
@@ -128,7 +136,7 @@ def test_list_packages_attaches_dataset_description(tmp_path: Path) -> None:
 
 def test_patch_description_overrides_and_clears(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     svc.publish(meta=meta, archive=archive, auth=auth)
@@ -171,7 +179,7 @@ def test_patch_description_overrides_and_clears(tmp_path: Path) -> None:
 
 def test_content_increments_download_count_files_do_not(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     payload = svc.publish(meta=meta, archive=archive, auth=auth)
@@ -218,7 +226,7 @@ def test_content_increments_download_count_files_do_not(tmp_path: Path) -> None:
 
 def test_draft_overwrite_and_entitled_list(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     meta["slot"] = "draft"
     alice = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
@@ -226,7 +234,7 @@ def test_draft_overwrite_and_entitled_list(tmp_path: Path) -> None:
     assert first["version"] == "draft"
     assert first["is_draft"] is True
     assert first["replaced"] is False
-    assert svc.meta.dataset_acl("test/publish-min", "alice") is not None
+    assert svc.packages.dataset_acl("test/publish-min", "alice") is not None
 
     second = svc.publish(meta=meta, archive=archive, auth=alice)
     assert second["replaced"] is True
@@ -241,7 +249,7 @@ def test_draft_overwrite_and_entitled_list(tmp_path: Path) -> None:
 
 def test_draft_hidden_from_non_entitled_get(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     meta["slot"] = "draft"
     alice = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
@@ -259,7 +267,7 @@ def test_draft_hidden_from_non_entitled_get(tmp_path: Path) -> None:
 
 def test_release_draft_creates_durable_version(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     meta["slot"] = "draft"
     alice = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
@@ -274,13 +282,13 @@ def test_release_draft_creates_durable_version(tmp_path: Path) -> None:
 
 def test_collaborator_cannot_release(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
-    svc.meta.add_member("acme", "bob", role="member")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.add_member("acme", "bob", role="member")
     meta, archive, _raw = _meta_archive(tmp_path)
     meta["slot"] = "draft"
     alice = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     svc.publish(meta=meta, archive=archive, auth=alice)
-    svc.meta.upsert_dataset_acl("test/publish-min", "bob", role="collaborator")
+    svc.packages.upsert_dataset_acl("test/publish-min", "bob", role="collaborator")
     bob = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="bob")
     with pytest.raises(RegistryAppError) as ei:
         svc.release_draft(dataset_id="test/publish-min", auth=bob)
@@ -289,7 +297,7 @@ def test_collaborator_cannot_release(tmp_path: Path) -> None:
 
 def test_reserved_version_draft_rejected_on_release_publish(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     meta["version"] = "draft"
     # Without slot, version=draft still takes the draft path (reserved).
@@ -301,7 +309,7 @@ def test_reserved_version_draft_rejected_on_release_publish(tmp_path: Path) -> N
 
 def test_anon_sees_public_release_not_draft(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     meta["slot"] = "draft"
     alice = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
@@ -336,8 +344,8 @@ def test_anon_sees_public_release_not_draft(tmp_path: Path) -> None:
 
 def test_org_member_can_read_draft(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
-    svc.meta.add_member("acme", "carol", role="member")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.add_member("acme", "carol", role="member")
     meta, archive, _raw = _meta_archive(tmp_path)
     meta["slot"] = "draft"
     alice = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
@@ -356,7 +364,7 @@ def test_org_member_can_read_draft(tmp_path: Path) -> None:
 
 def test_draft_first_upload_requires_org_membership(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     meta["slot"] = "draft"
     bob = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="bob")
@@ -388,7 +396,7 @@ def _plugin_meta_archive(tmp_path: Path) -> tuple[dict[str, object], Path]:
 
 def test_favorite_plugin_and_list_favorited(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive = _plugin_meta_archive(tmp_path)
     alice = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     bob = TokenInfo(scopes=frozenset({"results:read"}), user_id="bob")
@@ -453,8 +461,8 @@ def test_favorite_plugin_and_list_favorited(tmp_path: Path) -> None:
 
 def test_list_packages_orgs_filter(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
-    svc.meta.create_org(name="other", owner_user_id="carol", display_name="Other")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="other", owner_user_id="carol", display_name="Other")
     meta, archive = _plugin_meta_archive(tmp_path)
     alice = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     svc.publish(meta=meta, archive=archive, auth=alice)
@@ -491,7 +499,7 @@ def test_list_packages_orgs_filter(tmp_path: Path) -> None:
 
 def test_favorite_rejects_dataset_and_anonymous(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     meta["visibility"] = "public"
     alice = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
@@ -528,7 +536,7 @@ def test_list_tasks_pages_and_flags(tmp_path: Path) -> None:
     ]
 
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     payload = svc.publish(meta=meta, archive=archive, auth=auth)
@@ -578,7 +586,7 @@ def test_list_tasks_skips_blob_after_publish(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive, _raw = _meta_archive(tmp_path)
     auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     payload = svc.publish(meta=meta, archive=archive, auth=auth)
@@ -634,7 +642,7 @@ def test_list_tasks_reads_variant_profile_overlays(tmp_path: Path) -> None:
     assert index.overlay_prefixes == ["overlays/docker"]
 
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     path = tmp_path / "overlay-pkg.tar.gz"
     path.write_bytes(archive)
     auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")

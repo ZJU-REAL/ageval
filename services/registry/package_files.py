@@ -38,10 +38,11 @@ def _dataset_description(text: str) -> str:
     desc = doc.get("description")
     return desc.strip() if isinstance(desc, str) else ""
 
+
 # Process-local LRU of tar member indexes by package_digest.
 _INDEX_LRU_MAX = 64
 _index_lock = threading.Lock()
-_index_lru: OrderedDict[str, "PackageFileIndex"] = OrderedDict()
+_index_lru: OrderedDict[str, PackageFileIndex] = OrderedDict()
 
 
 class PackagePathError(ValueError):
@@ -156,10 +157,7 @@ class PackageFileIndex:
                 readme[task_id] = False
             if entry.type == "file" and rest == f"{task_id}/README.md":
                 readme[task_id] = True
-        items = [
-            {"task_id": task_id, "has_readme": readme[task_id]}
-            for task_id in sorted(readme)
-        ]
+        items = [{"task_id": task_id, "has_readme": readme[task_id]} for task_id in sorted(readme)]
         return items, has_shared
 
 

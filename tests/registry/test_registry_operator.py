@@ -293,7 +293,7 @@ def test_web_redirect_allows_compose_and_vite_hub() -> None:
 
     auth = AuthService(
         tokens=object(),
-        meta=object(),
+        orgs=object(),
         github_client_id="id",
         github_client_secret="secret",
         github_login_allowlist=frozenset(),

@@ -12,7 +12,10 @@ from services.registry.package_service import PackageService
 from services.registry.request_service import RequestService
 from services.registry.result_service import ResultService
 from services.registry.runtime_service import RuntimeService
-from services.registry.store import MemoryBlobStore, MetadataStore, TokenInfo
+from services.registry.store import MemoryBlobStore, TokenInfo
+from services.registry.store_schema import (
+    open_sqlite_stores,
+)
 
 from ageval.registry.agent_package import (
     AGENT_MEDIA_TYPE,
@@ -33,13 +36,21 @@ PI = {
 
 
 def _svcs(tmp_path: Path) -> tuple[PackageService, ResultService, RequestService, RuntimeService]:
-    meta = MetadataStore(tmp_path / "meta.sqlite3")
+    meta = open_sqlite_stores(tmp_path / "meta.sqlite3")
     blobs = MemoryBlobStore()
-    access = AccessPolicy(meta=meta)
-    packages = PackageService(meta, blobs, access, max_upload=64 * 1024 * 1024)
-    results = ResultService(meta, blobs, access, max_upload=64 * 1024 * 1024)
-    requests = RequestService(meta, access, results)
-    return packages, results, requests, RuntimeService(meta, results)
+    access = AccessPolicy(orgs=meta.orgs, packages=meta.packages, results=meta.results)
+    packages = PackageService(meta.packages, meta.orgs, blobs, access, max_upload=64 * 1024 * 1024)
+    results = ResultService(
+        meta.results,
+        meta.packages,
+        meta.orgs,
+        meta.inbox,
+        blobs,
+        access,
+        max_upload=64 * 1024 * 1024,
+    )
+    requests = RequestService(meta.inbox, meta.orgs, meta.packages, meta.results, access, results)
+    return packages, results, requests, RuntimeService(meta.inbox, meta.packages, results)
 
 
 def _as_path(tmp_path: Path, data: bytes, name: str) -> Path:
@@ -56,8 +67,8 @@ def _publish_dataset(
     org_id: str,
     owner: str,
 ) -> None:
-    if packages.meta.get_org(org_id) is None:
-        packages.meta.create_org(name=org_id, owner_user_id=owner, display_name=org_id)
+    if packages.orgs.get_org(org_id) is None:
+        packages.orgs.create_org(name=org_id, owner_user_id=owner, display_name=org_id)
     archive, blob_digest, size = build_archive(FIXTURE)
     packages.publish(
         meta={
@@ -84,8 +95,8 @@ def _publish_agent(
     org_id: str,
     owner: str,
 ) -> None:
-    if packages.meta.get_org(org_id) is None:
-        packages.meta.create_org(name=org_id, owner_user_id=owner, display_name=org_id)
+    if packages.orgs.get_org(org_id) is None:
+        packages.orgs.create_org(name=org_id, owner_user_id=owner, display_name=org_id)
     archive, blob_digest, size = build_agent_archive(AGENT)
     packages.publish(
         meta={
@@ -465,7 +476,7 @@ def test_performance_approve_private_suite_and_mismatch(tmp_path: Path) -> None:
             auth=alice,
             canonical_model="alibaba/qwen-max",
         )
-    still = results.meta.get_resource_request(bad["request_id"])
+    still = results.inbox.get_resource_request(bad["request_id"])
     assert still is not None and still.status == "pending"
     after = results.serve_suite_meta(suite_run_id="s_mis", auth=bob)
     assert after["job_overlay"] == overlay_before
@@ -519,7 +530,7 @@ def test_delete_and_replace_drop_requests_and_consent(tmp_path: Path) -> None:
         },
         replace=True,
     )
-    assert results.meta.list_agent_consents("s_keep") == []
+    assert results.inbox.list_agent_consents("s_keep") == []
     assert runtimes.performances_for_agent("official/pi-default", alice) == []
 
 

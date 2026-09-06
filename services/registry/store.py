@@ -9,15 +9,16 @@ Packages require ``org_id`` on new publishes; results carry ``uploaded_by``
 and optional share targets (org / user). Private read is ownership/membership
 based (admin bypass); scopes alone no longer grant global private sight.
 
-Blob and token adapters live in ``blobs.py`` / ``tokens.py`` and are
-re-exported here while importers migrate.
+Blob and token adapters live in ``blobs.py`` / ``tokens.py``; the four
+aggregate stores live in ``store_*.py`` behind the narrow protocols.
+This module keeps the row/DTO vocabulary and re-exports while importers
+migrate.
 """
 
 from __future__ import annotations
 
 import contextlib
 import json
-from pathlib import Path
 from typing import Any
 
 from services.registry.blobs import (  # noqa: F401
@@ -55,44 +56,8 @@ from services.registry.tokens import (  # noqa: F401
     _normalize_user_id,
 )
 
+
 # ---------------------------------------------------------------------------
-# Phase B façade over the four aggregate stores (deleted in phase C)
-# ---------------------------------------------------------------------------
-
-
-class MetadataStore:
-    """Flat duck-typed façade over the four aggregate stores (transitional).
-
-    New code takes the narrow store it needs from ``open_stores``. Note: do
-    not subclass ``MetadataStoreProtocol`` here — Protocol superclasses
-    install ``...`` bodies as real methods and would shadow delegation.
-    """
-
-    def __init__(self, db_path: Path | None = None, *, adapter: Any | None = None) -> None:
-        self._stores = open_stores(db_path=db_path, adapter=adapter)
-        self.db_path = getattr(self._stores.packages._adapter, "db_path", db_path)
-
-    def __getattr__(self, name: str) -> Any:
-        stores = self.__dict__.get("_stores")
-        if stores is None:
-            raise AttributeError(name)
-        for aggregate in (stores.packages, stores.results, stores.orgs, stores.inbox):
-            attr = getattr(aggregate, name, None)
-            if attr is not None:
-                return attr
-        raise AttributeError(name)
-
-
-class PostgresMetadataStore(MetadataStore):
-    """Metadata stores over Postgres (transitional façade)."""
-
-    def __init__(self, database_url: str) -> None:
-        from services.registry.sql_adapter import PostgresAdapter
-
-        super().__init__(adapter=PostgresAdapter(database_url))
-        self.database_url = database_url
-
-
 def package_kind_for_media_type(media_type: str) -> str:
     """Derive list/meta ``package_kind`` from the current vnd.ageval types only."""
     from ageval.registry.media_types import (

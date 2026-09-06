@@ -172,7 +172,11 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   ├── app.py / http_api.py / asgi.py / backend.py
 │   ├── auth_service.py / package_service.py / result_service.py / org_service.py
 │   ├── request_service.py           # listing + performance requests; Inbox
-│   ├── queries.py / dataset.py / sql_adapter.py / store.py
+│   ├── queries.py / dataset.py / sql_adapter.py
+│   ├── store_schema.py              # open_stores: schema once → RegistryStores
+│   ├── store_package.py / store_result.py / store_org.py / store_inbox.py
+│   ├── blobs.py / tokens.py / rows.py / protocols.py   # narrow store protocols
+│   ├── store.py                     # row/DTO vocabulary + re-exports
 │   └── routes.py                    # ROUTES must declare access
 ├── examples/
 │   ├── datasets/
@@ -393,7 +397,7 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | Other Agent backends | `openai-http` / `anthropic-http` / external `nooa` `dsh` | Not vendor stdout scrape |
 | Official base image | `docker/attempt/` | Bake every shipped ACP entry at build; no `npm i` at invoke |
 | ACP task image layer | `plugins/contrib/acp` | `config.image_layers` bakes the bound `options.entry` onto the task recipe |
-| Registry HTTP | `services/registry/` | Handlers do not touch `state.meta` directly |
+| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is four aggregate stores (`store_*.py`) behind narrow protocols, one schema init in `store_schema.open_stores`, SQL only in `queries.py`, dialect only in `sql_adapter.py` |
 
 ## Failure and Privacy Boundary
 

@@ -22,9 +22,7 @@ def _parse_int(raw: str | None, *, name: str, default: int, minimum: int) -> int
             "invalid_request", f"{name} must be an integer", http_status=400
         ) from exc
     if n < minimum:
-        raise RegistryAppError(
-            "invalid_request", f"{name} must be >= {minimum}", http_status=400
-        )
+        raise RegistryAppError("invalid_request", f"{name} must be >= {minimum}", http_status=400)
     return n
 
 

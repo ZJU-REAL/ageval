@@ -25,13 +25,13 @@ class AuthService:
         self,
         tokens: Any,
         *,
-        meta: Any,
+        orgs: Any,
         github_client_id: str | None,
         github_client_secret: str | None,
         github_login_allowlist: frozenset[str],
     ) -> None:
         self.tokens = tokens
-        self.meta = meta
+        self.orgs = orgs
         self.github_client_id = github_client_id
         self.github_client_secret = github_client_secret
         self.github_login_allowlist = github_login_allowlist
@@ -56,7 +56,7 @@ class AuthService:
         avatar_url = getattr(identity, "avatar_url", None) or ""
         github_id = getattr(identity, "id", None)
         try:
-            upsert = getattr(self.meta, "upsert_user_profile", None)
+            upsert = self.orgs.upsert_user_profile
             if callable(upsert):
                 upsert(
                     user_id=login,
