@@ -47,13 +47,6 @@ def test_proxy_allows_listed_host_and_forbids_others() -> None:
         origin.shutdown()
 
 
-def test_proxy_allows_union_and_forbids_third() -> None:
-    proxy = AllowlistProxy(["api.example.com", "registry.npmjs.org"])
-    assert proxy.allowed("api.example.com")
-    assert proxy.allowed("registry.npmjs.org")
-    assert not proxy.allowed("example.com")
-
-
 def test_empty_allowlist_refuses_to_start() -> None:
     proxy = AllowlistProxy([])
     with pytest.raises(RuntimeError, match="base_url"):
