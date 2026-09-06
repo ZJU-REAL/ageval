@@ -9,11 +9,13 @@ CLI 的 dataset 参数始终是 **dataset 根**（含 `ageval.yaml` 的目录）
 
 ```bash
 ageval registry list
+ageval lock official/minimal-demo@0.1.3 --task terminal-jsonl-agg
+ageval run  official/minimal-demo@0.1.3 --task terminal-jsonl-agg
 ageval lock <org>/<name>@<version> --task <task-id>
 ageval run  <org>/<name>@<version> --task <task-id>
 ```
 
-registry ref 会把已发布的 dataset 下载并缓存到本机（`ageval cache` 查看 / 清理），再按锁定配置执行。默认 profiles 多为 **docker** 环境，需要本机 Docker 引擎；实际运行 coding agent 还需要 ACP 入口与凭据。
+登录与 `registry list` 默认打公开 Hub，不必先设 `AGEVAL_REGISTRY_URL`。registry ref 会把已发布的 dataset 下载并缓存到本机（`ageval cache` 查看 / 清理），再按锁定配置执行。默认 profiles 多为 **docker** 环境，需要本机 Docker 引擎；实际运行 coding agent 还需要 ACP 入口与凭据。
 
 ## 仓库内示例
 

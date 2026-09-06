@@ -14,7 +14,7 @@ ageval -V
 - A real coding-agent path needs a host ACP entry and credentials. `ageval lock` does not.
 - Upgrade: `uv tool upgrade ageval-cli`
 
-Once installed, datasets come from the Hub by registry ref (`<dataset_id>@<version>`), or point at any local dataset root.
+Once installed, datasets come from the Hub by registry ref (`<dataset_id>@<version>`), or point at any local dataset root. The CLI defaults to the public Hub — you do not need `AGEVAL_REGISTRY_URL` first. Override it (or `--registry-url`) for self-host / compose.
 
 ## Optional extras
 

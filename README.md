@@ -64,6 +64,7 @@ Run a dataset straight from the Hub, or any local dataset root:
 
 ```bash
 ageval registry list                        # datasets visible on the Hub
+ageval run official/minimal-demo@0.1.3 --task terminal-jsonl-agg
 ageval run <org>/<name>@<version> --task <task-id>
 ageval executors -v
 ageval view <org>/<name>@<version> --no-browser
@@ -270,7 +271,7 @@ ageval/
 
 ## Docs
 
-- Usage: [`website/`](website/)
+- Usage: [docs site](https://zju-real.github.io/ageval/en/docs/) ([source](website/))
 - Design: [`docs/`](docs/README.md)
 - Examples: [`examples/README.md`](examples/README.md)
 - [`AGENTS.md`](AGENTS.md)

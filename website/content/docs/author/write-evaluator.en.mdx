@@ -45,7 +45,7 @@ evaluation:
 | Artifact ids | Must match files `run.py` actually writes |
 | `tmpfs_mb` | In-environment evaluator `/tmp` only; omit → 32 MiB. Declare a larger sandbox on the **task**, not under `limits` |
 
-`evaluator.py` is a **parent subprocess** (same shape as `run.py`). PASS still binds only in the engine. Run execution and evaluation stay separate facts. A profiles file may set `evaluate_host.isolated: true` (Current: docker) to start a scoring environment so gold never enters the Agent environment. Sequential stages with **different installed closures** use `evaluation.environments` on the task; the evaluator names a host with `inputs["scoring"].exec(<name>, argv)` or `Agent.session(..., environment=<name>)`. Unused names are not started. Omit the map → the single scoring host (or same-environment evaluate). `scoring.exec` exists only when the map is set.
+`evaluator.py` is a **parent subprocess** (same shape as `run.py`). PASS still binds only in the engine. Run execution and evaluation stay separate facts. A profiles file may set `evaluate_host.isolated: true` (Current: docker) to start a scoring environment so gold never enters the Agent environment. Sequential stages with **different installed closures** use `evaluation.environments` on the task; the evaluator names a host with `inputs["scoring"].exec(<name>, argv)` or `Agent.session(..., environment=<name>)`. Unused names are not started. Omit the map → the single scoring host (or same-environment evaluate); `scoring.exec` hits that default host. A named map still requires an exact name; unknown names fail once and do not start.
 
 ## Two scoring styles
 

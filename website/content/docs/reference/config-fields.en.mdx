@@ -63,6 +63,8 @@ Optional `label` on a role. `--agent` is mutually exclusive with `--profiles`. `
 
 Optional `evaluate_host.isolated: true` (Current: docker) starts a scoring environment. Combined with member `evaluation.environments`, Core lazily starts one host per name.
 
+Optional docker `environment_options`: `image` / `platform` / `network` / `user` / `egress` / `python_version`. `python_version` is the official Attempt base CPython minor (e.g. `"3.13"`; omit = 3.12, shape `^\d+\.\d+$`); a base that cannot be pulled fails once, with no fallback. `evaluate_host.environment_options` may set `network` / `egress` / `platform` / `user` / `python_version` (not `image`); when omitted, the scoring box inherits the job's `platform` / `user` / `python_version` and does not inherit the agent's `egress` / `network`.
+
 ## Allowed top-level dirs
 
 `prompts` · `schemas` · `environment` · `evaluation` · `data` · `lib` · `upstream` · `solution`

@@ -64,6 +64,7 @@ ageval -V
 
 ```bash
 ageval registry list                        # 查看 Hub 上可见的 dataset
+ageval run official/minimal-demo@0.1.3 --task terminal-jsonl-agg
 ageval run <org>/<name>@<version> --task <task-id>
 ageval executors -v
 ageval view <org>/<name>@<version> --no-browser
@@ -270,7 +271,7 @@ ageval/
 
 ## 文档
 
-- 用法：[website/](website/)
+- 用法：[文档站](https://zju-real.github.io/ageval/zh-CN/docs/)（[源码](website/)）
 - 设计：[docs/](docs/README.md)
 - 示例：[examples/README.md](examples/README.md)
 - [AGENTS.md](AGENTS.md)
