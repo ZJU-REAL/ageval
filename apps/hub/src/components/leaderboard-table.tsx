@@ -132,7 +132,6 @@ type SortKey =
   | "mean_score"
   | "pass_at_k"
   | "pass_power_k"
-  | "tasks"
   | "uploaded_by"
   | "suite_run_id";
 
@@ -153,11 +152,6 @@ function suiteSortValue(s: SuiteRow, key: SortKey): unknown {
       return passAtPrimaryK(m).value;
     case "pass_power_k":
       return passPowerPrimaryK(m).value;
-    case "tasks": {
-      if (typeof m.n_tasks === "number") return m.n_tasks;
-      if (Array.isArray(s.task_refs)) return s.task_refs.length;
-      return null;
-    }
     case "uploaded_by":
       return s.uploaded_by || "";
     case "suite_run_id":
@@ -335,9 +329,6 @@ export function LeaderboardTable({
                   </HoverTip>
                 </TableHead>
               ) : null}
-              <TableHead className={COL_METRIC}>
-                {head("tasks", "Tasks")}
-              </TableHead>
               <TableHead className={COL_TEXT}>
                 {head("uploaded_by", "Uploader")}
               </TableHead>
@@ -351,13 +342,6 @@ export function LeaderboardTable({
           <TableBody>
             {rows.map((s) => {
               const m = s.metrics || {};
-              const nTasks =
-                typeof m.n_tasks === "number"
-                  ? m.n_tasks
-                  : Array.isArray(s.task_refs)
-                    ? s.task_refs.length
-                    : null;
-              const nPass = typeof m.n_pass === "number" ? m.n_pass : null;
               const open = openId === s.suite_run_id;
               const atK = passAtPrimaryK(m);
               const powK = passPowerPrimaryK(m);
@@ -471,13 +455,6 @@ export function LeaderboardTable({
                         )}
                       </TableCell>
                     ) : null}
-                    <TableCell className={`tabular-nums ${COL_METRIC}`}>
-                      {nPass != null && nTasks != null
-                        ? `${nPass}/${nTasks}`
-                        : nTasks != null
-                          ? String(nTasks)
-                          : "—"}
-                    </TableCell>
                     <TableCell className={`${COL_TEXT}`}>
                       <TruncateTip text={s.uploaded_by || ""} copyable />
                     </TableCell>

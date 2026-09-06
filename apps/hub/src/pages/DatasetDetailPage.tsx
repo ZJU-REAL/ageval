@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ChartScatter, Grid3x3, Table2, type LucideIcon } from "lucide-react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { LoadingState } from "@/components/empty-state";
@@ -18,7 +19,6 @@ import {
 } from "@/components/leaderboard-table";
 import { LeaderboardPareto } from "@/components/leaderboard-pareto";
 import { LeaderboardWaffle } from "@/components/leaderboard-waffle";
-import { PillTabs } from "@/components/ui/pill-tabs";
 import {
   Select,
   SelectContent,
@@ -82,6 +82,17 @@ import { formatDay, formatScore } from "@/lib/utils";
 
 type Tab = "readme" | "tasks" | "shared" | "overlays" | "leaderboard";
 type BoardView = "public" | "internal";
+
+const BOARD_CHART_ICONS: Record<BoardChart, LucideIcon> = {
+  table: Table2,
+  pareto: ChartScatter,
+  waffle: Grid3x3,
+};
+
+function BoardChartIcon({ id }: { id: BoardChart }) {
+  const Icon = BOARD_CHART_ICONS[id];
+  return <Icon className="h-3.5 w-3.5 text-mute" aria-hidden />;
+}
 
 /** Sentinel for the Leaderboard version Select (omit `?dataset_version=`). */
 const ALL_BOARD_VERSIONS = "all";
@@ -927,12 +938,36 @@ export function DatasetDetailPage() {
                   </SelectContent>
                 </Select>
               ) : null}
-              <PillTabs
-                items={BOARD_CHARTS}
+              <Select
                 value={boardChart}
-                onChange={setBoardChart}
-                ariaLabel="Leaderboard chart"
-              />
+                onValueChange={(next) => {
+                  if (next === "table" || next === "pareto" || next === "waffle") {
+                    setBoardChart(next);
+                  }
+                }}
+              >
+                <SelectTrigger
+                  aria-label="Leaderboard chart"
+                  className="h-9 w-auto min-w-[8.5rem]"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <BoardChartIcon id={boardChart} />
+                    <SelectValue />
+                  </span>
+                </SelectTrigger>
+                <SelectContent className="w-max min-w-[var(--radix-select-trigger-width)]">
+                  {BOARD_CHARTS.map((item) => (
+                    <SelectItem
+                      key={item.id}
+                      value={item.id}
+                      mono={false}
+                      leading={<BoardChartIcon id={item.id} />}
+                    >
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {boardChart === "pareto" ? (
                 <Select
                   value={paretoAxis}

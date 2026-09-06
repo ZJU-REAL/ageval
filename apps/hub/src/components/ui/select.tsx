@@ -60,15 +60,16 @@ SelectContent.displayName = SelectPrimitive.Content.displayName;
 export const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & {
+    leading?: React.ReactNode;
     trailing?: React.ReactNode;
     /** Version / numeric values stay mono. Human labels (Public / Internal) use sans. */
     mono?: boolean;
   }
->(({ className, children, trailing, mono = true, ...props }, ref) => (
+>(({ className, children, leading, trailing, mono = true, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center gap-4 rounded-[8px] py-1.5 pl-8 pr-2 text-sm outline-none",
+      "relative flex w-full cursor-pointer select-none items-center gap-2 rounded-[8px] py-1.5 pl-8 pr-2 text-sm outline-none",
       "transition-colors duration-200 ease-smooth",
       "data-[highlighted]:bg-canvas-soft data-[state=checked]:bg-canvas-soft-2",
       "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
@@ -81,6 +82,11 @@ export const SelectItem = React.forwardRef<
         <Check className="h-3.5 w-3.5 text-link motion-safe:animate-[ageval-pop_200ms_var(--ease-spring)_both]" />
       </SelectPrimitive.ItemIndicator>
     </span>
+    {leading != null && leading !== "" ? (
+      <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-mute">
+        {leading}
+      </span>
+    ) : null}
     <SelectPrimitive.ItemText asChild>
       <span
         className={cn(
