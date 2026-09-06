@@ -647,8 +647,8 @@ def _single_job_row(
     }
 
 
-def list_jobs(dataset_root: Path) -> dict[str, Any]:
-    root = dataset_root.expanduser().resolve(strict=False)
+def list_jobs(dataset_root: Path | str) -> dict[str, Any]:
+    root = Path(dataset_root).expanduser().resolve(strict=False)
     suite_root = _suite_root(root)
     man = None
     with contextlib.suppress(ConfigError):
@@ -707,9 +707,9 @@ def list_jobs(dataset_root: Path) -> dict[str, Any]:
     }
 
 
-def job_overlay_mapping(dataset_root: Path, job_id: str) -> dict[str, Any] | None:
+def job_overlay_mapping(dataset_root: Path | str, job_id: str) -> dict[str, Any] | None:
     """Secret-free job_overlay from a suite summary or single-attempt lock."""
-    root = dataset_root.expanduser().resolve(strict=False)
+    root = Path(dataset_root).expanduser().resolve(strict=False)
     job_id = safe_id_segment(job_id, field="job_id")
     suite_summary = _suite_root(root) / job_id / "summary.json"
     if suite_summary.is_file():
@@ -725,8 +725,8 @@ def job_overlay_mapping(dataset_root: Path, job_id: str) -> dict[str, Any] | Non
     return None
 
 
-def get_job(dataset_root: Path, job_id: str) -> dict[str, Any]:
-    root = dataset_root.expanduser().resolve(strict=False)
+def get_job(dataset_root: Path | str, job_id: str) -> dict[str, Any]:
+    root = Path(dataset_root).expanduser().resolve(strict=False)
     job_id = safe_id_segment(job_id, field="job_id")
     suite_dir = _suite_root(root) / job_id
     # Confine suite dir under dataset root
@@ -918,7 +918,7 @@ def _get_single_job(root: Path, job_id: str) -> dict[str, Any]:
     }
 
 
-def get_job_task(dataset_root: Path, job_id: str, task_id: str) -> dict[str, Any]:
+def get_job_task(dataset_root: Path | str, job_id: str, task_id: str) -> dict[str, Any]:
     task_id = safe_id_segment(task_id, field="task_id")
     job_payload = get_job(dataset_root, job_id)
     match = None
@@ -933,7 +933,7 @@ def get_job_task(dataset_root: Path, job_id: str, task_id: str) -> dict[str, Any
             location=task_id,
         )
 
-    root = dataset_root.expanduser().resolve(strict=False)
+    root = Path(dataset_root).expanduser().resolve(strict=False)
     cmds = commands_for(root, task_id=task_id)
     # One-liner re-run command for the task (or full suite)
     run_cmd = cmds.get("run_task") or cmds.get("run_suite")
