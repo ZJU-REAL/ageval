@@ -367,6 +367,16 @@ def _validate_egress(
     options["egress_allow"] = sorted(set(hosts))
 
 
+def authored_egress_hosts(options: Mapping[str, Any] | None) -> list[str]:
+    """Extra hostnames on one box's ``egress_allow`` after lock (empty if omitted)."""
+    if not isinstance(options, Mapping):
+        return []
+    raw = options.get("egress_allow")
+    if not isinstance(raw, list):
+        return []
+    return [str(item).strip() for item in raw if str(item).strip()]
+
+
 def _egress_hostname(raw: Any, *, location: str) -> str:
     if not isinstance(raw, str):
         raise ConfigError(

@@ -157,11 +157,12 @@ def _scoring_plugin_layers(ctx: AttemptCtx) -> tuple[tuple[str, str, str, str], 
     return layers_for_graphs(graphs)
 
 
-def _scoring_egress_allowlist(ctx: AttemptCtx) -> list[str]:
-    """API hosts the evaluate-phase profiles need; judge box reaches judge hosts."""
+def _scoring_egress_allowlist(ctx: AttemptCtx, options: dict[str, Any]) -> list[str]:
+    """Evaluate-phase profile hosts ∪ this box's ``egress_allow``; never agent extras."""
     from urllib.parse import urlparse
 
     from ageval.config.env_refs import resolve_locked_base_url
+    from ageval.config.profiles import authored_egress_hosts
 
     sealed = set(_evaluate_phase_profile_ids(ctx))
     hosts: list[str] = []
@@ -181,6 +182,7 @@ def _scoring_egress_allowlist(ctx: AttemptCtx) -> list[str]:
         host = urlparse(str(url)).hostname
         if host:
             hosts.append(host)
+    hosts.extend(authored_egress_hosts(options))
     return sorted(set(hosts))
 
 
@@ -192,7 +194,7 @@ def _scoring_environment_options(
     Declared ``evaluate_host.environment_options`` wins whole. Omitted, the
     scoring box keeps today's non-inheritance: only ``platform`` / ``user`` /
     ``python_version`` from the job map, never the agent ``egress`` /
-    ``network`` or image.
+    ``egress_allow`` / ``network`` or image.
     """
     overlay = thaw(getattr(ctx.lock, "job_overlay", None) or {})
     host = overlay.get("evaluate_host") if isinstance(overlay.get("evaluate_host"), dict) else {}
@@ -213,7 +215,7 @@ def _scoring_environment_options(
     if isinstance(image, str) and image.strip():
         options["image"] = image.strip()
     if str(options.get("egress") or "") == "llm":
-        options["egress_allowlist"] = _scoring_egress_allowlist(ctx)
+        options["egress_allowlist"] = _scoring_egress_allowlist(ctx, options)
     return options
 
 
