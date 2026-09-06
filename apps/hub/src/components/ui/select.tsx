@@ -42,12 +42,15 @@ export const SelectContent = React.forwardRef<
       data-ageval-menu=""
       className={cn(
         "z-[70] min-w-[8rem] overflow-hidden rounded-[12px] border border-hairline bg-canvas text-ink shadow-[var(--viewer-shadow-pop)]",
+        "max-h-[min(24rem,var(--radix-select-content-available-height,24rem))]",
         className,
       )}
       position={position}
       {...props}
     >
-      <SelectPrimitive.Viewport className="p-1">{children}</SelectPrimitive.Viewport>
+      <SelectPrimitive.Viewport className="max-h-[inherit] overflow-y-auto overscroll-contain p-1">
+        {children}
+      </SelectPrimitive.Viewport>
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
   );

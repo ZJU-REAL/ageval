@@ -1,4 +1,4 @@
-import { ArrowRight, CircleMinus, Settings, Share2, Trash2 } from "lucide-react";
+import { CircleMinus, Settings, Share2, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -424,83 +424,62 @@ export function ResultOwnerOps({
           <p className="text-xs font-medium text-mute uppercase tracking-wide">
             Attach agent
           </p>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="space-y-2">
             {roleChoices.length > 0 ? (
-              <>
-                <Select
-                  value={attachRole}
-                  onValueChange={onAttachRoleChange}
-                  disabled={busy}
+              <Select
+                value={attachRole}
+                onValueChange={onAttachRoleChange}
+                disabled={busy}
+              >
+                <SelectTrigger
+                  aria-label="Attach role"
+                  className="h-8 min-w-0 w-auto shrink-0 text-xs"
                 >
-                  <SelectTrigger
-                    aria-label="Attach role"
-                    className="h-8 min-w-0 w-auto shrink-0 text-xs"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ATTACH_ROLE_ALL} mono={false}>
-                      all
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ATTACH_ROLE_ALL} mono={false}>
+                    all
+                  </SelectItem>
+                  {roleChoices.map((row) => (
+                    <SelectItem key={row.id} value={row.id} mono={false}>
+                      {row.id}
                     </SelectItem>
-                    {roleChoices.map((row) => (
-                      <SelectItem key={row.id} value={row.id} mono={false}>
-                        {row.id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <ArrowRight
-                  className="h-3.5 w-3.5 shrink-0 text-mute"
-                  aria-hidden
-                />
-                <CanonicalSelect
-                  value={attachCanonical}
-                  onChange={setAttachCanonical}
-                  hits={attachModelHits}
-                  allowEmpty={attachModelHits.length !== 1}
-                  includePin
-                  disabled={busy}
-                />
-                <ArrowRight
-                  className="h-3.5 w-3.5 shrink-0 text-mute"
-                  aria-hidden
-                />
-              </>
-            ) : (
-              <>
-                <CanonicalSelect
-                  value={attachCanonical}
-                  onChange={setAttachCanonical}
-                  hits={attachModelHits}
-                  allowEmpty={attachModelHits.length !== 1}
-                  includePin
-                  disabled={busy}
-                />
-                <ArrowRight
-                  className="h-3.5 w-3.5 shrink-0 text-mute"
-                  aria-hidden
-                />
-              </>
-            )}
-            <Input
-              value={agentRef}
-              onChange={(e) => setAgentRef(e.target.value)}
-              placeholder="org/name@version"
-              className="h-8 min-w-0 flex-1 text-xs"
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            <CanonicalSelect
+              value={attachCanonical}
+              onChange={setAttachCanonical}
+              hits={attachModelHits}
+              allowEmpty={attachModelHits.length !== 1}
+              includePin
+              allowCustom
+              variant="panel"
               disabled={busy}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void attachOrRequest();
-              }}
             />
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={busy || !agentRef.trim() || Boolean(matchingPerformance)}
-              onClick={() => void attachOrRequest()}
-            >
-              {matchingPerformance ? "Pending" : "Attach"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                value={agentRef}
+                onChange={(e) => setAgentRef(e.target.value)}
+                placeholder="org/name@version"
+                className="h-8 min-w-0 flex-1 text-xs"
+                disabled={busy}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void attachOrRequest();
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy || !agentRef.trim() || Boolean(matchingPerformance)}
+                onClick={() => void attachOrRequest()}
+              >
+                {matchingPerformance ? "Pending" : "Attach"}
+              </Button>
+            </div>
           </div>
           {matchingPerformance ? (
             <p className="text-xs text-body">
