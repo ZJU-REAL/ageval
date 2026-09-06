@@ -100,10 +100,11 @@ def directory_price(
 ) -> dict[str, float] | None:
     """USD per million tokens for this overlay, from the pin snapshot."""
     text = overlay.strip()
-    if not text or not pin:
+    if not text or pin is None:
         return None
     canonical = join_overlay(text, pin)
-    prices = pin.get("prices") if isinstance(pin.get("prices"), dict) else {}
+    raw_prices = pin.get("prices")
+    prices = raw_prices if isinstance(raw_prices, dict) else {}
     row = prices.get(canonical) if canonical else None
     if not isinstance(row, dict) or not row:
         return None
@@ -118,7 +119,8 @@ def directory_price(
                 "input": float(hit["input"]),
                 "output": float(out) if isinstance(out, (int, float)) else 0.0,
             }
-    models = pin.get("models") if isinstance(pin.get("models"), dict) else {}
+    raw_models = pin.get("models")
+    models = raw_models if isinstance(raw_models, dict) else {}
     lab = (models.get(canonical) or {}).get("lab") if canonical else None
     if isinstance(lab, str) and isinstance(row.get(lab), dict):
         hit = row[lab]

@@ -339,6 +339,7 @@ def _egress_allowlist(lock: LockedTaskConfig) -> list[str]:
 
     from ageval.config.env_refs import resolve_locked_base_url
     from ageval.config.errors import ConfigError
+    from ageval.config.profiles import authored_egress_hosts
 
     hosts: list[str] = []
     for row in lock.agent_profiles:
@@ -352,6 +353,7 @@ def _egress_allowlist(lock: LockedTaskConfig) -> list[str]:
         host = urlparse(str(url)).hostname
         if host:
             hosts.append(host)
+    hosts.extend(authored_egress_hosts(_environment_options(lock)))
     return sorted(set(hosts))
 
 

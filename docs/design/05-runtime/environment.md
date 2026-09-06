@@ -10,13 +10,15 @@
 # profiles.yaml — 选独占槽 environment 的赢家
 format: ageval.profiles/1
 environment: e2b    # local | docker | e2b | ssh | daytona
-# environment_options:   # docker：image / platform / network / user / egress / python_version
+# environment_options:   # docker：image / platform / network / user / egress / egress_allow / python_version
 #                        # ssh：host / user / port / key_env / image
 #                        # daytona：image / snapshot / timeout_seconds
 # evaluate_host:         # 省略 = 同一环境打分
 #   isolated: true       # 第二只 EnvironmentProvider；不是新槽
-#   environment_options: # 打分盒自己的 docker 旋钮；省略 = 不继承 agent 的 egress / network
-#     egress: llm        # network / egress / platform / user / python_version；不是 image（配方照旧）
+#   environment_options: # 打分盒自己的 docker 旋钮；省略 = 不继承 agent 的 egress / egress_allow / network
+#     egress: llm        # network / egress / egress_allow / platform / user / python_version；不是 image（配方照旧）
+#     egress_allow:      # 仅 egress: llm：额外 hostname，与该盒 base_url host 并集
+#       - registry.npmjs.org
 ```
 
 取消隔离档产品面。不要写 `provider.kind`、`assurance: l0/l1`。Result 记 `kind` + `capabilities_used`。
@@ -43,18 +45,19 @@ docker `environment_options`：
 - `image` / `docker_image` — 已有 tag，跳过本机构建
 - `platform` — 缺省跟本机
 - `network` — 缺省 `bridge`。这是 **原始 docker 网络名**。`none` 也是原始名：它会一并挡住环境内进程访问模型 API，**不是**下面的 LLM egress 模式。
-- `egress` — 省略 = 今日 `bridge`。`egress: llm`（Current：仅 docker contrib）：Agent 环境出站 HTTP(S) 只能到达已绑定 profile 的 `base_url` 主机（parent 侧代理 + 环境内 `HTTPS_PROXY` / `HTTP_PROXY`，或等价物）。ACP stdio 仍是 parent `attach_stdio`，不走这条代理。不能兑现的 kind 写了该键 → lock 失败。依赖仍 bake 在题包 `environment/Dockerfile`；官方 Attempt 镜像 invoke 时禁止 `npm i` / 浮动 `npx`。
+- `egress` — 省略 = 今日 `bridge`。`egress: llm`（Current：仅 docker contrib）：Agent 环境出站 HTTP(S) 只能到达 **有效放行名单**（parent 侧代理 + 环境内 `HTTPS_PROXY` / `HTTP_PROXY`，或等价物）。ACP stdio 仍是 parent `attach_stdio`，不走这条代理。不能兑现的 kind 写了该键 → lock 失败。依赖仍 bake 在题包 `environment/Dockerfile`；官方 Attempt 镜像 invoke 时禁止 `npm i` / 浮动 `npx`。
+- `egress_allow` — 仅与同一 map 上的 `egress: llm` 同写。hostname 列表（小写、无 scheme、无 path、无 port；与代理 exact match 同一规范化）。省略 = 只放行绑定 profile 的 `base_url` 主机（今日行为）。空列表 = 不加额外主机。有效名单 = 该盒相关 `base_url` 主机 ∪ 本 map 的 `egress_allow`，去重排序后写入内部 `egress_allowlist`；不另起代理。非 hostname 条目（带 path 的 URL、空串）→ lock 失败。非 docker kind 写了该键、或没有 `egress: llm` → lock 失败。不是新插件，也不是 chain slot。并集为空（`egress: llm` 且没有可解析 `base_url` 主机、也没有 extras）仍按今日规则拒绝启动代理，不静默放开网络。代理 allow/deny 不写 `Result.status`。
 - `user` — 环境内身份，`docker run --user` 与 `exec`/`attach_stdio` 同一值。缺省 `10001:10001`。`root` / `0` / `0:0` 开 root（Harbor 式终端题要 `apt` 或写 `/usr/local` 时用）。其它值必须是 `uid` 或 `uid:gid`。未知字符串一次失败。默认仍带 `no-new-privileges`。
 - `python_version` — 官方 Attempt 基座的 CPython minor（如 `"3.13"`）；省略 = 3.12。形状 `^\d+\.\d+$`；`latest` / `3` / 空串 / 其它形状一次拒绝。基座 `FROM python:${python_version}-slim-bookworm` 拉不到 → image build 一次失败，**不**回退 3.12。ACP 引擎仍在 build 期 bake，Node / Go 等引擎版本不受此旋钮影响。
 
-`egress` 约束的是 **Agent 环境**。两只盒子两份策略：打分 Host 有自己的
-`evaluate_host.environment_options`（`network` / `egress` / `platform` / `user` /
+`egress` / `egress_allow` 约束的是 **写它们的那只盒子**。两只盒子两份策略：打分 Host 有自己的
+`evaluate_host.environment_options`（`network` / `egress` / `egress_allow` / `platform` / `user` /
 `python_version`）；
 嵌套表省略时打分盒沿用今日行为——只继承 job `environment_options` 的
-`platform` / `user` / `python_version`，**不**继承 agent 的 `egress` / `network` 或镜像。
-打分 `egress: llm` 的放行名单来自 evaluate 相位 profile 的 `base_url`
-（judge 盒 reach judge 的 API host），不是 solver 名单。不能兑现该键的 kind
-写了任一处 `egress` → lock 失败，同一规则。
+`platform` / `user` / `python_version`，**不**继承 agent 的 `egress` / `egress_allow` / `network` 或镜像。
+打分 `egress: llm` 的放行名单 = evaluate 相位 profile 的 `base_url` 主机 ∪ 打分 map 自己的 `egress_allow`
+（judge 盒 reach judge 的 API host 与打分作者列出的额外 host），不是 solver 名单。不能兑现该键的 kind
+写了任一处 `egress` / `egress_allow` → lock 失败，同一规则。
 
 ## 第二份环境（evaluate，opt-in）
 

@@ -270,6 +270,46 @@ async def test_scoring_options_without_nested_map_inherit_platform_user_python(
     }
 
 
+def test_scoring_allowlist_unions_nested_extras_not_agent_extras(
+    tmp_path: Path, fake_layers: list[str]
+) -> None:
+    lock = _lock(
+        overlay={
+            "environment": "docker",
+            "environment_options": {
+                "egress": "llm",
+                "egress_allow": ["registry.npmjs.org"],
+            },
+            "evaluate_host": {
+                "isolated": True,
+                "environment_options": {
+                    "egress": "llm",
+                    "egress_allow": ["extra.judge.example.com"],
+                },
+            },
+        },
+        refs={"environment_evaluate_dockerfile": "environment/evaluate.Dockerfile"},
+    )
+    ctx = _ctx(
+        tmp_path,
+        [],
+        lock=lock,
+        graphs={
+            "solver": StubGraph(executor_plugin="solver-exec"),
+            "judge": StubGraph(executor_plugin="judge-exec"),
+        },
+        sealed={"solver"},
+    )
+
+    options = _scoring_environment_options(ctx)
+    assert options["egress_allowlist"] == [
+        "api.judge.example.com",
+        "extra.judge.example.com",
+    ]
+    assert "registry.npmjs.org" not in options["egress_allowlist"]
+    assert "solver.example.com" not in options["egress_allowlist"]
+
+
 def test_scoring_layers_follow_seal_set(tmp_path: Path, fake_layers: list[str]) -> None:
     """Sealed solver plugins stay out; unsealed ones (incl. solver) bake in."""
     lock = _lock(overlay={}, refs={})

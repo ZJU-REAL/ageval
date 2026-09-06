@@ -103,12 +103,12 @@ yaml 显式字段覆盖缺省。旧 `harness.entrypoint` 与未知 format **拒�
 ```yaml
 format: ageval.profiles/1
 environment: local          # 或 docker / e2b / ssh / daytona
-# environment_options:      # docker：image / platform / network / user（`root` 开 root）/ egress / python_version
+# environment_options:      # docker：image / platform / network / user（`root` 开 root）/ egress / egress_allow / python_version
 #                           # ssh：host / user / port / key_env / image
 #                           # daytona：image / snapshot / timeout_seconds
 # evaluate_host:            # 省略 = 同一环境 evaluate
 #   isolated: true
-#   environment_options:     # 打分盒自己的 network / egress / platform / user / python_version；省略 = 不继承 agent 的 egress/network
+#   environment_options:     # 打分盒自己的 network / egress / egress_allow / platform / user / python_version；省略 = 不继承 agent 的 egress/egress_allow/network
 agent_profiles:
   solver:
     executor: acp
@@ -121,7 +121,7 @@ agent_profiles:
       - plugin: local
 ```
 
-`environment_options` 给 **run** 环境；locator 在 preflight 解析，密钥不进 digest。`evaluate_host.isolated: true` 要求成员题有打分配方，且 kind 能再起一份环境（Current：docker）；否则 lock 失败。`evaluate_host.environment_options` 是打分盒自己的旋钮（`network` / `egress` / `platform` / `user` / `python_version`；不是 `image`），要求 `isolated: true`；省略时打分盒只继承 job `environment_options` 的 `platform` / `user` / `python_version`，不继承 agent 的 `egress` / `network`。未知顶键与未知嵌套键一次拒绝。
+`environment_options` 给 **run** 环境；locator 在 preflight 解析，密钥不进 digest。`evaluate_host.isolated: true` 要求成员题有打分配方，且 kind 能再起一份环境（Current：docker）；否则 lock 失败。`evaluate_host.environment_options` 是打分盒自己的旋钮（`network` / `egress` / `egress_allow` / `platform` / `user` / `python_version`；不是 `image`），要求 `isolated: true`；省略时打分盒只继承 job `environment_options` 的 `platform` / `user` / `python_version`，不继承 agent 的 `egress` / `egress_allow` / `network`。`egress_allow` 是 hostname 列表，必须与同一 map 的 `egress: llm` 同写（Current：仅 docker）；省略 = 该盒只放行相关 `base_url` 主机。未知顶键与未知嵌套键一次拒绝。
 
 `evaluation.environments` 是成员题上的名 → 配方表。名字 `[a-z][a-z0-9_-]*`。每个名字只允许 `dockerfile`（题相对路径）或 `docker_image`（OCI tag），或两者（与今日单只配方同一识别规则）。未知键一次错误。`dockerfile` 必须存在且不得落在 `evaluation/`（那是 gold）。写出该表则：
 
@@ -140,6 +140,6 @@ agent_profiles:
 | `evaluation/` | evaluate 相位（gold；可含 `docker_image` 供单只 isolated；禁止放 Dockerfile） |
 | `environment/` | Agent 环境配方；`evaluate.Dockerfile` 或 `evaluate/<name>/` 仅 isolated 打分环境 |
 | `data/` | Agent 可见 seed |
-| `profiles.yaml` | 选环境 / executor / entry；可选 `evaluate_host` / `egress` |
+| `profiles.yaml` | 选环境 / executor / entry；可选 `evaluate_host` / `egress` / `egress_allow` |
 
 实现：`src/ageval/config/`（`dataset.py`、`profiles.py`、`load_and_lock.py`、`validate.py`、`digest.py`）。

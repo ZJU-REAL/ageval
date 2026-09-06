@@ -634,3 +634,110 @@ def test_evaluate_host_nested_bad_egress_fails_closed() -> None:
         )
     assert caught.value.error_code == "invalid_schema"
     assert "egress" in caught.value.message
+
+
+def test_egress_allow_on_docker_llm_locks(tmp_path: Path) -> None:
+    root = _standalone(
+        tmp_path / "pkg",
+        files=("run.py", "evaluator.py", "environment/evaluate.Dockerfile"),
+    )
+    locked = _lock(
+        root,
+        job=job_document(
+            {"solver": dict(DOCKER_SOLVER)},
+            environment="docker",
+            environment_options={
+                "egress": "llm",
+                "egress_allow": ["GitHub.com", "registry.npmjs.org"],
+            },
+            evaluate_host={
+                "isolated": True,
+                "environment_options": {
+                    "egress": "llm",
+                    "egress_allow": ["api.judge.example.com"],
+                },
+            },
+        ),
+    )
+    overlay = thaw(locked.job_overlay)
+    assert overlay["environment_options"]["egress_allow"] == [
+        "github.com",
+        "registry.npmjs.org",
+    ]
+    assert overlay["evaluate_host"]["environment_options"]["egress_allow"] == [
+        "api.judge.example.com"
+    ]
+
+
+def test_egress_allow_empty_list_locks(tmp_path: Path) -> None:
+    root = _standalone(tmp_path / "pkg", files=("run.py", "evaluator.py"))
+    locked = _lock(
+        root,
+        job=job_document(
+            {"solver": dict(DOCKER_SOLVER)},
+            environment="docker",
+            environment_options={"egress": "llm", "egress_allow": []},
+        ),
+    )
+    overlay = thaw(locked.job_overlay)
+    assert overlay["environment_options"]["egress_allow"] == []
+
+
+def test_egress_allow_without_llm_fails_closed() -> None:
+    with pytest.raises(ConfigError) as caught:
+        parse_job_mapping(
+            {
+                "format": "ageval.profiles/1",
+                "environment": "docker",
+                "environment_options": {"egress_allow": ["github.com"]},
+                "agent_profiles": {"solver": dict(DOCKER_SOLVER)},
+            }
+        )
+    assert caught.value.error_code == "invalid_schema"
+    assert "egress_allow" in caught.value.message
+    assert "egress: llm" in caught.value.message
+
+
+def test_egress_allow_on_local_fails_closed(tmp_path: Path) -> None:
+    root = _standalone(tmp_path / "pkg", files=("run.py", "evaluator.py"))
+    with pytest.raises(ConfigError) as caught:
+        _lock(
+            root,
+            job=job_document(
+                {"solver": dict(SOLVER)},
+                environment_options={"egress": "llm", "egress_allow": ["github.com"]},
+            ),
+        )
+    assert caught.value.error_code == "invalid_schema"
+    assert "egress" in caught.value.message
+
+
+def test_egress_allow_non_hostname_fails_closed() -> None:
+    with pytest.raises(ConfigError) as caught:
+        parse_job_mapping(
+            {
+                "format": "ageval.profiles/1",
+                "environment": "docker",
+                "environment_options": {
+                    "egress": "llm",
+                    "egress_allow": ["https://github.com/org"],
+                },
+                "agent_profiles": {"solver": dict(DOCKER_SOLVER)},
+            }
+        )
+    assert caught.value.error_code == "invalid_schema"
+    assert "hostnames" in caught.value.message
+
+
+def test_egress_allow_empty_string_fails_closed() -> None:
+    with pytest.raises(ConfigError) as caught:
+        parse_job_mapping(
+            {
+                "format": "ageval.profiles/1",
+                "environment": "docker",
+                "environment_options": {"egress": "llm", "egress_allow": [""]},
+                "agent_profiles": {"solver": dict(DOCKER_SOLVER)},
+            }
+        )
+    assert caught.value.error_code == "invalid_schema"
+    assert "hostnames" in caught.value.message
