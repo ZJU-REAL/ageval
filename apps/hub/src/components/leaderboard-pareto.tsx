@@ -15,7 +15,6 @@ import {
   formatUsd,
   suiteChartPoint,
   type ParetoAxis,
-  type SuiteChartPoint,
 } from "@/lib/leaderboard-charts";
 import { cn, displayLabelsFromOverlay } from "@/lib/utils";
 
@@ -73,33 +72,15 @@ function chartModelName(suite: SuiteRow, pin: ModelPin): string {
   return slash >= 0 ? trimmed.slice(slash + 1) : trimmed;
 }
 
-function paretoFront(points: SuiteChartPoint[], axis: ParetoAxis): SuiteChartPoint[] {
-  const usable = points
-    .filter((p) => p.passRate != null && axisValue(p, axis) != null)
-    .sort((a, b) => (axisValue(a, axis) ?? 0) - (axisValue(b, axis) ?? 0));
-  const front: SuiteChartPoint[] = [];
-  let bestY = Number.NEGATIVE_INFINITY;
-  for (const p of usable) {
-    const y = p.passRate ?? 0;
-    if (y >= bestY) {
-      front.push(p);
-      bestY = y;
-    }
-  }
-  return front;
-}
-
 export function LeaderboardPareto({
   suites,
   axis,
-  openSuiteId,
   onOpenSuite,
   emptyTitle,
   emptyBody,
 }: {
   suites: SuiteRow[];
   axis: ParetoAxis;
-  openSuiteId?: string | null;
   onOpenSuite?: (suiteRunId: string | null) => void;
   emptyTitle?: string;
   emptyBody?: string;
@@ -123,27 +104,18 @@ export function LeaderboardPareto({
   const xmin = xs.length ? Math.min(...xs) * 0.7 : 0;
   const xmax = xs.length ? Math.max(...xs) * 1.15 || 1 : 1;
   const span = xmax - xmin || 1;
-  const front = paretoFront(plotted, axis);
   const W = 1000;
   const H = 520;
   const L = 64;
-  const R = 28;
+  const R = 80;
   const T = 44;
-  const B = 56;
+  const B = 80;
   const plotW = W - L - R;
   const plotH = H - T - B;
   const xOf = (v: number) => L + (1 - (v - xmin) / span) * plotW;
   const yOf = (v: number) => T + (1 - v) * plotH;
   const yTicks = [0, 0.2, 0.4, 0.6, 0.8, 1];
   const xTicks = [xmax, xmin + span / 2, xmin];
-  const frontPath = [...front]
-    .sort((a, b) => (axisValue(b, axis) ?? 0) - (axisValue(a, axis) ?? 0))
-    .map((p, i) => {
-      const x = xOf(axisValue(p, axis) as number);
-      const y = yOf(p.passRate ?? 0);
-      return `${i ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(" ");
   const hoveredIndex = plotted.findIndex((p) => p.suite.suite_run_id === hoveredId);
   const hovered = hoveredIndex >= 0 ? plotted[hoveredIndex] : null;
   const hx = hovered ? xOf(axisValue(hovered, axis) as number) : 0;
@@ -199,20 +171,10 @@ export function LeaderboardPareto({
               {formatAxis(axis, t)}
             </text>
           ))}
-          {frontPath ? (
-            <path
-              d={frontPath}
-              fill="none"
-              className="stroke-ink"
-              strokeWidth={1.5}
-              opacity={hovered ? 0.25 : 1}
-            />
-          ) : null}
           {plotted.map((p, i) => {
             const xv = axisValue(p, axis) as number;
             const cx = xOf(xv);
             const cy = yOf(p.passRate ?? 0);
-            const open = openSuiteId === p.suite.suite_run_id;
             const dim = hoveredId != null && hoveredId !== p.suite.suite_run_id;
             return (
               <circle
@@ -224,10 +186,7 @@ export function LeaderboardPareto({
                   DOT_FILL[i % DOT_FILL.length],
                   "motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-smooth",
                   dim && "opacity-20",
-                  open && "stroke-link",
                 )}
-                strokeWidth={open ? 2 : 0}
-                vectorEffect="non-scaling-stroke"
               />
             );
           })}
@@ -393,7 +352,7 @@ export function LeaderboardPareto({
               style={{
                 left: `${left}%`,
                 top: `${top}%`,
-                transform: "translate(-50%, calc(-100% - 8px))",
+                transform: "translate(-50%, 10px)",
               }}
             >
               {chartModelName(p.suite, pin)}
@@ -407,7 +366,7 @@ export function LeaderboardPareto({
           ? hidden
             ? `${hidden} suite run${hidden === 1 ? " has" : "s have"} no cost (no agent cost and no catalog price). Hidden here. Switch to Tokens.`
             : "Cost is the sum of every job in the suite. When the agent did not report USD, the axis uses tokens × catalog price (estimated, not a billed invoice)."
-          : "Right is cheaper / fewer. Solid line is the Pareto front. Metrics are observational, not a suite PASS. Cost and tokens are the sum of every job in the suite."}
+          : "Right is cheaper / fewer. Metrics are observational, not a suite PASS. Cost and tokens are the sum of every job in the suite."}
       </p>
     </div>
   );
