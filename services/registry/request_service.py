@@ -16,10 +16,21 @@ DECIDE_ACTIONS = frozenset({"approve", "reject"})
 
 
 class RequestService:
-    def __init__(self, meta: Any, access: Any, results: Any) -> None:
-        self.meta = meta
-        self.access = access
+    def __init__(
+        self,
+        inbox: Any,
+        orgs: Any,
+        packages: Any,
+        results: Any,
+        access: Any,
+        results_api: Any,
+    ) -> None:
+        self.inbox_store = inbox
+        self.orgs = orgs
+        self.packages = packages
         self.results = results
+        self.access = access
+        self.results_api = results_api
 
     def apply(
         self,
@@ -35,7 +46,7 @@ class RequestService:
             raise RegistryAppError("invalid_request", "unknown request kind", http_status=400)
         if not auth.user_id:
             raise RegistryAppError("unauthorized", "authentication required", http_status=401)
-        suite = self.meta.get_suite(suite_run_id)
+        suite = self.results.get_suite(suite_run_id)
         if suite is None or not self.access.can_manage_result(
             "suite", suite_run_id, auth, for_read=False
         ):
@@ -48,18 +59,18 @@ class RequestService:
         org_ids = self._owner_org_ids(auth)
         if auth_is_maintainer(auth):
             org_ids.add(MAINTAINER_INBOX_ORG)
-        rows = self.meta.list_inbox_requests(org_ids=list(org_ids), status=None)
-        hidden = self.meta.list_hidden_inbox_ids(auth.user_id or "")
+        rows = self.inbox_store.list_inbox_requests(org_ids=list(org_ids), status=None)
+        hidden = self.inbox_store.list_hidden_inbox_ids(auth.user_id or "")
         items = [request_to_dict(r) for r in rows if r.request_id not in hidden]
         return {"items": items}
 
     def list_for_suite(self, *, suite_run_id: str, auth: TokenInfo) -> dict[str, Any]:
-        suite = self.meta.get_suite(suite_run_id)
+        suite = self.results.get_suite(suite_run_id)
         if suite is None or not self.access.can_manage_result(
             "suite", suite_run_id, auth, for_read=True
         ):
             raise RegistryAppError("not_found", "suite not found", http_status=404)
-        rows = self.meta.list_suite_requests(suite_run_id)
+        rows = self.inbox_store.list_suite_requests(suite_run_id)
         owner_orgs = self._owner_org_ids(auth)
         is_uploader = bool(auth.user_id) and suite.uploaded_by == auth.user_id
         maintainer = auth_is_maintainer(auth)
@@ -89,7 +100,7 @@ class RequestService:
         ids = [i.strip() for i in request_ids if isinstance(i, str) and i.strip()]
         if not ids:
             raise RegistryAppError("invalid_request", "ids required", http_status=400)
-        rows = self.meta.list_resource_requests_by_ids(ids)
+        rows = self.inbox_store.list_resource_requests_by_ids(ids)
         by_id = {r.request_id: r for r in rows}
         for rid in ids:
             row = by_id.get(rid)
@@ -112,7 +123,7 @@ class RequestService:
             row = by_id[rid]
             if action == "approve":
                 self._approve(row, auth, canonical_model=canonical_model)
-            updated = self.meta.update_resource_request_status(
+            updated = self.inbox_store.update_resource_request_status(
                 rid,
                 status="approved" if action == "approve" else "rejected",
                 decided_by=auth.user_id or "",
@@ -140,7 +151,7 @@ class RequestService:
             row = visible.get(rid)
             if row is None or str(row.get("status") or "") == "pending":
                 raise RegistryAppError("not_found", "request not found", http_status=404)
-        self.meta.hide_inbox_requests(user_id=auth.user_id, request_ids=ids)
+        self.inbox_store.hide_inbox_requests(user_id=auth.user_id, request_ids=ids)
         return {"ok": True, "ids": ids}
 
     def _apply_listing(self, suite: Any, auth: TokenInfo) -> dict[str, Any]:
@@ -151,7 +162,7 @@ class RequestService:
                 http_status=400,
             )
         org_id = self._dataset_org_id(suite.dataset_id, suite.dataset_version)
-        pending = self.meta.get_pending_request(
+        pending = self.inbox_store.get_pending_request(
             kind="leaderboard_list", suite_run_id=suite.suite_run_id, agent_ref=""
         )
         if pending is not None:
@@ -165,7 +176,7 @@ class RequestService:
             owner_org_id=org_id,
             agent_ref="",
         )
-        self.meta.insert_resource_request(row)
+        self.inbox_store.insert_resource_request(row)
         return request_to_dict(row)
 
     def _apply_performance(
@@ -190,7 +201,7 @@ class RequestService:
         stored_canonical = canonical_model.strip()
         if builtin is not None:
             if auth_is_maintainer(auth):
-                attached = self.results.attach_agent(
+                attached = self.results_api.attach_agent(
                     suite_run_id=suite.suite_run_id,
                     agent=agent,
                     auth=auth,
@@ -200,7 +211,7 @@ class RequestService:
                 attached["request"] = None
                 attached["direct_attach"] = True
                 return attached
-            pending = self.meta.get_pending_request(
+            pending = self.inbox_store.get_pending_request(
                 kind="agent_performance",
                 suite_run_id=suite.suite_run_id,
                 agent_ref=stored_ref,
@@ -217,9 +228,9 @@ class RequestService:
                 agent_ref=stored_ref,
                 canonical_model=stored_canonical,
             )
-            self.meta.insert_resource_request(row)
+            self.inbox_store.insert_resource_request(row)
             return request_to_dict(row)
-        release = self.meta.get_by_version(package_id, version)
+        release = self.packages.get_by_version(package_id, version)
         if release is None or not self.access.visible_package(release, auth):
             raise RegistryAppError("not_found", "agent package not found", http_status=404)
         try:
@@ -236,7 +247,7 @@ class RequestService:
         if not owner_org:
             raise RegistryAppError("invalid_request", "agent package has no org", http_status=400)
         if self.access.org_owner_status(org_id=owner_org, auth=auth) == "ok":
-            attached = self.results.attach_agent(
+            attached = self.results_api.attach_agent(
                 suite_run_id=suite.suite_run_id,
                 agent=agent,
                 auth=auth,
@@ -246,7 +257,7 @@ class RequestService:
             attached["request"] = None
             attached["direct_attach"] = True
             return attached
-        pending = self.meta.get_pending_request(
+        pending = self.inbox_store.get_pending_request(
             kind="agent_performance",
             suite_run_id=suite.suite_run_id,
             agent_ref=stored_ref,
@@ -263,7 +274,7 @@ class RequestService:
             agent_ref=stored_ref,
             canonical_model=stored_canonical,
         )
-        self.meta.insert_resource_request(row)
+        self.inbox_store.insert_resource_request(row)
         return request_to_dict(row)
 
     def _approve(
@@ -275,7 +286,7 @@ class RequestService:
     ) -> None:
         try:
             if row.kind == "leaderboard_list":
-                self.meta.set_suite_board_listed(row.suite_run_id, True)
+                self.results_api.mark_board_listed(suite_run_id=row.suite_run_id)
                 return
             chosen = (canonical_model or row.canonical_model or "").strip()
             if not chosen:
@@ -284,7 +295,7 @@ class RequestService:
                     "canonical_model required",
                     http_status=400,
                 )
-            self.results.attach_agent(
+            self.results_api.attach_agent(
                 suite_run_id=row.suite_run_id,
                 agent=row.agent_ref,
                 auth=auth,
@@ -301,7 +312,7 @@ class RequestService:
         return row.owner_org_id in self._owner_org_ids(auth)
 
     def _dataset_org_id(self, dataset_id: str, version: str) -> str:
-        release = self.meta.get_by_version(dataset_id, version)
+        release = self.packages.get_by_version(dataset_id, version)
         if release is None or not release.org_id:
             raise RegistryAppError(
                 "invalid_request",
@@ -314,8 +325,8 @@ class RequestService:
         if not auth.user_id:
             return set()
         out: set[str] = set()
-        for org_id in self.meta.user_org_ids(auth.user_id):
-            mem = self.meta.membership(org_id, auth.user_id)
+        for org_id in self.orgs.user_org_ids(auth.user_id):
+            mem = self.orgs.membership(org_id, auth.user_id)
             if mem is not None and mem.role == "owner":
                 out.add(org_id)
         return out

@@ -8,7 +8,10 @@ from pathlib import Path
 from services.registry.access import AccessPolicy
 from services.registry.package_service import PackageService
 from services.registry.result_service import ResultService
-from services.registry.store import MemoryBlobStore, MetadataStore, TokenInfo
+from services.registry.store import MemoryBlobStore, TokenInfo
+from services.registry.store_schema import (
+    open_sqlite_stores,
+)
 
 from ageval.registry.archive import MEDIA_TYPE, build_archive
 from ageval.registry.digest import compute_package_digest
@@ -18,11 +21,19 @@ FIXTURE = REPO / "tests" / "fixtures" / "datasets" / "publish-min"
 
 
 def _services(tmp_path: Path) -> tuple[PackageService, ResultService]:
-    meta = MetadataStore(tmp_path / "meta.sqlite3")
+    meta = open_sqlite_stores(tmp_path / "meta.sqlite3")
     blobs = MemoryBlobStore()
-    access = AccessPolicy(meta=meta)
-    packages = PackageService(meta, blobs, access, max_upload=64 * 1024 * 1024)
-    results = ResultService(meta, blobs, access, max_upload=64 * 1024 * 1024)
+    access = AccessPolicy(orgs=meta.orgs, packages=meta.packages, results=meta.results)
+    packages = PackageService(meta.packages, meta.orgs, blobs, access, max_upload=64 * 1024 * 1024)
+    results = ResultService(
+        meta.results,
+        meta.packages,
+        meta.orgs,
+        meta.inbox,
+        blobs,
+        access,
+        max_upload=64 * 1024 * 1024,
+    )
     return packages, results
 
 
@@ -34,7 +45,7 @@ def _as_path(tmp_path: Path, data: bytes, name: str = "blob.bin") -> Path:
 
 def _publish_release(packages: PackageService, tmp_path: Path) -> None:
     archive, blob_digest, size = build_archive(FIXTURE)
-    packages.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    packages.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     packages.publish(
         meta={
@@ -95,7 +106,7 @@ def test_fail_on_all_tasks_is_complete_and_on_board(tmp_path: Path) -> None:
     assert payload["board_listed"] is False
     board = results.list_suites(auth=auth, dataset_id="test/publish-min", board=True)
     assert board["items"] == []
-    results.meta.set_suite_board_listed("suite_fail_all", True)
+    results.results.set_suite_board_listed("suite_fail_all", True)
     board = results.list_suites(auth=auth, dataset_id="test/publish-min", board=True)
     assert [i["suite_run_id"] for i in board["items"]] == ["suite_fail_all"]
 
@@ -139,7 +150,7 @@ def test_list_tasks_attaches_visible_job_stats(tmp_path: Path) -> None:
         task_refs=[{"task_id": "hello", "status": "FAIL", "score": 0.0}],
     )
     results.upload_suite(meta=meta, archive=archive, auth=auth)
-    release = packages.meta.get_by_version("test/publish-min", "0.1.0")
+    release = packages.packages.get_by_version("test/publish-min", "0.1.0")
     assert release is not None
     listed = packages.list_tasks(
         dataset_id="test/publish-min",
@@ -155,7 +166,7 @@ def test_list_tasks_attaches_visible_job_stats(tmp_path: Path) -> None:
 def test_list_tasks_hides_invisible_job_stats(tmp_path: Path) -> None:
     packages, results = _services(tmp_path)
     _publish_release(packages, tmp_path)
-    packages.meta.create_org(name="other", owner_user_id="carol", display_name="Other")
+    packages.orgs.create_org(name="other", owner_user_id="carol", display_name="Other")
     alice = TokenInfo(scopes=frozenset({"results:upload", "registry:publish"}), user_id="alice")
     bob = TokenInfo(scopes=frozenset({"results:read"}), user_id="bob")
     carol = TokenInfo(scopes=frozenset({"results:read"}), user_id="carol")
@@ -166,13 +177,13 @@ def test_list_tasks_hides_invisible_job_stats(tmp_path: Path) -> None:
     )
     meta["visibility"] = "private"
     results.upload_suite(meta=meta, archive=archive, auth=alice)
-    results.meta.add_result_share(
+    results.results.add_result_share(
         result_kind="suite",
         result_id="suite_private_stats",
         target_type="org",
         target_id="other",
     )
-    release = packages.meta.get_by_version("test/publish-min", "0.1.0")
+    release = packages.packages.get_by_version("test/publish-min", "0.1.0")
     assert release is not None
 
     def _hello_stats(auth: TokenInfo) -> dict[str, object]:
@@ -214,7 +225,7 @@ def test_missing_task_is_incomplete_hidden_from_board(tmp_path: Path) -> None:
 
 def test_draft_bound_suite_stays_off_public_board(tmp_path: Path) -> None:
     packages, results = _services(tmp_path)
-    packages.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    packages.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     archive, blob_digest, size = build_archive(FIXTURE)
     alice = TokenInfo(scopes=frozenset({"registry:publish", "results:upload"}), user_id="alice")
     packages.publish(
@@ -292,7 +303,7 @@ def test_later_draft_task_does_not_drop_old_release_run(tmp_path: Path) -> None:
         task_refs=[{"task_id": "hello", "status": "PASS", "score": 1.0}],
     )
     results.upload_suite(meta=meta, archive=archive, auth=auth)
-    results.meta.set_suite_board_listed("suite_release", True)
+    results.results.set_suite_board_listed("suite_release", True)
     # Later draft adds a task; stored release fingerprint must not be rewritten.
     wider = tmp_path / "wider"
     shutil.copytree(FIXTURE, wider)
@@ -343,7 +354,7 @@ def test_later_draft_task_does_not_drop_old_release_run(tmp_path: Path) -> None:
 
 def test_non_entitled_uploader_cannot_bind_private_draft(tmp_path: Path) -> None:
     packages, results = _services(tmp_path)
-    packages.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    packages.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     archive, blob_digest, size = build_archive(FIXTURE)
     alice = TokenInfo(scopes=frozenset({"registry:publish", "results:upload"}), user_id="alice")
     packages.publish(

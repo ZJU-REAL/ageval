@@ -6,22 +6,26 @@ import os
 from pathlib import Path
 
 import pytest
+from services.registry.sql_adapter import PostgresAdapter
 from services.registry.store import (
     AttemptResultRow,
-    MetadataStore,
-    PostgresMetadataStore,
     PostgresTokenStore,
     ReleaseRow,
     SqliteTokenStore,
     now,
 )
+from services.registry.store_schema import (
+    RegistryStores,
+    open_sqlite_stores,
+    open_stores,
+)
 
 
-def _sqlite(tmp_path: Path) -> MetadataStore:
-    return MetadataStore(tmp_path / "meta.sqlite")
+def _sqlite(tmp_path: Path) -> RegistryStores:
+    return open_sqlite_stores(tmp_path / "meta.sqlite")
 
 
-def _postgres() -> MetadataStore | None:
+def _postgres() -> RegistryStores | None:
     url = os.environ.get("AGEVAL_REGISTRY_DATABASE_URL") or os.environ.get("DATABASE_URL")
     if not url:
         return None
@@ -30,11 +34,11 @@ def _postgres() -> MetadataStore | None:
         psycopg.connect(url).close()
     except Exception:
         return None
-    return PostgresMetadataStore(url)
+    return open_stores(adapter=PostgresAdapter(url))
 
 
 @pytest.fixture(params=["sqlite", "postgres"])
-def meta(request: pytest.FixtureRequest, tmp_path: Path) -> MetadataStore:
+def meta(request: pytest.FixtureRequest, tmp_path: Path) -> RegistryStores:
     if request.param == "sqlite":
         return _sqlite(tmp_path)
     store = _postgres()
@@ -43,7 +47,7 @@ def meta(request: pytest.FixtureRequest, tmp_path: Path) -> MetadataStore:
     return store
 
 
-def test_insert_and_get_release(meta: MetadataStore) -> None:
+def test_insert_and_get_release(meta: RegistryStores) -> None:
     row = ReleaseRow(
         dataset_id="acme/db",
         version="1.0.0",
@@ -55,23 +59,14 @@ def test_insert_and_get_release(meta: MetadataStore) -> None:
         created_at=now(),
         org_id="acme",
     )
-    meta.create_org(name="acme", display_name="Acme", owner_user_id="alice")
-    meta.insert(row)
-    got = meta.get_by_version("acme/db", "1.0.0")
+    meta.orgs.create_org(name="acme", display_name="Acme", owner_user_id="alice")
+    meta.packages.insert(row)
+    got = meta.packages.get_by_version("acme/db", "1.0.0")
     assert got is not None
     assert got.package_digest == row.package_digest
     assert got.org_id == "acme"
-    listed = meta.list_releases(dataset_id_prefix="acme/")
+    listed = meta.packages.list_releases(dataset_id_prefix="acme/")
     assert any(r.version == "1.0.0" for r in listed)
-
-
-def test_postgres_store_is_thin_adapter() -> None:
-    own = [
-        name
-        for name, val in vars(PostgresMetadataStore).items()
-        if callable(val) and name not in {"__init__"}
-    ]
-    assert own == [], own
 
 
 def test_attempt_row_stores_environment(tmp_path: Path) -> None:
@@ -92,14 +87,14 @@ def test_attempt_row_stores_environment(tmp_path: Path) -> None:
         model_label="glm-5.2",
         score=1.0,
     )
-    meta.insert_attempt(row)
-    got = meta.get_attempt("attempt_env_1")
+    meta.results.insert_attempt(row)
+    got = meta.results.get_attempt("attempt_env_1")
     assert got is not None
     assert got.environment == "e2b"
     assert got.agent_label == "acp"
     assert got.model_label == "glm-5.2"
     assert got.score == 1.0
-    listed = meta.list_attempts(
+    listed = meta.results.list_attempts(
         dataset_id="example/minimal-demo",
         task_id="terminal-jsonl-agg",
         standalone=True,

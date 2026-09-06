@@ -114,7 +114,8 @@ def test_postgres_add_column_skips_when_present() -> None:
 
 def test_metadata_and_token_init_take_schema_lock(tmp_path, monkeypatch) -> None:
     from services.registry.sql_adapter import SqliteAdapter
-    from services.registry.store import MetadataStore, SqliteTokenStore
+    from services.registry.store import SqliteTokenStore
+    from services.registry.store_schema import open_sqlite_stores
 
     calls: list[str] = []
     orig = SqliteAdapter.lock_schema
@@ -125,7 +126,7 @@ def test_metadata_and_token_init_take_schema_lock(tmp_path, monkeypatch) -> None
 
     monkeypatch.setattr(SqliteAdapter, "lock_schema", _spy)
     db = tmp_path / "meta.sqlite3"
-    MetadataStore(db)
+    open_sqlite_stores(db)
     SqliteTokenStore(db)
     assert calls == ["sqlite", "sqlite"]
 
@@ -142,17 +143,16 @@ def test_align_integer_flag_rejects_bad_ident() -> None:
 def test_store_has_no_sql_literals() -> None:
     from pathlib import Path
 
-    text = (Path(__file__).resolve().parents[2] / "services" / "registry" / "store.py").read_text(
-        encoding="utf-8"
-    )
     needles = ("DELETE FROM", "INSERT INTO", "CREATE TABLE", "UPDATE ")
+    registry = Path(__file__).resolve().parents[2] / "services" / "registry"
     offenders: list[str] = []
-    for i, line in enumerate(text.splitlines(), 1):
-        stripped = line.strip()
-        if stripped.startswith("#"):
-            continue
-        if any(n in line for n in needles):
-            offenders.append(f"{i}:{stripped}")
+    for path in sorted(registry.glob("store*.py")):
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            if any(n in line for n in needles):
+                offenders.append(f"{path.name}:{i}:{stripped}")
     assert offenders == []
 
 

@@ -88,7 +88,7 @@ def build_results_commands() -> Any:
 
 
 def build_local_jobs_commands() -> Any:
-    """Local Job delete for Viewer / ``ageval jobs delete`` (no Registry)."""
+    """Local Job list / get / overlay / delete for Viewer / ``ageval jobs`` (no Registry)."""
     from ageval.application.local_jobs import LocalJobsCommands
 
     return LocalJobsCommands()

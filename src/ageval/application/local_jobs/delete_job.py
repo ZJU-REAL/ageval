@@ -9,6 +9,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from ageval.application.local_jobs import listing
 from ageval.config.errors import ConfigError
 from ageval.evidence.locators import (
     default_suite_runs_root,
@@ -200,7 +201,19 @@ def _confirm_token(job_id: str, kind: str, locators: list[str]) -> str:
 
 
 class LocalJobsCommands:
-    """Preview / delete local Job trees. No Registry, no score rewrite."""
+    """List / get / preview / delete local Job trees. No Registry, no score rewrite."""
+
+    def list_jobs(self, dataset_root: Path | str) -> dict[str, Any]:
+        return listing.list_jobs(Path(dataset_root))
+
+    def get_job(self, dataset_root: Path | str, job_id: str) -> dict[str, Any]:
+        return listing.get_job(dataset_root, job_id)
+
+    def get_job_task(self, dataset_root: Path | str, job_id: str, task_id: str) -> dict[str, Any]:
+        return listing.get_job_task(dataset_root, job_id, task_id)
+
+    def job_overlay_mapping(self, dataset_root: Path | str, job_id: str) -> dict[str, Any] | None:
+        return listing.job_overlay_mapping(dataset_root, job_id)
 
     def preview_delete_job(self, dataset_root: Path | str, *, job_id: str) -> dict[str, Any]:
         root = resolve_dataset_root(dataset_root)

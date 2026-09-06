@@ -128,6 +128,7 @@ def test_handler_methods_do_not_touch_store() -> None:
     src = ast.get_source_segment(text, handler) or ""
     assert "state.meta." not in src
     assert "state.blobs." not in src
+    assert "state.stores." not in src
 
 
 def test_bearer_is_only_used_by_dispatch() -> None:
@@ -136,15 +137,24 @@ def test_bearer_is_only_used_by_dispatch() -> None:
 
 
 def test_store_has_no_sql_literals() -> None:
-    text = (REPO / "services" / "registry" / "store.py").read_text(encoding="utf-8")
     needles = ("DELETE FROM", "INSERT INTO", "CREATE TABLE", "UPDATE ")
     offenders: list[str] = []
-    for i, line in enumerate(text.splitlines(), 1):
-        stripped = line.strip()
-        if stripped.startswith("#"):
-            continue
-        if any(n in line for n in needles):
-            offenders.append(f"{i}:{stripped}")
+    store_files = sorted((REPO / "services" / "registry").glob("store*.py"))
+    assert {p.name for p in store_files} >= {
+        "store.py",
+        "store_package.py",
+        "store_result.py",
+        "store_org.py",
+        "store_inbox.py",
+        "store_schema.py",
+    }
+    for path in store_files:
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            if any(n in line for n in needles):
+                offenders.append(f"{path.name}:{i}:{stripped}")
     assert offenders == []
 
 
