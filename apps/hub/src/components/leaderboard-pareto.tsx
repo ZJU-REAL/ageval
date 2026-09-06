@@ -1,7 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { HoverTip } from "@/components/hover-tip";
-import { loadModelPin } from "@/lib/model-pin";
+import {
+  joinOverlay,
+  loadModelPin,
+  pinnedModel,
+  type ModelPin,
+} from "@/lib/model-pin";
 import type { SuiteRow } from "@/lib/api";
 import {
   axisValue,
@@ -14,15 +19,15 @@ import {
 } from "@/lib/leaderboard-charts";
 import { cn, displayLabelsFromOverlay } from "@/lib/utils";
 
-const DOT_CLASS = [
-  "bg-ink",
-  "bg-link",
-  "bg-nav-agents",
-  "bg-nav-datasets",
-  "bg-nav-plugins",
-  "bg-nav-models",
-  "bg-nav-inbox",
-  "bg-nav-orgs",
+const DOT_FILL = [
+  "fill-ink",
+  "fill-link",
+  "fill-nav-agents",
+  "fill-nav-datasets",
+  "fill-nav-plugins",
+  "fill-nav-models",
+  "fill-nav-inbox",
+  "fill-nav-orgs",
 ] as const;
 
 function EmptyBoard({
@@ -52,9 +57,20 @@ function formatAxis(axis: ParetoAxis, n: number): string {
 }
 
 function axisLabel(axis: ParetoAxis): string {
-  if (axis === "cost") return "Avg cost per suite";
-  if (axis === "tokens") return "Total tokens";
-  return "Wall time";
+  if (axis === "cost") return "Suite cost";
+  if (axis === "tokens") return "Suite tokens";
+  return "Suite time";
+}
+
+function chartModelName(suite: SuiteRow, pin: ModelPin): string {
+  const overlay =
+    displayLabelsFromOverlay(suite.job_overlay).model || suite.model_label || "";
+  const pretty = pinnedModel(joinOverlay(overlay, pin).canonical, pin)?.name;
+  if (pretty) return pretty;
+  const trimmed = overlay.trim();
+  if (!trimmed) return "—";
+  const slash = trimmed.lastIndexOf("/");
+  return slash >= 0 ? trimmed.slice(slash + 1) : trimmed;
 }
 
 function paretoFront(points: SuiteChartPoint[], axis: ParetoAxis): SuiteChartPoint[] {
@@ -97,6 +113,7 @@ export function LeaderboardPareto({
     (p) => p.passRate != null && axisValue(p, axis) != null,
   );
   const hidden = points.length - plotted.length;
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   if (suites.length === 0) {
     return <EmptyBoard emptyTitle={emptyTitle} emptyBody={emptyBody} />;
@@ -109,10 +126,10 @@ export function LeaderboardPareto({
   const front = paretoFront(plotted, axis);
   const W = 1000;
   const H = 520;
-  const L = 56;
+  const L = 64;
   const R = 28;
-  const T = 28;
-  const B = 48;
+  const T = 44;
+  const B = 56;
   const plotW = W - L - R;
   const plotH = H - T - B;
   const xOf = (v: number) => L + (1 - (v - xmin) / span) * plotW;
@@ -127,13 +144,23 @@ export function LeaderboardPareto({
       return `${i ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
     })
     .join(" ");
+  const hoveredIndex = plotted.findIndex((p) => p.suite.suite_run_id === hoveredId);
+  const hovered = hoveredIndex >= 0 ? plotted[hoveredIndex] : null;
+  const hx = hovered ? xOf(axisValue(hovered, axis) as number) : 0;
+  const hy = hovered ? yOf(hovered.passRate ?? 0) : 0;
+  const xAxisY = T + plotH;
+  const yAxisX = L;
 
   return (
     <div className="space-y-3">
       <div className="blob-panel overflow-hidden p-2">
-        <div className="relative">
+        <div
+          className="relative mx-auto w-full max-h-[min(62vh,32rem)]"
+          style={{ aspectRatio: `${W} / ${H}` }}
+          onPointerLeave={() => setHoveredId(null)}
+        >
         <svg
-          className="block h-[min(62vh,32rem)] w-full"
+          className="absolute inset-0 h-full w-full"
           viewBox={`0 0 ${W} ${H}`}
           role="img"
           aria-label={`Pass rate versus ${axisLabel(axis)}`}
@@ -149,10 +176,13 @@ export function LeaderboardPareto({
                 strokeWidth={1}
               />
               <text
-                x={L - 8}
+                x={L - 10}
                 y={yOf(t) + 4}
                 textAnchor="end"
-                className="fill-mute text-[11px]"
+                className={cn(
+                  "fill-mute text-[11px]",
+                  hovered && "opacity-30",
+                )}
               >
                 {Math.round(t * 100)}%
               </text>
@@ -162,9 +192,9 @@ export function LeaderboardPareto({
             <text
               key={t}
               x={xOf(t)}
-              y={H - 18}
+              y={H - 22}
               textAnchor="middle"
-              className="fill-mute text-[11px]"
+              className={cn("fill-mute text-[11px]", hovered && "opacity-30")}
             >
               {formatAxis(axis, t)}
             </text>
@@ -175,11 +205,103 @@ export function LeaderboardPareto({
               fill="none"
               className="stroke-ink"
               strokeWidth={1.5}
+              opacity={hovered ? 0.25 : 1}
             />
+          ) : null}
+          {plotted.map((p, i) => {
+            const xv = axisValue(p, axis) as number;
+            const cx = xOf(xv);
+            const cy = yOf(p.passRate ?? 0);
+            const open = openSuiteId === p.suite.suite_run_id;
+            const dim = hoveredId != null && hoveredId !== p.suite.suite_run_id;
+            return (
+              <circle
+                key={p.suite.suite_run_id}
+                cx={cx}
+                cy={cy}
+                r={4}
+                className={cn(
+                  DOT_FILL[i % DOT_FILL.length],
+                  "motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-smooth",
+                  dim && "opacity-20",
+                  open && "stroke-link",
+                )}
+                strokeWidth={open ? 2 : 0}
+                vectorEffect="non-scaling-stroke"
+              />
+            );
+          })}
+          {hovered ? (
+            <g className="pointer-events-none">
+              <line
+                x1={hx}
+                x2={hx}
+                y1={hy}
+                y2={xAxisY}
+                className="stroke-ink"
+                strokeWidth={1}
+                strokeDasharray="5 4"
+                vectorEffect="non-scaling-stroke"
+              />
+              <line
+                x1={yAxisX}
+                x2={hx}
+                y1={hy}
+                y2={hy}
+                className="stroke-ink"
+                strokeWidth={1}
+                strokeDasharray="5 4"
+                vectorEffect="non-scaling-stroke"
+              />
+              <line
+                x1={hx}
+                x2={hx}
+                y1={xAxisY}
+                y2={xAxisY + 6}
+                className="stroke-ink"
+                strokeWidth={1.5}
+                vectorEffect="non-scaling-stroke"
+              />
+              <line
+                x1={yAxisX - 6}
+                x2={yAxisX}
+                y1={hy}
+                y2={hy}
+                className="stroke-ink"
+                strokeWidth={1.5}
+                vectorEffect="non-scaling-stroke"
+              />
+              <circle
+                cx={hx}
+                cy={hy}
+                r={4}
+                className={DOT_FILL[hoveredIndex % DOT_FILL.length]}
+              />
+              <text
+                x={hx}
+                y={H - 22}
+                textAnchor="middle"
+                className="fill-ink stroke-canvas text-[11px]"
+                strokeWidth={4}
+                paintOrder="stroke"
+              >
+                {formatAxis(axis, axisValue(hovered, axis) as number)}
+              </text>
+              <text
+                x={L - 10}
+                y={hy + 4}
+                textAnchor="end"
+                className="fill-ink stroke-canvas text-[11px]"
+                strokeWidth={4}
+                paintOrder="stroke"
+              >
+                {((hovered.passRate ?? 0) * 100).toFixed(1)}%
+              </text>
+            </g>
           ) : null}
           <text
             x={L + plotW / 2}
-            y={H - 2}
+            y={H - 4}
             textAnchor="middle"
             className="fill-mute text-[11px]"
           >
@@ -197,7 +319,7 @@ export function LeaderboardPareto({
           {plotted.length ? (
             <text
               x={W - R}
-              y={T - 8}
+              y={T - 14}
               textAnchor="end"
               className="fill-link text-[11px]"
             >
@@ -206,28 +328,24 @@ export function LeaderboardPareto({
           ) : null}
         </svg>
         <div className="pointer-events-none absolute inset-0">
-          {plotted.map((p, i) => {
+          {plotted.map((p) => {
             const labels = displayLabelsFromOverlay(p.suite.job_overlay);
             const harness = labels.agent || p.suite.agent_label || "—";
             const model = labels.model || p.suite.model_label || "—";
             const xv = axisValue(p, axis) as number;
             const left = ((xOf(xv) / W) * 100).toFixed(3);
             const top = ((yOf(p.passRate ?? 0) / H) * 100).toFixed(3);
-            const open = openSuiteId === p.suite.suite_run_id;
             const resource = formatAxis(axis, xv);
-            const costNote =
-              axis === "cost" && p.costSource === "estimated" ? " · est." : "";
             return (
               <HoverTip
                 key={p.suite.suite_run_id}
                 content={
-                  <span>
+                  <span className="break-normal">
                     <span className="block font-medium">
                       {harness} / {model}
                     </span>
                     <span className="block">
-                      {((p.passRate ?? 0) * 100).toFixed(1)}% pass · {resource}
-                      {costNote}
+                      {((p.passRate ?? 0) * 100).toFixed(1)}% · {resource}
                     </span>
                     <span className="text-mute">Click to open suite run</span>
                   </span>
@@ -236,16 +354,23 @@ export function LeaderboardPareto({
                 <button
                   type="button"
                   className={cn(
-                    "pointer-events-auto absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full",
-                    DOT_CLASS[i % DOT_CLASS.length],
-                    p.costSource === "estimated" &&
-                      axis === "cost" &&
-                      "ring-1 ring-hairline-strong",
-                    open && "ring-2 ring-link/70",
+                    "pointer-events-auto absolute h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70",
                   )}
                   style={{ left: `${left}%`, top: `${top}%` }}
                   aria-label={`${harness} ${model}. Click to open suite run`}
+                  onPointerEnter={() => setHoveredId(p.suite.suite_run_id)}
+                  onPointerLeave={() =>
+                    setHoveredId((cur) =>
+                      cur === p.suite.suite_run_id ? null : cur,
+                    )
+                  }
+                  onFocus={() => setHoveredId(p.suite.suite_run_id)}
+                  onBlur={() =>
+                    setHoveredId((cur) =>
+                      cur === p.suite.suite_run_id ? null : cur,
+                    )
+                  }
                   onClick={() => onOpenSuite?.(p.suite.suite_run_id)}
                 />
               </HoverTip>
@@ -253,26 +378,25 @@ export function LeaderboardPareto({
           })}
         </div>
         {plotted.map((p) => {
-          const labels = displayLabelsFromOverlay(p.suite.job_overlay);
-          const model = labels.model || p.suite.model_label || "";
-          const harness = labels.agent || p.suite.agent_label || "";
           const xv = axisValue(p, axis) as number;
           const left = ((xOf(xv) / W) * 100).toFixed(3);
           const top = ((yOf(p.passRate ?? 0) / H) * 100).toFixed(3);
+          const dim = hoveredId != null && hoveredId !== p.suite.suite_run_id;
           return (
             <div
               key={`${p.suite.suite_run_id}-lab`}
-              className="pointer-events-none absolute text-[11px] leading-4 text-body"
+              className={cn(
+                "pointer-events-none absolute max-w-[9rem] truncate text-center text-[11px] leading-4 text-body",
+                "motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-smooth",
+                dim && "opacity-20",
+              )}
               style={{
-                left: `calc(${left}% + 10px)`,
-                top: `calc(${top}% - 18px)`,
+                left: `${left}%`,
+                top: `${top}%`,
+                transform: "translate(-50%, calc(-100% - 8px))",
               }}
             >
-              <div>{model}</div>
-              <div className="text-mute">
-                {harness}
-                {axis === "cost" && p.costSource === "estimated" ? " · est." : ""}
-              </div>
+              {chartModelName(p.suite, pin)}
             </div>
           );
         })}
@@ -282,8 +406,8 @@ export function LeaderboardPareto({
         {axis === "cost"
           ? hidden
             ? `${hidden} suite run${hidden === 1 ? " has" : "s have"} no cost (no agent cost and no catalog price). Hidden here. Switch to Tokens.`
-            : "Cost uses reported USD when the agent sent it. Otherwise token × catalog price (est.). Not a billed invoice."
-          : "Right is cheaper / fewer. Solid line is the Pareto front. Metrics are observational, not a suite PASS."}
+            : "Cost is the sum of every job in the suite. When the agent did not report USD, the axis uses tokens × catalog price (estimated, not a billed invoice)."
+          : "Right is cheaper / fewer. Solid line is the Pareto front. Metrics are observational, not a suite PASS. Cost and tokens are the sum of every job in the suite."}
       </p>
     </div>
   );
