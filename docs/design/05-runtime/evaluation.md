@@ -83,8 +83,10 @@ job：
 # profiles.yaml — 省略 evaluate_host = 同一环境
 evaluate_host:
   isolated: true
-  # environment_options:      # 打分盒自己的网络策略；省略 = 不继承 agent 的 egress/network
+  # environment_options:      # 打分盒自己的网络策略；省略 = 不继承 agent 的 egress/egress_allow/network
   #   egress: llm             # ACP judge 在打分盒里时放行其 API host
+  #   egress_allow:           # 仅 egress: llm；不继承 agent extras
+  #     - api.judge.example.com
   #   network: bridge
 ```
 
@@ -93,7 +95,7 @@ lock：
 - `isolated: true` 必须能在成员题上落到配方：存在 `environment/evaluate.Dockerfile`，或 `evaluation.docker_image`（OCI tag）。两者都无 → lock 失败，不 start。
 - 配方文件 **不** 放 `evaluation/`（那是 gold）。
 - Current：`environment: docker`。local / 不能再起一份环境的 kind + `isolated: true` → lock 失败。
-- 嵌套 `environment_options` 要求 `isolated: true`；键允许 `network` / `egress` / `platform` / `user`（与盒子同一旋钮名，**不是** `image`）；`egress` 的 kind 门禁与 agent 同一规则；未知键一次错误，不映射。
+- 嵌套 `environment_options` 要求 `isolated: true`；键允许 `network` / `egress` / `egress_allow` / `platform` / `user`（与盒子同一旋钮名，**不是** `image`）；`egress` / `egress_allow` 的 kind 门禁与 agent 同一规则；`egress_allow` 必须与同一 map 的 `egress: llm` 同写；未知键一次错误，不映射。agent extras 不出现在打分 `egress_allowlist`，打分 extras 不出现在 agent 名单。
 - 未知 `evaluate_host` 键、未知 `artifacts.publishable` 键：一次错误，不映射。
 
 runtime：打分盒实例在 **evaluate 相位**（writer 已密封）构造：composition 不再预建
