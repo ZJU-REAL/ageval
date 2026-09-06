@@ -17,7 +17,7 @@ import { entityHintFromPackage, markFromPackage } from "@/lib/brand-marks";
 import { OfficialMark } from "@/components/official-mark";
 import { FileSplitPanel } from "@/components/file-split-panel";
 import { PackageOwnerOps } from "@/components/package-owner-ops";
-import { SuiteInspector } from "@/components/suite-inspector";
+import { suiteDetailPath } from "@/components/suite-inspector";
 import { InlineMarkdown } from "@/components/markdown";
 import { Chip } from "@/components/ui/chip";
 import { ModelDirectory } from "@/components/model-directory";
@@ -48,16 +48,12 @@ import {
   getOrg,
   getPackageByDigest,
   getPackageFile,
-  getSuite,
   isBuiltinPackage,
   isDraftRelease,
   listBuiltinPackageFiles,
   listPackageFiles,
-  latestPackageByDataset,
-  listPackages,
   listPackageVersions,
   listPackageVersionsWithPerformances,
-  detachPerformance,
   setPerformanceCollect,
   splitPackageId,
   updatePackageDisplayName,
@@ -66,7 +62,6 @@ import {
   type PackageRelease,
   type PerformanceCollect,
   type PerformanceCollectMode,
-  type SuiteRow,
   RegistryHttpError,
 } from "@/lib/api";
 import {
@@ -84,7 +79,7 @@ import {
 } from "@/lib/agent-models";
 import { performanceCanonical } from "@/lib/model-appearances";
 import { joinOverlay, loadModelPin } from "@/lib/model-pin";
-import { getGithubUser, getToken } from "@/lib/auth";
+import { getToken } from "@/lib/auth";
 import { buildNestedTree, type TreeNode } from "@/lib/file-tree";
 import { ScoreRing } from "@/components/score-ring";
 import { formatScore } from "@/lib/utils";
@@ -146,12 +141,6 @@ export function AgentDetailPage() {
   });
   const [collectBusy, setCollectBusy] = useState(false);
   const [modelQuery, setModelQuery] = useState("");
-  const [inspect, setInspect] = useState<{
-    suite: SuiteRow;
-    role: string;
-    packageDigest?: string;
-  } | null>(null);
-  const [pluginCatalog, setPluginCatalog] = useState<PackageRelease[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -431,39 +420,14 @@ export function AgentDetailPage() {
     setCollectOpen(true);
   }
 
-  async function openPerformance(row: AgentPerformance) {
-    try {
-      const [suite, plugins] = await Promise.all([
-        getSuite(row.suite_run_id, token),
-        listPackages(token, { packageKind: "plugin" }).catch(
-          () => [] as PackageRelease[],
-        ),
-      ]);
-      setPluginCatalog(latestPackageByDataset(plugins));
-      setInspect({
-        suite,
+  function openPerformance(row: AgentPerformance) {
+    if (!row.dataset_id || !row.suite_run_id) return;
+    navigate(
+      suiteDetailPath(row.dataset_id, row.suite_run_id, {
+        agent: agentId,
         role: row.role,
-        packageDigest: row.package_digest,
-      });
-    } catch (err) {
-      toastError(err);
-    }
-  }
-
-  async function removeInspectedPerformance() {
-    if (!inspect || !token) return;
-    try {
-      await detachPerformance(
-        agentId,
-        { suite_run_id: inspect.suite.suite_run_id, role: inspect.role },
-        token,
-      );
-      toast("Removed from Performance");
-      setInspect(null);
-      setReloadAt((n) => n + 1);
-    } catch (err) {
-      toastError(err);
-    }
+      }),
+    );
   }
 
   async function saveCollect() {
@@ -797,11 +761,11 @@ export function AgentDetailPage() {
                               <TableRow
                                 key={key}
                                 className="cursor-pointer"
-                                onClick={() => void openPerformance(row)}
+                                onClick={() => openPerformance(row)}
                               >
                                 <TableCell>
                                   <Link
-                                    to={`/datasets/${encodeDatasetId(row.dataset_id)}?tab=leaderboard&suite=${encodeURIComponent(row.suite_run_id)}`}
+                                    to={`/datasets/${encodeDatasetId(row.dataset_id)}?tab=leaderboard`}
                                     className="text-link hover:text-link-deep hover:underline underline-offset-2"
                                     onClick={(event) => event.stopPropagation()}
                                   >
@@ -921,30 +885,6 @@ export function AgentDetailPage() {
           </div>
         </div>
       </Modal>
-
-      {inspect ? (
-        <SuiteInspector
-          suite={inspect.suite}
-          datasetId={inspect.suite.dataset_id || ""}
-          overlayDigest={inspect.packageDigest}
-          pluginCatalog={pluginCatalog}
-          orgId={undefined}
-          canManage={
-            Boolean(getGithubUser()) &&
-            (inspect.suite.uploaded_by || "").toLowerCase() ===
-              (getGithubUser() || "").toLowerCase()
-          }
-          canDetachPerformance={
-            builtin ? Boolean(collect?.can_edit) : canEditName
-          }
-          onRemovePerformance={() => void removeInspectedPerformance()}
-          onClose={() => setInspect(null)}
-          onSuiteDeleted={() => {
-            setInspect(null);
-            setReloadAt((n) => n + 1);
-          }}
-        />
-      ) : null}
     </>
   );
 }

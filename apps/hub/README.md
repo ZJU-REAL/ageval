@@ -79,7 +79,7 @@ modal; the list only shows a prefix. Members join from **Organizations → Join*
 | `/plugins/:id` | Plugin detail (exclusive/chain timeline · files · CLI install) |
 | `/agents` | Published Agent catalog |
 | `/agents/:id` | Agent detail: `?model=` chips + CLI; tabs Overview / Performance / Files |
-| `/datasets/:id?tab=leaderboard&suite=` | Public Leaderboard with that suite inspector open |
+| `/datasets/:id/suites/:suiteRunId` | Suite run detail (Profiles / Plugin / Jobs / Share). Leaderboard `?suite=` redirects here |
 | `/datasets/:id?tab=leaderboard&dataset_version=` | Leaderboard filtered to that Dataset version (omit = all versions) |
 | `/organizations` | Your orgs · Create · Join |
 | `/organizations/:orgId` | Overview (members · datasets · plugins · agents) · Settings |

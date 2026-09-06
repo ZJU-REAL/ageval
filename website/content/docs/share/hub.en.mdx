@@ -37,6 +37,7 @@ Or `docker compose -f services/registry/docker-compose.yml up -d` for Hub at `ht
 | `/organizations/:orgId` | Overview (members · datasets · plugins · agents) · Settings |
 | `/users/:login` | Public user profile (official orgs and public datasets / plugins / agents; signed-out OK) |
 | `/datasets/:id/tasks/:task/attempts/:runId` | Remote Attempt detail (needs uploaded run artifacts) |
+| `/datasets/:id/suites/:suiteRunId` | Suite run detail (Profiles / Plugin / Jobs / Share) |
 
 Ops detail: `apps/hub/README.md`, `services/registry/README.md`.
 
@@ -52,7 +53,7 @@ Ops detail: `apps/hub/README.md`, `services/registry/README.md`.
 - **Public** lists only suites that are complete, bound to a release, and approved for listing by the dataset org's owner; **Internal** shows caller-visible incomplete or draft-bound runs in the same table.
 - The same tab switches **Table** / **Pareto** / **Waffle**. Pareto’s x-axis is the **sum of every job** in the suite (cost, tokens, or time). When the agent did not report USD, cost is tokens × catalog price — estimated, not a billed invoice.
 - Metrics are observational summaries, not a suite PASS; headers sort.
-- Click a row for the inspector: **Profiles** / **Plugin** / **Jobs**, with secret-free YAML and rerun commands. Uploaders get Share, Delete, and Attach — link a published model / agent for provenance.
+- Click a row for the suite run page: **Profiles** / **Plugin** / **Jobs**, with secret-free YAML and rerun commands. Uploaders get Share, Delete, and Attach — link a published model / agent for provenance.
 - Listing and Performance requests are batch-approved by org owners in the **Inbox**.
 
 ## Plugins, agents, and models

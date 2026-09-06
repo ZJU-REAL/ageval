@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChartScatter, Grid3x3, Table2, type LucideIcon } from "lucide-react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { LoadingState } from "@/components/empty-state";
 import { CatalogHead } from "@/components/page-head";
@@ -14,11 +14,11 @@ import {
   LEADERBOARD_OPTIONAL_COLUMNS,
   LEADERBOARD_OPTIONAL_DEFAULT,
   LEADERBOARD_OPTIONAL_IDS,
-  LeaderboardInspector,
   LeaderboardTable,
 } from "@/components/leaderboard-table";
 import { LeaderboardPareto } from "@/components/leaderboard-pareto";
 import { LeaderboardWaffle } from "@/components/leaderboard-waffle";
+import { suiteDetailPath } from "@/components/suite-inspector";
 import {
   Select,
   SelectContent,
@@ -473,12 +473,9 @@ export function DatasetDetailPage() {
     setSearch(n, { replace: true });
   }
 
-  function setSuite(id: string | null) {
-    const n = new URLSearchParams(search);
-    n.set("tab", "leaderboard");
-    if (id) n.set("suite", id);
-    else n.delete("suite");
-    setSearch(n, { replace: true });
+  function openSuite(id: string | null) {
+    if (!id) return;
+    navigate(suiteDetailPath(datasetId, id));
   }
 
   function setBoardChart(next: BoardChart) {
@@ -524,13 +521,8 @@ export function DatasetDetailPage() {
       ),
     [jobSuites, login],
   );
-  const suiteQuery = search.get("suite");
-  const publicSuites = useMemo(() => {
-    if (!suiteQuery) return boardSuites;
-    if (boardSuites.some((row) => row.suite_run_id === suiteQuery)) return boardSuites;
-    const extra = jobSuites.find((row) => row.suite_run_id === suiteQuery);
-    return extra ? [...boardSuites, extra] : boardSuites;
-  }, [boardSuites, jobSuites, suiteQuery]);
+  const suiteQuery = (search.get("suite") || "").trim();
+  const publicSuites = boardSuites;
   const awaitingListingVisible = useMemo(
     () =>
       awaitingListing.filter(
@@ -587,6 +579,10 @@ export function DatasetDetailPage() {
     navigate(
       `/datasets/${encodeDatasetId(datasetId)}/tasks/${encodeURIComponent(tid)}${qs}`,
     );
+  }
+
+  if (datasetId && suiteQuery && !demoLeaderboard) {
+    return <Navigate to={suiteDetailPath(datasetId, suiteQuery)} replace />;
   }
 
   return (
@@ -1018,8 +1014,7 @@ export function DatasetDetailPage() {
                     : visiblePublicSuites
               }
               datasetId={datasetId}
-              openSuiteId={demoLeaderboard ? null : search.get("suite")}
-              onOpenSuite={demoLeaderboard ? undefined : setSuite}
+              onOpenSuite={demoLeaderboard ? undefined : openSuite}
               emptyTitle={
                 boardVersion
                   ? `No suite runs for ${boardVersionLabel(boardVersion, versions)}`
@@ -1045,8 +1040,7 @@ export function DatasetDetailPage() {
                     : visiblePublicSuites
               }
               axis={paretoAxis}
-              openSuiteId={demoLeaderboard ? null : search.get("suite")}
-              onOpenSuite={demoLeaderboard ? undefined : setSuite}
+              onOpenSuite={demoLeaderboard ? undefined : openSuite}
               emptyTitle={
                 boardVersion
                   ? `No suite runs for ${boardVersionLabel(boardVersion, versions)}`
@@ -1073,26 +1067,7 @@ export function DatasetDetailPage() {
             }
             optionalColumns={leaderboardColumns}
             datasetId={datasetId}
-            orgId={release?.org_id}
-            packageDigest={release?.package_digest}
-            versions={versions}
-            onSuiteUpdated={(id, patch) => {
-              const apply = (rows: SuiteRow[]) =>
-                rows.map((row) =>
-                  row.suite_run_id === id ? { ...row, ...patch } : row,
-                );
-              setJobSuites(apply);
-              setBoardSuites(apply);
-            }}
-            onSuiteDeleted={(id) => {
-              const drop = (rows: SuiteRow[]) =>
-                rows.filter((row) => row.suite_run_id !== id);
-              setJobSuites(drop);
-              setBoardSuites(drop);
-              if (search.get("suite") === id) setSuite(null);
-            }}
-            openSuiteId={demoLeaderboard ? null : search.get("suite")}
-            onOpenSuite={demoLeaderboard ? undefined : setSuite}
+            onOpenSuite={demoLeaderboard ? undefined : openSuite}
             emptyTitle={
               boardVersion
                 ? `No suite runs for ${boardVersionLabel(boardVersion, versions)}`
@@ -1120,60 +1095,10 @@ export function DatasetDetailPage() {
                 suites={visibleAwaitingListing}
                 optionalColumns={leaderboardColumns}
                 datasetId={datasetId}
-                orgId={release?.org_id}
-                packageDigest={release?.package_digest}
-                versions={versions}
-                onSuiteUpdated={(id, patch) => {
-                  const apply = (rows: SuiteRow[]) =>
-                    rows.map((row) =>
-                      row.suite_run_id === id ? { ...row, ...patch } : row,
-                    );
-                  setJobSuites(apply);
-                  setBoardSuites(apply);
-                }}
-                onSuiteDeleted={(id) => {
-                  const drop = (rows: SuiteRow[]) =>
-                    rows.filter((row) => row.suite_run_id !== id);
-                  setJobSuites(drop);
-                  setBoardSuites(drop);
-                  if (search.get("suite") === id) setSuite(null);
-                }}
-                openSuiteId={search.get("suite")}
-                onOpenSuite={setSuite}
+                onOpenSuite={openSuite}
               />
             </div>
           ) : null}
-          {demoLeaderboard ? null : (
-            <LeaderboardInspector
-              suites={[
-                ...(boardView === "internal"
-                  ? visibleInternalSuites
-                  : visiblePublicSuites),
-                ...(boardView === "public" ? visibleAwaitingListing : []),
-              ]}
-              datasetId={datasetId}
-              orgId={release?.org_id}
-              packageDigest={release?.package_digest}
-              versions={versions}
-              openSuiteId={search.get("suite")}
-              onOpenSuite={setSuite}
-              onSuiteUpdated={(id, patch) => {
-                const apply = (rows: SuiteRow[]) =>
-                  rows.map((row) =>
-                    row.suite_run_id === id ? { ...row, ...patch } : row,
-                  );
-                setJobSuites(apply);
-                setBoardSuites(apply);
-              }}
-              onSuiteDeleted={(id) => {
-                const drop = (rows: SuiteRow[]) =>
-                  rows.filter((row) => row.suite_run_id !== id);
-                setJobSuites(drop);
-                setBoardSuites(drop);
-                if (search.get("suite") === id) setSuite(null);
-              }}
-            />
-          )}
         </div>
       )}
     </>

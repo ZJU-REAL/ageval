@@ -59,6 +59,30 @@ export function toRelPath(archivePath: string, runId: string): string | null {
   return null;
 }
 
+/** Started / duration from an Attempt ``summary.json`` (same source as job detail). */
+export function clockFromSummaryJson(text: string): {
+  started: string | null;
+  duration: string | null;
+} {
+  try {
+    const data = JSON.parse(text) as {
+      phase_timing?: Trial["phase_timing"] | { started_at?: unknown };
+    };
+    const raw = data.phase_timing;
+    const phase =
+      raw && typeof raw === "object"
+        ? (raw as Trial["phase_timing"])
+        : null;
+    const started =
+      phase && typeof phase.started_at === "string" && phase.started_at.trim()
+        ? phase.started_at.trim()
+        : null;
+    return { started, duration: durationFromPhaseTiming(phase) };
+  } catch {
+    return { started: null, duration: null };
+  }
+}
+
 export function toArchivePath(relPath: string, runId: string): string {
   const clean = relPath.replace(/^\/+/, "");
   return clean ? `${runRootPrefix(runId)}/${clean}` : runRootPrefix(runId);
@@ -277,7 +301,7 @@ function environmentKind(
   return environmentFromOverlay(lock.job_overlay as JobOverlay | undefined);
 }
 
-function durationFromPhaseTiming(phaseTiming: Trial["phase_timing"]): string | null {
+export function durationFromPhaseTiming(phaseTiming: Trial["phase_timing"]): string | null {
   if (!phaseTiming || typeof phaseTiming.total_ms !== "number") return null;
   const ms = phaseTiming.total_ms;
   if (ms < 1000) return `${Math.round(ms)}ms`;

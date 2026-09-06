@@ -37,6 +37,7 @@ pnpm dev   # http://127.0.0.1:5174
 | `/organizations/:orgId` | 概览（成员 · Dataset · 插件 · Agent）· 设置 |
 | `/users/:login` | 公开用户页（官方组织与公开 Dataset / 插件 / Agent；未登录可看） |
 | `/datasets/:id/tasks/:task/attempts/:runId` | 远程 Attempt 详情（需已上传对应运行产物） |
+| `/datasets/:id/suites/:suiteRunId` | suite run 详情（Profiles / Plugin / Jobs / Share） |
 
 命令与部署细节见 `apps/hub/README.md`、`services/registry/README.md`。
 
@@ -52,7 +53,7 @@ pnpm dev   # http://127.0.0.1:5174
 - **Public** 只列完备、绑定 release、且经 dataset 所属组织 owner 批准上榜的 suite；**Internal** 用同一张表列当前可见的缺题 / draft 绑定跑次
 - 同一 tab 可切 **Table** / **Pareto** / **Waffle**。Pareto 横轴是整次 suite **全部 job** 的花费、token 或时间加总；没有 agent 上报 USD 时用目录价估算（不是账单）
 - 指标是观测汇总，不是 suite PASS；表头可排序
-- 点行打开 inspector：**Profiles** / **Plugin** / **Jobs**，附无密钥 YAML 与再跑命令。上传者可 Share、Delete，或 Attach 一条已发布的 model / agent 溯源
+- 点行打开 suite 详情页：**Profiles** / **Plugin** / **Jobs**，附无密钥 YAML 与再跑命令。上传者可 Share、Delete，或 Attach 一条已发布的 model / agent 溯源
 - 上榜与 Performance 申请由组织 owner 在 **Inbox** 批量处理
 
 ## 插件、Agent 与模型

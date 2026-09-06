@@ -235,9 +235,9 @@ export function InboxPage() {
 
   function peekSuite(row: ResourceRequest) {
     setPeek({
-      type: "dataset",
+      type: "suite",
       datasetId: row.dataset_id,
-      search: `tab=leaderboard&suite=${encodeURIComponent(row.suite_run_id)}`,
+      suiteRunId: row.suite_run_id,
     });
   }
 

@@ -227,6 +227,8 @@ export type SuiteRow = {
     attempt_run_ids?: string[];
     /** True when full Attempt evidence archive is present on Registry (#43). */
     has_attempt_content?: boolean;
+    /** Per-attempt start when the upload wrote it. */
+    started_at?: string | null;
     /** Superseded Attempts for this scoring slot (oldest first). */
     previous?: Array<{
       run_id?: string | null;

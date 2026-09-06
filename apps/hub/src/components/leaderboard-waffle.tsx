@@ -40,14 +40,12 @@ function EmptyBoard({
 export function LeaderboardWaffle({
   suites,
   datasetId,
-  openSuiteId,
   onOpenSuite,
   emptyTitle,
   emptyBody,
 }: {
   suites: SuiteRow[];
   datasetId: string;
-  openSuiteId?: string | null;
   onOpenSuite?: (suiteRunId: string | null) => void;
   emptyTitle?: string;
   emptyBody?: string;
@@ -93,7 +91,6 @@ export function LeaderboardWaffle({
             const labels = displayLabelsFromOverlay(suite.job_overlay);
             const model = labels.model || suite.model_label || "—";
             const harness = labels.agent || suite.agent_label || "—";
-            const open = openSuiteId === suite.suite_run_id;
             return (
               <HoverTip
                 key={suite.suite_run_id}
@@ -109,8 +106,7 @@ export function LeaderboardWaffle({
                 <button
                   type="button"
                   className={cn(
-                    "sticky top-0 z-10 flex min-h-20 min-w-[4.75rem] flex-col justify-end gap-0.5 border-b border-r border-hairline bg-canvas px-2 py-2 text-left text-sm",
-                    open ? "bg-canvas-soft" : "hover:bg-canvas-soft",
+                    "sticky top-0 z-10 flex min-h-20 min-w-[4.75rem] flex-col justify-end gap-0.5 border-b border-r border-hairline bg-canvas px-2 py-2 text-left text-sm hover:bg-canvas-soft",
                   )}
                   aria-label={`${harness} ${model}. Click to open suite run`}
                   onClick={() => onOpenSuite?.(suite.suite_run_id)}
@@ -126,7 +122,6 @@ export function LeaderboardWaffle({
               key={taskId}
               taskId={taskId}
               suites={ranked}
-              openSuiteId={openSuiteId}
               onOpenTrial={openTrial}
             />
           ))}
@@ -153,12 +148,10 @@ export function LeaderboardWaffle({
 function WaffleTaskRow({
   taskId,
   suites,
-  openSuiteId,
   onOpenTrial,
 }: {
   taskId: string;
   suites: SuiteRow[];
-  openSuiteId?: string | null;
   onOpenTrial: (suite: SuiteRow, trial: WaffleTrial) => void;
 }) {
   return (
@@ -171,14 +164,10 @@ function WaffleTaskRow({
           (row) => (row.task_id || "").trim() === taskId,
         );
         const trials = ref ? trialsForRef(suite.suite_run_id, ref) : [];
-        const open = openSuiteId === suite.suite_run_id;
         return (
           <div
             key={`${suite.suite_run_id}:${taskId}`}
-            className={cn(
-              "flex items-center gap-0.5 border-b border-r border-hairline px-2 py-2",
-              open && "bg-canvas-soft",
-            )}
+            className="flex items-center gap-0.5 border-b border-r border-hairline px-2 py-2"
           >
             {trials.length === 0 ? (
               <span className="text-xs text-mute">—</span>

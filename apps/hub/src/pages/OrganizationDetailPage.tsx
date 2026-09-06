@@ -664,7 +664,7 @@ export function OrganizationDetailPage() {
                             onClick={() => {
                               if (!s.dataset_id) return;
                               navigate(
-                                `/datasets/${encodeDatasetId(s.dataset_id)}?tab=leaderboard&suite=${encodeURIComponent(s.suite_run_id)}`,
+                                `/datasets/${encodeDatasetId(s.dataset_id)}/suites/${encodeURIComponent(s.suite_run_id)}`,
                               );
                             }}
                           >
@@ -845,7 +845,7 @@ export function OrganizationDetailPage() {
 
                   <div className="flex flex-wrap items-end gap-3">
                     <div className="w-full sm:w-40">
-                      <label className="text-xs font-medium text-mute uppercase tracking-wide">
+                      <label className="text-sm font-medium text-ink">
                         Max uses
                       </label>
                       <Input
@@ -859,7 +859,7 @@ export function OrganizationDetailPage() {
                       />
                     </div>
                     <div className="w-full sm:w-40">
-                      <label className="text-xs font-medium text-mute uppercase tracking-wide">
+                      <label className="text-sm font-medium text-ink">
                         Expires (days)
                       </label>
                       <Input
@@ -1087,7 +1087,7 @@ export function OrganizationDetailPage() {
             <div>
               <label
                 htmlFor="add-member-login"
-                className="text-xs font-medium text-mute uppercase tracking-wide"
+                className="text-sm font-medium text-ink"
               >
                 GitHub Id
               </label>

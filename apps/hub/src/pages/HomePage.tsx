@@ -306,13 +306,8 @@ export function HomePage() {
                   key: s.suite_run_id,
                   onClick: () => {
                     if (!s.dataset_id) return;
-                    const tid = (s.task_refs || []).find((r) => r.task_id)
-                      ?.task_id;
-                    const ds = `/datasets/${encodeDatasetId(s.dataset_id)}`;
                     navigate(
-                      tid
-                        ? `${ds}/tasks/${encodeURIComponent(tid)}?tab=jobs`
-                        : `${ds}?tab=leaderboard`,
+                      `/datasets/${encodeDatasetId(s.dataset_id)}/suites/${encodeURIComponent(s.suite_run_id)}`,
                     );
                   },
                   cells: [

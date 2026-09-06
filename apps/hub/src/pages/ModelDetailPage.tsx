@@ -20,7 +20,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { agentPackageHref } from "@/lib/agent-models";
-import { decodeDatasetId, encodeDatasetId } from "@/lib/api";
+import { suiteDetailPath } from "@/components/suite-inspector";
+import { decodeDatasetId } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import {
   collectModelAppearances,
@@ -321,7 +322,7 @@ export function ModelDetailPage() {
                         </TableCell>
                         <TableCell>
                           <Link
-                            to={`/datasets/${encodeDatasetId(row.datasetId)}?tab=leaderboard&suite=${encodeURIComponent(row.suiteRunId)}`}
+                            to={suiteDetailPath(row.datasetId, row.suiteRunId)}
                             className="text-link hover:text-link-deep hover:underline underline-offset-2"
                           >
                             {row.datasetId}
@@ -362,7 +363,7 @@ function FactRow({
   return (
     <TableRow>
       <TableCell className="w-[12rem] align-middle">
-        <span className="inline-flex items-center gap-1 text-[11px] uppercase tracking-wide text-mute">
+        <span className="inline-flex items-center gap-1 text-sm font-medium text-ink">
           {label}
           {hint ? (
             <HoverTip content={hint}>

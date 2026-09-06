@@ -15,6 +15,7 @@ import { ModelDetailPage } from "@/pages/ModelDetailPage";
 import { ModelsPage } from "@/pages/ModelsPage";
 import { PluginDetailPage } from "@/pages/PluginDetailPage";
 import { PluginsPage } from "@/pages/PluginsPage";
+import { SuiteDetailPage } from "@/pages/SuiteDetailPage";
 import { TaskDetailPage } from "@/pages/TaskDetailPage";
 import { UserPage } from "@/pages/UserPage";
 
@@ -31,6 +32,10 @@ export function HubRoutes({
       {includeWorkspace ? <Route path="/inbox" element={<InboxPage />} /> : null}
       <Route path="/datasets" element={<DatasetsPage />} />
       <Route path="/datasets/:datasetId" element={<DatasetDetailPage />} />
+      <Route
+        path="/datasets/:datasetId/suites/:suiteRunId"
+        element={<SuiteDetailPage />}
+      />
       <Route path="/datasets/:datasetId/tasks/:taskId" element={<TaskDetailPage />} />
       <Route
         path="/datasets/:datasetId/tasks/:taskId/attempts/:runId"

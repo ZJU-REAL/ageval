@@ -17,14 +17,10 @@ import {
 } from "@/components/ui/table";
 import {
   environmentFromOverlay,
-  latestPackageByDataset,
-  listPackages,
   uniqueAgentRefs,
-  type PackageRelease,
   type SuiteRow,
 } from "@/lib/api";
 import { agentPackageHref } from "@/lib/agent-models";
-import { getGithubUser, getToken } from "@/lib/auth";
 import {
   displayLabelsFromOverlay,
   formatScore,
@@ -40,7 +36,7 @@ import { HoverTip, TruncateTip } from "@/components/hover-tip";
 import { ModelLabel } from "@/components/model-label";
 import { ScoreRing } from "@/components/score-ring";
 import { resolveMechanismMark } from "@/lib/brand-marks";
-import { shortSuiteId, SuiteInspector } from "@/components/suite-inspector";
+import { shortSuiteId } from "@/components/suite-inspector";
 
 const COL_TEXT = "max-w-[12rem] overflow-hidden";
 const COL_METRIC = "w-[6.5rem]";
@@ -60,69 +56,6 @@ export const LEADERBOARD_OPTIONAL_IDS = LEADERBOARD_OPTIONAL_COLUMNS.map(
 );
 export const LEADERBOARD_OPTIONAL_DEFAULT: readonly LeaderboardOptionalColumn[] =
   [];
-
-export function LeaderboardInspector({
-  suites,
-  datasetId,
-  orgId,
-  openSuiteId,
-  onOpenSuite,
-  packageDigest,
-  versions,
-  onSuiteUpdated,
-  onSuiteDeleted,
-}: {
-  suites: SuiteRow[];
-  datasetId: string;
-  orgId?: string | null;
-  openSuiteId?: string | null;
-  onOpenSuite?: (suiteRunId: string | null) => void;
-  packageDigest?: string;
-  versions?: PackageRelease[];
-  onSuiteUpdated?: (suiteRunId: string, patch: Partial<SuiteRow>) => void;
-  onSuiteDeleted?: (suiteRunId: string) => void;
-}) {
-  const selfLogin = (getGithubUser() || "").toLowerCase();
-  const [pluginCatalog, setPluginCatalog] = useState<PackageRelease[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    const token = getToken();
-    listPackages(token, { packageKind: "plugin" })
-      .then((items) => {
-        if (!cancelled) setPluginCatalog(latestPackageByDataset(items));
-      })
-      .catch(() => {
-        if (!cancelled) setPluginCatalog([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  const openSuite =
-    openSuiteId && suites.some((s) => s.suite_run_id === openSuiteId)
-      ? (suites.find((s) => s.suite_run_id === openSuiteId) ?? null)
-      : null;
-  if (!openSuite) return null;
-  return (
-    <SuiteInspector
-      suite={openSuite}
-      datasetId={datasetId}
-      overlayDigest={
-        versions?.find((row) => row.version === openSuite.dataset_version)
-          ?.package_digest || packageDigest
-      }
-      pluginCatalog={pluginCatalog}
-      orgId={orgId}
-      canManage={
-        Boolean(selfLogin) &&
-        (openSuite.uploaded_by || "").toLowerCase() === selfLogin
-      }
-      onClose={() => onOpenSuite?.(null)}
-      onSuiteUpdated={onSuiteUpdated}
-      onSuiteDeleted={onSuiteDeleted}
-    />
-  );
-}
 
 type SortKey =
   | "agent_label"
@@ -177,49 +110,25 @@ function defaultCompare(a: SuiteRow, b: SuiteRow): number {
  * Default sort: pass_rate desc → mean_score desc → created_at desc.
  * Column headers are clickable (Viewer Jobs pattern). pass@k / pass^k sort by
  * primary display k (max k_values / n_attempts); not job identity.
- * Row click opens SuiteInspector (not an in-table expand).
+ * Row click opens the suite run detail page (not an in-table expand).
  */
 export function LeaderboardTable({
   suites,
   datasetId,
   emptyTitle,
   emptyBody,
-  openSuiteId,
   onOpenSuite,
   optionalColumns = [],
 }: {
   suites: SuiteRow[];
   datasetId: string;
-  /** Dataset owning org — used to pick `my-lab/nooa` over another org's copy. */
-  orgId?: string | null;
   emptyTitle?: string;
   emptyBody?: string;
-  /** Open this suite inspector; ignored when the suite is absent from `suites`. */
-  openSuiteId?: string | null;
   onOpenSuite?: (suiteRunId: string | null) => void;
-  /** Currently viewed Dataset release digest (fallback for overlay preview). */
-  packageDigest?: string;
-  versions?: PackageRelease[];
-  onSuiteUpdated?: (suiteRunId: string, patch: Partial<SuiteRow>) => void;
-  onSuiteDeleted?: (suiteRunId: string) => void;
   optionalColumns?: readonly LeaderboardOptionalColumn[];
 }) {
-  const [localOpenId, setLocalOpenId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<string | null>("pass_rate");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const controlled = typeof onOpenSuite === "function";
-
-  const requested = controlled ? (openSuiteId ?? null) : localOpenId;
-  const openId =
-    requested && suites.some((s) => s.suite_run_id === requested)
-      ? requested
-      : null;
-
-  function toggleRow(id: string) {
-    const next = openId === id ? null : id;
-    if (controlled) onOpenSuite?.(next);
-    else setLocalOpenId(next);
-  }
 
   const show = new Set(optionalColumns);
 
@@ -342,7 +251,6 @@ export function LeaderboardTable({
           <TableBody>
             {rows.map((s) => {
               const m = s.metrics || {};
-              const open = openId === s.suite_run_id;
               const atK = passAtPrimaryK(m);
               const powK = passPowerPrimaryK(m);
               const derived = displayLabelsFromOverlay(s.job_overlay);
@@ -353,14 +261,11 @@ export function LeaderboardTable({
               const environmentKey = resolveMechanismMark(environment);
 
               return (
-                  <HoverTip content="Click to open suite run">
                   <TableRow
                     key={s.suite_run_id}
                     className="cursor-pointer"
-                    onClick={() => toggleRow(s.suite_run_id)}
-                    data-state={open ? "selected" : undefined}
-                    aria-haspopup="dialog"
-                    aria-expanded={open}
+                    onClick={() => onOpenSuite?.(s.suite_run_id)}
+                    role={onOpenSuite ? "link" : undefined}
                     aria-label="Click to open suite run"
                   >
                     {runtimeLinks.length ? (
@@ -468,7 +373,6 @@ export function LeaderboardTable({
                       </TableCell>
                     ) : null}
                   </TableRow>
-                  </HoverTip>
               );
             })}
           </TableBody>
