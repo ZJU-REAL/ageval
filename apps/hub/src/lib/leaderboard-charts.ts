@@ -41,6 +41,8 @@ export type SuiteUsage = {
   completionTokens: number | null;
   cachedTokens: number | null;
   costUsd: number | null;
+  costUsdEstimated: number | null;
+  costSource: CostSource | null;
   durationS: number | null;
 };
 
@@ -88,11 +90,18 @@ function usageBag(metrics: Record<string, unknown> | null | undefined): Record<s
 export function suiteUsage(suite: SuiteRow): SuiteUsage {
   const m = suite.metrics || {};
   const u = usageBag(m);
+  const sourceRaw = u.cost_source;
+  const costSource =
+    sourceRaw === "reported" || sourceRaw === "estimated" || sourceRaw === "missing"
+      ? sourceRaw
+      : null;
   return {
     promptTokens: finite(u.prompt_tokens) ?? finite(m.prompt_tokens),
     completionTokens: finite(u.completion_tokens) ?? finite(m.completion_tokens),
     cachedTokens: finite(u.cached_tokens) ?? finite(m.cached_tokens),
     costUsd: finite(u.cost_usd) ?? finite(m.cost_usd),
+    costUsdEstimated: finite(u.cost_usd_estimated),
+    costSource,
     durationS: finite(u.duration_s) ?? finite(m.duration_s),
   };
 }
@@ -141,9 +150,18 @@ export function suiteChartPoint(
 ): SuiteChartPoint {
   const usage = suiteUsage(suite);
   const tokens = totalTokens(usage);
-  let costUsd = usage.costUsd;
-  let costSource: CostSource = costUsd != null ? "reported" : "missing";
-  if (costUsd == null) {
+  let costUsd: number | null = null;
+  let costSource: CostSource = "missing";
+  if (usage.costSource === "reported" && usage.costUsd != null) {
+    costUsd = usage.costUsd;
+    costSource = "reported";
+  } else if (usage.costUsdEstimated != null) {
+    costUsd = usage.costUsdEstimated;
+    costSource = "estimated";
+  } else if (usage.costUsd != null) {
+    costUsd = usage.costUsd;
+    costSource = "reported";
+  } else {
     const est = estimateCostUsd(usage, suite, pin);
     if (est != null) {
       costUsd = est;
