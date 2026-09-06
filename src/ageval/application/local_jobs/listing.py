@@ -261,8 +261,7 @@ def _job_row(
     dataset_root: Path,
     manifest: Any = None,
 ) -> dict[str, Any]:
-    metrics = _ensure_metrics(summary)
-    refs = _ensure_task_refs(summary)
+    metrics, refs = suite_document.metrics_and_refs(summary)
     n_tasks = int(metrics.get("n_tasks") or len(refs) or 0)
     n_done = int(metrics.get("n_pass") or 0) + int(metrics.get("n_fail") or 0)
     # Trials fraction: completed / planned

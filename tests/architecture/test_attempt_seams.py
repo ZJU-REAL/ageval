@@ -128,6 +128,7 @@ def test_handler_methods_do_not_touch_store() -> None:
     src = ast.get_source_segment(text, handler) or ""
     assert "state.meta." not in src
     assert "state.blobs." not in src
+    assert "state.stores." not in src
 
 
 def test_bearer_is_only_used_by_dispatch() -> None:

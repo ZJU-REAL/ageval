@@ -286,7 +286,7 @@ class RequestService:
     ) -> None:
         try:
             if row.kind == "leaderboard_list":
-                self.results.set_suite_board_listed(row.suite_run_id, True)
+                self.results_api.mark_board_listed(suite_run_id=row.suite_run_id)
                 return
             chosen = (canonical_model or row.canonical_model or "").strip()
             if not chosen:

@@ -1071,6 +1071,14 @@ class ResultService:
             raise RegistryAppError("not_found", "suite not found", http_status=404) from exc
         return suite_to_dict(row)
 
+    def mark_board_listed(self, *, suite_run_id: str) -> dict[str, Any]:
+        """Leaderboard approval flips ``board_listed`` (RequestService approve path)."""
+        try:
+            row = self.results.set_suite_board_listed(suite_run_id, True)
+        except LookupError as exc:
+            raise RegistryAppError("not_found", "suite not found", http_status=404) from exc
+        return suite_to_dict(row)
+
     def _visible_attempt(self, row: AttemptResultRow, auth: TokenInfo) -> bool:
         return self.access.visible_result(
             result_kind="attempt",
