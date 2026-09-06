@@ -438,15 +438,11 @@ def _apply_evaluate_job(job: JobDocument, resolved_refs: dict[str, Any]) -> None
                 "or evaluation.docker_image",
                 location="/evaluate_host",
             )
-    egress = job.environment_options.get("egress")
-    if egress is None:
-        pass
-    elif job.environment not in _EGRESS_KINDS:
-        raise ConfigError(
-            ERROR_INVALID_SCHEMA,
-            "environment_options.egress requires environment: docker",
-            location="/environment_options/egress",
-        )
+    _require_docker_egress_keys(
+        job.environment,
+        job.environment_options,
+        location="/environment_options",
+    )
     scoring_options = job.evaluate_host.get("environment_options")
     if not scoring_options:
         return
@@ -456,12 +452,26 @@ def _apply_evaluate_job(job: JobDocument, resolved_refs: dict[str, Any]) -> None
             "evaluate_host.environment_options requires evaluate_host.isolated: true",
             location="/evaluate_host/environment_options",
         )
-    scoring_egress = scoring_options.get("egress")
-    if scoring_egress is not None and job.environment not in _EGRESS_KINDS:
+    _require_docker_egress_keys(
+        job.environment,
+        scoring_options,
+        location="/evaluate_host/environment_options",
+    )
+
+
+def _require_docker_egress_keys(
+    kind: str, options: Mapping[str, Any], *, location: str
+) -> None:
+    for key in ("egress", "egress_allow"):
+        if key not in options:
+            continue
+        if kind in _EGRESS_KINDS:
+            continue
+        pointer = f"{location}/{key}"
         raise ConfigError(
             ERROR_INVALID_SCHEMA,
-            "evaluate_host.environment_options.egress requires environment: docker",
-            location="/evaluate_host/environment_options/egress",
+            f"{pointer.lstrip('/').replace('/', '.')} requires environment: docker",
+            location=pointer,
         )
 
 

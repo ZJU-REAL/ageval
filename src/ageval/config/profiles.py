@@ -204,7 +204,11 @@ def parse_job_mapping(raw: Mapping[str, Any], *, location: str = "profiles.yaml"
             "environment_options must be a mapping the box kind understands",
             location=f"{location}:/environment_options",
         )
-    _validate_egress(env_options_raw, location=f"{location}:/environment_options")
+    _validate_egress(
+        env_options_raw,
+        location=f"{location}:/environment_options",
+        label="environment_options",
+    )
 
     evaluate_host_raw = _parse_evaluate_host(
         raw.get("evaluate_host"), location=f"{location}:/evaluate_host"
@@ -266,8 +270,15 @@ _EVALUATE_HOST_KEYS = frozenset({"isolated", "environment_options"})
 # The scoring box reads the same per-box knobs as the agent box. ``image`` is
 # deliberately absent: the recipe stays environment/evaluate.Dockerfile or
 # evaluation.docker_image.
-_EVALUATE_HOST_OPTION_KEYS = frozenset({"network", "egress", "platform", "user", "python_version"})
+_EVALUATE_HOST_OPTION_KEYS = frozenset(
+    {"network", "egress", "egress_allow", "platform", "user", "python_version"}
+)
 _EGRESS_VALUES = frozenset({"llm"})
+# Hostnames only: lowercase, no scheme / path / port. Same exact-match shape
+# AllowlistProxy uses after its own normalization.
+_EGRESS_HOST_RE = re.compile(
+    r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+)
 
 
 def _parse_evaluate_host(raw: Any, *, location: str) -> dict[str, Any]:
@@ -307,7 +318,8 @@ def _parse_evaluate_host(raw: Any, *, location: str) -> dict[str, Any]:
                 "evaluate_host.environment_options must be a mapping the box kind understands",
                 location=f"{location}/environment_options",
             )
-        unknown_options = sorted(set(options_raw) - _EVALUATE_HOST_OPTION_KEYS)
+        stored = copy.deepcopy(dict(options_raw))
+        unknown_options = sorted(set(stored) - _EVALUATE_HOST_OPTION_KEYS)
         if unknown_options:
             raise ConfigError(
                 ERROR_INVALID_SCHEMA,
@@ -315,26 +327,69 @@ def _parse_evaluate_host(raw: Any, *, location: str) -> dict[str, Any]:
                 location=f"{location}/environment_options",
             )
         _validate_egress(
-            options_raw,
+            stored,
             location=f"{location}/environment_options",
-            label="evaluate_host.environment_options.egress",
+            label="evaluate_host.environment_options",
         )
-        out["environment_options"] = copy.deepcopy(dict(options_raw))
+        out["environment_options"] = stored
     return out
 
 
 def _validate_egress(
-    options: Mapping[str, Any], *, location: str, label: str = "environment_options.egress"
+    options: dict[str, Any], *, location: str, label: str = "environment_options"
 ) -> None:
-    if "egress" not in options:
+    if "egress" in options:
+        egress = options.get("egress")
+        if not isinstance(egress, str) or egress not in _EGRESS_VALUES:
+            raise ConfigError(
+                ERROR_INVALID_SCHEMA,
+                f"{label}.egress must be llm when set",
+                location=f"{location}/egress",
+            )
+    if "egress_allow" not in options:
         return
-    egress = options.get("egress")
-    if not isinstance(egress, str) or egress not in _EGRESS_VALUES:
+    if options.get("egress") not in _EGRESS_VALUES:
         raise ConfigError(
             ERROR_INVALID_SCHEMA,
-            f"{label} must be llm when set",
-            location=f"{location}/egress",
+            f"{label}.egress_allow requires egress: llm",
+            location=f"{location}/egress_allow",
         )
+    raw_allow = options.get("egress_allow")
+    if not isinstance(raw_allow, list):
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            f"{label}.egress_allow must be a list of hostnames",
+            location=f"{location}/egress_allow",
+        )
+    hosts: list[str] = []
+    for index, item in enumerate(raw_allow):
+        hosts.append(_egress_hostname(item, location=f"{location}/egress_allow/{index}"))
+    options["egress_allow"] = sorted(set(hosts))
+
+
+def _egress_hostname(raw: Any, *, location: str) -> str:
+    if not isinstance(raw, str):
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "egress_allow entries must be hostnames",
+            location=location,
+        )
+    text = raw.strip().lower().rstrip(".")
+    if (
+        not text
+        or "://" in text
+        or "/" in text
+        or ":" in text
+        or "?" in text
+        or "#" in text
+        or not _EGRESS_HOST_RE.fullmatch(text)
+    ):
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "egress_allow entries must be hostnames",
+            location=location,
+        )
+    return text
 
 
 def assert_slots_have_no_inline_binding(
