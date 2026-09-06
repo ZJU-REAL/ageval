@@ -70,6 +70,14 @@ const PREVIEW_FOLD: Record<BodyKind, string> = {
   text: "max-h-[50px] [mask-image:linear-gradient(to_bottom,black_40px,transparent_50px)]",
 };
 
+/** Sealed jsonl still has these; the panel does not draw the auto-approve pile. */
+function isBatchAutoApprovePermission(step: TrajectoryStep): boolean {
+  return (
+    (step.type || "") === "permission_decision" &&
+    step.policy === "batch_auto_approve"
+  );
+}
+
 function overflowsPreview(el: HTMLElement): boolean {
   const probe =
     el.firstElementChild instanceof HTMLElement ? el.firstElementChild : el;
@@ -517,6 +525,10 @@ export function TrajectoryPanel({
   result: Record<string, unknown> | null;
   actors: ActorRow[];
 }) {
+  const visibleSteps = useMemo(
+    () => steps.filter((s) => !isBatchAutoApprovePermission(s)),
+    [steps],
+  );
   const actorByPid = useMemo(() => {
     return new Map(
       actors.map((a) => [a.profile_id || `${a.role}-${a.agent}`, a]),
@@ -524,7 +536,7 @@ export function TrajectoryPanel({
   }, [actors]);
   const multiRole = useMemo(() => {
     const ids = new Set<string>();
-    for (const s of steps) {
+    for (const s of visibleSteps) {
       if (typeof s.profile_id === "string" && s.profile_id) ids.add(s.profile_id);
     }
     if (ids.size >= 2) return true;
@@ -534,7 +546,7 @@ export function TrajectoryPanel({
         .filter((p): p is string => typeof p === "string" && !!p),
     );
     return actorIds.size >= 2;
-  }, [steps, actors]);
+  }, [visibleSteps, actors]);
   const invokes = useMemo(() => {
     type Block = {
       turn: number | null;
@@ -542,7 +554,7 @@ export function TrajectoryPanel({
       steps: TrajectoryStep[];
     };
     const blocks: Block[] = [];
-    for (const s of steps) {
+    for (const s of visibleSteps) {
       const turn = typeof s.turn_index === "number" ? s.turn_index : null;
       const pid =
         typeof s.profile_id === "string" && s.profile_id ? s.profile_id : null;
@@ -555,7 +567,7 @@ export function TrajectoryPanel({
       blocks.push({ turn, profileId: pid, steps: [s] });
     }
     return blocks;
-  }, [steps]);
+  }, [visibleSteps]);
   const showInvokeHeaders = multiRole && invokes.length >= 2;
   const [allExpanded, setAllExpanded] = useState(true);
   const [expandGen, setExpandGen] = useState(0);
@@ -580,7 +592,7 @@ export function TrajectoryPanel({
   }, [showInvokeHeaders, invokes]);
 
   if (loading) return <p className="text-sm text-mute">Loading trajectory…</p>;
-  if (!steps.length) {
+  if (!visibleSteps.length) {
     return (
       <div className="space-y-2">
         <p className="text-sm text-mute">No trajectory.jsonl steps for this run.</p>
@@ -671,7 +683,7 @@ export function TrajectoryPanel({
         </div>
       ) : (
         <div className="max-h-[70vh] overflow-y-auto pr-1 [overflow-anchor:none]">
-          {renderSteps(steps)}
+          {renderSteps(visibleSteps)}
         </div>
       )}
     </div>
