@@ -69,9 +69,9 @@ ageval cancel <suite_run_id> --dataset examples/datasets/minimal-demo
 - **status** — ControlStore record + suite progress when present  
 - **cancel** — writes `cancel.requested` (no new units); SIGTERM stored pid if any  
 
-Unlike [Campaign](/docs/run/campaign): suite is the **task axis**; campaign sweeps **parameters on one task**. Always-k is **not** the campaign matrix axis.
+Unlike [Campaign](./campaign.mdx): suite is the **task axis**; campaign sweeps **parameters on one task**. Always-k is **not** the campaign matrix axis.
 
-Runs land under `.ageval/suite-runs/` — browse Timing bars with [Viewer](/docs/run/local-viewer).
+Runs land under `.ageval/suite-runs/` — browse Timing bars with [Viewer](./local-viewer.mdx).
 
 ## Upload to Hub (Leaderboard / Jobs)
 

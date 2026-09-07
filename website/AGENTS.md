@@ -22,6 +22,8 @@ Write what this page owes. If the fact belongs on another path, the sidebar take
 
 Exception: `index.mdx` / `index.en.mdx` may carry a site map.
 
+When that catalog (or a necessary in-page cross-ref) must link, use a **relative MDX path** (`./getting-started/install.mdx`, `../reference/cli.mdx`). Absolute `/docs/...` drops the locale prefix and 404s. `createRelativeLink` only resolves `./` and `../`.
+
 Off-site links (ACP, e2b, GitHub tree paths) are fine. No GitHub Issue numbers.
 
 ## Reader and placement (docs-substance)

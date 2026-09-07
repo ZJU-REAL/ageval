@@ -69,9 +69,9 @@ ageval cancel <suite_run_id> --dataset examples/datasets/minimal-demo
 - **status**：ControlStore 记录 + 可读 progress  
 - **cancel**：写 `cancel.requested`，不再开新 unit；有 pid 则 SIGTERM  
 
-和 [Campaign](/docs/run/campaign) 的区别：suite 是 **task 轴**（多题）；campaign 是 **同一题扫参数**。Always-k **不是** campaign 矩阵轴。
+和 [Campaign](./campaign.mdx) 的区别：suite 是 **task 轴**（多题）；campaign 是 **同一题扫参数**。Always-k **不是** campaign 矩阵轴。
 
-跑次落在 Dataset 下的 `.ageval/suite-runs/`，可用 [Viewer](/docs/run/local-viewer) 浏览 Timing 条。
+跑次落在 Dataset 下的 `.ageval/suite-runs/`，可用 [Viewer](./local-viewer.mdx) 浏览 Timing 条。
 
 ## 上传到 Hub（Leaderboard / Jobs）
 
