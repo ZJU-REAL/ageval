@@ -625,7 +625,7 @@ export function TrajectoryPanel({
     <div className="space-y-3">
       {note ? <p className="text-xs text-mute">{note}</p> : null}
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] text-mute">
+        <p className="text-xs text-mute">
           Trajectory is observational only; independent evaluator owns PASS.
         </p>
         <HoverTip content={allExpanded ? "Collapse all" : "Expand all"}>

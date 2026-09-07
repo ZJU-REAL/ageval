@@ -57,7 +57,7 @@ export function ActorsTable({ actors }: { actors: NonNullable<Trial["actors"]> }
           </TableBody>
         </Table>
       </div>
-      <p className="text-[11px] text-mute">
+      <p className="text-xs text-mute">
         Time sums inv latency. Usage is last-invoke session snapshot
         (tokens/cost); trajectory and usage are not PASS.
       </p>
