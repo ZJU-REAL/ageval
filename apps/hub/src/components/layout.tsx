@@ -16,6 +16,7 @@ import {
   Database,
   House,
   Inbox,
+  LogOut,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -541,17 +542,20 @@ export function Shell({
                     </span>
                   </Link>
                 ) : null}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    clearToken();
-                    window.location.reload();
-                  }}
-                >
-                  Sign out
-                </Button>
+                <HoverTip content="Sign out" side="bottom">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Sign out"
+                    onClick={() => {
+                      clearToken();
+                      window.location.reload();
+                    }}
+                  >
+                    <LogOut className="h-4 w-4" aria-hidden />
+                  </Button>
+                </HoverTip>
               </>
             ) : (
               <SignInButton />
