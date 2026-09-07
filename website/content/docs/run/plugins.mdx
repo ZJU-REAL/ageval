@@ -44,7 +44,7 @@ agent_profiles:
           method: "run"
 ```
 
-`executor:` 选出这份配置里的 Agent。插件自己的选项写在该插件的 `extensions` 行上。docker 的镜像层由环境在启动时写入。ACP 的 `entry` 写在 `- plugin: acp` / `options.entry`；该 entry 会 bake 进题图，换模型不重建。
+`executor:` 选出这份配置里的 Agent。插件自己的选项写在该插件的 `extensions` 行上。docker 的镜像层由环境在启动时写入。ACP 的 `entry` 写在 `- plugin: acp` / `options.entry`；该 entry 会写入镜像，换模型不重建。
 
 用另一份 profiles 切换，不必改 dataset：
 
@@ -60,7 +60,7 @@ ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
   --profiles examples/datasets/minimal-demo/profiles.dsh.yaml --probe
 ```
 
-`--probe` 按 **`environment`** 检查本机能否开这个环境：`host_requires`、Docker daemon（docker）、locator **名**。缺项非零退出。没跑不要标完成。
+`--probe` 按 **`environment`** 检查本机能否开这个环境：`host_requires`、Docker daemon（docker）、locator **名**。缺项则非零退出，这次运行不会开始。
 
 ## 装上不等于能跑
 

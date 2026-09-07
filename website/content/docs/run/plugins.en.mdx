@@ -48,8 +48,8 @@ agent_profiles:
 
 `executor:` selects the Agent for this profiles file. Plugin options live on that
 plugin's `extensions` row. Docker image layers are written when the environment
-starts. ACP `entry` lives on `- plugin: acp` / `options.entry` and is baked
-into the task image; switching model does not rebuild.
+starts. ACP `entry` lives on `- plugin: acp` / `options.entry` and is written
+into the image; switching model does not rebuild.
 
 ```bash
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
@@ -64,7 +64,7 @@ ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
   --profiles examples/datasets/minimal-demo/profiles.dsh.yaml --probe
 ```
 
-`--probe` checks whether this **`environment`** can open here: `host_requires`, Docker daemon (docker), locator **names**. Unsatisfied paths exit non-zero. Skip is not a pass.
+`--probe` checks whether this **`environment`** can open here: `host_requires`, Docker daemon (docker), locator **names**. If something is missing, the command exits non-zero and the run does not start.
 
 ## Installed is not the same as runnable
 

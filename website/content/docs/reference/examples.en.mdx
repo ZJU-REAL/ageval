@@ -1,6 +1,6 @@
 ---
 title: Repository examples
-description: When to use minimal-demo / Agent packages / conversion packages.
+description: When to use minimal-demo, Agent packages, or a dataset converted from an upstream bench.
 ---
 
 | Path                                                                                                                | Use when                                                                |
@@ -13,13 +13,13 @@ List members with `ageval tasks <path>`. Copy layout from `minimal-demo` when au
 
 ## `tau3-airline-5`
 
-Conversion of the [tau2-bench](https://github.com/sierra-research/tau2-bench) (τ³-bench) **airline** domain onto ageval’s outer lifecycle: dual-role `user` / `service` dialog over ACP, tools and DB via an in-package bridge, PASS only from `evaluator.py` (not `run.py` completion). This repository ships **five** members (`airline-00` … `airline-04`); shared bridge code and domain assets live under root `shared/lib` and `shared/assets` so each task need not ship its own `lib/` copy.
+This dataset ports the [tau2-bench](https://github.com/sierra-research/tau2-bench) (τ³-bench) **airline** domain onto ageval’s outer lifecycle: dual-role `user` / `service` dialog over ACP, tools and DB via an in-package bridge, PASS only from `evaluator.py` (not `run.py` completion). This repository ships **five** members (`airline-00` … `airline-04`); shared bridge code and domain assets live under root `shared/lib` and `shared/assets` so each task need not ship its own `lib/` copy.
 
 Full runs need the `tau2` pin in the package `requirements.txt`; `ageval lock` does not. Package notes: [`examples/datasets/tau3-airline-5/README.md`](https://github.com/ZJU-REAL/ageval/blob/main/examples/datasets/tau3-airline-5/README.md). Shipping the package does not make the results more credible.
 
-## Hub-only conversions
+## Datasets published only on Hub
 
-`examples/datasets/` holds **minimal-demo** and a **five-task** `tau3-airline-5` cut. The full 50-task airline domain and other popular-bench conversions are **not** checked into this repository; they ship via Hub publish + suite upload so clone size and CI paths stay bounded:
+`examples/datasets/` holds **minimal-demo** and a **five-task** `tau3-airline-5` cut. The full 50-task airline domain and other popular-bench conversions are **not** checked into this repository; they ship via Hub publish plus a whole-dataset upload so clone size and CI paths stay bounded:
 
 | Upstream           | Hub package id (org `my-lab`)                    | Notes                                      |
 | ------------------ | ------------------------------------------------ | ------------------------------------------ |

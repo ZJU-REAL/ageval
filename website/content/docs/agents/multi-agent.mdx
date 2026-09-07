@@ -36,4 +36,4 @@ agent_profiles:
 - 每个 profile 的 invoke 会进各自证据；Viewer 可按 `profile_id` 分组
 - docker 上多 actor 必须与 local 相同 SDK 表面：`Agent.session(...).invoke`。YAML 只声明逻辑 isolation（`shared-container` / `container-per-group`）；container id / UID 由 Core 拥有。本轮不承诺多 group 真调度 run（lock 有 topology 即可）
 
-可参考 `examples/datasets/minimal-demo` 中的多角色包。
+`examples/datasets/minimal-demo` 里有多角色例子。

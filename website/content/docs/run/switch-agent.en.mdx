@@ -56,7 +56,7 @@ ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
   --set '/bindings/solver/options/entry="codex"'
 ```
 
-Only allowlisted `--set` pointers work, e.g. `/bindings/solver/options/reasoning_effort="high"` — [CLI](../reference/cli.mdx).
+Only allowlisted `--set` pointers work, e.g. `/bindings/solver/options/reasoning_effort="high"`. The CLI page lists the pointers.
 
 `api_key` is always an env **name**, never the secret. Optional profile fields: `options.reasoning_effort` (thinking level), `options.idle_timeout_seconds` (stall ceiling), and `base_url`.
 

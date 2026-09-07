@@ -1,6 +1,6 @@
 ---
 title: Campaign 参数矩阵
-description: 同一 task 上扫 seed / profile 等允许覆盖的字段。
+description: 在同一道 task 上扫 seed、profile 等允许改的字段。
 ---
 
 Campaign 解决的是：**固定一题**，换一批允许的参数点，各点各自出 Result。
@@ -11,12 +11,12 @@ ageval campaign <dataset> --task <id> ...
 
 具体矩阵参数以 `ageval campaign --help` 为准。
 
-| | Suite | Campaign | Always-k (`-k`) |
+| | 整份 dataset | Campaign | Always-k (`-k`) |
 | --- | --- | --- | --- |
 | 轴 | 多个 task | 同一 task 的参数组合 | 同一 task **重复独立运行** |
-| 典型用途 | 整包回归 | 对比 seed / profile / binding | 攒 pass@k / pass^k 样本 |
+| 典型用途 | 全成员回归 | 对比 seed / profile / binding | 攒 pass@k / pass^k 样本 |
 | 入口 | `ageval run`（可省略 `--task`） | `ageval campaign` | `ageval run … -k N` |
 
-**矩阵轴 ≠ k-attempt 轴。** Always-k 不写进 campaign matrix，也不写进 `task.yaml`。
+**矩阵轴 ≠ k 次运行轴。** Always-k 不写进 campaign matrix，也不写进 `task.yaml`。
 
 覆盖仍受 `--set` 白名单约束，不能随意改任意字段。

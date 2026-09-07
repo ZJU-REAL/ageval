@@ -4,16 +4,16 @@ description: 发布 Dataset、组织权限、结果归档与分享。
 ---
 
 Registry 是独立的 HTTP 服务：发包、管组织、存结果、登录。  
-它**不是**本机 Viewer，也**不是** ageval Core。
+它**不是**本地 Viewer，也**不是** ageval Core。
 
 CLI 默认连公开 Hub，登录不必先填 URL。自托管再用 `AGEVAL_REGISTRY_URL` 或 `--registry-url` 覆盖。
 
 ## 怎么用
 
 1. 按仓库 [`services/registry/README.md`](https://github.com/ZJU-REAL/ageval/blob/main/services/registry/README.md) 启动**自托管**服务。发版标签会把 Registry 与 Hub 镜像推到 GHCR，本机可用 compose 一次拉起 Postgres、对象存储、Registry 与 Hub
-2. CLI 登录后创建组织。Dataset 用 `ageval publish --draft` 覆盖当前工作树，owner 再用 `ageval release` 固化为不可变版本；也可直接 `ageval publish` 发 release。按需上传 suite / Attempt 结果
+2. CLI 登录后创建组织。Dataset 用 `ageval publish --draft` 覆盖当前工作树，owner 再用 `ageval release` 固化为不可变版本；也可直接 `ageval publish` 发 release。按需上传整份运行或单次运行的结果
 3. 私有结果可以分享给某个组织或用户
-4. 用浏览器打开 [Hub](./hub.mdx) 浏览；Hub 走浏览器 OAuth，CLI 走 Device Flow
+4. 浏览用 Hub 网页端；Hub 走浏览器 OAuth，CLI 走 Device Flow
 
 <Callout type="warning" title="公网部署">
 
@@ -25,19 +25,19 @@ CLI 默认连公开 Hub，登录不必先填 URL。自托管再用 `AGEVAL_REGIS
 
 ## 所有权（摘要）
 
-| 对象                  | 归属       | 谁能读私有内容            | 删除 / 改可见性 / 覆盖上传 |
+| 对象                  | 归属       | 谁能读私有内容            | 删除 / 改公开或私有 / 覆盖上传 |
 | --------------------- | ---------- | ------------------------- | -------------------------- |
 | 包（Dataset release） | **组织**   | 组织成员 / admin          | **组织 owner** / admin     |
-| Attempt / suite 结果  | **上传者** | 本人 / 被分享对象 / admin | **上传者** / admin         |
+| 单次运行 / 整份运行结果  | **上传者** | 本人 / 被分享对象 / admin | **上传者** / admin         |
 
 加入组织**不会**自动看到别人的私有结果，除非对方分享给你。  
-任意组织 **member** 都可在该组织下 `publish`；**删除包 / 改包可见性 / `--replace` 覆盖同版本** 需要 **org owner**。  
+任意组织 **member** 都可在该组织下 `publish`；**删除包 / 改包公开或私有 / `--replace` 覆盖同版本** 需要 **org owner**。  
 邀请码在创建时只完整展示一次，之后只能看到前缀。  
 owner 或 admin 按 GitHub login 加减成员（`ageval registry org-add-member` / `org-remove-member`），用 `org-set-role` 改已有成员角色，用 `org-transfer` 把组织交给现有成员（调用者变为 `member`）。最后一名 owner 不能离开、降级或被移除。对方不必在线。allowlist 上的官方 slug（默认 `official`）不能自助 create / claim，只有 admin bootstrap token 能 `org-create`。
 
 ## 发布后 owner 操作（CLI）
 
-创建时 `--public` 只决定**当时**的可见性；之后可用 CLI 改，不必重新发包或重传结果：
+创建时 `--public` 只决定**当时**公开还是私有；之后可用 CLI 改，不必重新发包或重传结果：
 
 ```bash
 # 按 GitHub login 加减成员（owner 或 admin；对方不必在线）
@@ -46,23 +46,23 @@ owner 或 admin 按 GitHub login 加减成员（`ageval registry org-add-member`
 # ageval registry org-transfer my-lab alice
 # ageval registry org-remove-member my-lab alice
 
-# 包：可见性 / 删除（删除必须 --yes）
+# 包：公开或私有 / 删除（删除必须 --yes）
 ageval registry set-visibility 'my-org/dataset@0.1.0' --visibility public
 # ageval registry delete 'my-org/dataset@0.1.0' --yes
 
 # 包：描述（owner 覆写，不重新发包；空串清除覆写，回到包内 manifest 描述）
 ageval registry set-description my-org/dataset --description '一句话描述'
 
-# 结果：可见性 / 取消分享 / 删除
+# 结果：公开或私有 / 取消分享 / 删除
 ageval results set-visibility <run_or_suite_id> --kind attempt|suite --visibility private
 ageval results unshare <id> --kind attempt --share-org my-lab
 # ageval results delete <id> --kind suite --yes
-# 删 suite 默认不删 attempt；显式级联：
+# 删整份运行默认不删各次运行；显式级联：
 # ageval results delete <suite_id> --kind suite --with-attempts --yes
 ```
 
 **覆盖上传：** 同一 `dataset_id@version` / `run_id` / `suite_run_id` 默认 **409**。  
-仅 owner 可加 `--replace`（`ageval publish` / `results upload` / `upload-suite`），覆盖 blob、指标/标签与可见性；无静默覆盖。
+仅 owner 可加 `--replace`（`ageval publish` / `results upload` / `upload-suite`），覆盖 blob、指标/标签与公开或私有；无静默覆盖。
 
 命令细节见 `ageval --help`、[`src/ageval/cli/README.md`](https://github.com/ZJU-REAL/ageval/blob/main/src/ageval/cli/README.md) 与 registry README。
 

@@ -1,24 +1,24 @@
 ---
 title: 结果与 PASS
-description: Result 怎么读；pass@k 是 job 指标，不是整包 PASS。
+description: Result 怎么读；pass@k 是 job 指标，不是整份 dataset 的 PASS。
 ---
 
-## 几条硬边界
+## 不要搞混
 
 1. `run.py` 跑完 **≠** PASS  
 2. 轨迹 / token / agent 自述 **≠** 分数（含 `evaluation/observation.jsonl`）  
 3. PASS / FAIL 仅来自 `evaluator.py` 的返回值  
-4. suite / job 汇总（含 pass@k）**≠** 整包 PASS 权威  
+4. 整份 dataset / job 汇总（含 pass@k）**≠** 整份 dataset 的 PASS  
 
 ## 终端上
 
-- **Result**：绑定到本次 Attempt 的状态与评测结论  
-- **`logs`**：Attempt 证据 locator（相对 Dataset 根，如 `.ageval/runs/<run_id>`；单次 `k=1` 常见）  
-- suite 的 `pass_rate` / `mean_score`：观测用  
+- **Result**：绑定到这次运行的状态与评测结论  
+- **`logs`**：这次运行的证据路径（相对 dataset 根，如 `.ageval/runs/<run_id>`；单次 `k=1` 常见）  
+- 整份跑完时的 `pass_rate` / `mean_score`：只供观测  
 
 ## Always-k 与 pass@k / pass^k
 
-用 `-k` / `--n-attempts` 跑满 k 次后，suite `summary.json` → `metrics` 会写：
+用 `-k` / `--n-attempts` 跑满 k 次后，整份跑完的 `summary.json` → `metrics` 会写：
 
 | 键 | 含义 |
 | --- | --- |
@@ -27,7 +27,7 @@ description: Result 怎么读；pass@k 是 job 指标，不是整包 PASS。
 | `n_attempts` | 本 job 的 Always-k 预算（来自 CLI / job，不是 `task.yaml`） |
 | `k_values` | 本 summary 计算过的 k 列表 |
 | `per_task` | 各 task 的 `n` / `c` 与 per-k 映射（审计） |
-| suite 总分 | 各 **task** 上该指标的 **mean**（样本不够的 task 不进分母） |
+| 整份汇总分 | 各 **task** 上该指标的 **mean**（样本不够的 task 不进分母） |
 
 ### `metrics.pass_at_k` / `pass_power_k` 契约
 
@@ -49,28 +49,28 @@ description: Result 怎么读；pass@k 是 job 指标，不是整包 PASS。
 **上传 / Registry：**
 
 - `ageval results upload-suite` 在本地先 **ensure / recompute**（有 `attempts[]` 或 task `n`/`c` 即可补全 k 指标），再 POST 整份 `metrics` blob。
-- Registry 原样存入 `metrics_json`，list/get suite **不剥除** `pass_at_k` / `pass_power_k`。
+- Registry 原样存入 `metrics_json`，list/get **不剥除** `pass_at_k` / `pass_power_k`。
 - 主列仍是 `pass_rate` / `mean_score`；k 指标在 `metrics` 内读。
 - **不**写入 `config_fingerprint` / job identity；不同 k 的 job 可并列，身份仍是 agent×model 绑定。
-- 无 k 数据的旧 suite：`metrics.pass_at_k` 缺失 → Hub 显示 `—`。
+- 无 k 数据的旧上传：`metrics.pass_at_k` 缺失 → Hub 显示 `—`。
 
 **`task_refs`（多 attempt）：** 可含 `n`、`c`、`attempt_run_ids`（及主 `run_id`），供审计与 `--with-attempts` 上传全样本。
 
-这些是 **观测汇总**，不是 suite 级 PASS。
+这些是 **观测汇总**，不是整份 dataset 的 PASS。
 
 ## Hub 上看得到什么
 
 | 上传命令 | 产物 | Hub 主界面 |
 | --- | --- | --- |
-| `ageval results upload --run …` | 单次 Attempt | **一般不进** Dataset Leaderboard / Task Jobs 主列表 |
-| `ageval results upload-suite --suite-run …` | Suite 行 + metrics / task_refs | **完备且绑定 release** 才上 Leaderboard；缺题或 draft 绑定只出现在 Task Jobs |
+| `ageval results upload --run …` | 单次运行 | **一般不进** Dataset Leaderboard / Task Jobs 主列表 |
+| `ageval results upload-suite --suite-run …` | 整份运行的一行 + metrics / task_refs | **完备且绑定 release** 才上 Leaderboard；缺题或 draft 绑定只出现在 Task Jobs |
 | `… --with-attempts` | 额外上传各 attempt 目录 | Jobs 可点进 Attempt 详情 / 轨迹 |
 
-因此：要给别人（或自己）在 Hub 上「扫一眼整包」，流程是 **suite run → upload-suite**，并且绑定已发布 release。不是只 upload 单题。
+因此：要在 Hub 上看整份 dataset 的结果，流程是 **整份跑完 → upload-suite**，并且绑定已发布 release。不是只 upload 单题。
 
-## 本机翻看
+## 本地查看
 
-[Viewer](../run/local-viewer.mdx)：Jobs → Tasks → Attempt。  
+`ageval view` 打开 Jobs → Tasks → Attempt。  
 Attempt 页可有 **Timing**（及有数据时的 **Tokens**）条。轨迹按文件顺序展示（thought 紧挨着它后面的工具）。轨迹行带 `elapsed_ms` 时步骤头显示单步耗时。耗时 / token / 单步耗时 **只是参考**，不是 PASS。
 
 ## 失败怎么分

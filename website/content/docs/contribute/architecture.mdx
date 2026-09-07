@@ -1,6 +1,6 @@
 ---
 title: 架构地图
-description: 源码目录与结构权威。
+description: 源码目录和结构说明。
 ---
 
 模块放哪、谁依赖谁、生命周期与数据流，以仓库根 **[`ARCHITECTURE.md`](https://github.com/ZJU-REAL/ageval/blob/main/ARCHITECTURE.md)** 为准（含 Current 源码树、emit 图、失败归属表）。
@@ -12,5 +12,3 @@ description: 源码目录与结构权威。
 | `apps/viewer` · `apps/hub` | 本机 Jobs / Hub SPA |
 | `website/` | 本站 |
 | `docs/` | 设计 |
-
-设计说明在仓库 `docs/design/`。executor 不直接 import docker / e2b；它声明需要环境提供 `attach_stdio` 或 `exec`，lock 核过再跑。接线细节见 `docs/design/11`。

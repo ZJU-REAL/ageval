@@ -1,11 +1,11 @@
 ---
 title: Local results viewer
-description: Browse suite runs in the browser — no Registry.
+description: Browse local results in the browser. No Registry.
 ---
 
-After a suite or a single-task run, use Viewer for scores, trajectories, and copyable commands. It reads the **opened** dataset only (`.ageval/suite-runs/` and `.ageval/runs/`) and never talks to Registry.
+After the whole dataset finishes, or after a single task, use Viewer for scores, trajectories, and copyable commands. It reads only the dataset you opened (`.ageval/suite-runs/` and `.ageval/runs/`) and never talks to Registry.
 
-From the Jobs table you can delete a local Job after a path preview. Deleting a suite always removes the Attempts it references; they do not come back as singles. You cannot delete one Attempt from inside a suite. This is a local erase, not a Registry delete (`ageval results delete` is a different object). The same use case is `ageval jobs delete --local <dataset> --job <id> --yes`.
+From the Jobs table you can delete a local Job after a path preview. Deleting a suite row also deletes the runs it references; they do not come back as singles. You cannot delete one run from inside a suite. That wipes local results, not a Registry object (`ageval results delete` is different). Same command: `ageval jobs delete --local <dataset> --job <id> --yes`.
 
 Pin and notes stay in **this browser** only. They are not written to evidence, lock, or Registry.
 
@@ -34,13 +34,13 @@ ageval view examples/datasets/minimal-demo --open /jobs/<id>
 
 | Layer | Content |
 | --- | --- |
-| Jobs | Local suite runs **and** single-task Attempts (Kind: suite / single). Kind / Source are filters; suite Source lists task ids only |
-| Tasks | Per-task status / score. A suite task with one Attempt opens that Attempt directly |
+| Jobs | Local results for the whole dataset, and for a single task (Kind: suite / single). Kind / Source are filters; suite Source lists task ids only |
+| Tasks | Per-task status / score. A suite task with one run opens that run directly |
 | Attempt | Outcome, **Timing** (and **Tokens** when present), actors, evidence tabs |
 
 Timing comes from Attempt `phase_timing` (`prepare` / `run` / `evaluate` / `cleanup`); hover bar segments for durations.  
 Trajectory steps follow the sealed file order: a thought, then the tools that thought invoked, then the next thought. When a sealed step (thought, `tool_call`, or final assistant) carries `elapsed_ms`, the step header shows that duration. Missing timing is omitted — Viewer does not invent it from file mtimes or the page clock.  
-Time / tokens / step duration are **hints**, not PASS. Trajectory is not scoring authority. Each **tool-call** row (and other long rows) can collapse; the observational PASS note has expand-all / collapse-all, matching the Hub Attempt page.
+Time, tokens, and step duration are **hints**, not PASS. Trajectory is not how scoring is decided. Each **tool-call** row (and other long rows) can collapse; the observational PASS note has expand-all / collapse-all, same as the Hub Attempt page.
 
 **Verifier:** default is `result.json` plus the `evaluation/` tree. When `evaluation/observation.jsonl` exists (evaluate-phase SDK invoke, LLM-as-judge), that tab reuses the Trajectory step cards. The Agent Trajectory tab still reads only root `trajectory.jsonl`. Observation is not PASS.
 

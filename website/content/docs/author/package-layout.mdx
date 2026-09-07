@@ -17,7 +17,7 @@ npx skills add ZJU-REAL/ageval --skill ageval-config-package
 
 | 层 | 文件 | 职责 |
 | --- | --- | --- |
-| Dataset | 根 `ageval.yaml` | 套件身份、版本、成员在哪 |
+| Dataset | 根 `ageval.yaml` | dataset 身份、版本、成员在哪 |
 | Task | `tasks/<id>/task.yaml` | 这一题怎么跑、怎么评 |
 
 CLI 路径永远是 Dataset 根；`--task` 选成员。
@@ -58,7 +58,7 @@ Core 注入的 path 前缀是 **`[task_dir, dataset_root]`**，**不会**再把 
 
 硬规则（摘要）：
 
-- 有 `shared/` 则 **必须** 进入 `packageDigest` / publish blob；改它会改整包 digest  
+- 有 `shared/` 则 **必须** 进入 `packageDigest` / publish blob；改它会改整份 dataset 的 digest  
 - 默认 **不** 挂到 Agent workspace；参考答案 **只** 放 `tasks/*/evaluation/`  
 - 成员 task **禁止** 占用顶层名 `shared`（`shared/` 目录或 `shared.py`）— lock 失败  
 - `shared/lib` 与 `tasks/*/lib` **允许** 同名 stem（命名空间已区分）  
@@ -76,7 +76,7 @@ version: "0.1.0"
 tasks:
   root: tasks
 # defaults:
-#   max_concurrent_tasks: 2   # 仅 suite 调度；不要写 harness/limits
+#   max_concurrent_tasks: 2   # 仅整份 dataset 调度；不要写 harness/limits
 ```
 
 `dataset_id`：1–128 字符，小写字母数字开头结尾，中间可有 `.` `_` `/` `-`，禁止 `..` 与 `//`。**不参与打分**。
@@ -89,6 +89,4 @@ tasks:
 - **`limits` / `evaluation` / `environment/`**：给 Core
 - 环境与 ACP entry：根上 `profiles.yaml`
 
-`run.py` 不要再读第二份「真配置」。运行时改允许的项用 `--set`（[CLI](../reference/cli.mdx)）。
-
-完整字段、profile 写法、lock 失败清单 → [配置字段](../reference/config-fields.mdx)。
+`run.py` 不要再读第二份「真配置」。运行时改允许的项用 `--set`。

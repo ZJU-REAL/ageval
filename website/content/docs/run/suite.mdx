@@ -1,6 +1,6 @@
 ---
 title: 整份 dataset 一次跑完
-description: 一次跑 Dataset 里所有 task；可 Always-k 与 pass@k；汇总分不是整包 PASS。
+description: 一次跑完 dataset 里所有 task；可 Always-k 与 pass@k；汇总分不是整份 dataset 的 PASS。
 ---
 
 省略 `--task` 时，`ageval run` 把 dataset 里每一个 task 都跑一遍，各自独立 lock / 执行 / 评测：
@@ -14,33 +14,33 @@ ageval run examples/datasets/minimal-demo --max-concurrent-tasks 2
 
 | 轴 | 干什么 | 不干什么 |
 | --- | --- | --- |
-| **并发** `--max-concurrent-tasks` | **少等一会儿**——多开几路压总耗时 | 不改 k，也不改 PASS/FAIL |
+| **并发** `--max-concurrent-tasks` | **少等一会儿**：多开几路压总耗时 | 不改 k，也不改 PASS/FAIL |
 | **Always-k** `--n-attempts` / `-k` | 每题固定跑满 k 次独立运行，给 **pass@k / pass^k** 攒样本 | 不是「失败再试」的条件 retry；**不进** `task.yaml` / fingerprint |
 
 ```bash
-# 整包每题 k=5（CLI/job 参数 only）
+# 整份 dataset，每题 k=5（只写在 CLI / job 上）
 ageval run examples/datasets/minimal-demo -k 5 --max-concurrent-tasks 2
 
 # 只对一题 Always-k
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg -k 5
 
-# 补跑：并进已有 suite job，重算指标（可加 --task 只补一题）
+# 补跑：并进已有 job，重算指标（可加 --task 只补一题）
 ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task terminal-jsonl-agg -k 5
 
-# 指定要换的成员（PASS / FAIL / ERROR）：新的一次运行，同一 suite id
+# 指定要换的成员（PASS / FAIL / ERROR）：新的一次运行，同一个 `suite_run_id`
 ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task terminal-jsonl-agg --replace-slot
 # Always-k：只换一格 (task_id, attempt_index)
 # ageval run examples/datasets/minimal-demo --resume-suite <id> --task terminal-jsonl-agg --replace-slot --attempt-index 1
 ```
 
-硬约束：
+规则：
 
 - `n_attempts` **禁止**写进 `task.yaml`；也不进 `config_fingerprint`  
 - 不加 `--replace-slot` 的补跑只**追加**缺失 index；已完成的 PASS / FAIL / ERROR 仍跳过  
 - `--replace-slot` 写**新**的一次运行；旧行留在盘上并进入 `previous[]`；指标只按现行指针重算  
 - Hub / Viewer 历史列表是 `patch N` + 该次运行开始时间（不是补跑时刻，也不展示 `run_id`）  
 - 因 **cancel 未真正跑过** 的占位会在 resume 时**重跑**（避免 pass@k 永久偏低）
-- 进度 / 取消见下方；Hub Leaderboard 在有 `metrics.pass_at_k` 时展示 pass@k / pass^k / n_attempts；本机 summary 始终可写 metrics  
+- 进度和取消写在下面；Hub Leaderboard 在有 `metrics.pass_at_k` 时展示 pass@k / pass^k / n_attempts；本地 summary 始终可写 metrics  
 - 系统默认 `suite_run_id` 为 **8 位 hex**（无 `suite_` 前缀）
 
 
@@ -50,8 +50,8 @@ ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task t
 
 | 字段 | 含义 |
 | --- | --- |
-| `pass_rate` / `mean_score` | 观测用扫一眼（不是整包 PASS） |
-| `pass_at_k` | **pass@k**（Harbor 无偏估计）；suite 分 = **各 task 上该指标的 mean** |
+| `pass_rate` / `mean_score` | 只供观测，不是整份 dataset 的 PASS |
+| `pass_at_k` | **pass@k**（Harbor 无偏估计）；整份汇总分 = **各 task 上该指标的 mean** |
 | `pass_power_k` | **pass^k**（k 次都成功的估计）；同样按 task 取 mean |
 | `n_attempts` | 本次 job 的 k 预算 |
 
@@ -69,19 +69,19 @@ ageval cancel <suite_run_id> --dataset examples/datasets/minimal-demo
 - **status**：ControlStore 记录 + 可读 progress  
 - **cancel**：写 `cancel.requested`，不再开新 unit；有 pid 则 SIGTERM  
 
-和 [Campaign](./campaign.mdx) 的区别：suite 是 **task 轴**（多题）；campaign 是 **同一题扫参数**。Always-k **不是** campaign 矩阵轴。
+整份 dataset 一次跑完是 **task 轴**（多题）；campaign 是 **同一题扫参数**。Always-k **不是** campaign 矩阵轴。
 
-跑次落在 Dataset 下的 `.ageval/suite-runs/`，可用 [Viewer](./local-viewer.mdx) 浏览 Timing 条。
+结果写在 dataset 下的 `.ageval/suite-runs/`。用本地查看器打开这份 dataset，可以看到 Timing 条。
 
 ## 上传到 Hub（Leaderboard / Jobs）
 
-Hub 的 **Dataset → Leaderboard** 和 **Task → Jobs** 读的是 Registry 的 **suite** 结果，不是零散 attempt 列表。
+Hub 的 **Dataset → Leaderboard** 和 **Task → Jobs** 读的是 Registry 里整份 dataset 跑完的结果，不是零散的单次上传。
 
 | 步骤 | 命令 |
 | --- | --- |
 | 1. 整份跑完 | `ageval run <dataset>`（**不要**加 `--task`；可用 `--profiles`） |
 | 2. 记下 id | 输出 / `summary.json` 里的 `suite_run_id`（默认 8 位 hex） |
-| 3. 上传 suite | `ageval results upload-suite <dataset> --suite-run <id> --public`（也可 `id@version`） |
+| 3. 上传整份结果 | `ageval results upload-suite <dataset> --suite-run <id> --public`（也可 `id@version`） |
 | 4. 需要点开轨迹时 | 加上 `--with-attempts` |
 
 ```bash
@@ -92,6 +92,6 @@ ageval results upload-suite examples/datasets/minimal-demo \
   --agent acp-pi --model zai-coding-cn/glm-5.2
 ```
 
-**常见误解：** 只跑 `ageval run … --task X` 再 `ageval results upload --run …`——attempt 可能已经进 Registry，但 **Leaderboard 通常仍没有一行**。要上榜必须先 suite 再 `upload-suite`。
+**常见误解：** 只跑 `ageval run … --task X` 再 `ageval results upload --run …`。那一次运行可能已经进 Registry，但 **Leaderboard 通常仍没有一行**。要上榜必须先整份跑完，再 `upload-suite`。
 
-公开榜还有两道门：suite **完备**（绑定版本的每题都有一条 result；题上 FAIL / ERROR 也算），且绑定 **release**。缺题或绑定 draft 的行只出现在 Task **Jobs**。先 `ageval publish --draft`、owner 再 `ageval release`，或直接 `ageval publish` 发 release。
+公开榜还有两道门：整份运行必须 **完备**（绑定版本的每题都有一条 result；题上 FAIL / ERROR 也算），且绑定 **release**。缺题或绑定 draft 的行只出现在 Task **Jobs**。先 `ageval publish --draft`、owner 再 `ageval release`，或直接 `ageval publish` 发 release。

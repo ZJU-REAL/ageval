@@ -1,9 +1,9 @@
 ---
 title: Config field reference
-description: ageval.yaml / task.yaml field and validation cheat sheet.
+description: Fields and validation rules for ageval.yaml and task.yaml.
 ---
 
-This page is for lookup. Tutorial: [Author a task](../author/tutorial.mdx).
+Field rules:
 
 ## Root `ageval.yaml`
 
@@ -18,7 +18,7 @@ This page is for lookup. Tutorial: [Author a task](../author/tutorial.mdx).
 
 **Not** in yaml: `n_attempts` / Always-k (CLI/job only).
 
-Empty suite fails lock. Unknown format → `invalid_format`.
+A dataset with no tasks fails lock. Unknown format → `invalid_format`.
 
 ## Member `task.yaml`
 
@@ -63,7 +63,7 @@ Optional `label` on a role. `--agent` is mutually exclusive with `--profiles`. `
 
 Optional `evaluate_host.isolated: true` (Current: docker) starts a scoring environment. Combined with member `evaluation.environments`, Core lazily starts one host per name.
 
-Optional docker `environment_options`: `image` / `platform` / `network` / `user` / `egress` / `egress_allow` / `python_version`. `python_version` is the official Attempt base CPython minor (e.g. `"3.13"`; omit = 3.12, shape `^\d+\.\d+$`); a base that cannot be pulled fails once, with no fallback. `egress: llm` allows outbound traffic only to bound profile `base_url` hosts; `egress_allow` on the same map is extra hostnames (omit = none). `evaluate_host.environment_options` may set `network` / `egress` / `egress_allow` / `platform` / `user` / `python_version` (not `image`); when omitted, the scoring box inherits the job's `platform` / `user` / `python_version` and does not inherit the agent's `egress` / `egress_allow` / `network`.
+Optional docker `environment_options`: `image` / `platform` / `network` / `user` / `egress` / `egress_allow` / `python_version`. `python_version` is the official image CPython minor (e.g. `"3.13"`; omit = 3.12, shape `^\d+\.\d+$`); an image that cannot be pulled fails once, with no fallback. `egress: llm` allows outbound traffic only to bound profile `base_url` hosts; `egress_allow` on the same map is extra hostnames (omit = none). `evaluate_host.environment_options` may set `network` / `egress` / `egress_allow` / `platform` / `user` / `python_version` (not `image`); when omitted, the scoring host inherits the job's `platform` / `user` / `python_version` and does not inherit the agent's `egress` / `egress_allow` / `network`.
 
 ## Allowed top-level dirs
 
@@ -71,4 +71,4 @@ Optional docker `environment_options`: `image` / `platform` / `network` / `user`
 
 ## Common lock failures
 
-id mismatch · bad format · illegal dataset_id · docker without Dockerfile · missing ACP entry · secrets in yaml · illegal folders · empty suite
+id mismatch · bad format · illegal dataset_id · docker without Dockerfile · missing ACP entry · secrets in yaml · illegal folders · no tasks

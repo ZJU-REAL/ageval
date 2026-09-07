@@ -100,4 +100,4 @@ async def evaluate(inputs):
 
 `exec` 的 argv 是列表；stdout / stderr / exit_code 来自**那个容器内**。第一次用到某名字才 start 并 upload 快照和参考答案。未知名、run 阶段写了名字、或表里有名字时 ACP 省略名字：一次失败，不 start。v1 只顺序 stage，不要并发 `exec` 与 `session` 打同一名字。start / `exec` 退出 / observation 文件都不是 PASS。
 
-不调 `Agent.session` = 脚本路径。Verifier 有 observation 时复用 Trajectory 那种步骤卡片；没有则保持文件树。本机翻看用 `ageval view`。
+不调 `Agent.session` = 脚本路径。Verifier 有 observation 时复用 Trajectory 那种步骤卡片；没有则保持文件树。本地查看用 `ageval view`。

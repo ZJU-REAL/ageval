@@ -1,11 +1,11 @@
 ---
 title: 本地结果查看器
-description: 浏览器里翻本机跑次，不连 Registry。
+description: 在浏览器里查看本地运行结果，不连 Registry。
 ---
 
-整份 dataset 跑完或只跑一题后，想对照分数、点开轨迹、复制命令——用 Viewer。它读打开的那一个 Dataset：`.ageval/suite-runs/` 与 `.ageval/runs/`，不连 Registry。
+整份 dataset 跑完，或只跑一题之后，要对照分数、点开轨迹、复制命令，用 Viewer。它只读你打开的那一份 dataset：`.ageval/suite-runs/` 和 `.ageval/runs/`，不连 Registry。
 
-Jobs 表可以删掉本机一行 Job（先 preview 路径，再确认）。删 suite 会一并删掉它引用的全部 Attempt，不会再以 single 冒出来。不能从 suite 里单独删一条 Attempt。这是擦本地证据，不是 Registry 删除（`ageval results delete` 是另一对象）。CLI 对等：`ageval jobs delete --local <dataset> --job <id> --yes`。
+Jobs 表可以删掉本地一行 Job（先 preview 路径，再确认）。删掉 Kind 为 suite 的那一行，会把它引用的各次运行一起删掉，不会再以 single 冒出来。不能从 suite 里单独删一次运行。这是删本地结果，不是 Registry 上的删除（`ageval results delete` 是另一对象）。CLI 对等：`ageval jobs delete --local <dataset> --job <id> --yes`。
 
 置顶和备注只存在**这个浏览器**，不写进 evidence / lock / Registry。
 
@@ -36,13 +36,13 @@ ageval view examples/datasets/minimal-demo --open /jobs/<id>
 
 | 层 | 内容 |
 | --- | --- |
-| Jobs | 本地 suite 跑次 **和** 单题 Attempt（Kind：suite / single）。Kind / Source 是过滤器；suite 的 Source 只列 task id |
-| Tasks | 每题状态 / 分数。suite 题且只有 1 次 Attempt 时，点进后直接打开该 Attempt |
+| Jobs | 本地整份 dataset 的运行结果，以及只跑一题的结果（Kind：suite / single）。Kind / Source 是过滤器；suite 的 Source 只列 task id |
+| Tasks | 每题状态 / 分数。整份跑完且一题只有一次运行时，点进后直接打开那一次 |
 | Attempt | 结果条、**Timing**（有数据时还有 **Tokens**）、角色、证据页签（Trajectory / Agent / …） |
 
 Timing 来自 Attempt `phase_timing`（prepare / run / evaluate / cleanup）；hover 色条看分段耗时。  
-轨迹按轨迹文件顺序展示：一段 thought，紧接着它调用的工具，再下一段 thought。轨迹行（thought / `tool_call` / 最终 assistant）若带 `elapsed_ms`，步骤头会显示该步耗时；没有就不画标签——Viewer 不会用文件 mtime 或页面时钟补造。  
-耗时、token、单步耗时 **只是参考**，不是 PASS。轨迹也不是评分依据。Trajectory 里每条 **tool-call**（以及过长行）可折叠；观测 PASS 条上有全部展开 / 全部收起，与 Hub Attempt 页一致。
+轨迹按轨迹文件顺序展示：一段 thought，紧接着它调用的工具，再下一段 thought。轨迹行（thought / `tool_call` / 最终 assistant）若带 `elapsed_ms`，步骤头会显示该步耗时；没有就不画标签。Viewer 不会用文件 mtime 或页面时钟补造。  
+耗时、token、单步耗时 **只是参考**，不是 PASS。轨迹也不是评分依据。Trajectory 里每条 **tool-call**（以及过长行）可折叠；观测 PASS 条上有全部展开 / 全部收起，和 Hub 上 Attempt 页一样。
 
 **Verifier**：缺省是 `result.json` + `evaluation/` 文件树。若有 `evaluation/observation.jsonl`（evaluate 阶段 SDK invoke，LLM-as-judge），该页签复用 Trajectory 的步骤卡片；Agent 的 Trajectory 页仍只读根 `trajectory.jsonl`。观察不是 PASS。
 

@@ -1,6 +1,6 @@
 ---
-title: Run a Dataset suite
-description: Run every task; optional Always-k and pass@k; aggregates are not suite-level PASS.
+title: Run the whole dataset
+description: Run every task; optional Always-k and pass@k; aggregates are not a PASS for the whole dataset.
 ---
 
 Omit `--task` and `ageval run` schedules **every** member — each locks, runs, and evaluates independently:
@@ -69,13 +69,13 @@ ageval cancel <suite_run_id> --dataset examples/datasets/minimal-demo
 - **status** — ControlStore record + suite progress when present  
 - **cancel** — writes `cancel.requested` (no new units); SIGTERM stored pid if any  
 
-Unlike [Campaign](./campaign.mdx): suite is the **task axis**; campaign sweeps **parameters on one task**. Always-k is **not** the campaign matrix axis.
+Running the whole dataset is the **task axis**; campaign sweeps **parameters on one task**. Always-k is **not** the campaign matrix axis.
 
-Runs land under `.ageval/suite-runs/` — browse Timing bars with [Viewer](./local-viewer.mdx).
+Results land under `.ageval/suite-runs/`. Open the dataset in the local viewer to see Timing bars.
 
 ## Upload to Hub (Leaderboard / Jobs)
 
-Hub **Dataset → Leaderboard** and **Task → Jobs** list Registry **suite** rows — not a bare attempt feed.
+Hub **Dataset → Leaderboard** and **Task → Jobs** list whole-dataset results in Registry, not a feed of single-task uploads.
 
 | Step | Command |
 | --- | --- |

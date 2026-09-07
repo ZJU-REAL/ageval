@@ -1,6 +1,6 @@
 ---
 title: 溯源（Provenance）
-description: 可选声明题目从哪移植来；不是分数。
+description: 可选声明这题从哪移植来；不是分数。
 ---
 
 ```yaml
@@ -15,5 +15,5 @@ provenance:
     known_gaps: []
 ```
 
-可写在根 `ageval.yaml`（套件默认）或成员 `task.yaml`。成员一旦写了，**整块替换**根默认。  
+可写在根 `ageval.yaml`（dataset 默认）或成员 `task.yaml`。成员一旦写了，**整块替换**根默认。  
 `port` 类一般要有 `upstream.url` 和 `ref` 或 `commit`。这与 PASS 无关。

@@ -3,11 +3,11 @@ title: 导出证据
 description: 把一次运行的材料打包带走。
 ---
 
-证据默认已在 `.ageval/runs/<id>/`。写入成功后默认可持久树是 `lock.json` / `result.json` / `trajectory.jsonl` / `summary.json` / `task-artifacts/**`。`--keep-vendor-raw`（默认关）才保留 invoke 的 `backend_raw/`、layer B 与 `evaluator_raw.json`。`--keep-workspace` 只管宿主 work root，与 vendor raw 无关。
+证据默认已在 `.ageval/runs/<id>/`。写入成功后默认留下 `lock.json` / `result.json` / `trajectory.jsonl` / `summary.json` / `task-artifacts/**`。`--keep-vendor-raw`（默认关）才保留 invoke 的 `backend_raw/`、layer B 与 `evaluator_raw.json`。`--keep-workspace` 只管宿主 work root，与 vendor raw 无关。
 
 ```bash
 ageval evidence --help
 ageval run <dataset> --task <id> --keep-vendor-raw
 ```
 
-导出同样不能夹带 secret；轨迹**不能**当 PASS。随手翻看优先用 [Viewer](./local-viewer.mdx)。
+导出不能夹带 secret。轨迹**不能**当 PASS。本地结果用 `ageval view` 打开。

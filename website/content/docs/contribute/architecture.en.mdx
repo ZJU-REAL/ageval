@@ -1,6 +1,6 @@
 ---
 title: Architecture map
-description: Source layout and structure authority.
+description: Source tree and how modules relate.
 ---
 
 Module placement, dependency direction, lifecycle, and data flow: **[`ARCHITECTURE.md`](https://github.com/ZJU-REAL/ageval/blob/main/ARCHITECTURE.md)** (current tree, emit map, failure table).
@@ -12,5 +12,3 @@ Module placement, dependency direction, lifecycle, and data flow: **[`ARCHITECTU
 | `apps/viewer` · `apps/hub` | Local Jobs / Hub SPA |
 | `website/` | This site |
 | `docs/` | Design |
-
-Design notes: in-repo `docs/design/`. An executor does not import docker or e2b; it asks the environment for `attach_stdio` or `exec`, and lock checks before invoke. Wiring: `docs/design/11`.

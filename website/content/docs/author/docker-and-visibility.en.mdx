@@ -1,6 +1,6 @@
 ---
-title: Docker and visibility
-description: When to use docker, Dockerfile, what the agent can see.
+title: Docker and what the agent can see
+description: When to use docker, the Dockerfile, and what the agent can see.
 ---
 
 ## local vs docker
@@ -21,7 +21,7 @@ environment: docker    # or local / e2b / ssh / daytona
 
 `docker` (and `e2b` / `daytona`) need **`environment/Dockerfile`** (or an image option) or lock fails. Same recipe for all three.
 
-## Official base Python
+## Official image Python
 
 ```yaml
 environment: docker
@@ -29,11 +29,11 @@ environment_options:
   python_version: "3.13"   # omit = 3.12
 ```
 
-`python_version` selects the official Attempt base CPython minor. A task `FROM ageval-attempt:base` is rewritten onto the versioned tag (e.g. `ageval-attempt:py3.13`), so 3.12 and 3.13 bases coexist. The shape must be `^\d+\.\d+$`; empty / `latest` / `3` are rejected once. A base that cannot be pulled fails with no fallback to 3.12. ACP engine versions are unaffected. When the scoring box omits its own `evaluate_host.environment_options.python_version`, it inherits this job value.
+`python_version` selects the official image CPython minor. A task `FROM ageval-attempt:base` is rewritten onto the versioned tag (e.g. `ageval-attempt:py3.13`), so 3.12 and 3.13 images can both stay on the machine. The shape must be `^\d+\.\d+$`; empty / `latest` / `3` are rejected once. An image that cannot be pulled fails with no fallback to 3.12. ACP engine versions are unaffected. When the scoring host omits its own `evaluate_host.environment_options.python_version`, it inherits this job value.
 
 Plugin bake layers read host `AGEVAL_PIP_INDEX` as `PIP_INDEX_URL`; unset keeps pip's default index.
 
-## Visibility
+## What the agent can see
 
 | Path | Who |
 | --- | --- |

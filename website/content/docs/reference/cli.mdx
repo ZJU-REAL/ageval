@@ -11,7 +11,7 @@ ageval lock <dataset> --task <id>
 ageval lock <dataset> --task <id> --probe
 ageval run <dataset> --task <id>
 ageval run <dataset> --task <id> --probe
-ageval run <dataset>                         # suite
+ageval run <dataset>                         # 整份 dataset
 ageval run official/demo@0.1.0 --dir tmp --task <id>
 ageval run <dataset> --max-concurrent-tasks 2
 ageval run <dataset> -k 5                    # Always-k（每题 k 次）
@@ -43,27 +43,27 @@ ageval results upload|attach-agent|request|inbox|decide|share|unshare|set-visibi
 
 | 选项 | 含义 |
 | --- | --- |
-| `--task <id>` | 只跑该成员；省略 = 整包 suite |
-| `--max-concurrent-tasks N` | 并行 unit 上限；**只加速**，不改 k / PASS |
-| `--n-attempts` / `-k N` | Always-k：每题 N 次独立 Attempt（默认 1）；**CLI/job only** |
-| `--resume-suite <suite_run_id>` | 并进已有 job：跳过已完成 unit，追加 Attempt，重算 pass@k / pass^k |
-| `--replace-slot` | 配合 `--resume-suite --task`：重跑该已完成槽；新 Attempt；旧行进 `previous[]` |
+| `--task <id>` | 只跑该成员；省略 = 整份 dataset 跑完 |
+| `--max-concurrent-tasks N` | 并行上限；**只加速**，不改 k / PASS |
+| `--n-attempts` / `-k N` | Always-k：每题 N 次独立运行（默认 1）；只写在 CLI / job 上 |
+| `--resume-suite <suite_run_id>` | 并进已有 job：跳过已完成的，追加一次运行，重算 pass@k / pass^k |
+| `--replace-slot` | 配合 `--resume-suite --task`：重跑那一行；新的一次运行；旧行进 `previous[]` |
 | `--attempt-index N` | Always-k 要换的格（默认 0）。只与 `--replace-slot` 一起用 |
 | `--keep-workspace` | 清理后保留环境工作根（默认删除）。 |
-| `--keep-vendor-raw` | seal 后保留 vendor raw / layer B；默认丢掉。与 `--keep-workspace` 独立 |
+| `--keep-vendor-raw` | 写入成功后保留 vendor raw / layer B；默认丢掉。与 `--keep-workspace` 独立 |
 | `--dir <path>` | 只配合 Hub ref：在 `<path>/<dataset_id>/` 找包；已匹配则复用 |
-| `--agent` | 绑定 `ageval.agent/1` harness（`pi`、`org/name@version` 或本地路径）；与 `--profiles` 互斥 |
+| `--agent` | 绑定 `ageval.agent/1` Agent 包（`pi`、`org/name@version` 或本地路径）；与 `--profiles` 互斥 |
 | `--model` | 改这次 run 已绑角色的 `binding.model`；须配合 `--agent`。不是 `results upload-suite --model` |
-| `--set` / `--profiles` | 见下；与 job binding 相关 |
-| `--probe` | 只做可行性：按绑定 / `environment` 打印 plan + readiness。不 invoke Agent、不 bake、不改 lock digest。选中路径不满足则 exit 1。 |
-| `--json` | stdout 打完整结果文档。TTY 默认是短 recap（suite 含 `summary` 路径与 `ageval view` / `upload-suite`）；管道默认仍是 JSON。 |
+| `--set` / `--profiles` | 覆盖项 / 换一份配置文件 |
+| `--probe` | 只做可行性：按绑定 / `environment` 打印 plan + readiness。不 invoke Agent、不写入镜像、不改 lock digest。选中路径不满足则 exit 1。 |
+| `--json` | stdout 打完整结果文档。TTY 默认是短 recap（整份跑完时含 `summary` 路径与 `ageval view` / `upload-suite`）；管道默认仍是 JSON。 |
 
 ## `status` / `cancel`
 
 | 命令 | 含义 |
 | --- | --- |
-| `ageval status <run_id\|suite_run_id>` | ControlStore；suite 可加 `--dataset` 读 `progress.json` |
-| `ageval cancel <run_id\|suite_…>` | 单 Run 或 suite job；suite 可加 `--dataset` 写 `cancel.requested` |
+| `ageval status <run_id\|suite_run_id>` | 进度记录；整份跑完时可加 `--dataset` 读 `progress.json` |
+| `ageval cancel <run_id\|suite_…>` | 一次运行或整份 job；整份跑完时可加 `--dataset` 写 `cancel.requested` |
 
 ## `--set`
 

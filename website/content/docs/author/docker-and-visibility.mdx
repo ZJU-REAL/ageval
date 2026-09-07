@@ -1,6 +1,6 @@
 ---
-title: Docker 与可见性
-description: 何时用 docker、Dockerfile、agent 能看见什么。
+title: Docker 与 Agent 能看见的文件
+description: 何时用 docker、Dockerfile、Agent 能看见什么。
 ---
 
 ## local 还是 docker
@@ -21,7 +21,7 @@ environment: docker    # 或 local / e2b / ssh / daytona
 
 选 `docker`（或 `e2b` / `daytona`）时，成员下应有 **`environment/Dockerfile`**（或 image 选项），否则 lock 失败。docker / e2b / daytona 用同一份配方。
 
-## 官方基座的 Python
+## 官方镜像的 Python
 
 ```yaml
 environment: docker
@@ -29,7 +29,7 @@ environment_options:
   python_version: "3.13"   # 省略 = 3.12
 ```
 
-`python_version` 只选官方 Attempt 基座的 CPython minor。成员 `FROM ageval-attempt:base` 会解析到版本化 tag（如 `ageval-attempt:py3.13`），3.12 与 3.13 本地基座并存。形状必须是 `^\d+\.\d+$`；空串 / `latest` / `3` 一次拒绝。上游 tag 拉不到就失败，不回退 3.12。ACP 引擎版本不受此旋钮影响。打分 Host 省略自己的 `evaluate_host.environment_options.python_version` 时沿用 job 这份。
+`python_version` 只选官方镜像的 CPython minor。成员 `FROM ageval-attempt:base` 会解析到版本化 tag（如 `ageval-attempt:py3.13`），3.12 与 3.13 两套镜像可以同时留在本地。形状必须是 `^\d+\.\d+$`；空串 / `latest` / `3` 一次拒绝。上游 tag 拉不到就失败，不回退 3.12。ACP 引擎版本不受这项影响。打分 Host 省略自己的 `evaluate_host.environment_options.python_version` 时沿用 job 这份。
 
 插件 bake 层构建可读宿主 `AGEVAL_PIP_INDEX`，作为 `PIP_INDEX_URL`；未设置则用 pip 默认源。
 

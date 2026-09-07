@@ -1,9 +1,9 @@
 ---
 title: 环境
-description: 本机、Docker、e2b、ssh、daytona，同一条 ACP 链。
+description: 本机、Docker、e2b、ssh、daytona；ACP 用法相同。
 ---
 
-环境写在 `profiles.yaml` 的 `environment:`。ACP 只要 `attach_stdio`，不写 `plugin_id: docker`。换环境不必改 ACP。`exec` 是同一服务上的一次性命令，不是第二种环境。docker 在 `host.start()` 把绑定的 `options.entry` bake 进题图；`after_environment_ready` 探测命中则不再 `npm i`。换 `model` 不重建镜像，换 `entry` 会。
+环境写在 `profiles.yaml` 的 `environment:`。ACP 只要求环境提供 `attach_stdio`，配置里不要写 `plugin_id: docker`。换环境不用改 ACP。`exec` 是同一环境上的一次性命令，不是另一种环境。docker 会在启动时把绑定的 `options.entry` 写入镜像；镜像里已经有这个入口，就不会再 `npm i`。换 `model` 不重建镜像，换 `entry` 会重建。
 
 | 环境 | 怎么开 | 真跑条件 |
 | --- | --- | --- |

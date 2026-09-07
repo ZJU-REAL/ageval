@@ -1,6 +1,6 @@
 ---
 title: 首次运行
-description: lock 配置、跑 task，并找到结果目录。
+description: 锁定配置、跑一道 task，找到结果目录。
 ---
 
 CLI 的 dataset 参数始终是 **dataset 根**（含 `ageval.yaml` 的目录）或 **registry ref**（`<dataset_id>@<version>`），不是 `tasks/<id>/`。
@@ -15,13 +15,13 @@ ageval lock <org>/<name>@<version> --task <task-id>
 ageval run  <org>/<name>@<version> --task <task-id>
 ```
 
-登录与 `registry list` 默认打公开 Hub，不必先设 `AGEVAL_REGISTRY_URL`。registry ref 会把已发布的 dataset 下载并缓存到本机（`ageval cache` 查看 / 清理），再按锁定配置执行。默认 profiles 多为 **docker** 环境，需要本机 Docker 引擎；实际运行 coding agent 还需要 ACP 入口与凭据。
+登录与 `registry list` 默认连公开 Hub，不必先设 `AGEVAL_REGISTRY_URL`。registry ref 会把已发布的 dataset 下载并缓存到本机（`ageval cache` 查看 / 清理），再按锁定配置执行。默认 profiles 多为 **docker** 环境，需要本机 Docker 引擎；实际运行 coding agent 还需要 ACP 入口与凭据。
 
 ## 仓库内示例
 
 公开示例 [`examples/datasets/minimal-demo`](https://github.com/ZJU-REAL/ageval/tree/main/examples/datasets/minimal-demo) 随仓库 checkout 提供：
 
-<Callout type="info" title="跑之前">
+<Callout type="info" title="开始之前">
 
 minimal-demo 默认 docker 环境，先确认 Docker 引擎已启动；再用 `ageval executors -v` 确认要用的 agent 是 `engine_ready` / `acp_entry_ready`，缺密钥会标 `credential_missing`。
 

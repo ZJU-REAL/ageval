@@ -31,11 +31,11 @@ agent_profiles:
 | `api_key` | 可选；`${ENV_NAME}` locator |
 | `base_url` | 可选；字面 URL 或 `${ENV_NAME}` |
 
-不要在 yaml 里写 command / version / install——版本钉在安装与镜像构建。
+不要在 yaml 里写 command / version / install。版本钉在安装与镜像构建。
 
 evaluate 阶段的 ACP（如 `judge`）在 task.yaml 写了 `evaluation.environments`（按名的打分环境表）时，必须 `Agent.session("judge", environment="<name>")`，连到对应的那个打分 Host。run 阶段写了名字、或表里有名字时省略名字，一次失败。HTTP judge 忽略 `environment=`。
 
-## 本机就绪
+## 本机是否已安装
 
 ```bash
 ageval executors -v
@@ -45,8 +45,8 @@ ageval executors -v
 
 | 信号 | 含义 |
 | --- | --- |
-| `engine_ready` | 该 entry 的 agent 运行时（`pi` / `codex` 这些 CLI）本机就绪 |
-| `acp_entry_ready` | 运行时之上的 ACP 入口就绪 |
+| `engine_ready` | 该 entry 的 agent 运行时（`pi` / `codex` 这些 CLI）已装在本机 |
+| `acp_entry_ready` | 运行时之上的 ACP 入口已就绪 |
 | `credential_missing` | 声明的 credential 环境变量全空、binding 又没写 `api_key` |
 
 需要密钥的 entry（如 `pi`）在 `--probe` / session-open 过不了检查就不能进入运行；支持 OAuth / 本机登录的 entry 只警告。子进程环境只投影 allowlist（`PATH` / `HOME` / `LANG`、entry 声明的 credential 名、binding 的 `api_key` / `base_url`）；宿主里未声明的 token 进不了 entry。

@@ -1,24 +1,24 @@
 ---
 title: Results and PASS
-description: How to read Result; pass@k is a job metric, not suite PASS.
+description: How to read Result; pass@k is a job metric, not a PASS for the whole dataset.
 ---
 
-## Hard boundaries
+## Do not mix these up
 
 1. `run.py` completed **≠** PASS  
 2. Trajectory / tokens / agent self-report **≠** score (including `evaluation/observation.jsonl`)  
 3. PASS / FAIL comes only from the `evaluator.py` return value  
-4. Suite / job aggregates (including pass@k) **≠** suite-level PASS authority  
+4. Whole-dataset / job aggregates (including pass@k) **≠** a PASS for the whole dataset  
 
 ## On the terminal
 
-- **Result** — status and evaluation for this Attempt  
-- **`logs`** — Attempt evidence locator under the Dataset root (e.g. `.ageval/runs/<run_id>`; typical when `k=1`)  
-- Suite `pass_rate` / `mean_score` — observational  
+- **Result**: status and evaluation for this run  
+- **`logs`**: evidence path under the dataset root (e.g. `.ageval/runs/<run_id>`; typical when `k=1`)  
+- Whole-dataset `pass_rate` / `mean_score`: observational only  
 
 ## Always-k and pass@k / pass^k
 
-After Always-k (`-k` / `--n-attempts`), suite `summary.json` → `metrics` includes:
+After Always-k (`-k` / `--n-attempts`), the whole-dataset `summary.json` → `metrics` includes:
 
 | Key | Meaning |
 | --- | --- |
@@ -27,7 +27,7 @@ After Always-k (`-k` / `--n-attempts`), suite `summary.json` → `metrics` inclu
 | `n_attempts` | Always-k budget for this job (CLI / job only — not `task.yaml`) |
 | `k_values` | k list computed for this summary |
 | `per_task` | Per-task `n` / `c` and per-k maps (audit) |
-| Suite score | **Mean over tasks** for that metric (omit tasks with too few samples) |
+| Whole-dataset score | **Mean over tasks** for that metric (omit tasks with too few samples) |
 
 ### Contract: `metrics.pass_at_k` / `pass_power_k`
 
@@ -56,7 +56,7 @@ Each key is a **stringified k** (`"1"`, `"2"`, `"5"`, …). Value shape:
 
 **`task_refs` (multi-attempt):** may include `n`, `c`, `attempt_run_ids` (plus primary `run_id`) for audit and `--with-attempts`.
 
-These are **observational aggregates**, not suite-level PASS.
+These are **observational aggregates**, not a PASS for the whole dataset.
 
 ## What Hub actually lists
 
@@ -66,12 +66,12 @@ These are **observational aggregates**, not suite-level PASS.
 | `ageval results upload-suite --suite-run …` | Suite row + metrics / task_refs | **Leaderboard** only when complete and release-bound; incomplete or draft-bound rows stay on Task Jobs |
 | `… --with-attempts` | Also packs attempt dirs | Jobs can open Attempt detail / trajectory |
 
-So: to show a package run on the public board, use **suite run → upload-suite** against a published release, not attempt-only upload.
+So: to show whole-dataset results on the public board, **run the whole dataset → upload-suite** against a published release. Uploading one task is not enough.
 
-## Browse
+## Local view
 
-[Viewer](../run/local-viewer.mdx).  
-Attempt pages may show **Timing** (and **Tokens** when present). Trajectory steps follow file order (thought next to the tools it precedes). A step may show a duration when the sealed row has `elapsed_ms`. Time / tokens / step duration are **hints**, not PASS.
+`ageval view` opens Jobs → Tasks → Attempt.  
+Attempt pages may show **Timing** (and **Tokens** when present). Trajectory steps follow file order (thought next to the tools it precedes). A step may show a duration when the row has `elapsed_ms`. Time, tokens, and step duration are **hints**, not PASS.
 
 ## Failure kinds
 

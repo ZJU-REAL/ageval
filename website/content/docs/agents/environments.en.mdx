@@ -1,9 +1,9 @@
 ---
 title: Environments
-description: Host, Docker, e2b, ssh, daytona on one ACP chain.
+description: Host, Docker, e2b, ssh, daytona. ACP does not change.
 ---
 
-Set the environment in `profiles.yaml` with `environment:`. ACP only needs `attach_stdio`. Do not write `plugin_id: docker`. Changing the environment does not change ACP. `exec` is a one-shot method on the same service, not a second environment. On docker, `host.start()` bakes the bound `options.entry` onto the task image; `after_environment_ready` skips `npm i` when that bake already matches. Switching `model` does not rebuild; switching `entry` does.
+Set the environment in `profiles.yaml` with `environment:`. ACP only needs the environment to provide `attach_stdio`. Do not write `plugin_id: docker`. Changing the environment does not change ACP. `exec` is a one-shot command on the same environment, not a second environment. On docker, startup writes the bound `options.entry` into the image; if that entry is already there, it does not run `npm i`. Switching `model` does not rebuild; switching `entry` does.
 
 | Environment | Opens | To actually run |
 | --- | --- | --- |

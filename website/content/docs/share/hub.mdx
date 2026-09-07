@@ -1,9 +1,9 @@
 ---
 title: Hub
-description: 远程 Dataset 目录、组织、Jobs 运行结果与 Leaderboard。
+description: 远程 dataset 目录、组织、Jobs 和排行榜。
 ---
 
-Hub（`apps/hub`）是连 Registry 的网页端，浏览共享的 dataset、插件、Agent 与跑次结果。浏览器里点 **Sign in with GitHub** 登录即用；CLI 仍走 Device Flow。
+Hub（`apps/hub`）是连 Registry 的网页端，浏览共享的 dataset、插件、Agent 和运行结果。浏览器里点 **Sign in with GitHub** 登录即用；CLI 仍走 Device Flow。
 
 ## 本地开发
 
@@ -26,7 +26,7 @@ pnpm dev   # http://127.0.0.1:5174
 | `/datasets` | 列表（Explore / Your organizations，默认 Explore） |
 | `/datasets/:id` | README · Tasks · Shared（有 shared/ 时）· Overlays（声明了 `overlays:` 时）· Leaderboard |
 | `/datasets/:id/tasks/:task` | README · Files（Local \| Shared \| Overlays）· Jobs |
-| `/plugins` | 插件 marketplace |
+| `/plugins` | 插件市场 |
 | `/plugins/:id` | 插件详情（声明接入点时间线 · 文件预览 · CLI 安装命令） |
 | `/agents` | Agent 目录（内置 Agent 包在前，再是 upload） |
 | `/inbox` | 调用方可决定的待处理上榜 / Performance 申请 |
@@ -37,23 +37,23 @@ pnpm dev   # http://127.0.0.1:5174
 | `/organizations/:orgId` | 概览（成员 · Dataset · 插件 · Agent）· 设置 |
 | `/users/:login` | 公开用户页（官方组织与公开 Dataset / 插件 / Agent；未登录可看） |
 | `/datasets/:id/tasks/:task/attempts/:runId` | 远程 Attempt 详情（需已上传对应运行产物） |
-| `/datasets/:id/suites/:suiteRunId` | suite run 详情（Profiles / Plugin / Jobs / Share） |
+| `/datasets/:id/suites/:suiteRunId` | 整份运行详情（Profiles / Plugin / Jobs / Share） |
 
-命令与部署细节见 `apps/hub/README.md`、`services/registry/README.md`。
+命令与部署写在 `apps/hub/README.md`、`services/registry/README.md`。
 
 ## Dataset 与 Task
 
 - 列表按组织分组：组头是组织名与描述，行里有名称、描述、task 数与更新日期；点开读 README、预览 Task 文件
-- 版本切换：有权限的人能看到 **draft (current)**，其他人切已发布的 release；org owner 可发布 draft、改可见性、删版本
+- 版本切换：有权限的人能看到 **draft (current)**，其他人切已发布的 release；org owner 可发布 draft、改公开/私有、删版本
 - 包声明了根 `shared/` 或 `overlays:` 时，Task **Files** 顶栏多出 **Shared** / **Overlays** 范围（默认 Local）
-- Task 下的 **Jobs** 列出已上传的跑次，能点进详情看轨迹（界面与本机 Viewer 相近）
+- Task 下的 **Jobs** 列出已上传的运行结果，能点进详情看轨迹（界面和本地 Viewer 相近）
 
 ## Leaderboard
 
-- **Public** 只列完备、绑定 release、且经 dataset 所属组织 owner 批准上榜的 suite；**Internal** 用同一张表列当前可见的缺题 / draft 绑定跑次
-- 同一 tab 可切 **Table** / **Pareto** / **Waffle**。Pareto 横轴是整次 suite **全部 job** 的花费、token 或时间加总；没有 agent 上报 USD 时用目录价估算（不是账单）
-- 指标是观测汇总，不是 suite PASS；表头可排序
-- 点行打开 suite 详情页：**Profiles** / **Plugin** / **Jobs**，附无密钥 YAML 与再跑命令。上传者可 Share、Delete，或 Attach 一条已发布的 model / agent 溯源
+- **Public** 只列完备、绑定 release、且经 dataset 所属组织 owner 批准上榜的整份运行；**Internal** 用同一张表列当前可见的缺题 / draft 绑定结果
+- 同一 tab 可切 **Table** / **Pareto** / **Waffle**。Pareto 横轴是整份运行里 **全部 job** 的花费、token 或时间加总；没有 agent 上报 USD 时用目录价估算（不是账单）
+- 指标是观测汇总，不是整份 dataset 的 PASS；表头可排序
+- 点行打开详情页：**Profiles** / **Plugin** / **Jobs**，附无密钥 YAML 与再跑命令。上传者可 Share、Delete，或 Attach 一条已发布的 model / agent 溯源
 - 上榜与 Performance 申请由组织 owner 在 **Inbox** 批量处理
 
 ## 插件、Agent 与模型
@@ -83,22 +83,22 @@ Jobs 列表里，已有运行产物的行可以点进去看；没上传的会显
 
 | 你想看 | 需要上传 | 怎么跑 / 传 |
 | --- | --- | --- |
-| Dataset **Public Leaderboard** 一行 | **完备**、绑定 **release**、且 Dataset org owner 已批准上榜的 suite | 先 `ageval publish --draft` 再 `ageval release`（或直接 `ageval publish`）→ 省略 `--task` 的 `ageval run` → `upload-suite --suite-run <id>` → `ageval results request --kind leaderboard_list --suite-run <id>`（owner 在 Hub Inbox 批准） |
-| Leaderboard **Internal** | 当前可见的缺题或 draft 绑定 suite | 同样 `upload-suite`；不会出现在 Public |
-| Task **Jobs** 可点开 Attempt / 轨迹 | suite + **attempt 证据** | `upload-suite --with-attempts`（或等价挂上 task_refs 的 attempt）；缺题 / draft 绑定也出现在这里 |
-| 给已上传 suite 补一个 finished 成员 | 新 Attempt + suite 现行指针 | 本机 `--resume-suite --replace-slot`，再 `upload-suite --suite-run <id> --task <id> [--run <run_id>]`。Hub / Viewer 默认现行；版本列表是 `patch N` + 该 Attempt 开始时间 |
-| 只归档一次 Attempt | `ageval results upload --run <run_id>` | 可以进 Registry，但 **通常不会**出现在 Leaderboard |
+| Dataset **Public Leaderboard** 一行 | **完备**、绑定 **release**、且 Dataset org owner 已批准上榜的整份运行 | 先 `ageval publish --draft` 再 `ageval release`（或直接 `ageval publish`）→ 省略 `--task` 的 `ageval run` → `upload-suite --suite-run <id>` → `ageval results request --kind leaderboard_list --suite-run <id>`（owner 在 Hub Inbox 批准） |
+| Leaderboard **Internal** | 当前可见的缺题或 draft 绑定的整份运行 | 同样 `upload-suite`；不会出现在 Public |
+| Task **Jobs** 可点开 Attempt / 轨迹 | 整份运行 + 各次运行的证据 | `upload-suite --with-attempts`（或等价挂上 task_refs 的各次运行）；缺题 / draft 绑定也出现在这里 |
+| 给已上传的整份运行补一个 finished 成员 | 新的一次运行 + 现行指针 | 本机 `--resume-suite --replace-slot`，再 `upload-suite --suite-run <id> --task <id> [--run <run_id>]`。Hub / Viewer 默认现行；版本列表是 `patch N` + 该次运行开始时间 |
+| 只归档一次运行 | `ageval results upload --run <run_id>` | 可以进 Registry，但 **通常不会**出现在 Leaderboard |
 
 ```bash
-# 正确：整包 suite → 上榜
+# 正确：整份 dataset 跑完再上榜
 ageval run <dataset> --profiles <profiles.yaml>
 ageval results upload-suite <dataset|id@version> --suite-run <8-hex> --public --with-attempts
 
-# 不够：单题 attempt upload 单独上传 → 榜上经常空白
+# 不够：只上传单题的一次运行 → 榜上经常空白
 # ageval run <dataset> --task <id>
 # ageval results upload <dataset> --run <run_id>
 ```
 
-Dataset Leaderboard 默认列出该包全部过门 suite。页顶版本切换只切 README / Tasks；榜上 Public 右侧的版本选择器才按 suite 的 `dataset_version` 过滤，默认 All versions。
+Dataset Leaderboard 默认列出该包全部过门的整份运行。页顶版本切换只切 README / Tasks；榜上 Public 右侧的版本选择器才按这次上传的 `dataset_version` 过滤，默认 All versions。
 
 Hub 前端必须指向与 `ageval login` / `~/.ageval/credentials` **同一** Registry（本机开发常见 `127.0.0.1:8700`）。

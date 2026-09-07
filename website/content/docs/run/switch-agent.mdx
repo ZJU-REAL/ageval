@@ -5,7 +5,7 @@ description: 用 profile、--agent、--model 或 --set 切换 coding-agent 入�
 
 同一题可以声明多个 `agent_profiles`，运行时换「用谁」。
 
-## 先看本机有什么
+## 先看本机装了什么
 
 ```bash
 ageval executors -v
@@ -56,7 +56,7 @@ ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
   --set '/bindings/solver/options/entry="codex"'
 ```
 
-`--set` 只允许白名单指针，例如 `/bindings/solver/options/reasoning_effort="high"`；完整列表见 [CLI](../reference/cli.mdx)。
+`--set` 只允许白名单指针，例如 `/bindings/solver/options/reasoning_effort="high"`。允许的指针列在 CLI 页的 `--set` 表里。
 
 `api_key` 永远写**环境变量名**，不要写密钥本身。可选 profile 字段还有 `options.reasoning_effort`（思考档位）、`options.idle_timeout_seconds`（静默上限）与 `base_url`。
 
