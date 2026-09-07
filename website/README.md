@@ -40,7 +40,7 @@ Open `http://localhost:3000`. Default locale is Simplified Chinese at `/zh-CN`; 
 
 | Env | Meaning |
 | --- | --- |
-| `NEXT_PUBLIC_HUB_URL` | Homepage CTA and docs sidebar link to the Hub SPA. Unset = `http://127.0.0.1:5174`. Empty = hide. |
+| `NEXT_PUBLIC_HUB_URL` | Homepage nav/CTA and docs sidebar link to the Hub SPA. Unset = `http://127.0.0.1:5174`. Empty = hide. |
 | `NEXT_PUBLIC_BASE_PATH` | URL prefix for GitHub project Pages (`/ageval`). Unset for a domain root. Build-time. |
 
 ## Content layout

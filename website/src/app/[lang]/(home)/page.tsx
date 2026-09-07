@@ -130,7 +130,13 @@ export default async function HomePage({ params }: { params: Promise<HomeParams>
         {text.skip}
       </a>
 
-      <LandingNav lang={lang} copy={text.nav} navAria={text.navAria} repoUrl={repoUrl} />
+      <LandingNav
+        lang={lang}
+        copy={text.nav}
+        navAria={text.navAria}
+        repoUrl={repoUrl}
+        hubUrl={hubUrl}
+      />
 
       <main id="main">
         <section className="hero" id="top">
