@@ -9,7 +9,7 @@ import { CatalogHead } from "@/components/page-head";
 import { UnderlineTabs } from "@/components/underline-tabs";
 import { DisplayNameEditor } from "@/components/display-name-editor";
 import { EntityMarkControl } from "@/components/entity-mark-control";
-import { HoverTip, TruncateTip } from "@/components/hover-tip";
+import { DisabledTip, HoverTip, TruncateTip } from "@/components/hover-tip";
 import { OfficialMark } from "@/components/official-mark";
 import { SignInLink } from "@/components/sign-in-button";
 import { Button } from "@/components/ui/button";
@@ -765,31 +765,39 @@ export function OrganizationDetailPage() {
                                   </div>
                                 </TableCell>
                                 <TableCell>
-                                  <Select
-                                    value={m.role === "owner" ? "owner" : "member"}
-                                    disabled={roleBusy || lastOwner}
-                                    onValueChange={(next) => {
-                                      if (
-                                        next !== "owner" &&
-                                        next !== "member"
-                                      ) {
-                                        return;
-                                      }
-                                      if (next === m.role) return;
-                                      void changeRole(m.user_id, next);
-                                    }}
+                                  <DisabledTip
+                                    content={
+                                      lastOwner && !roleBusy
+                                        ? "Promote another member to owner before changing the last owner's role."
+                                        : undefined
+                                    }
                                   >
-                                    <SelectTrigger
-                                      aria-label={`Role for ${m.user_id}`}
-                                      className="h-8 min-w-[7rem] w-auto"
+                                    <Select
+                                      value={m.role === "owner" ? "owner" : "member"}
+                                      disabled={roleBusy || lastOwner}
+                                      onValueChange={(next) => {
+                                        if (
+                                          next !== "owner" &&
+                                          next !== "member"
+                                        ) {
+                                          return;
+                                        }
+                                        if (next === m.role) return;
+                                        void changeRole(m.user_id, next);
+                                      }}
                                     >
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="w-max min-w-0">
-                                      <SelectItem value="owner">owner</SelectItem>
-                                      <SelectItem value="member">member</SelectItem>
-                                    </SelectContent>
-                                  </Select>
+                                      <SelectTrigger
+                                        aria-label={`Role for ${m.user_id}`}
+                                        className="h-8 min-w-[7rem] w-auto"
+                                      >
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent className="w-max min-w-0">
+                                        <SelectItem value="owner">owner</SelectItem>
+                                        <SelectItem value="member">member</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </DisabledTip>
                                 </TableCell>
                                 <TableCell className="overflow-visible text-right">
                                   <div className="flex justify-end gap-2">
@@ -810,23 +818,31 @@ export function OrganizationDetailPage() {
                                         Transfer
                                       </Button>
                                     ) : null}
-                                    <Button
-                                      type="button"
-                                      variant="dangerOutline"
-                                      size="sm"
-                                      disabled={
-                                        lastOwner || memberBusy === removeKey
+                                    <DisabledTip
+                                      content={
+                                        lastOwner
+                                          ? "Promote another owner first — this is the only owner."
+                                          : undefined
                                       }
-                                      onClick={() => {
-                                        
-                                        setOrgDanger({
-                                          kind: "remove",
-                                          userId: m.user_id,
-                                        });
-                                      }}
                                     >
-                                      Remove
-                                    </Button>
+                                      <Button
+                                        type="button"
+                                        variant="dangerOutline"
+                                        size="sm"
+                                        disabled={
+                                          lastOwner || memberBusy === removeKey
+                                        }
+                                        onClick={() => {
+
+                                          setOrgDanger({
+                                            kind: "remove",
+                                            userId: m.user_id,
+                                          });
+                                        }}
+                                      >
+                                        Remove
+                                      </Button>
+                                    </DisabledTip>
                                   </div>
                                 </TableCell>
                               </TableRow>

@@ -45,6 +45,27 @@ export function HoverTip({
   );
 }
 
+/** Tooltip for a disabled control: Radix events never fire on a disabled button,
+ * so the trigger needs this pointer-events span between tooltip and control. */
+export function DisabledTip({
+  content,
+  children,
+  side,
+}: {
+  content?: ReactNode;
+  children: ReactElement;
+  side?: "top" | "right" | "bottom" | "left";
+}) {
+  if (content == null || content === "") return children;
+  return (
+    <HoverTip content={content} side={side}>
+      <span className="inline-flex cursor-not-allowed">
+        {children}
+      </span>
+    </HoverTip>
+  );
+}
+
 /** Visible cap vs unwrapped width on the same node (no ellipsis scrollWidth, no body probe). */
 function isOverflowTruncated(el: HTMLElement): boolean {
   const parent = el.parentElement;

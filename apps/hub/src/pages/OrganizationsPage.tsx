@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { EmptyState, LoadingState } from "@/components/empty-state";
-import { HoverTip } from "@/components/hover-tip";
+import { DisabledTip, HoverTip } from "@/components/hover-tip";
 import { OfficialMark } from "@/components/official-mark";
 import { PageHead } from "@/components/page-head";
 import { SignInButton } from "@/components/sign-in-button";
@@ -540,13 +540,21 @@ export function OrganizationsPage() {
               >
                 Cancel
               </Button>
-              <Button
-                type="button"
-                disabled={createBusy || !orgNameOk}
-                onClick={() => void submitCreate()}
+              <DisabledTip
+                content={
+                  createBusy || orgNameOk || !orgName.trim()
+                    ? undefined
+                    : "Slug must be lowercase letters, digits, hyphen, underscore."
+                }
               >
-                {createBusy ? "Creating…" : "Create"}
-              </Button>
+                <Button
+                  type="button"
+                  disabled={createBusy || !orgNameOk}
+                  onClick={() => void submitCreate()}
+                >
+                  {createBusy ? "Creating…" : "Create"}
+                </Button>
+              </DisabledTip>
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 
 import { EmptyState, LoadingState } from "@/components/empty-state";
+import { DisabledTip } from "@/components/hover-tip";
 import { PageHead } from "@/components/page-head";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -344,27 +345,47 @@ export function InboxPage() {
               disabled={busy || noneSelected}
               label="Canonical model"
             />
-            <Button
-              type="button"
-              size="sm"
-              disabled={
-                busy ||
-                noneSelected ||
-                (needsCanonical && !approveCanonical.trim())
+            <DisabledTip
+              content={
+                busy
+                  ? undefined
+                  : noneSelected
+                    ? "Select at least one request."
+                    : needsCanonical && !approveCanonical.trim()
+                      ? "Pick a canonical model for the selected Performance requests first."
+                      : undefined
               }
-              onClick={() => void decide("approve")}
             >
-              Approve
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={busy || noneSelected}
-              onClick={() => void decide("reject")}
+              <Button
+                type="button"
+                size="sm"
+                disabled={
+                  busy ||
+                  noneSelected ||
+                  (needsCanonical && !approveCanonical.trim())
+                }
+                onClick={() => void decide("approve")}
+              >
+                Approve
+              </Button>
+            </DisabledTip>
+            <DisabledTip
+              content={
+                busy || !noneSelected
+                  ? undefined
+                  : "Select at least one request."
+              }
             >
-              Reject
-            </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy || noneSelected}
+                onClick={() => void decide("reject")}
+              >
+                Reject
+              </Button>
+            </DisabledTip>
           </div>
         </div>
 

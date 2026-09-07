@@ -2,6 +2,7 @@ import { CircleMinus, Settings, Share2, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { AgentSearchModal, attachSpecFromPackage } from "@/components/agent-search-modal";
+import { DisabledTip } from "@/components/hover-tip";
 import { FieldLabel } from "@/components/field-label";
 import { LabMark } from "@/components/lab-mark";
 import { ModelSearchModal } from "@/components/model-search-modal";
@@ -617,16 +618,26 @@ export function ResultOwnerOps({
             .
           </p>
           <div className="flex justify-end">
-            <Button
-              type="button"
-              size="sm"
-              disabled={
-                busy || !agentRef.trim() || Boolean(matchingPerformance)
+            <DisabledTip
+              content={
+                matchingPerformance
+                  ? "Performance request pending. Waiting on the agent org owner."
+                  : agentRef.trim()
+                    ? undefined
+                    : "Pick an agent above first."
               }
-              onClick={() => void attachOrRequest()}
             >
-              {matchingPerformance ? "Pending" : "Apply"}
-            </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={
+                  busy || !agentRef.trim() || Boolean(matchingPerformance)
+                }
+                onClick={() => void attachOrRequest()}
+              >
+                {matchingPerformance ? "Pending" : "Apply"}
+              </Button>
+            </DisabledTip>
           </div>
           {matchingPerformance ? (
             <p className="text-sm text-body">
@@ -695,7 +706,10 @@ export function ResultOwnerOps({
             }}
             disabled={busy}
           >
-            <SelectTrigger className="h-8 min-w-0 w-auto text-xs">
+            <SelectTrigger
+              aria-label="Share target type"
+              className="h-8 min-w-0 w-auto text-xs"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -713,15 +727,23 @@ export function ResultOwnerOps({
               if (e.key === "Enter") void share();
             }}
           />
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={busy || !targetId.trim()}
-            onClick={() => void share()}
+          <DisabledTip
+            content={
+              busy || targetId.trim()
+                ? undefined
+                : "Enter an org id or GitHub login first."
+            }
           >
-            Share
-          </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy || !targetId.trim()}
+              onClick={() => void share()}
+            >
+              Share
+            </Button>
+          </DisabledTip>
         </div>
         {shares.length === 0 ? (
           <p className="text-xs text-mute">Not shared with anyone yet.</p>
