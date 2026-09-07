@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""ageval README hero v7 — 1680×600, title+note group vertically centered.
+"""ageval README hero + GitHub Social preview.
 
-EN + ZH. Pixel owl / pact / marquee unchanged from v6.
+README posters: 1680×600, EN + ZH.
+GitHub Social preview: 1280×640, EN only (Settings → Social preview).
 
 Centered Geist title, compact pact strip, quiet logo marquee.
 Pixel-owl wash is a 52×52 digitile of the official evenodd face path
-(owl-pixel.tsx, assembled=1, idle breath ~0.55), cream tiles bottom-right.
+(owl-pixel.tsx, assembled=1, idle breath ~0.55), cream tiles.
 Compose at 2x then LANCZOS down. No solid owl silhouette.
 """
 from __future__ import annotations
@@ -42,9 +43,15 @@ def _rsvg_bin() -> str:
 
 RSVG = _rsvg_bin()
 
-W1, H1 = 1680, 600
 SCALE = 2
+# Canvas defaults: README 1680×600. `apply_profile("social")` switches to 1280×640.
+W1, H1 = 1680, 600
 W, H = W1 * SCALE, H1 * SCALE
+PROFILE = "readme"
+PACT_SHOW_BODY = True
+MARQUEE_GAP_1X = 32
+MARQUEE_GROUP_1X = 56
+HEADLINE_BIAS = 0.5  # 0 = top of the title band, 0.5 = centered
 
 
 def s(v: float) -> int:
@@ -100,6 +107,9 @@ MARK_1X = 28
 PLATE_1X = 30
 OWL_PLATE_1X = 28
 PAD_1X = 40
+# GitHub Social preview: 1280×640, PNG < 1 MB, keep type ~56px inside edges
+# (Twitter/LinkedIn crop ~1.91:1 ≈ 29px from each side of this canvas).
+SOCIAL_MAX_BYTES = 1_000_000
 
 # Official face path (viewBox 0 0 806 721), evenodd — same as owl-pixel.tsx.
 OWL_FACE_W, OWL_FACE_H = 806.0, 721.0
@@ -148,6 +158,87 @@ IDLE_BREATH = 1.0  # full-bright static frame
 OWL_W_1X = 420  # landing min(420px, 38vw); slightly large on this banner
 OWL_RIGHT_PCT = 0.02
 OWL_BOTTOM_PCT = 0.0  # unused; owl is vertically centered
+
+_README_PROFILE = {
+    "w1": 1680,
+    "h1": 600,
+    "title_1x": 56,
+    "title_gap_1x": 16,
+    "note_1x": 19,
+    "note_max_w": 720,
+    "pact_kicker": 11,
+    "pact_title": 18,
+    "pact_body": 13,
+    "pact_show_body": True,
+    "mark_1x": 28,
+    "plate_1x": 30,
+    "owl_plate_1x": 28,
+    "pad_1x": 40,
+    "owl_w_1x": 420,
+    "owl_right_pct": 0.02,
+    "marquee_gap_1x": 32,
+    "marquee_group_1x": 56,
+    "headline_bias": 0.5,
+    "hero_name": {"en": "hero.png", "zh": "hero.zh-CN.png"},
+}
+_SOCIAL_PROFILE = {
+    "w1": 1280,
+    "h1": 640,
+    "title_1x": 52,
+    "title_gap_1x": 12,
+    "note_1x": 18,
+    "note_max_w": 720,
+    "pact_kicker": 11,
+    "pact_title": 17,
+    "pact_body": 12,
+    "pact_show_body": False,
+    "mark_1x": 24,
+    "plate_1x": 26,
+    "owl_plate_1x": 26,
+    "pad_1x": 56,
+    "owl_w_1x": 340,
+    "owl_right_pct": 0.03,
+    "marquee_gap_1x": 24,
+    "marquee_group_1x": 40,
+    "headline_bias": 0.28,
+    "hero_name": {"en": "social-preview.png"},
+}
+
+
+def apply_profile(name: str) -> None:
+    """Switch canvas. `readme` = README poster; `social` = GitHub OG 1280×640."""
+    global W1, H1, W, H, PROFILE, PACT_SHOW_BODY, HERO_NAME
+    global TITLE_1X, TITLE_GAP_1X, NOTE_1X, NOTE_MAX_W
+    global PACT_KICKER, PACT_TITLE, PACT_BODY
+    global MARK_1X, PLATE_1X, OWL_PLATE_1X, PAD_1X, OWL_W_1X, OWL_RIGHT_PCT
+    global MARQUEE_GAP_1X, MARQUEE_GROUP_1X, HEADLINE_BIAS
+    if name == "social":
+        p = _SOCIAL_PROFILE
+    elif name == "readme":
+        p = _README_PROFILE
+    else:
+        raise SystemExit(f"unknown profile {name!r} (readme|social)")
+    PROFILE = name
+    W1, H1 = p["w1"], p["h1"]
+    W, H = W1 * SCALE, H1 * SCALE
+    TITLE_1X = p["title_1x"]
+    TITLE_GAP_1X = p["title_gap_1x"]
+    NOTE_1X = p["note_1x"]
+    NOTE_MAX_W = p["note_max_w"]
+    PACT_KICKER = p["pact_kicker"]
+    PACT_TITLE = p["pact_title"]
+    PACT_BODY = p["pact_body"]
+    PACT_SHOW_BODY = p["pact_show_body"]
+    MARK_1X = p["mark_1x"]
+    PLATE_1X = p["plate_1x"]
+    OWL_PLATE_1X = p["owl_plate_1x"]
+    PAD_1X = p["pad_1x"]
+    OWL_W_1X = p["owl_w_1x"]
+    OWL_RIGHT_PCT = p["owl_right_pct"]
+    MARQUEE_GAP_1X = p["marquee_gap_1x"]
+    MARQUEE_GROUP_1X = p["marquee_group_1x"]
+    HEADLINE_BIAS = p["headline_bias"]
+    HERO_NAME = dict(p["hero_name"])
 
 
 def font(path: Path, px: int) -> ImageFont.FreeTypeFont:
@@ -655,11 +746,13 @@ def measure_pact_h(locale: str) -> int:
     t_lh = int(round(s(PACT_TITLE) * 1.25))
     b_lh = int(round(s(PACT_BODY) * 1.4))
     title_lines = 1
-    body_lines = 1
+    body_lines = 0
     for _k, title, body in COPY[locale]["pacts"]:
         title_lines = max(title_lines, len(wrap_mixed(title, tf, body_max)))
-        body_lines = max(body_lines, len(wrap_mixed(body, bf, body_max)))
-    return cell_pad + k_h + s(6) + title_lines * t_lh + s(6) + body_lines * b_lh + cell_pad
+        if PACT_SHOW_BODY:
+            body_lines = max(body_lines, len(wrap_mixed(body, bf, body_max)))
+    body_block = (s(6) + body_lines * b_lh) if PACT_SHOW_BODY else 0
+    return cell_pad + k_h + s(6) + title_lines * t_lh + body_block + cell_pad
 
 
 def measure_headline_h(locale: str) -> int:
@@ -680,7 +773,7 @@ def headline_top(locale: str) -> int:
     bot = pact_y1() - measure_pact_h(locale)
     group = measure_headline_h(locale)
     band = bot - top
-    y = top + max(0, (band - group) // 2)
+    y = top + max(0, int(round((band - group) * HEADLINE_BIAS)))
     if y + group > bot - s(8):
         y = max(top, bot - group - s(8))
     return y
@@ -757,10 +850,11 @@ def draw_pact(im: Image.Image, locale: str, y1: int) -> Image.Image:
     body_max = col_w - cell_pad * 2
     pacts = COPY[locale]["pacts"]
     wrapped_t = [wrap_mixed(p[1], tf, body_max) for p in pacts]
-    wrapped_b = [wrap_mixed(p[2], bf, body_max) for p in pacts]
+    wrapped_b = [wrap_mixed(p[2], bf, body_max) for p in pacts] if PACT_SHOW_BODY else [[] for _ in pacts]
     title_lines = max(len(w) for w in wrapped_t)
-    body_lines = max(len(w) for w in wrapped_b)
-    strip_h = cell_pad + k_h + s(6) + title_lines * t_lh + s(6) + body_lines * b_lh + cell_pad
+    body_lines = max((len(w) for w in wrapped_b), default=0) if PACT_SHOW_BODY else 0
+    body_block = (s(6) + body_lines * b_lh) if PACT_SHOW_BODY else 0
+    strip_h = cell_pad + k_h + s(6) + title_lines * t_lh + body_block + cell_pad
     y0 = y1 - strip_h
     border = CREAM + (BORDER_A,)
     lw = max(1, s(1))
@@ -777,10 +871,11 @@ def draw_pact(im: Image.Image, locale: str, y1: int) -> Image.Image:
         for ln in wrapped_t[i]:
             d.text((x0 - t_bb[0], y), ln, font=tf, fill=CREAM + (255,))
             y += t_lh
-        y += s(6)
-        for ln in wrapped_b[i]:
-            d.text((x0 - b_bb[0], y), ln, font=bf, fill=MUTED + (255,))
-            y += b_lh
+        if PACT_SHOW_BODY:
+            y += s(6)
+            for ln in wrapped_b[i]:
+                d.text((x0 - b_bb[0], y), ln, font=bf, fill=MUTED + (255,))
+                y += b_lh
     return im
 
 
@@ -792,8 +887,8 @@ def draw_marquee(im: Image.Image, logos: dict[str, Image.Image], rule_y: int, lo
     mf = sc_font(False, s(12)) if locale == "zh" else font(MONO_REG, s(12))
     plug_w = int(d.textlength(label, font=mf))
     lbb = d.textbbox((0, 0), label, font=mf)
-    gap = s(32)
-    group = s(56)
+    gap = s(MARQUEE_GAP_1X)
+    group = s(MARQUEE_GROUP_1X)
     total = 0
     for k in ENV_KEYS:
         total += logos[k].width
@@ -836,16 +931,26 @@ def save_locale(locale: str) -> None:
     hero = rgb.resize((W1, H1), Image.Resampling.LANCZOS)
     hero_path = ASSETS / HERO_NAME[locale]
     hero.save(hero_path, "PNG", optimize=True, compress_level=9)
+    nbytes = hero_path.stat().st_size
     print(
-        f"{locale} {hero.size} -> {hero_path} "
-        f"{hero_path.stat().st_size / 1024:.0f}KB "
+        f"{PROFILE}/{locale} {hero.size} -> {hero_path} "
+        f"{nbytes / 1024:.0f}KB "
         f"title_y={headline_top(locale)} pact_h={measure_pact_h(locale)}"
     )
+    if PROFILE == "social" and nbytes >= SOCIAL_MAX_BYTES:
+        raise SystemExit(f"social-preview is {nbytes} bytes; GitHub limit is {SOCIAL_MAX_BYTES}")
 
 
 def main() -> None:
     import sys
-    for loc in sys.argv[1:] or ["en", "zh"]:
+    args = [a for a in sys.argv[1:] if a]
+    if args and args[0] in ("social", "--social"):
+        apply_profile("social")
+        save_locale("en")
+        return
+    apply_profile("readme")
+    locales = [a for a in args if a not in ("readme", "--readme")] or ["en", "zh"]
+    for loc in locales:
         save_locale(loc)
 
 
