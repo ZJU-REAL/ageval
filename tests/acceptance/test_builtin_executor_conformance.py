@@ -20,6 +20,22 @@ def test_unknown_executor_fail_closed(tmp_path: Path) -> None:
             PACKAGE, tmp_path / "minimal-demo", ignore=shutil.ignore_patterns(".ageval", ".env")
         )
     )
+    # Overlaying entry=codex on docker bakes ACP image_layers. This test is
+    # fail-closed CLI, not a docker e2e — pin local so CI cannot hang on bake.
+    (dataset / "profiles.yaml").write_text(
+        "format: ageval.profiles/1\n"
+        "environment: local\n"
+        "agent_profiles:\n"
+        '  "*":\n'
+        "    executor: acp\n"
+        "    model: zai-coding-cn/glm-5.3\n"
+        "    api_key: ${ZHIPU_API_KEY}\n"
+        "    options:\n"
+        "      entry: pi\n"
+        "    extensions:\n"
+        "      - plugin: acp\n",
+        encoding="utf-8",
+    )
     env = {**os.environ, "AGEVAL_OFFLINE_AGENT": "1"}
     env.setdefault("ZHIPU_API_KEY", "ci-offline-placeholder")
     result = subprocess.run(
