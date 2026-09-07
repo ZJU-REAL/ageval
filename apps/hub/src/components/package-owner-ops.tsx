@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FieldLabel } from "@/components/field-label";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 import { toastError } from "@/lib/toast-error";
@@ -203,12 +204,7 @@ export function PackageOwnerOps({
               </p>
             </div>
             <div>
-              <label
-                htmlFor="release-version"
-                className="text-sm font-medium text-ink"
-              >
-                Version
-              </label>
+              <FieldLabel htmlFor="release-version">Version</FieldLabel>
               <Input
                 id="release-version"
                 value={releaseVersion}
@@ -219,9 +215,7 @@ export function PackageOwnerOps({
               />
             </div>
             <div>
-              <p className="text-sm font-medium text-ink">
-                Visibility
-              </p>
+              <FieldLabel>Visibility</FieldLabel>
               <Select
                 value={releaseVisibility}
                 onValueChange={(value) => {
