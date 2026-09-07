@@ -9,16 +9,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from services.registry.store import DraftRow, ReleaseRow, TokenInfo
+from services.registry.rows import DraftRow, ReleaseRow
+from services.registry.tokens import TokenInfo
 
 OrgOwnerStatus = Literal["ok", "not_found", "unauthorized", "forbidden"]
 
 
 @dataclass(frozen=True, slots=True)
 class AccessPolicy:
-    """Single authorization surface over a metadata store."""
+    """Single authorization surface; reads the three aggregates it authorizes."""
 
-    meta: Any
+    orgs: Any
+    packages: Any
+    results: Any
 
     @staticmethod
     def is_admin(scopes: frozenset[str]) -> bool:
@@ -31,7 +34,7 @@ class AccessPolicy:
             return True
         if not auth.user_id or not row.org_id:
             return False
-        return self.meta.membership(row.org_id, auth.user_id) is not None
+        return self.orgs.membership(row.org_id, auth.user_id) is not None
 
     def visible_result(
         self,
@@ -50,8 +53,8 @@ class AccessPolicy:
             return False
         if uploaded_by and uploaded_by == auth.user_id:
             return True
-        orgs = self.meta.user_org_ids(auth.user_id) if auth.user_id else set()
-        return self.meta.result_shared_with_user(
+        orgs = self.orgs.user_org_ids(auth.user_id) if auth.user_id else set()
+        return self.results.result_shared_with_user(
             result_kind=result_kind,
             result_id=result_id,
             user_id=auth.user_id,
@@ -63,10 +66,10 @@ class AccessPolicy:
             return True
         if not auth.user_id:
             return False
-        acl = self.meta.dataset_acl(draft.dataset_id, auth.user_id)
+        acl = self.packages.dataset_acl(draft.dataset_id, auth.user_id)
         if acl is not None:
             return True
-        return bool(draft.org_id and self.meta.membership(draft.org_id, auth.user_id) is not None)
+        return bool(draft.org_id and self.orgs.membership(draft.org_id, auth.user_id) is not None)
 
     def can_write_draft(self, draft: DraftRow | None, *, org_id: str, auth: TokenInfo) -> bool:
         if self.is_admin(auth.scopes):
@@ -74,8 +77,8 @@ class AccessPolicy:
         if not auth.user_id:
             return False
         if draft is None:
-            return self.meta.membership(org_id, auth.user_id) is not None
-        acl = self.meta.dataset_acl(draft.dataset_id, auth.user_id)
+            return self.orgs.membership(org_id, auth.user_id) is not None
+        acl = self.packages.dataset_acl(draft.dataset_id, auth.user_id)
         return bool(acl is not None and acl.role in {"owner", "collaborator"})
 
     def can_release_draft(self, draft: DraftRow, auth: TokenInfo) -> bool:
@@ -83,11 +86,11 @@ class AccessPolicy:
             return True
         if not auth.user_id:
             return False
-        acl = self.meta.dataset_acl(draft.dataset_id, auth.user_id)
+        acl = self.packages.dataset_acl(draft.dataset_id, auth.user_id)
         if acl is not None and acl.role == "owner":
             return True
         if draft.org_id:
-            mem = self.meta.membership(draft.org_id, auth.user_id)
+            mem = self.orgs.membership(draft.org_id, auth.user_id)
             if mem is not None and mem.role == "owner":
                 return True
         return False
@@ -97,7 +100,7 @@ class AccessPolicy:
             return True
         if not auth.user_id or not row.org_id:
             return False
-        mem = self.meta.membership(row.org_id, auth.user_id)
+        mem = self.orgs.membership(row.org_id, auth.user_id)
         return mem is not None and mem.role == "owner"
 
     def can_manage_result(
@@ -109,7 +112,7 @@ class AccessPolicy:
         for_read: bool,
     ) -> bool:
         if result_kind == "attempt":
-            row = self.meta.get_attempt(result_id)
+            row = self.results.get_attempt(result_id)
             if row is None:
                 return False
             if for_read:
@@ -123,7 +126,7 @@ class AccessPolicy:
             return self.is_admin(auth.scopes) or (
                 bool(auth.user_id) and row.uploaded_by == auth.user_id
             )
-        row_s = self.meta.get_suite(result_id)
+        row_s = self.results.get_suite(result_id)
         if row_s is None:
             return False
         if for_read:
@@ -174,7 +177,7 @@ class AccessPolicy:
                 dataset_id = str(kwargs.get("dataset_id") or "")
                 version = str(kwargs.get("version") or "")
                 if dataset_id and version:
-                    row = self.meta.get_by_version(dataset_id, version)
+                    row = self.packages.get_by_version(dataset_id, version)
                     if row is None:
                         return 404, {"error": "not_found", "message": "package not found"}
                     if not self.can_manage_package(row, auth):
@@ -204,14 +207,14 @@ class AccessPolicy:
         return 500, {"error": "internal", "message": f"unknown access {access}"}
 
     def org_owner_status(self, *, org_id: str, auth: TokenInfo) -> OrgOwnerStatus:
-        org = self.meta.get_org(org_id)
+        org = self.orgs.get_org(org_id)
         if org is None:
             return "not_found"
         if self.is_admin(auth.scopes):
             return "ok"
         if not auth.user_id:
             return "unauthorized"
-        mem = self.meta.membership(org_id, auth.user_id)
+        mem = self.orgs.membership(org_id, auth.user_id)
         if mem is None or mem.role != "owner":
             return "forbidden"
         return "ok"

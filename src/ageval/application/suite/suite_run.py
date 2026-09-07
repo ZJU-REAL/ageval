@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from ageval.application.composition import build_run_attempt
+from ageval.application.suite import document
 from ageval.application.suite.suite_config_fingerprint import collect_suite_config
 from ageval.application.suite.suite_metrics import (
     aggregate_k_metrics,
@@ -131,13 +132,7 @@ def plan_suite_run(
 
 
 def suite_summary_path(dataset_root: Path, suite_run_id: str) -> Path:
-    return (
-        dataset_root.expanduser().resolve(strict=False)
-        / ".ageval"
-        / "suite-runs"
-        / suite_run_id
-        / "summary.json"
-    )
+    return document.summary_path(dataset_root.expanduser().resolve(strict=False), suite_run_id)
 
 
 def is_suite_run_locator(
@@ -160,34 +155,12 @@ def is_suite_run_locator(
     if dataset_root is None:
         return False
     root = Path(dataset_root).expanduser().resolve(strict=False)
-    suite_dir = root / ".ageval" / "suite-runs" / rid
-    return suite_dir.is_dir()
+    return document.suite_dir(root, rid).is_dir()
 
 
 def load_suite_summary(dataset_root: Path, suite_run_id: str) -> dict[str, Any]:
     """Load an existing suite ``summary.json`` or raise ConfigError."""
-    path = suite_summary_path(dataset_root, suite_run_id)
-    if not path.is_file():
-        raise ConfigError(
-            "suite_not_found",
-            f"suite summary not found: {suite_run_id}",
-            location=str(path),
-        )
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ConfigError(
-            "suite_summary_invalid",
-            f"cannot read suite summary: {exc}",
-            location=str(path),
-        ) from exc
-    if not isinstance(data, dict):
-        raise ConfigError(
-            "suite_summary_invalid",
-            "suite summary must be a JSON object",
-            location=str(path),
-        )
-    return data
+    return document.load_suite_summary(dataset_root, suite_run_id)
 
 
 def extract_run_id(dataset_root: Path, *candidates: object) -> str | None:
@@ -270,10 +243,7 @@ def suite_is_settled(dataset_root: Path, suite_run_id: str) -> bool:
     if is_suite_cancel_requested(dataset_root, suite_run_id):
         return False
     progress_path = (
-        dataset_root.expanduser().resolve(strict=False)
-        / ".ageval"
-        / "suite-runs"
-        / suite_run_id
+        document.suite_dir(dataset_root.expanduser().resolve(strict=False), suite_run_id)
         / "progress.json"
     )
     if not progress_path.is_file():
@@ -369,15 +339,12 @@ async def _run_one(
 
 
 def suite_dir_for(plan: SuitePlan) -> Path:
-    return plan.dataset_root / ".ageval" / "suite-runs" / plan.suite_run_id
+    return document.suite_dir(plan.dataset_root, plan.suite_run_id)
 
 
 def cancel_request_path(dataset_root: Path, suite_run_id: str) -> Path:
     return (
-        dataset_root.expanduser().resolve(strict=False)
-        / ".ageval"
-        / "suite-runs"
-        / suite_run_id
+        document.suite_dir(dataset_root.expanduser().resolve(strict=False), suite_run_id)
         / "cancel.requested"
     )
 
@@ -685,7 +652,7 @@ def _live_summary(
 
 
 def _write_summary(plan: SuitePlan, summary: dict[str, Any]) -> dict[str, Any]:
-    suite_dir = plan.dataset_root / ".ageval" / "suite-runs" / plan.suite_run_id
+    suite_dir = document.suite_dir(plan.dataset_root, plan.suite_run_id)
     suite_dir.mkdir(parents=True, exist_ok=True)
     out = suite_dir / "summary.json"
     tmp = out.with_suffix(".tmp")

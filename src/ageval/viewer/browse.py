@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ageval.application.local_jobs.listing import commands_for as commands_for
 from ageval.config.dataset import list_tasks, load_dataset_manifest
 from ageval.registry.resolve import resolve_dataset_root
 
@@ -30,22 +31,3 @@ def dataset_overview(root: Path) -> dict[str, Any]:
         "task_count": len(task_ids),
         "root": str(root),
     }
-
-
-def commands_for(root: Path, *, task_id: str | None = None) -> dict[str, str]:
-    """Copyable CLI strings matching the current public surface."""
-    # Prefer relative path when under cwd for nicer copy-paste.
-    try:
-        display = str(root.relative_to(Path.cwd()))
-    except ValueError:
-        display = str(root)
-
-    cmds: dict[str, str] = {
-        "tasks": f"ageval tasks {display}",
-        "run_suite": f"ageval run {display}",
-        "lock_suite_hint": f"ageval lock {display} --task <task_id>",
-    }
-    if task_id:
-        cmds["run_task"] = f"ageval run {display} --task {task_id}"
-        cmds["lock_task"] = f"ageval lock {display} --task {task_id}"
-    return cmds

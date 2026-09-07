@@ -86,22 +86,28 @@ def _archive_looks_like_secret_leak(archive: Path) -> bool:
 class ResultService:
     def __init__(
         self,
-        meta: Any,
+        results: Any,
+        packages: Any,
+        orgs: Any,
+        inbox: Any,
         blobs: Any,
         access: AccessPolicy,
         *,
         max_upload: int,
     ) -> None:
-        self.meta = meta
+        self.results = results
+        self.packages = packages
+        self.orgs = orgs
+        self.inbox = inbox
         self.blobs = blobs
         self.access = access
         self.max_upload = max_upload
 
     def get_attempt(self, run_id: str) -> Any:
-        return self.meta.get_attempt(run_id)
+        return self.results.get_attempt(run_id)
 
     def get_suite(self, suite_run_id: str) -> Any:
-        return self.meta.get_suite(suite_run_id)
+        return self.results.get_suite(suite_run_id)
 
     def can_manage(self, result_kind: str, result_id: str, auth: TokenInfo) -> bool:
         return self.access.can_manage_result(result_kind, result_id, auth, for_read=False)
@@ -161,7 +167,7 @@ class ResultService:
             "true",
             "yes",
         }
-        existing = self.meta.get_attempt(run_id)
+        existing = self.results.get_attempt(run_id)
         if existing is not None:
             if not replace:
                 raise RegistryAppError(
@@ -174,7 +180,7 @@ class ResultService:
                 or (auth.user_id and existing.uploaded_by == auth.user_id)
             ):
                 raise RegistryAppError("not_found", "attempt not found", http_status=404)
-            self.meta.delete_attempt(run_id)
+            self.results.delete_attempt(run_id)
             self._gc_attempt_blob(existing.blob_digest)
         row = AttemptResultRow(
             run_id=run_id,
@@ -196,7 +202,7 @@ class ResultService:
         )
         try:
             self.blobs.put_if_absent(blob_digest, archive, prefix="results")
-            self.meta.insert_attempt(row)
+            self.results.insert_attempt(row)
         except ValueError as exc:
             raise RegistryAppError(
                 "conflict",
@@ -216,7 +222,7 @@ class ResultService:
         task_id: str | None = None,
         standalone: bool = False,
     ) -> dict[str, Any]:
-        rows = self.meta.list_attempts(
+        rows = self.results.list_attempts(
             dataset_id=dataset_id or None,
             task_id=task_id or None,
             standalone=standalone,
@@ -404,7 +410,7 @@ class ResultService:
             "true",
             "yes",
         }
-        existing = self.meta.get_suite(suite_run_id)
+        existing = self.results.get_suite(suite_run_id)
         if existing is not None:
             if not replace:
                 raise RegistryAppError(
@@ -417,7 +423,7 @@ class ResultService:
                 or (auth.user_id and existing.uploaded_by == auth.user_id)
             ):
                 raise RegistryAppError("not_found", "suite not found", http_status=404)
-            self.meta.delete_suite(suite_run_id)
+            self.results.delete_suite(suite_run_id)
             self._gc_suite_blob(existing.blob_digest)
         bound_kind, bound_ids = self._bound_task_ids(dataset_id, dataset_version, auth=auth)
         digest = task_set_digest(bound_ids) if bound_ids else ""
@@ -445,7 +451,7 @@ class ResultService:
         )
         try:
             self.blobs.put_if_absent(blob_digest, archive, prefix="suite-results")
-            self.meta.insert_suite(row)
+            self.results.insert_suite(row)
         except ValueError as exc:
             raise RegistryAppError(
                 "conflict",
@@ -467,7 +473,7 @@ class ResultService:
                 "slot append must not use replace",
                 http_status=400,
             )
-        existing = self.meta.get_suite(suite_run_id)
+        existing = self.results.get_suite(suite_run_id)
         if existing is None:
             raise RegistryAppError("not_found", "suite not found", http_status=404)
         if not (
@@ -503,7 +509,7 @@ class ResultService:
                 "attempt_index must be an integer ≥ 0",
                 http_status=400,
             )
-        attempt = self.meta.get_attempt(new_run_id)
+        attempt = self.results.get_attempt(new_run_id)
         if attempt is None:
             raise RegistryAppError(
                 "invalid_request",
@@ -601,7 +607,7 @@ class ResultService:
             existing.dataset_id, existing.dataset_version, auth=auth
         )
         complete = suite_is_complete(bound_task_ids=bound_ids, task_refs=task_refs)
-        row = self.meta.update_suite_slot(
+        row = self.results.update_suite_slot(
             suite_run_id,
             pass_rate=pass_rate,
             mean_score=mean_score,
@@ -625,7 +631,7 @@ class ResultService:
         limit: int | None = None,
         offset: int = 0,
     ) -> dict[str, Any]:
-        rows = self.meta.list_suites(dataset_id=dataset_id or None, include_private=True)
+        rows = self.results.list_suites(dataset_id=dataset_id or None, include_private=True)
         visible = [r for r in rows if self._visible_suite(r, auth)]
         if uploaded_by:
             want = (
@@ -652,8 +658,8 @@ class ResultService:
             ]
         page, total = page_slice(visible, limit=limit, offset=offset)
         attempt_ids = self._suite_visible_attempt_ids(page, auth=auth)
-        official = official_dataset_ids(self.meta.list_releases(include_private=True))
-        consents = self.meta.list_agent_consents_for_suites([r.suite_run_id for r in page])
+        official = official_dataset_ids(self.packages.list_releases(include_private=True))
+        consents = self.inbox.list_agent_consents_for_suites([r.suite_run_id for r in page])
         payload: dict[str, Any] = {
             "items": [
                 attach_agent_refs(
@@ -673,8 +679,8 @@ class ResultService:
     def serve_suite_meta(self, *, suite_run_id: str, auth: TokenInfo) -> dict[str, Any]:
         row = self._require_visible_suite(suite_run_id, auth)
         attempt_ids = self._suite_visible_attempt_ids([row], auth=auth)
-        official = official_dataset_ids(self.meta.list_releases(include_private=True))
-        consented = set(self.meta.list_agent_consents(suite_run_id))
+        official = official_dataset_ids(self.packages.list_releases(include_private=True))
+        consented = set(self.inbox.list_agent_consents(suite_run_id))
         return attach_agent_refs(
             suite_to_dict(row, attempt_content_ids=attempt_ids),
             official,
@@ -711,7 +717,7 @@ class ResultService:
             parse_published_agent_spec,
         )
 
-        row = self.meta.get_suite(suite_run_id)
+        row = self.results.get_suite(suite_run_id)
         if row is None or (
             not skip_owner_check
             and not self.access.can_manage_result("suite", suite_run_id, auth, for_read=False)
@@ -746,7 +752,7 @@ class ResultService:
             if grant_consent is None:
                 grant_consent = True
         else:
-            release = self.meta.get_by_version(package_id, version)
+            release = self.packages.get_by_version(package_id, version)
             if release is None or not self.access.visible_package(release, auth):
                 raise RegistryAppError("not_found", "agent package not found", http_status=404)
             try:
@@ -793,13 +799,13 @@ class ResultService:
             cfg["job_overlay"] = result.overlay
             if fingerprint_before is not None:
                 cfg["config_fingerprint"] = fingerprint_before
-            self.meta.update_suite_config_json(suite_run_id, json.dumps(cfg, sort_keys=True))
+            self.results.update_suite_config_json(suite_run_id, json.dumps(cfg, sort_keys=True))
         agent_org_owner = bool(
             release_org_id
             and self.access.org_owner_status(org_id=release_org_id, auth=auth) == "ok"
         )
         if grant_consent is True or (grant_consent is None and agent_org_owner):
-            self.meta.grant_agent_consent(
+            self.inbox.grant_agent_consent(
                 suite_run_id=suite_run_id,
                 package_id=package_id,
                 granted_by=auth.user_id or "",
@@ -817,18 +823,18 @@ class ResultService:
                     model = raw.get("model")
                     overlay_model = model.strip() if isinstance(model, str) else ""
                     if overlay_model:
-                        self.meta.set_suite_canonical_model(
+                        self.inbox.set_suite_canonical_model(
                             suite_run_id, overlay_model, chosen_canonical
                         )
             payload_canonical = chosen_canonical
         else:
             payload_canonical = ""
         if skip_owner_check:
-            stored = self.meta.get_suite(suite_run_id)
+            stored = self.results.get_suite(suite_run_id)
             if stored is None:
                 raise RegistryAppError("not_found", "suite not found", http_status=404)
-            official = official_dataset_ids(self.meta.list_releases(include_private=True))
-            consented = set(self.meta.list_agent_consents(suite_run_id))
+            official = official_dataset_ids(self.packages.list_releases(include_private=True))
+            consented = set(self.inbox.list_agent_consents(suite_run_id))
             payload = attach_agent_refs(suite_to_dict(stored), official, consented=consented)
         else:
             payload = self.serve_suite_meta(suite_run_id=suite_run_id, auth=auth)
@@ -855,7 +861,7 @@ class ResultService:
             strip_published_agent_ref,
         )
 
-        row = self.meta.get_suite(suite_run_id)
+        row = self.results.get_suite(suite_run_id)
         if row is None:
             raise RegistryAppError("not_found", "suite not found", http_status=404)
         try:
@@ -878,7 +884,7 @@ class ResultService:
             cfg["job_overlay"] = result.overlay
             if fingerprint_before is not None:
                 cfg["config_fingerprint"] = fingerprint_before
-            self.meta.update_suite_config_json(suite_run_id, json.dumps(cfg, sort_keys=True))
+            self.results.update_suite_config_json(suite_run_id, json.dumps(cfg, sort_keys=True))
         remaining = False
         profiles = (
             result.overlay.get("agent_profiles") if isinstance(result.overlay, Mapping) else None
@@ -896,7 +902,7 @@ class ResultService:
                     remaining = True
                     break
         if not remaining:
-            self.meta.revoke_agent_consent(suite_run_id=suite_run_id, package_id=package_id)
+            self.inbox.revoke_agent_consent(suite_run_id=suite_run_id, package_id=package_id)
         return {"ok": True, "changed": result.changed, "remaining": remaining}
 
     def serve_suite_content(
@@ -912,7 +918,7 @@ class ResultService:
     def list_shares(self, *, result_kind: str, result_id: str, auth: TokenInfo) -> dict[str, Any]:
         if not self.access.can_manage_result(result_kind, result_id, auth, for_read=True):
             raise RegistryAppError("not_found", "result not found", http_status=404)
-        shares = self.meta.list_result_shares(result_kind=result_kind, result_id=result_id)
+        shares = self.results.list_result_shares(result_kind=result_kind, result_id=result_id)
         return {
             "result_kind": result_kind,
             "result_id": result_id,
@@ -942,14 +948,14 @@ class ResultService:
             target_id = _normalize_user_id(target_id) or target_id.casefold()
         else:
             target_id = target_id.casefold()
-            if self.meta.get_org(target_id) is None:
+            if self.orgs.get_org(target_id) is None:
                 raise RegistryAppError(
                     "org_not_found",
                     f"org {target_id!r} not found",
                     http_status=400,
                 )
         try:
-            share = self.meta.add_result_share(
+            share = self.results.add_result_share(
                 result_kind=result_kind,
                 result_id=result_id,
                 target_type=target_type,
@@ -977,7 +983,7 @@ class ResultService:
         else:
             target_id = target_id.casefold()
         try:
-            self.meta.remove_result_share(
+            self.results.remove_result_share(
                 result_kind=result_kind,
                 result_id=result_id,
                 target_type=target_type,
@@ -990,7 +996,7 @@ class ResultService:
     def delete_attempt(self, *, run_id: str, auth: TokenInfo) -> dict[str, Any]:
         if not self.can_manage("attempt", run_id, auth):
             raise RegistryAppError("not_found", "attempt not found", http_status=404)
-        row = self.meta.get_attempt(run_id)
+        row = self.results.get_attempt(run_id)
         if row is None:
             raise RegistryAppError("not_found", "attempt not found", http_status=404)
         blob_deleted = self._delete_attempt_row(row)
@@ -1006,7 +1012,7 @@ class ResultService:
     ) -> dict[str, Any]:
         if not self.can_manage("suite", suite_run_id, auth):
             raise RegistryAppError("not_found", "suite not found", http_status=404)
-        row = self.meta.get_suite(suite_run_id)
+        row = self.results.get_suite(suite_run_id)
         if row is None:
             raise RegistryAppError("not_found", "suite not found", http_status=404)
         deleted_attempts: list[str] = []
@@ -1021,7 +1027,7 @@ class ResultService:
                     continue
                 self._delete_attempt_row(att)
                 deleted_attempts.append(att.run_id)
-        self.meta.delete_suite(suite_run_id)
+        self.results.delete_suite(suite_run_id)
         blob_deleted = self._gc_suite_blob(row.blob_digest)
         payload: dict[str, Any] = {
             "ok": True,
@@ -1045,7 +1051,7 @@ class ResultService:
                 http_status=400,
             )
         try:
-            row = self.meta.set_attempt_visibility(run_id, visibility)
+            row = self.results.set_attempt_visibility(run_id, visibility)
         except LookupError as exc:
             raise RegistryAppError("not_found", "attempt not found", http_status=404) from exc
         return attempt_to_dict(row)
@@ -1060,7 +1066,15 @@ class ResultService:
                 http_status=400,
             )
         try:
-            row = self.meta.set_suite_visibility(suite_run_id, visibility)
+            row = self.results.set_suite_visibility(suite_run_id, visibility)
+        except LookupError as exc:
+            raise RegistryAppError("not_found", "suite not found", http_status=404) from exc
+        return suite_to_dict(row)
+
+    def mark_board_listed(self, *, suite_run_id: str) -> dict[str, Any]:
+        """Leaderboard approval flips ``board_listed`` (RequestService approve path)."""
+        try:
+            row = self.results.set_suite_board_listed(suite_run_id, True)
         except LookupError as exc:
             raise RegistryAppError("not_found", "suite not found", http_status=404) from exc
         return suite_to_dict(row)
@@ -1086,16 +1100,16 @@ class ResultService:
         release = None
         draft = None
         if is_draft_version(dataset_version):
-            draft = self.meta.get_draft(dataset_id)
+            draft = self.packages.get_draft(dataset_id)
             if draft is not None and not self.access.entitled_to_draft(draft, auth):
                 return BOUND_UNKNOWN, frozenset()
             kind = BOUND_DRAFT if draft is not None else BOUND_UNKNOWN
         else:
-            release = self.meta.get_by_version(dataset_id, dataset_version)
+            release = self.packages.get_by_version(dataset_id, dataset_version)
             if release is not None:
                 kind = BOUND_RELEASE
             else:
-                draft = self.meta.get_draft(dataset_id)
+                draft = self.packages.get_draft(dataset_id)
                 if draft is not None and not self.access.entitled_to_draft(draft, auth):
                     return BOUND_UNKNOWN, frozenset()
                 kind = BOUND_DRAFT if draft is not None else BOUND_UNKNOWN
@@ -1128,13 +1142,13 @@ class ResultService:
         )
 
     def _require_visible_attempt(self, run_id: str, auth: TokenInfo) -> AttemptResultRow:
-        row = self.meta.get_attempt(run_id)
+        row = self.results.get_attempt(run_id)
         if row is None or not self._visible_attempt(row, auth):
             raise RegistryAppError("not_found", "attempt not found", http_status=404)
         return row
 
     def _require_visible_suite(self, suite_run_id: str, auth: TokenInfo) -> SuiteResultRow:
-        row = self.meta.get_suite(suite_run_id)
+        row = self.results.get_suite(suite_run_id)
         if row is None or not self._visible_suite(row, auth):
             raise RegistryAppError("not_found", "suite not found", http_status=404)
         return row
@@ -1146,7 +1160,7 @@ class ResultService:
         for r in rows:
             run_ids.extend(_run_ids_from_tasks_json(r.tasks_json))
         try:
-            attempts = self.meta.attempts_for_ids(run_ids)
+            attempts = self.results.attempts_for_ids(run_ids)
         except Exception:  # noqa: BLE001
             return set()
         return {a.run_id for a in attempts if self._visible_attempt(a, auth)}
@@ -1154,24 +1168,24 @@ class ResultService:
     def _gc_attempt_blob(self, blob_digest: str) -> bool:
         if not blob_digest:
             return False
-        if self.meta.count_attempt_blob_refs(blob_digest) > 0:
+        if self.results.count_attempt_blob_refs(blob_digest) > 0:
             return False
         return bool(self.blobs.delete(blob_digest, prefix="results"))
 
     def _gc_suite_blob(self, blob_digest: str) -> bool:
         if not blob_digest:
             return False
-        if self.meta.count_suite_blob_refs(blob_digest) > 0:
+        if self.results.count_suite_blob_refs(blob_digest) > 0:
             return False
         return bool(self.blobs.delete(blob_digest, prefix="suite-results"))
 
     def _delete_attempt_row(self, row: AttemptResultRow) -> bool:
-        self.meta.delete_attempt(row.run_id)
+        self.results.delete_attempt(row.run_id)
         return self._gc_attempt_blob(row.blob_digest)
 
     def _collect_suite_linked_attempts(self, suite_row: SuiteResultRow) -> list[AttemptResultRow]:
         by_id: dict[str, AttemptResultRow] = {}
-        for att in self.meta.list_attempts_for_suite(suite_row.suite_run_id):
+        for att in self.results.list_attempts_for_suite(suite_row.suite_run_id):
             by_id[att.run_id] = att
         run_ids = list(_run_ids_from_tasks_json(suite_row.tasks_json))
         try:
@@ -1188,6 +1202,6 @@ class ResultService:
                         text = str(rid or "").strip()
                         if text:
                             run_ids.append(text)
-        for att in self.meta.attempts_for_ids(run_ids):
+        for att in self.results.attempts_for_ids(run_ids):
             by_id[att.run_id] = att
         return list(by_id.values())

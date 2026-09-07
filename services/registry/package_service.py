@@ -99,9 +99,7 @@ def _normalize_marketplace_description(raw: object) -> str:
     if raw is None:
         return ""
     if not isinstance(raw, str):
-        raise RegistryAppError(
-            "invalid_request", "description must be a string", http_status=400
-        )
+        raise RegistryAppError("invalid_request", "description must be a string", http_status=400)
     text = raw.strip()
     if len(text) > MARKETPLACE_DESCRIPTION_MAX:
         raise RegistryAppError(
@@ -115,19 +113,21 @@ def _normalize_marketplace_description(raw: object) -> str:
 class PackageService:
     def __init__(
         self,
-        meta: Any,
+        packages: Any,
+        orgs: Any,
         blobs: Any,
         access: AccessPolicy,
         *,
         max_upload: int,
     ) -> None:
-        self.meta = meta
+        self.packages = packages
+        self.orgs = orgs
         self.blobs = blobs
         self.access = access
         self.max_upload = max_upload
 
     def get(self, dataset_id: str, version: str) -> ReleaseRow | None:
-        return self.meta.get_by_version(dataset_id, version)
+        return self.packages.get_by_version(dataset_id, version)
 
     def can_manage(self, row: ReleaseRow, auth: TokenInfo) -> bool:
         return self.access.can_manage_package(row, auth)
@@ -142,10 +142,10 @@ class PackageService:
         self, items: list[dict[str, Any]], auth: TokenInfo | None = None
     ) -> list[dict[str, Any]]:
         ids = [str(item.get("dataset_id") or "") for item in items]
-        counts = self.meta.package_download_counts(ids)
-        fav_counts = self.meta.package_favorite_counts(ids)
+        counts = self.packages.package_download_counts(ids)
+        fav_counts = self.packages.package_favorite_counts(ids)
         uid = auth.user_id if auth is not None else None
-        starred = self.meta.package_favorites_for_user(uid, ids) if uid else set()
+        starred = self.packages.package_favorites_for_user(uid, ids) if uid else set()
         for item in items:
             did = str(item.get("dataset_id") or "")
             item["download_count"] = int(counts.get(did, 0))
@@ -154,7 +154,7 @@ class PackageService:
         return items
 
     def _apply_icons(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        icons = self.meta.package_icons()
+        icons = self.packages.package_icons()
         for item in items:
             pair = icons.get(str(item.get("dataset_id") or ""))
             if not pair:
@@ -209,9 +209,9 @@ class PackageService:
             return self.upsert_draft(meta=meta, archive=archive, auth=auth)
         if not org_id:
             raise RegistryAppError("org_required", "publish requires org_id", http_status=400)
-        if self.meta.get_org(org_id) is None:
+        if self.orgs.get_org(org_id) is None:
             raise RegistryAppError("org_not_found", f"org {org_id!r} not found", http_status=400)
-        if not AccessPolicy.is_admin(auth.scopes) and self.meta.membership(org_id, user_id) is None:
+        if not AccessPolicy.is_admin(auth.scopes) and self.orgs.membership(org_id, user_id) is None:
             raise RegistryAppError(
                 "forbidden",
                 "must be org member to publish under this org",
@@ -241,13 +241,13 @@ class PackageService:
             "true",
             "yes",
         }
-        existing_rel = self.meta.get_by_version(dataset_id, version)
+        existing_rel = self.packages.get_by_version(dataset_id, version)
         if existing_rel is not None:
             if not replace:
                 raise RegistryAppError("conflict", "release already exists", http_status=409)
             if not self._may_replace(existing_rel, auth):
                 raise RegistryAppError("not_found", "release not found", http_status=404)
-            self.meta.delete_release(dataset_id, version)
+            self.packages.delete_release(dataset_id, version)
             self._gc_blob(existing_rel.blob_digest)
         row = ReleaseRow(
             dataset_id=dataset_id,
@@ -263,7 +263,7 @@ class PackageService:
         )
         try:
             self.blobs.put_if_absent(blob_digest, archive, prefix="packages")
-            self.meta.insert(row)
+            self.packages.insert(row)
         except ValueError as exc:
             raise RegistryAppError("conflict", "release already exists", http_status=409) from exc
         self._store_task_summary(archive, package_digest)
@@ -299,7 +299,7 @@ class PackageService:
             raise RegistryAppError("invalid_request", "bad visibility", http_status=400)
         if not org_id:
             raise RegistryAppError("org_required", "draft requires org_id", http_status=400)
-        if self.meta.get_org(org_id) is None:
+        if self.orgs.get_org(org_id) is None:
             raise RegistryAppError("org_not_found", f"org {org_id!r} not found", http_status=400)
         package_kind = str(meta.get("package_kind") or "dataset").strip().casefold()
         if package_kind != "dataset":
@@ -308,7 +308,7 @@ class PackageService:
                 "draft slot is only for dataset packages",
                 http_status=400,
             )
-        existing = self.meta.get_draft(dataset_id)
+        existing = self.packages.get_draft(dataset_id)
         if not self.access.can_write_draft(existing, org_id=org_id, auth=auth):
             raise RegistryAppError(
                 "forbidden",
@@ -342,10 +342,10 @@ class PackageService:
             updated_at=now(),
         )
         self.blobs.put_if_absent(blob_digest, archive, prefix="packages")
-        stored = self.meta.upsert_draft(row)
+        stored = self.packages.upsert_draft(row)
         self._store_task_summary(archive, package_digest)
         if existing is None and user_id:
-            self.meta.upsert_dataset_acl(dataset_id, user_id, role="owner")
+            self.packages.upsert_dataset_acl(dataset_id, user_id, role="owner")
         if existing is not None and existing.package_digest != package_digest:
             self._gc_task_summary(existing.package_digest)
         if old_blob and old_blob != blob_digest:
@@ -363,7 +363,7 @@ class PackageService:
         replace: bool = False,
         version: str | None = None,
     ) -> dict[str, Any]:
-        draft = self.meta.get_draft(dataset_id)
+        draft = self.packages.get_draft(dataset_id)
         if draft is None or not self.access.can_release_draft(draft, auth):
             raise RegistryAppError("not_found", "draft not found", http_status=404)
         archive = read_blob(self.blobs, draft.blob_digest, prefix="packages")
@@ -379,13 +379,13 @@ class PackageService:
         vis = visibility or draft.visibility
         if vis not in {"private", "public"}:
             raise RegistryAppError("invalid_request", "bad visibility", http_status=400)
-        existing_rel = self.meta.get_by_version(dataset_id, rel_version)
+        existing_rel = self.packages.get_by_version(dataset_id, rel_version)
         if existing_rel is not None:
             if not replace:
                 raise RegistryAppError("conflict", "release already exists", http_status=409)
             if not self._may_replace(existing_rel, auth):
                 raise RegistryAppError("not_found", "release not found", http_status=404)
-            self.meta.delete_release(dataset_id, rel_version)
+            self.packages.delete_release(dataset_id, rel_version)
             self._gc_blob(existing_rel.blob_digest)
         row = ReleaseRow(
             dataset_id=dataset_id,
@@ -400,7 +400,7 @@ class PackageService:
             uploaded_by=draft.uploaded_by or auth.user_id or "",
         )
         try:
-            self.meta.insert(row)
+            self.packages.insert(row)
         except ValueError as exc:
             raise RegistryAppError("conflict", "release already exists", http_status=409) from exc
         payload = self._with_download_count(release_to_dict(row), auth)
@@ -429,7 +429,7 @@ class PackageService:
                 "package_kind must be dataset, plugin or agent",
                 http_status=400,
             )
-        rows = self.meta.list_releases(
+        rows = self.packages.list_releases(
             dataset_id_prefix=prefix or None,
             visibility=visibility,
             version=version or None,
@@ -437,7 +437,7 @@ class PackageService:
         )
         items = [release_to_dict(r) for r in rows if self.access.visible_package(r, auth)]
         if package_kind in (None, "dataset"):
-            for draft in self.meta.list_drafts():
+            for draft in self.packages.list_drafts():
                 if not self.access.entitled_to_draft(draft, auth):
                     continue
                 if prefix and not draft.dataset_id.startswith(prefix):
@@ -451,7 +451,7 @@ class PackageService:
             items = self._filter_mine(items, auth)
         if orgs:
             items = self._filter_orgs(items, auth)
-        labels = self.meta.package_display_names()
+        labels = self.packages.package_display_names()
         for item in items:
             label = labels.get(str(item.get("dataset_id") or ""))
             if label:
@@ -475,8 +475,8 @@ class PackageService:
             for item in items
             if item.get("package_kind") == "dataset"
         ]
-        counts = self.meta.package_task_counts(digests)
-        descriptions = self.meta.package_manifest_descriptions(digests)
+        counts = self.packages.package_task_counts(digests)
+        descriptions = self.packages.package_manifest_descriptions(digests)
         for item in items:
             if item.get("package_kind") != "dataset":
                 continue
@@ -487,7 +487,7 @@ class PackageService:
                 item["description"] = description
 
     def _apply_description_overrides(self, items: list[dict[str, Any]]) -> None:
-        overrides = self.meta.package_descriptions()
+        overrides = self.packages.package_descriptions()
         if not overrides:
             return
         for item in items:
@@ -496,10 +496,10 @@ class PackageService:
                 item["description"] = override
 
     def _effective_description(self, dataset_id: str, package_digest: str) -> str:
-        override = self.meta.get_package_description(dataset_id)
+        override = self.packages.get_package_description(dataset_id)
         if override:
             return override
-        manifest = self.meta.package_manifest_descriptions([package_digest])
+        manifest = self.packages.package_manifest_descriptions([package_digest])
         return manifest.get(package_digest, "")
 
     def _filter_orgs(self, items: list[dict[str, Any]], auth: TokenInfo) -> list[dict[str, Any]]:
@@ -507,7 +507,7 @@ class PackageService:
         uid = auth.user_id or ""
         if not uid:
             return []
-        org_ids = self.meta.user_org_ids(uid)
+        org_ids = self.orgs.user_org_ids(uid)
         return [item for item in items if str(item.get("org_id") or "") in org_ids]
 
     def _filter_mine(self, items: list[dict[str, Any]], auth: TokenInfo) -> list[dict[str, Any]]:
@@ -517,7 +517,7 @@ class PackageService:
             return []
         maintainable = {
             row.dataset_id
-            for row in self.meta.list_dataset_acl_for_user(uid)
+            for row in self.packages.list_dataset_acl_for_user(uid)
             if row.role in {"owner", "collaborator"}
         }
         out: list[dict[str, Any]] = []
@@ -543,12 +543,12 @@ class PackageService:
         if kind is not None:
             builtin = _builtin_item(dataset_id, kind)
             return {"dataset_id": builtin["dataset_id"], "items": [builtin]}
-        rows = self.meta.list_versions(dataset_id, include_private=True)
+        rows = self.packages.list_versions(dataset_id, include_private=True)
         items = [release_to_dict(r) for r in rows if self.access.visible_package(r, auth)]
-        draft = self.meta.get_draft(dataset_id)
+        draft = self.packages.get_draft(dataset_id)
         if draft is not None and self.access.entitled_to_draft(draft, auth):
             items.insert(0, release_to_dict(draft.as_release()))
-        label = self.meta.get_package_display_name(dataset_id)
+        label = self.packages.get_package_display_name(dataset_id)
         if label:
             for item in items:
                 item["display_name"] = label
@@ -583,13 +583,11 @@ class PackageService:
             version=version,
         )
         payload = self._with_download_count(release_to_dict(row), auth)
-        label = self.meta.get_package_display_name(dataset_id)
+        label = self.packages.get_package_display_name(dataset_id)
         if label:
             payload["display_name"] = label
         self._apply_icons([payload])
-        description_value = self._effective_description(
-            dataset_id, str(row.package_digest)
-        )
+        description_value = self._effective_description(dataset_id, str(row.package_digest))
         if description_value:
             payload["description"] = description_value
         try:
@@ -625,7 +623,7 @@ class PackageService:
         fh = self.blobs.open(row.blob_digest, prefix="packages")
         if fh is None or size is None:
             raise RegistryAppError("not_found", "blob missing", http_status=404)
-        self.meta.increment_package_download(row.dataset_id)
+        self.packages.increment_package_download(row.dataset_id)
         return fh, int(size), row
 
     def list_files(
@@ -687,17 +685,13 @@ class PackageService:
             package_digest=package_digest,
             version=version,
         )
-        summary = self.meta.get_package_task_summary(row.package_digest)
+        summary = self.packages.get_package_task_summary(row.package_digest)
         if summary is None:
             summary = self._backfill_task_summary(row.package_digest, row.blob_digest)
         tasks, has_shared, overlay_prefixes = summary
         needle = (q or "").strip().casefold()
         if needle:
-            tasks = [
-                item
-                for item in tasks
-                if needle in str(item.get("task_id") or "").casefold()
-            ]
+            tasks = [item for item in tasks if needle in str(item.get("task_id") or "").casefold()]
         page, total = page_slice(tasks, limit=limit, offset=offset)
         self._attach_task_job_stats(page, dataset_id=row.dataset_id, auth=auth)
         return {
@@ -772,10 +766,10 @@ class PackageService:
         return file_payload(safe_path, data, size=size, truncated=truncated)
 
     def delete_release(self, *, dataset_id: str, version: str, auth: TokenInfo) -> dict[str, Any]:
-        row = self.meta.get_by_version(dataset_id, version)
+        row = self.packages.get_by_version(dataset_id, version)
         if row is None or not self.can_manage(row, auth):
             raise RegistryAppError("not_found", "release not found", http_status=404)
-        self.meta.delete_release(dataset_id, version)
+        self.packages.delete_release(dataset_id, version)
         blob_deleted = self._gc_blob(row.blob_digest)
         return {
             "ok": True,
@@ -823,21 +817,21 @@ class PackageService:
             next_description = _normalize_marketplace_description(description)
         stored_name = None
         if next_name is not None:
-            stored_name = self.meta.set_package_display_name(dataset_id, next_name)
+            stored_name = self.packages.set_package_display_name(dataset_id, next_name)
         if has_icon_key or has_icon_github:
-            cur_key, cur_github = self.meta.get_package_icon(dataset_id)
+            cur_key, cur_github = self.packages.get_package_icon(dataset_id)
             key = next_key if has_icon_key else cur_key
             github = next_github if has_icon_github else cur_github
             if has_icon_key and has_icon_github:
                 key, github = next_key or "", next_github or ""
-            self.meta.set_package_icon(dataset_id, icon_key=key or "", icon_github=github or "")
+            self.packages.set_package_icon(dataset_id, icon_key=key or "", icon_github=github or "")
         if has_description:
-            self.meta.set_package_description(dataset_id, next_description or "")
+            self.packages.set_package_description(dataset_id, next_description or "")
         payload = self._with_download_count(release_to_dict(row), auth)
         label = (
             stored_name
             if stored_name is not None
-            else self.meta.get_package_display_name(dataset_id)
+            else self.packages.get_package_display_name(dataset_id)
         )
         if label:
             payload["display_name"] = label
@@ -850,13 +844,13 @@ class PackageService:
         return payload
 
     def _latest_managed_release(self, dataset_id: str, auth: TokenInfo) -> Any:
-        rows = self.meta.list_releases(
+        rows = self.packages.list_releases(
             dataset_id_prefix=dataset_id,
             include_private=True,
         )
         owned = [r for r in rows if r.dataset_id == dataset_id and self.can_manage(r, auth)]
         if not owned:
-            draft = self.meta.get_draft(dataset_id)
+            draft = self.packages.get_draft(dataset_id)
             if draft is not None and self.access.can_write_draft(
                 draft, org_id=draft.org_id, auth=auth
             ):
@@ -868,7 +862,7 @@ class PackageService:
     def patch_visibility(
         self, *, dataset_id: str, version: str, visibility: str, auth: TokenInfo
     ) -> dict[str, Any]:
-        row = self.meta.get_by_version(dataset_id, version)
+        row = self.packages.get_by_version(dataset_id, version)
         if row is None or not self.can_manage(row, auth):
             raise RegistryAppError("not_found", "release not found", http_status=404)
         if visibility not in {"public", "private"}:
@@ -878,7 +872,7 @@ class PackageService:
                 http_status=400,
             )
         try:
-            updated = self.meta.set_release_visibility(dataset_id, version, visibility)
+            updated = self.packages.set_release_visibility(dataset_id, version, visibility)
         except LookupError as exc:
             raise RegistryAppError("not_found", "release not found", http_status=404) from exc
         return self._with_download_count(release_to_dict(updated), auth)
@@ -898,11 +892,11 @@ class PackageService:
                 http_status=400,
             )
         if favorited:
-            self.meta.add_package_favorite(auth.user_id, row.dataset_id)
+            self.packages.add_package_favorite(auth.user_id, row.dataset_id)
         else:
-            self.meta.remove_package_favorite(auth.user_id, row.dataset_id)
-        counts = self.meta.package_favorite_counts([row.dataset_id])
-        starred = self.meta.package_favorites_for_user(auth.user_id, [row.dataset_id])
+            self.packages.remove_package_favorite(auth.user_id, row.dataset_id)
+        counts = self.packages.package_favorite_counts([row.dataset_id])
+        starred = self.packages.package_favorites_for_user(auth.user_id, [row.dataset_id])
         return {
             "dataset_id": row.dataset_id,
             "package_kind": kind,
@@ -913,13 +907,13 @@ class PackageService:
     def _latest_visible_release(self, dataset_id: str, auth: TokenInfo) -> ReleaseRow:
         rows = [
             r
-            for r in self.meta.list_versions(dataset_id, include_private=True)
+            for r in self.packages.list_versions(dataset_id, include_private=True)
             if r.dataset_id == dataset_id and self.access.visible_package(r, auth)
         ]
         if rows:
             rows.sort(key=lambda r: r.created_at, reverse=True)
             return rows[0]
-        draft = self.meta.get_draft(dataset_id)
+        draft = self.packages.get_draft(dataset_id)
         if draft is not None and self.access.entitled_to_draft(draft, auth):
             return draft.as_release()
         raise RegistryAppError("not_found", "package not found", http_status=404)
@@ -934,15 +928,15 @@ class PackageService:
     ) -> ReleaseRow:
         draft: DraftRow | None = None
         if package_digest:
-            row = self.meta.get_by_digest(dataset_id, package_digest)
+            row = self.packages.get_by_digest(dataset_id, package_digest)
             if row is None:
-                draft = self.meta.get_draft_by_digest(dataset_id, package_digest)
+                draft = self.packages.get_draft_by_digest(dataset_id, package_digest)
         elif version:
             if is_draft_version(version):
-                draft = self.meta.get_draft(dataset_id)
+                draft = self.packages.get_draft(dataset_id)
                 row = None
             else:
-                row = self.meta.get_by_version(dataset_id, version)
+                row = self.packages.get_by_version(dataset_id, version)
         else:
             row = None
         if draft is not None:
@@ -974,13 +968,13 @@ class PackageService:
             return True
         if not auth.user_id or not existing.org_id:
             return False
-        mem = self.meta.membership(existing.org_id, auth.user_id)
+        mem = self.orgs.membership(existing.org_id, auth.user_id)
         return mem is not None and mem.role == "owner"
 
     def _gc_blob(self, blob_digest: str) -> bool:
         if not blob_digest:
             return False
-        if self.meta.count_package_blob_refs(blob_digest) > 0:
+        if self.packages.count_package_blob_refs(blob_digest) > 0:
             return False
         return bool(self.blobs.delete(blob_digest, prefix="packages"))
 
@@ -989,7 +983,7 @@ class PackageService:
 
         index = build_index_from_archive(archive.read_bytes(), package_digest=package_digest)
         tasks, has_shared = index.list_tasks()
-        self.meta.put_package_task_summary(
+        self.packages.put_package_task_summary(
             package_digest,
             has_shared=has_shared,
             tasks=tasks,
@@ -1014,7 +1008,7 @@ class PackageService:
                 http_status=500,
             ) from exc
         tasks, has_shared = index.list_tasks()
-        self.meta.put_package_task_summary(
+        self.packages.put_package_task_summary(
             package_digest,
             has_shared=has_shared,
             tasks=tasks,
@@ -1026,9 +1020,9 @@ class PackageService:
     def _gc_task_summary(self, package_digest: str) -> None:
         if not package_digest:
             return
-        if self.meta.count_package_digest_refs(package_digest) > 0:
+        if self.packages.count_package_digest_refs(package_digest) > 0:
             return
-        self.meta.delete_package_task_summary(package_digest)
+        self.packages.delete_package_task_summary(package_digest)
 
     def _attach_task_job_stats(
         self,
@@ -1046,7 +1040,7 @@ class PackageService:
         hits: dict[str, list[tuple[float, str | None, float | None]]] = {
             task_id: [] for task_id in wanted
         }
-        for row in self.meta.list_suite_task_refs(dataset_id):
+        for row in self.packages.list_suite_task_refs(dataset_id):
             if not self.access.visible_result(
                 result_kind="suite",
                 result_id=str(row.get("suite_run_id") or ""),

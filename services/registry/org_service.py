@@ -68,12 +68,12 @@ def normalize_description(raw: object, *, max_len: int) -> str:
 
 
 class OrgService:
-    def __init__(self, meta: Any, access: AccessPolicy) -> None:
-        self.meta = meta
+    def __init__(self, orgs: Any, access: AccessPolicy) -> None:
+        self.orgs = orgs
         self.access = access
 
     def get(self, org_id: str) -> Any:
-        return self.meta.get_org(org_id)
+        return self.orgs.get_org(org_id)
 
     def owner_status(self, org_id: str, auth: TokenInfo) -> str:
         return self.access.org_owner_status(org_id=org_id, auth=auth)
@@ -109,7 +109,7 @@ class OrgService:
         if is_official_upload_org(name):
             is_claimable = False
         try:
-            org = self.meta.create_org(
+            org = self.orgs.create_org(
                 name=name,
                 owner_user_id=auth.user_id,
                 display_name=display_name,
@@ -124,7 +124,7 @@ class OrgService:
         if not auth.user_id:
             raise RegistryAppError("unauthorized", "login required", http_status=401)
         items = []
-        for org, role in self.meta.list_orgs_for_user(auth.user_id):
+        for org, role in self.orgs.list_orgs_for_user(auth.user_id):
             d = org_to_dict(org)
             d["role"] = role
             items.append(d)
@@ -164,7 +164,7 @@ class OrgService:
         next_key: str | None = None
         next_github: str | None = None
         if has_icon_key or has_icon_github:
-            current = self.meta.get_org(org_id)
+            current = self.orgs.get_org(org_id)
             if current is None:
                 raise RegistryAppError("not_found", "org not found", http_status=404)
             key = normalize_icon_key(icon_key) if has_icon_key else current.icon_key
@@ -172,7 +172,7 @@ class OrgService:
             next_key = key or ""
             next_github = github or ""
         try:
-            org = self.meta.update_org(
+            org = self.orgs.update_org(
                 org_id,
                 display_name=name,
                 description=desc,
@@ -183,18 +183,18 @@ class OrgService:
             raise RegistryAppError("not_found", "org not found", http_status=404) from exc
         payload = org_to_dict(org)
         if auth.user_id:
-            mem = self.meta.membership(org.org_id, auth.user_id)
+            mem = self.orgs.membership(org.org_id, auth.user_id)
             if mem:
                 payload["role"] = mem.role
         return payload
 
     def get_public(self, *, org_id: str, auth: TokenInfo) -> dict[str, Any]:
-        org = self.meta.get_org(org_id.casefold())
+        org = self.orgs.get_org(org_id.casefold())
         if org is None:
             raise RegistryAppError("not_found", "org not found", http_status=404)
         payload = org_to_dict(org)
         if auth.user_id:
-            m = self.meta.membership(org.org_id, auth.user_id)
+            m = self.orgs.membership(org.org_id, auth.user_id)
             if m:
                 payload["role"] = m.role
         return payload
@@ -210,7 +210,7 @@ class OrgService:
                 http_status=403,
             )
         try:
-            org = self.meta.claim_org(org_id, auth.user_id)
+            org = self.orgs.claim_org(org_id, auth.user_id)
         except LookupError as exc:
             raise RegistryAppError("not_found", "org not found", http_status=404) from exc
         except PermissionError as exc:
@@ -268,7 +268,7 @@ class OrgService:
         token_hash = hashlib.sha256(plain.encode("utf-8")).hexdigest()
         prefix = plain[:16] + "…"
         try:
-            row = self.meta.create_invite_key(
+            row = self.orgs.create_invite_key(
                 org_id=org_id,
                 created_by=auth.user_id or "",
                 token_hash=token_hash,
@@ -285,14 +285,14 @@ class OrgService:
     def list_invites(self, *, org_id: str, auth: TokenInfo) -> dict[str, Any]:
         org_id = org_id.casefold()
         self._require_owner(org_id, auth)
-        items = [invite_key_to_dict(r) for r in self.meta.list_invite_keys(org_id)]
+        items = [invite_key_to_dict(r) for r in self.orgs.list_invite_keys(org_id)]
         return {"org_id": org_id, "items": items}
 
     def revoke_invite(self, *, org_id: str, key_id: str, auth: TokenInfo) -> dict[str, Any]:
         org_id = org_id.casefold()
         self._require_owner(org_id, auth)
         try:
-            row = self.meta.revoke_invite_key(org_id, key_id)
+            row = self.orgs.revoke_invite_key(org_id, key_id)
         except LookupError as exc:
             raise RegistryAppError("not_found", "invite key not found", http_status=404) from exc
         return invite_key_to_dict(row)
@@ -305,7 +305,7 @@ class OrgService:
             raise RegistryAppError("invalid_request", "invite_key required", http_status=400)
         token_hash = hashlib.sha256(invite.encode("utf-8")).hexdigest()
         try:
-            org, mem = self.meta.redeem_invite_key(token_hash=token_hash, user_id=auth.user_id)
+            org, mem = self.orgs.redeem_invite_key(token_hash=token_hash, user_id=auth.user_id)
         except LookupError as exc:
             raise RegistryAppError("not_found", "invalid invite key", http_status=404) from exc
         except PermissionError as exc:
@@ -319,15 +319,15 @@ class OrgService:
 
     def list_members(self, *, org_id: str, auth: TokenInfo) -> dict[str, Any]:
         org_id = org_id.casefold()
-        org = self.meta.get_org(org_id)
+        org = self.orgs.get_org(org_id)
         if org is None:
             raise RegistryAppError("not_found", "org not found", http_status=404)
         if not AccessPolicy.is_admin(auth.scopes) and (
-            not auth.user_id or self.meta.membership(org_id, auth.user_id) is None
+            not auth.user_id or self.orgs.membership(org_id, auth.user_id) is None
         ):
             raise RegistryAppError("not_found", "org not found", http_status=404)
-        member_rows = self.meta.list_members(org_id)
-        profiles = self.meta.get_user_profiles([m.user_id for m in member_rows])
+        member_rows = self.orgs.list_members(org_id)
+        profiles = self.orgs.get_user_profiles([m.user_id for m in member_rows])
         members = [membership_to_dict(m, profile=profiles.get(m.user_id)) for m in member_rows]
         return {"org_id": org_id, "items": members}
 
@@ -337,7 +337,7 @@ class OrgService:
         org_id = org_id.casefold()
         if not auth.user_id and not AccessPolicy.is_admin(auth.scopes):
             raise RegistryAppError("unauthorized", "login required", http_status=401)
-        mem = self.meta.membership(org_id, auth.user_id) if auth.user_id else None
+        mem = self.orgs.membership(org_id, auth.user_id) if auth.user_id else None
         if not AccessPolicy.is_admin(auth.scopes) and (mem is None or mem.role != "owner"):
             raise RegistryAppError(
                 "forbidden",
@@ -348,7 +348,7 @@ class OrgService:
         if not target:
             raise RegistryAppError("invalid_request", "user_id required", http_status=400)
         try:
-            m = self.meta.add_member(org_id, target, role=role or "member")
+            m = self.orgs.add_member(org_id, target, role=role or "member")
         except LookupError as exc:
             raise RegistryAppError("not_found", "org not found", http_status=404) from exc
         except ValueError as exc:
@@ -363,7 +363,7 @@ class OrgService:
         org_id = org_id.casefold()
         if not auth.user_id and not AccessPolicy.is_admin(auth.scopes):
             raise RegistryAppError("unauthorized", "login required", http_status=401)
-        mem = self.meta.membership(org_id, auth.user_id) if auth.user_id else None
+        mem = self.orgs.membership(org_id, auth.user_id) if auth.user_id else None
         if not AccessPolicy.is_admin(auth.scopes) and (mem is None or mem.role != "owner"):
             raise RegistryAppError(
                 "forbidden",
@@ -381,7 +381,7 @@ class OrgService:
                 http_status=400,
             )
         try:
-            m = self.meta.set_member_role(org_id, target, role=wanted)
+            m = self.orgs.set_member_role(org_id, target, role=wanted)
         except LookupError as exc:
             raise RegistryAppError("not_found", "membership not found", http_status=404) from exc
         except PermissionError as exc:
@@ -394,7 +394,7 @@ class OrgService:
         org_id = org_id.casefold()
         if not auth.user_id:
             raise RegistryAppError("unauthorized", "user identity required", http_status=401)
-        caller = self.meta.membership(org_id, auth.user_id)
+        caller = self.orgs.membership(org_id, auth.user_id)
         if caller is None or caller.role != "owner":
             raise RegistryAppError(
                 "forbidden",
@@ -411,7 +411,7 @@ class OrgService:
                 http_status=400,
             )
         try:
-            new_target, new_caller = self.meta.transfer_owner(
+            new_target, new_caller = self.orgs.transfer_owner(
                 org_id, from_user_id=auth.user_id, to_user_id=target
             )
         except LookupError as exc:
@@ -437,7 +437,7 @@ class OrgService:
     def remove_member(self, *, org_id: str, user_id: str, auth: TokenInfo) -> dict[str, Any]:
         org_id = org_id.casefold()
         target = _normalize_user_id(user_id) or user_id.casefold()
-        mem = self.meta.membership(org_id, auth.user_id) if auth.user_id else None
+        mem = self.orgs.membership(org_id, auth.user_id) if auth.user_id else None
         if not AccessPolicy.is_admin(auth.scopes) and (mem is None or mem.role != "owner"):
             raise RegistryAppError(
                 "forbidden",
@@ -445,7 +445,7 @@ class OrgService:
                 http_status=403,
             )
         try:
-            self.meta.remove_member(org_id, target)
+            self.orgs.remove_member(org_id, target)
         except LookupError as exc:
             raise RegistryAppError("not_found", "membership not found", http_status=404) from exc
         except PermissionError as exc:
@@ -457,7 +457,7 @@ class OrgService:
         if not auth.user_id:
             raise RegistryAppError("unauthorized", "user identity required", http_status=401)
         try:
-            self.meta.leave_org(org_id, auth.user_id)
+            self.orgs.leave_org(org_id, auth.user_id)
         except LookupError as exc:
             raise RegistryAppError("not_found", "membership not found", http_status=404) from exc
         except PermissionError as exc:
@@ -468,7 +468,7 @@ class OrgService:
         org_id = org_id.casefold()
         self._require_owner(org_id, auth)
         try:
-            self.meta.delete_org(org_id)
+            self.orgs.delete_org(org_id)
         except LookupError as exc:
             raise RegistryAppError("not_found", "org not found", http_status=404) from exc
         except ValueError as exc:

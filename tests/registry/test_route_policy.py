@@ -20,7 +20,7 @@ def test_route_without_access_cannot_be_constructed() -> None:
 
 
 def test_publish_access_requires_scope() -> None:
-    policy = AccessPolicy(meta=object())
+    policy = AccessPolicy(orgs=object(), packages=object(), results=object())
     denied = policy.enforce_route_access(
         "publish",
         TokenInfo(scopes=frozenset({"read"}), user_id="alice"),

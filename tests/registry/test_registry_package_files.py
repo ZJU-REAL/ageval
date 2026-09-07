@@ -204,7 +204,7 @@ def test_oversize_http_returns_truncated_preview(
     """Inject a large blob; Hub preview gets a truncated head (not 413)."""
     summary = _publish_public(registry_server, monkeypatch)
     state = registry_server["state"]
-    row = state.meta.get_by_digest(summary["dataset_id"], summary["package_digest"])
+    row = state.stores.packages.get_by_digest(summary["dataset_id"], summary["package_digest"])
     assert row is not None
     big = b"z" * (MAX_FILE_BYTES + 50)
     archive = _gzip_tar_with_file("huge.txt", big)

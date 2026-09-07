@@ -14,15 +14,15 @@ _USER_DESCRIPTION_MAX = 280
 
 
 class UserService:
-    def __init__(self, meta: Any) -> None:
-        self.meta = meta
+    def __init__(self, orgs: Any) -> None:
+        self.orgs = orgs
 
     def get_public(self, user_id: str) -> dict[str, Any]:
         uid = _normalize_user_id(user_id)
         if not uid:
             raise RegistryAppError("invalid_request", "user_id required", http_status=400)
-        profile = self.meta.get_user_profile(uid)
-        memberships = self.meta.list_orgs_for_user(uid)
+        profile = self.orgs.get_user_profile(uid)
+        memberships = self.orgs.list_orgs_for_user(uid)
         if profile is None and not memberships:
             raise RegistryAppError("not_found", "user not found", http_status=404)
         official_orgs: list[dict[str, Any]] = []
@@ -62,5 +62,5 @@ class UserService:
         if _normalize_user_id(auth.user_id) != uid:
             raise RegistryAppError("forbidden", "cannot edit another user", http_status=403)
         text = normalize_description(description, max_len=_USER_DESCRIPTION_MAX)
-        self.meta.set_user_description(uid, text)
+        self.orgs.set_user_description(uid, text)
         return self.get_public(uid)

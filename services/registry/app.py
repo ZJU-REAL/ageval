@@ -80,11 +80,13 @@ from services.registry.store import (  # noqa: E402
     ADMIN_SCOPES,
     FilesystemBlobStore,
     MemoryBlobStore,
-    MetadataStore,
-    PostgresMetadataStore,
     PostgresTokenStore,
     S3BlobStore,
     SqliteTokenStore,
+)
+from services.registry.store_schema import (  # noqa: E402
+    open_sqlite_stores,
+    open_stores,
 )
 from services.registry.upload_slots import (  # noqa: E402
     UploadSlotPool,
@@ -108,7 +110,7 @@ class RegistryState:
     def __init__(
         self,
         *,
-        meta: Any,
+        stores: Any,
         blobs: Any,
         tokens: Any,
         max_upload: int = MAX_UPLOAD_BYTES,
@@ -117,10 +119,12 @@ class RegistryState:
         github_login_allowlist: frozenset[str] | None = None,
         upload_slots: int | UploadSlotPool | None = None,
     ) -> None:
-        self.meta = meta
+        self.stores = stores
         self.blobs = blobs
         self.tokens = tokens
-        self.access = AccessPolicy(meta=meta)
+        self.access = AccessPolicy(
+            orgs=stores.orgs, packages=stores.packages, results=stores.results
+        )
         if isinstance(upload_slots, UploadSlotPool):
             self.upload_slots = upload_slots
         else:
@@ -137,17 +141,29 @@ class RegistryState:
 
         self.auth = AuthService(
             tokens,
-            meta=meta,
+            orgs=stores.orgs,
             github_client_id=github_client_id,
             github_client_secret=github_client_secret,
             github_login_allowlist=github_login_allowlist or frozenset(),
         )
-        self.packages = PackageService(meta, blobs, self.access, max_upload=max_upload)
-        self.results = ResultService(meta, blobs, self.access, max_upload=max_upload)
-        self.runtimes = RuntimeService(meta, self.results)
-        self.requests = RequestService(meta, self.access, self.results)
-        self.orgs = OrgService(meta, self.access)
-        self.users = UserService(meta)
+        self.packages = PackageService(
+            stores.packages, stores.orgs, blobs, self.access, max_upload=max_upload
+        )
+        self.results = ResultService(
+            stores.results,
+            stores.packages,
+            stores.orgs,
+            stores.inbox,
+            blobs,
+            self.access,
+            max_upload=max_upload,
+        )
+        self.runtimes = RuntimeService(stores.inbox, stores.packages, self.results)
+        self.requests = RequestService(
+            stores.inbox, stores.orgs, stores.packages, stores.results, self.access, self.results
+        )
+        self.orgs = OrgService(stores.orgs, self.access)
+        self.users = UserService(stores.orgs)
         self.max_upload = max_upload
         self.spool_dir = Path(tempfile.gettempdir()) / "ageval-registry-spool"
         self.spool_dir.mkdir(parents=True, exist_ok=True)
@@ -220,14 +236,14 @@ def build_default_state(
 ) -> tuple[RegistryState, str]:
     """Zero-dep path: SQLite meta + filesystem (or memory) blob + SQLite tokens."""
     db_path = data_dir / "meta.sqlite3"
-    meta = MetadataStore(db_path)
+    stores = open_sqlite_stores(db_path)
     tokens: Any = SqliteTokenStore(db_path)
     blobs: Any = MemoryBlobStore() if memory_blob else FilesystemBlobStore(data_dir / "blobs")
     token = bootstrap_token or secrets.token_urlsafe(24)
     tokens.add(token, ADMIN_SCOPES, github_user="bootstrap")
     return (
         RegistryState(
-            meta=meta,
+            stores=stores,
             blobs=blobs,
             tokens=tokens,
             github_client_id=os.environ.get("AGEVAL_GITHUB_CLIENT_ID"),
@@ -263,7 +279,9 @@ def build_state_from_env(
         )
 
     database_url, s3_endpoint = require_public_backend()
-    meta = PostgresMetadataStore(database_url)
+    from services.registry.sql_adapter import PostgresAdapter
+
+    stores = open_stores(adapter=PostgresAdapter(database_url))
     tokens = PostgresTokenStore(database_url)
     blobs = S3BlobStore(
         endpoint=s3_endpoint,
@@ -276,7 +294,7 @@ def build_state_from_env(
     tokens.add(token, ADMIN_SCOPES, github_user="bootstrap")
     return (
         RegistryState(
-            meta=meta,
+            stores=stores,
             blobs=blobs,
             tokens=tokens,
             github_client_id=os.environ.get("AGEVAL_GITHUB_CLIENT_ID"),

@@ -83,8 +83,9 @@ def attach_agent_refs(
 
 
 class RuntimeService:
-    def __init__(self, meta: Any, results: Any) -> None:
-        self.meta = meta
+    def __init__(self, inbox: Any, packages: Any, results: Any) -> None:
+        self.inbox = inbox
+        self.packages = packages
         self.results = results
 
     def performances_for_agent(self, package_id: str, auth: TokenInfo) -> list[dict[str, Any]]:
@@ -111,7 +112,7 @@ class RuntimeService:
         harness = canonical_harness_id((package_id or "").strip())
         if harness is None:
             return None
-        stored = self.meta.get_performance_collect_mode(harness)
+        stored = self.inbox.get_performance_collect_mode(harness)
         mode = stored if stored in COLLECT_MODES else DEFAULT_BUILTIN_COLLECT
         return {"mode": mode, "can_edit": auth_is_maintainer(auth)}
 
@@ -132,7 +133,7 @@ class RuntimeService:
         want = (mode or "").strip()
         if want not in COLLECT_MODES:
             raise RegistryAppError("invalid_request", "unknown collect mode", http_status=400)
-        self.meta.set_performance_collect_mode(
+        self.inbox.set_performance_collect_mode(
             package_id=harness, mode=want, updated_by=auth.user_id or ""
         )
         payload = self.collect_payload(harness, auth)
@@ -140,18 +141,18 @@ class RuntimeService:
         return payload
 
     def _collect_mode(self, harness_id: str) -> str:
-        stored = self.meta.get_performance_collect_mode(harness_id)
+        stored = self.inbox.get_performance_collect_mode(harness_id)
         if stored in COLLECT_MODES:
             return stored
         return DEFAULT_BUILTIN_COLLECT
 
     def _reduce_builtin(self, harness_id: str, auth: TokenInfo) -> list[dict[str, Any]]:
-        official = official_dataset_ids(self.meta.list_releases(include_private=True))
+        official = official_dataset_ids(self.packages.list_releases(include_private=True))
         listed = self.results.list_suites(auth=auth, dataset_id=None)
         items = [s for s in (listed.get("items") or []) if isinstance(s, Mapping)]
         suite_ids = [str(s.get("suite_run_id") or "") for s in items]
-        consents = self.meta.list_agent_consents_for_suites(suite_ids)
-        canonicals = self.meta.list_canonical_models_for_suites(suite_ids)
+        consents = self.inbox.list_agent_consents_for_suites(suite_ids)
+        canonicals = self.inbox.list_canonical_models_for_suites(suite_ids)
         mode = self._collect_mode(harness_id)
         digest_cache: dict[tuple[str, str], str] = {}
         out: list[dict[str, Any]] = []
@@ -167,7 +168,7 @@ class RuntimeService:
             consented = harness_id in (consents.get(sid) or set())
             if not auto and not consented:
                 continue
-            package_digest = _package_digest_for_suite(self.meta, suite, digest_cache)
+            package_digest = _package_digest_for_suite(self.packages, suite, digest_cache)
             rows = _performances_from_suite(
                 suite,
                 package_digest=package_digest,
@@ -182,12 +183,12 @@ class RuntimeService:
         return out
 
     def _reduce(self, auth: TokenInfo) -> dict[str, list[dict[str, Any]]]:
-        official = official_dataset_ids(self.meta.list_releases(include_private=True))
+        official = official_dataset_ids(self.packages.list_releases(include_private=True))
         listed = self.results.list_suites(auth=auth, dataset_id=None)
         items = [s for s in (listed.get("items") or []) if isinstance(s, Mapping)]
         suite_ids = [str(s.get("suite_run_id") or "") for s in items]
-        consents = self.meta.list_agent_consents_for_suites(suite_ids)
-        canonicals = self.meta.list_canonical_models_for_suites(suite_ids)
+        consents = self.inbox.list_agent_consents_for_suites(suite_ids)
+        canonicals = self.inbox.list_canonical_models_for_suites(suite_ids)
         grouped: dict[str, list[dict[str, Any]]] = {}
         digest_cache: dict[tuple[str, str], str] = {}
         for suite in items:
@@ -195,7 +196,7 @@ class RuntimeService:
                 continue
             sid = str(suite.get("suite_run_id") or "")
             allowed = consents.get(sid) or set()
-            package_digest = _package_digest_for_suite(self.meta, suite, digest_cache)
+            package_digest = _package_digest_for_suite(self.packages, suite, digest_cache)
             for row in _with_canonical_models(
                 _performances_from_suite(suite, package_digest=package_digest),
                 canonicals.get(sid) or {},
@@ -234,7 +235,7 @@ class RuntimeService:
                 raise RegistryAppError("forbidden", "maintainer required", http_status=403)
             store_id = harness
         else:
-            rows = self.meta.list_versions(agent_id, include_private=True)
+            rows = self.packages.list_versions(agent_id, include_private=True)
             if not rows:
                 raise RegistryAppError("not_found", "agent package not found", http_status=404)
             try:
@@ -297,7 +298,7 @@ def _agent_refs_from_overlay(overlay: Mapping[str, Any] | None) -> list[dict[str
 
 
 def _package_digest_for_suite(
-    meta: Any,
+    packages: Any,
     suite: Mapping[str, Any],
     cache: dict[tuple[str, str], str],
 ) -> str:
@@ -310,7 +311,7 @@ def _package_digest_for_suite(
         return cache[key]
     digest = ""
     try:
-        release = meta.get_by_version(dataset_id, version)
+        release = packages.get_by_version(dataset_id, version)
     except Exception:  # noqa: BLE001 — performance stays YAML-only
         release = None
     if release is not None:

@@ -10,7 +10,10 @@ from services.registry.access import AccessPolicy
 from services.registry.errors import RegistryAppError
 from services.registry.package_service import PackageService
 from services.registry.result_service import ResultService
-from services.registry.store import MemoryBlobStore, MetadataStore, TokenInfo
+from services.registry.store import MemoryBlobStore, TokenInfo
+from services.registry.store_schema import (
+    open_sqlite_stores,
+)
 
 from ageval.registry.archive import MEDIA_TYPE, build_archive
 from ageval.registry.digest import compute_package_digest
@@ -20,12 +23,12 @@ FIXTURE = REPO / "tests" / "fixtures" / "datasets" / "publish-min"
 
 
 def _services(tmp_path: Path) -> ResultService:
-    meta = MetadataStore(tmp_path / "meta.sqlite3")
+    meta = open_sqlite_stores(tmp_path / "meta.sqlite3")
     blobs = MemoryBlobStore()
-    access = AccessPolicy(meta=meta)
-    packages = PackageService(meta, blobs, access, max_upload=64 * 1024 * 1024)
+    access = AccessPolicy(orgs=meta.orgs, packages=meta.packages, results=meta.results)
+    packages = PackageService(meta.packages, meta.orgs, blobs, access, max_upload=64 * 1024 * 1024)
     archive, blob_digest, size = build_archive(FIXTURE)
-    packages.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    packages.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     packages.publish(
         meta={
@@ -41,7 +44,15 @@ def _services(tmp_path: Path) -> ResultService:
         archive=_as_path(tmp_path, archive, "release.tar.gz"),
         auth=auth,
     )
-    return ResultService(meta, blobs, access, max_upload=64 * 1024 * 1024)
+    return ResultService(
+        meta.results,
+        meta.packages,
+        meta.orgs,
+        meta.inbox,
+        blobs,
+        access,
+        max_upload=64 * 1024 * 1024,
+    )
 
 
 def _as_path(tmp_path: Path, data: bytes, name: str) -> Path:

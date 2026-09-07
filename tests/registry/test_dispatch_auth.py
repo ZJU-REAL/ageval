@@ -27,13 +27,14 @@ def test_publish_without_scope_does_not_enter_store(tmp_path: Path) -> None:
     server, ctx = _start(tmp_path)
     port = server.server_address[1]
     calls: list[Any] = []
-    original = ctx["state"].meta.insert
+    packages_store = ctx["state"].stores.packages
+    original = packages_store.insert
 
     def _spy(row: Any) -> None:
         calls.append(row)
         return original(row)
 
-    ctx["state"].meta.insert = _spy  # type: ignore[method-assign]
+    packages_store.insert = _spy  # type: ignore[method-assign]
     try:
         conn = HTTPConnection("127.0.0.1", port, timeout=5)
         body = b'--x\r\nContent-Disposition: form-data; name="metadata"\r\n\r\n{}\r\n--x--\r\n'

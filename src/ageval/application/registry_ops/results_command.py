@@ -6,11 +6,15 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ageval.application.suite import ensure_suite_metrics, ensure_suite_task_refs
+from ageval.application.suite import document as suite_document
 from ageval.application.suite.suite_usage import merge_suite_usage
 from ageval.config.errors import ConfigError
 from ageval.evidence.identity import dataset_identity
-from ageval.evidence.locators import default_runs_root, resolve_attempt_run_dir
+from ageval.evidence.locators import (
+    default_runs_root,
+    default_suite_runs_root,
+    resolve_attempt_run_dir,
+)
 from ageval.registry.client import RegistryError
 from ageval.registry.resolve import resolve_dataset_root
 from ageval.registry.results_archive import (
@@ -86,7 +90,7 @@ def _read_run_meta(run_dir: Path) -> dict[str, Any]:
 
 def _resolve_suite_dir(dataset_root: Path, suite_run_id: str) -> Path:
     root = dataset_root.expanduser().resolve(strict=False)
-    candidate = root / ".ageval" / "suite-runs" / suite_run_id
+    candidate = default_suite_runs_root(root) / suite_run_id
     if candidate.is_dir():
         return candidate
     raise ConfigError(
@@ -97,70 +101,23 @@ def _resolve_suite_dir(dataset_root: Path, suite_run_id: str) -> Path:
 
 
 def _load_suite_summary(suite_dir: Path) -> dict[str, Any]:
-    path = suite_dir / "summary.json"
-    if not path.is_file():
-        raise ConfigError(
-            "invalid_package",
-            f"suite summary missing: {path}",
-            location=str(path),
-        )
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ConfigError(
-            "invalid_package",
-            f"unreadable suite summary: {exc}",
-            location=str(path),
-        ) from exc
-    if not isinstance(data, dict):
-        raise ConfigError(
-            "invalid_package",
-            "suite summary must be a JSON object",
-            location=str(path),
-        )
-    return data
-
-
-def _task_rows_from_summary(summary: dict[str, Any]) -> list[dict[str, Any]]:
-    raw = summary.get("tasks")
-    if not isinstance(raw, list):
-        return []
-    return [t for t in raw if isinstance(t, dict)]
+    return suite_document.load_summary_file(
+        suite_dir / "summary.json",
+        missing_code="invalid_package",
+        invalid_code="invalid_package",
+    )
 
 
 def _refuse_in_progress_snapshot(
     summary: dict[str, Any], suite_dir: Path, suite_run_id: str
 ) -> None:
-    """A live ``running``/``cancelling`` snapshot is not a complete suite."""
-    snapshot_status = str(summary.get("status") or "").strip().lower()
-    if snapshot_status in {"running", "cancelling"}:
-        raise ConfigError(
-            "suite_in_progress",
-            f"suite {suite_run_id} is still {snapshot_status}; "
-            "an in-progress summary is an observational snapshot, not a complete suite",
-            location=str(suite_dir / "summary.json"),
-        )
+    suite_document.refuse_in_progress_snapshot(
+        summary, suite_dir=suite_dir, suite_run_id=suite_run_id
+    )
 
 
 def _suite_metrics_and_refs(summary: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Resolve metrics + task_refs, recomputing pass@k / n,c when recoverable (#60 A).
-
-    Recompute is local-only (list/get/upload). Hub never becomes the live
-    pass@k authority. Missing k maps with complete ``attempts[]`` or per-task
-    ``n``/``c`` are restored before upload.
-    """
-    task_rows = _task_rows_from_summary(summary)
-    metrics = ensure_suite_metrics(summary, task_rows=task_rows)
-    raw_refs = summary.get("task_refs")
-    existing: list[dict[str, Any]] | None = None
-    if isinstance(raw_refs, list):
-        existing = [t for t in raw_refs if isinstance(t, dict)]
-    task_refs = ensure_suite_task_refs(
-        summary,
-        task_rows=task_rows,
-        existing_refs=existing,
-    )
-    return metrics, task_refs
+    return suite_document.metrics_and_refs(summary)
 
 
 def _config_fields_from_summary(summary: dict[str, Any]) -> dict[str, Any]:
@@ -822,7 +779,7 @@ class ResultsCommands:
         """List suite results from registry, or local ``.ageval/suite-runs/`` when *local* set."""
         if local is not None:
             root = resolve_dataset_root(local)
-            suite_root = root / ".ageval" / "suite-runs"
+            suite_root = default_suite_runs_root(root)
             items: list[dict[str, Any]] = []
             if suite_root.is_dir():
                 for child in sorted(suite_root.iterdir(), key=lambda p: p.name, reverse=True):

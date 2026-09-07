@@ -11,7 +11,10 @@ from services.registry.access import AccessPolicy
 from services.registry.brand_marks import ALLOWED_KEYS, normalize_icon_github
 from services.registry.errors import RegistryAppError
 from services.registry.package_service import PackageService
-from services.registry.store import MemoryBlobStore, MetadataStore, TokenInfo
+from services.registry.store import MemoryBlobStore, TokenInfo
+from services.registry.store_schema import (
+    open_sqlite_stores,
+)
 
 from ageval.registry.archive import MEDIA_TYPE, build_archive
 from ageval.registry.digest import compute_package_digest
@@ -22,9 +25,15 @@ ASSETS = REPO / "apps/hub/src/lib/brand-marks/assets"
 
 
 def _service(tmp_path: Path) -> PackageService:
-    meta = MetadataStore(tmp_path / "meta.sqlite3")
+    meta = open_sqlite_stores(tmp_path / "meta.sqlite3")
     blobs = MemoryBlobStore()
-    return PackageService(meta, blobs, AccessPolicy(meta=meta), max_upload=64 * 1024 * 1024)
+    return PackageService(
+        meta.packages,
+        meta.orgs,
+        blobs,
+        AccessPolicy(orgs=meta.orgs, packages=meta.packages, results=meta.results),
+        max_upload=64 * 1024 * 1024,
+    )
 
 
 def _meta_archive(tmp_path: Path) -> tuple[dict[str, object], Path]:
@@ -70,7 +79,7 @@ def test_normalize_icon_github() -> None:
 
 def test_patch_icon_roundtrip(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive = _meta_archive(tmp_path)
     auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     svc.publish(meta=meta, archive=archive, auth=auth)

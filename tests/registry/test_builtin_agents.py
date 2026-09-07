@@ -14,7 +14,10 @@ from services.registry.builtin_agents import builtin_harness_ids
 from services.registry.errors import RegistryAppError
 from services.registry.http_api import RegistryHttpApi
 from services.registry.package_service import PackageService
-from services.registry.store import MemoryBlobStore, MetadataStore, TokenInfo
+from services.registry.store import MemoryBlobStore, TokenInfo
+from services.registry.store_schema import (
+    open_sqlite_stores,
+)
 
 from ageval.registry.agent_package import (
     AGENT_MEDIA_TYPE,
@@ -30,9 +33,15 @@ SEVEN = frozenset(
 
 
 def _service(tmp_path: Path) -> PackageService:
-    meta = MetadataStore(tmp_path / "meta.sqlite3")
+    meta = open_sqlite_stores(tmp_path / "meta.sqlite3")
     blobs = MemoryBlobStore()
-    return PackageService(meta, blobs, AccessPolicy(meta=meta), max_upload=64 * 1024 * 1024)
+    return PackageService(
+        meta.packages,
+        meta.orgs,
+        blobs,
+        AccessPolicy(orgs=meta.orgs, packages=meta.packages, results=meta.results),
+        max_upload=64 * 1024 * 1024,
+    )
 
 
 def _agent_meta(tmp_path: Path) -> tuple[dict[str, object], Path]:
@@ -61,7 +70,7 @@ def test_catalog_has_seven_harness_ids() -> None:
 
 def test_explore_unions_builtin_with_store(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive = _agent_meta(tmp_path)
     alice = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     svc.publish(meta=meta, archive=archive, auth=alice)
@@ -127,7 +136,7 @@ def test_unfiltered_list_omits_builtin_agents(tmp_path: Path) -> None:
 
 def test_mine_orgs_favorited_omit_builtin_agents(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive = _agent_meta(tmp_path)
     alice = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     svc.publish(meta=meta, archive=archive, auth=alice)
@@ -225,7 +234,7 @@ def test_openai_http_kind_collision(tmp_path: Path) -> None:
 
 def test_publish_reserved_agent_id_fail_closed(tmp_path: Path) -> None:
     svc = _service(tmp_path)
-    svc.meta.create_org(name="acme", owner_user_id="alice", display_name="Acme")
+    svc.orgs.create_org(name="acme", owner_user_id="alice", display_name="Acme")
     meta, archive = _agent_meta(tmp_path)
     alice = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     for dataset_id in ("acme/pi", "acme/OpenAI-HTTP", "pi"):

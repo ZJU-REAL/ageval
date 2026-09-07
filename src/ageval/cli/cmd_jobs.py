@@ -28,9 +28,9 @@ def register(app: typer.Typer) -> None:
         ],
     ) -> None:
         """List the Jobs already on disk under a Dataset root."""
-        from ageval.viewer.jobs import list_jobs
+        from ageval.application.composition import build_local_jobs_commands
 
-        summary = list_jobs(dataset)
+        summary = build_local_jobs_commands().list_jobs(dataset)
         emit(summary)
 
     @sub.command("delete")

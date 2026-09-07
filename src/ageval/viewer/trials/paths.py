@@ -12,8 +12,7 @@ from typing import Any
 from urllib.parse import parse_qs
 
 from ageval.config.errors import ConfigError
-from ageval.evidence.locators import resolve_evidence_root
-from ageval.viewer.jobs import safe_id_segment
+from ageval.evidence.locators import resolve_evidence_root, safe_id_segment
 
 __all__ = [
     "parse_query",

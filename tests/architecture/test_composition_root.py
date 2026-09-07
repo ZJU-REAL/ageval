@@ -29,6 +29,7 @@ def test_cli_reaches_run_only_through_composition() -> None:
     assert "build_dataset_checkout" in sources
     assert "from ageval.application.run import" not in sources
     assert "from ageval.registry.resolve import" not in sources
+    assert "from ageval.viewer.jobs import" not in sources
 
 
 def test_cli_campaign_uses_composition() -> None:

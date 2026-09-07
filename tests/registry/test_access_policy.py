@@ -5,13 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 
 from services.registry.access import AccessPolicy
-from services.registry.store import MetadataStore, ReleaseRow, TokenInfo, now
+from services.registry.store import ReleaseRow, TokenInfo, now
+from services.registry.store_schema import (
+    open_sqlite_stores,
+)
 
 
 def test_visible_package_public_and_org_member(tmp_path: Path) -> None:
-    meta = MetadataStore(tmp_path / "meta.sqlite")
-    meta.create_org(name="acme", display_name="Acme", owner_user_id="alice")
-    policy = AccessPolicy(meta=meta)
+    meta = open_sqlite_stores(tmp_path / "meta.sqlite")
+    meta.orgs.create_org(name="acme", display_name="Acme", owner_user_id="alice")
+    policy = AccessPolicy(orgs=meta.orgs, packages=meta.packages, results=meta.results)
     private = ReleaseRow(
         dataset_id="acme/db",
         version="1.0.0",
@@ -23,7 +26,7 @@ def test_visible_package_public_and_org_member(tmp_path: Path) -> None:
         created_at=now(),
         org_id="acme",
     )
-    meta.insert(private)
+    meta.packages.insert(private)
     public = ReleaseRow(
         dataset_id="acme/pub",
         version="1.0.0",
@@ -35,7 +38,7 @@ def test_visible_package_public_and_org_member(tmp_path: Path) -> None:
         created_at=now(),
         org_id="acme",
     )
-    meta.insert(public)
+    meta.packages.insert(public)
     anon = TokenInfo(scopes=frozenset())
     assert policy.visible_package(public, anon) is True
     assert policy.visible_package(private, anon) is False
@@ -48,10 +51,10 @@ def test_visible_package_public_and_org_member(tmp_path: Path) -> None:
 
 
 def test_can_manage_package_owner_only(tmp_path: Path) -> None:
-    meta = MetadataStore(tmp_path / "meta.sqlite")
-    meta.create_org(name="acme", display_name="Acme", owner_user_id="alice")
-    meta.add_member("acme", "dave", role="member")
-    policy = AccessPolicy(meta=meta)
+    meta = open_sqlite_stores(tmp_path / "meta.sqlite")
+    meta.orgs.create_org(name="acme", display_name="Acme", owner_user_id="alice")
+    meta.orgs.add_member("acme", "dave", role="member")
+    policy = AccessPolicy(orgs=meta.orgs, packages=meta.packages, results=meta.results)
     row = ReleaseRow(
         dataset_id="acme/db",
         version="1.0.0",
@@ -69,9 +72,9 @@ def test_can_manage_package_owner_only(tmp_path: Path) -> None:
 
 
 def test_org_owner_status_matrix(tmp_path: Path) -> None:
-    meta = MetadataStore(tmp_path / "meta.sqlite")
-    meta.create_org(name="acme", display_name="Acme", owner_user_id="alice")
-    policy = AccessPolicy(meta=meta)
+    meta = open_sqlite_stores(tmp_path / "meta.sqlite")
+    meta.orgs.create_org(name="acme", display_name="Acme", owner_user_id="alice")
+    policy = AccessPolicy(orgs=meta.orgs, packages=meta.packages, results=meta.results)
     assert policy.org_owner_status(org_id="missing", auth=TokenInfo(scopes=frozenset())) == (
         "not_found"
     )
