@@ -54,7 +54,7 @@
 ```bash
 uv tool install ageval-cli
 # 装全依赖或者按需安装
-uv tool install 'ageval-cli[all]' # 一次装全
+uv tool install 'ageval-cli[all]' # CLI 可选后端一次装全（不含 Hub 服务）
 uv tool install 'ageval-cli[e2b]' # 按需装单个 extra
 
 ageval -V

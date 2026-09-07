@@ -21,17 +21,18 @@ Once installed, datasets come from the Hub by registry ref (`<dataset_id>@<versi
 Optional backends ship as extras. Install on demand; rerunning the same command upgrades in place (uv caches, so this is cheap):
 
 ```bash
-uv tool install 'ageval-cli[all]'   # everything at once
+uv tool install 'ageval-cli[all]'   # every CLI extra
 ```
 
 | Extra | For |
 | --- | --- |
 | `e2b` | [e2b](https://e2b.dev) cloud sandbox environment |
 | `daytona` | [Daytona](https://www.daytona.io) sandbox environment |
-| `registry` | Self-hosted Registry / Hub service |
 | `nooa` / `dsh` / `miniswe` | The matching external harness plugins |
 
-Missing extras or credentials fail the check at lock/run and the run does not start; the error includes the exact install command.
+`[all]` is those CLI extras, not a self-hosted Hub. To run the Registry service from a checkout: `uv sync --extra registry`.
+
+Missing extras or credentials fail lock/run. The error names the install command.
 
 ## Develop from source (contributors)
 
@@ -60,5 +61,3 @@ npx skills add ZJU-REAL/ageval --skill ageval-cli   # one skill
 | `ageval-plugin` | `ageval.plugin/1` |
 | `ageval-config-package` | dataset / task |
 | `ageval-sdk-harness` | `run.py` / SDK |
-
-Next: [First run](/docs/getting-started/first-run).

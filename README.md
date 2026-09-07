@@ -54,7 +54,7 @@ How to avoid rewriting scaffolds for the huge set of agent runtime × model × e
 ```bash
 uv tool install ageval-cli
 # install everything, or only what you need
-uv tool install 'ageval-cli[all]' # everything
+uv tool install 'ageval-cli[all]' # every CLI extra (not the Hub service)
 uv tool install 'ageval-cli[e2b]' # one extra at a time
 
 ageval -V

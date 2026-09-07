@@ -21,17 +21,18 @@ CLI 装好即可用：dataset 用 registry ref（`<dataset_id>@<version>`）从 
 可选后端以 extras 提供，按需安装；同一命令重跑即升级（uv 有缓存，开销很小）：
 
 ```bash
-uv tool install 'ageval-cli[all]'   # 一次装全
+uv tool install 'ageval-cli[all]'   # CLI 可选后端一次装全
 ```
 
 | Extra | 用途 |
 | --- | --- |
 | `e2b` | [e2b](https://e2b.dev) 云沙箱环境 |
 | `daytona` | [Daytona](https://www.daytona.io) 沙箱环境 |
-| `registry` | 自托管 Registry / Hub 服务 |
 | `nooa` / `dsh` / `miniswe` | 对应外部 harness 插件 |
 
-缺 extras 或凭据时 lock/run 检查不过就不能进入运行，报错信息带准确的安装命令。
+`[all]` 只装这些 CLI extra，不含自托管 Hub。要在本机跑 Registry 服务，用仓库里的 `uv sync --extra registry`。
+
+缺 extras 或凭据时 lock/run 过不了，报错里会带安装命令。
 
 ## 从源码开发（贡献者）
 
@@ -60,5 +61,3 @@ npx skills add ZJU-REAL/ageval --skill ageval-cli   # 单个技能
 | `ageval-plugin` | `ageval.plugin/1` |
 | `ageval-config-package` | dataset / task |
 | `ageval-sdk-harness` | `run.py` / SDK |
-
-下一步：[首次运行](/docs/getting-started/first-run)。

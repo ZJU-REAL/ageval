@@ -20,7 +20,7 @@ uv run ageval -h
 uv run ageval -V
 uv run ageval --version
 
-# when talking to a Postgres/S3-backed Registry process:
+# self-hosted Registry / Hub *service* only (not needed for `ageval registry` client):
 uv sync --extra registry
 ```
 
