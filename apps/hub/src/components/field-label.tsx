@@ -11,21 +11,23 @@ export function FieldLabel({
   htmlFor,
   className,
   hint,
+  as,
 }: {
   children: ReactNode;
   htmlFor?: string;
   className?: string;
   hint?: ReactNode;
+  /** Tag for the non-label title; defaults to p (h2/h3 keep section semantics). */
+  as?: "p" | "h2" | "h3";
 }) {
   const cls = cn("text-sm font-medium text-ink", className);
+  const Tag = as ?? "p";
   const title = htmlFor ? (
     <label htmlFor={htmlFor} className={cls}>
       {children}
     </label>
-  ) : hint ? (
-    <span className={cls}>{children}</span>
   ) : (
-    <p className={cls}>{children}</p>
+    <Tag className={cls}>{children}</Tag>
   );
   if (!hint) return title;
   const about =

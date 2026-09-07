@@ -11,6 +11,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { entityHintFromPackage, markFromPackage } from "@/lib/brand-marks";
 import { OfficialMark } from "@/components/official-mark";
 import { FileSplitPanel } from "@/components/file-split-panel";
+import { FieldLabel } from "@/components/field-label";
 import { MarketplaceCounts } from "@/components/marketplace-counts";
 import { PackageOwnerOps } from "@/components/package-owner-ops";
 import { PackageStarButton } from "@/components/star-toggle";
@@ -391,7 +392,12 @@ export function PluginDetailPage() {
           )}
 
           <section className="space-y-2">
-            <h2 className="text-sm font-medium text-ink">Declared slots</h2>
+            <FieldLabel
+              as="h2"
+              hint="Slots this plugin declares in plugin.yaml, grouped by Attempt stage (L0 environment → L5 cleanup). Click a slot to open the file that provides it."
+            >
+              Declared slots
+            </FieldLabel>
             <PluginSlotTimeline
               declared={declared}
               files={previewFiles}

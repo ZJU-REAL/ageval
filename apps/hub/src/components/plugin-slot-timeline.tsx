@@ -121,21 +121,23 @@ export function PluginSlotTimeline({
                 }
                 aria-hidden
               />
-              <span className="text-sm shrink-0">{label}</span>
+              <span className="text-sm font-medium shrink-0">{label}</span>
               {hit ? (
                 <span className="ml-auto flex min-w-0 flex-wrap justify-end gap-x-3 gap-y-1">
                   {slots.map((slot) => {
                     const path = resolvePluginEntryPath(slot.entry, files);
                     return (
-                      <HoverTip content={path}>
-                      <button
+                      <HoverTip
                         key={`${slot.kind}-${slot.id}`}
-                        type="button"
-                        onClick={() => onOpenPath(path)}
-                        className="cursor-pointer text-xs text-ink underline-offset-2 hover:underline hover:decoration-mute"
+                        content={path}
                       >
-                        {slot.id}
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpenPath(path)}
+                          className="cursor-pointer text-xs text-ink underline-offset-2 hover:underline hover:decoration-mute"
+                        >
+                          {slot.id}
+                        </button>
                       </HoverTip>
                     );
                   })}
