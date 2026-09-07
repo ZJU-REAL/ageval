@@ -244,7 +244,7 @@ ageval/
 │   ├── environments/protocol.py     # EnvironmentProvider · caps; no vendor SDK
 │   ├── plugins/
 │   │   ├── slots.py                 # exclusive / chain
-│   │   └── contrib/                 # acp · local · docker · e2b · daytona · ssh
+│   │   └── contrib/                 # acp · local · docker/attempt (official base, in the wheel) · e2b · daytona · ssh
 │   ├── runtime/                     # identity, parent Agent Service, task_worker
 │   ├── evaluation/                  # bind PASS
 │   └── evidence/                    # trajectory.jsonl layout
@@ -258,7 +258,6 @@ ageval/
 ├── apps/viewer                      # ageval view SPA
 ├── apps/hub                         # Hub SPA
 ├── services/registry/               # package + results HTTP
-├── docker/attempt/                  # official image; ACP entries baked in
 ├── docs/                            # mechanism design
 └── website/                         # product docs
 ```

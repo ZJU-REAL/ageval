@@ -1,4 +1,4 @@
-"""Pin parity: acp_entries.json ↔ docker/attempt/acp-entries.lock.json."""
+"""Pin parity: acp_entries.json ↔ contrib/docker/attempt/acp-entries.lock.json."""
 
 from __future__ import annotations
 
@@ -12,7 +12,11 @@ def test_host_registry_and_image_lock_pins_match() -> None:
     entries = json.loads(
         (REPO / "src/ageval/plugins/contrib/acp/acp_entries.json").read_text(encoding="utf-8")
     )
-    lock = json.loads((REPO / "docker/attempt/acp-entries.lock.json").read_text(encoding="utf-8"))
+    lock = json.loads(
+        (REPO / "src/ageval/plugins/contrib/docker/attempt/acp-entries.lock.json").read_text(
+            encoding="utf-8"
+        )
+    )
     assert entries["python_sdk"]["version"] == lock["python_sdk"]["version"]
     by_id = {e["entry_id"]: e for e in entries["entries"]}
     for entry_id, row in lock["entries"].items():
@@ -25,8 +29,14 @@ def test_host_registry_and_image_lock_pins_match() -> None:
 
 
 def test_install_script_pins_match_lock() -> None:
-    script = (REPO / "docker/attempt/install-executors.sh").read_text(encoding="utf-8")
-    lock = json.loads((REPO / "docker/attempt/acp-entries.lock.json").read_text(encoding="utf-8"))
+    script = (REPO / "src/ageval/plugins/contrib/docker/attempt/install-executors.sh").read_text(
+        encoding="utf-8"
+    )
+    lock = json.loads(
+        (REPO / "src/ageval/plugins/contrib/docker/attempt/acp-entries.lock.json").read_text(
+            encoding="utf-8"
+        )
+    )
     for _eid, row in lock["entries"].items():
         ver = row["acp_entry"]["version"]
         pkg = row["acp_entry"]["package"]

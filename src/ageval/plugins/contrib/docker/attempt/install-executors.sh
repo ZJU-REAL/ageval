@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install ageval first-party coding-agent engines + ACP entries into a Debian/Ubuntu
-# image layer (official L1 base). Exact pins match docker/attempt/acp-entries.lock.json
-# and src/ageval/adapters/acp_entries.json (Spec 19).
+# image layer (official L1 base). Exact pins match acp-entries.lock.json
+# next to this script and src/ageval/plugins/contrib/acp/acp_entries.json.
 #
 # Rules:
 # - No floating tags / latest.

@@ -78,6 +78,8 @@ def test_acp_never_learns_how_the_box_is_built() -> None:
 
 
 def test_docker_image_does_not_install_python_acp_sdk() -> None:
-    install = (REPO / "docker/attempt/install-executors.sh").read_text(encoding="utf-8")
+    install = (REPO / "src/ageval/plugins/contrib/docker/attempt/install-executors.sh").read_text(
+        encoding="utf-8"
+    )
     assert "agent-client-protocol" not in install
     assert "pip install" not in install

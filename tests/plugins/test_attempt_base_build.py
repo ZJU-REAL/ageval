@@ -1,17 +1,12 @@
-"""docker/attempt/build.py — base CPython selection and versioned tags."""
+"""Official Attempt base build — CPython selection, packaged recipe, versioned tags."""
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 
 import pytest
 
-_BUILD_SCRIPT = Path(__file__).resolve().parents[2] / "docker" / "attempt" / "build.py"
-_spec = importlib.util.spec_from_file_location("attempt_base_build", _BUILD_SCRIPT)
-assert _spec is not None and _spec.loader is not None
-build = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(build)
+from ageval.plugins.contrib.docker.attempt import ATTEMPT_DIR, build
 
 
 @pytest.mark.parametrize("version", ["3.9", "3.10", "3.12", "3.13"])
@@ -27,6 +22,12 @@ def test_invalid_python_version_shape(version: str) -> None:
 def test_default_tag_keeps_l1_for_312_and_versions_others() -> None:
     assert build.default_tag("3.12") == "ageval-attempt:l1"
     assert build.default_tag("3.13") == "ageval-attempt:py3.13"
+
+
+def test_packaged_attempt_dir_ships_build_inputs() -> None:
+    assert build.official_attempt_dir() == ATTEMPT_DIR
+    for name in build.BUILD_INPUT_NAMES:
+        assert (ATTEMPT_DIR / name).is_file(), name
 
 
 def test_buildx_command_passes_python_version(tmp_path: Path) -> None:

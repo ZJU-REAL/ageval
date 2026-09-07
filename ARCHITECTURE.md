@@ -143,7 +143,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   │   ├── defaults/                # environment_setup recognizes setup.sh
 │   │   └── contrib/
 │   │       ├── acp/                 # exclusive executor + attach_stdio client
-│   │       ├── docker/              # exclusive environment
+│   │       ├── docker/              # exclusive environment; attempt/ = official base recipe
 │   │       ├── local/
 │   │       ├── e2b/
 │   │       ├── daytona/
@@ -186,7 +186,6 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 ├── plugins/                         # external ageval.plugin/1
 │   ├── nooa/ / dsh/ / miniswe/ / acp-oneshot/
 │   └── home-files/ / agent-skills/
-├── docker/attempt/                  # official base: ACP entries written at image build
 ├── tests/
 ├── docs/
 └── website/
@@ -236,7 +235,7 @@ src/ageval/
 | `config/` | dataset resolve; read `task.yaml` / profiles; digest | Executing `run.py`, scoring |
 | `attempt/` | Phase order, `emit`, AttemptCtx | Vendor SDKs, `container_id` |
 | `environments/` | Protocol + caps + stream shapes | `import e2b` / `docker` / `paramiko` |
-| `plugins/contrib/docker/` | `docker exec`, compose, uid/gid, images | ACP protocol |
+| `plugins/contrib/docker/` | `docker exec`, compose, uid/gid, images; `attempt/` official base recipe | ACP protocol |
 | `plugins/contrib/e2b/` | E2B SDK, template alias (cached on that account; Core does not implement) | A Core cache layer |
 | `plugins/contrib/ssh/` | ssh A/B, `ssh -T` / `docker exec` | A fake in-process agent |
 | `plugins/contrib/acp/` | Parent ACP client, entry registry, consumer of `attach_stdio` | Layer-C writer; vendor stdout scrape |
@@ -395,7 +394,7 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | `environment: ssh` A/B | `plugins/contrib/ssh` | A has no image; B has a remote tag |
 | ACP coding-agent | `plugins/contrib/acp` | Sole coding-agent inlet; `attach_stdio` |
 | Other Agent backends | `openai-http` / `anthropic-http` / external `nooa` `dsh` | Not vendor stdout scrape |
-| Official base image | `docker/attempt/` | Bake every shipped ACP entry at build; no `npm i` at invoke |
+| Official base image | `plugins/contrib/docker/attempt/` | Bake every shipped ACP entry at build; no `npm i` at invoke |
 | ACP task image layer | `plugins/contrib/acp` | `config.image_layers` bakes the bound `options.entry` onto the task recipe |
 | Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is four aggregate stores (`store_*.py`) behind narrow protocols, one schema init in `store_schema.open_stores`, SQL only in `queries.py`, dialect only in `sql_adapter.py` |
 

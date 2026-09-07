@@ -34,7 +34,12 @@ from ageval.environments.protocol import (
     ExecResult,
     Placement,
 )
-from ageval.plugins.contrib.docker.images import daemon_available, docker, resolve_image
+from ageval.plugins.contrib.docker.images import (
+    daemon_available,
+    docker,
+    host_platform,
+    resolve_image,
+)
 
 BOX_ROOT = "/attempt"
 ATTEMPT_UID = 10001
@@ -110,7 +115,7 @@ class DockerHost:
         self._dockerfile = spec.dockerfile
         self._compose_file = spec.compose_file
         self._declared_image = _text(opts.get("image") or opts.get("docker_image"))
-        self._platform = _text(opts.get("platform")) or _host_platform()
+        self._platform = _text(opts.get("platform")) or host_platform()
         # The Agent runs inside the box and has to reach its provider.
         self._network = _text(opts.get("network")) or "bridge"
         self._user = _box_user(opts.get("user"))
@@ -146,7 +151,6 @@ class DockerHost:
         self._prepare_work_root()
         tag, _digest = resolve_image(
             task_root=self._task_root or self._repo_root,
-            repo_root=self._repo_root,
             dockerfile_rel=self._dockerfile,
             declared_image=self._declared_image,
             platform=self._platform,
@@ -551,13 +555,6 @@ def _make_box_writable(path: Path) -> None:
         for child in path.rglob("*"):
             with contextlib.suppress(OSError):
                 child.chmod(0o777 if child.is_dir() else 0o666)
-
-
-def _host_platform() -> str:
-    import platform
-
-    machine = platform.machine().lower()
-    return "linux/arm64" if machine in {"arm64", "aarch64"} else "linux/amd64"
 
 
 def _text(raw: object) -> str | None:

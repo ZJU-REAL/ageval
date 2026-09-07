@@ -4,8 +4,8 @@ The cache key is the recipe plus what it copies, never the task id or the lock
 digest — two tasks with the same recipe share one image, and editing the recipe
 invalidates it.
 
-Plugin bake layers honor parent ``AGEVAL_PIP_INDEX`` (same knob as
-``docker/attempt/build.py``). Unset omits the build-arg and leaves the content
+Plugin bake layers honor parent ``AGEVAL_PIP_INDEX`` (same knob as the
+official Attempt build). Unset omits the build-arg and leaves the content
 key unchanged. A non-empty value is ``PIP_INDEX_URL`` on the plugin-layer
 build only — task recipes and the official base path are untouched.
 
@@ -23,16 +23,20 @@ import os
 import re
 import shlex
 import subprocess
-import sys
 import tempfile
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from ageval.environments.protocol import EnvironmentFailure
+from ageval.plugins.contrib.docker.attempt import official_lock_path
+from ageval.plugins.contrib.docker.attempt.build import (
+    OfficialBuildError,
+    build_official_image,
+    host_platform,
+)
 
 BASE_TAG = "ageval-attempt:base"
 PACKAGE_TAG_PREFIX = "ageval-pkg"
-BASE_LOCK_PATH = Path(".ageval") / "runtime-images" / "attempt-base.json"
 DEFAULT_PYTHON_VERSION = "3.12"
 
 _BASE_FROM_RE = re.compile(
@@ -76,47 +80,37 @@ def base_tag_for(python_version: str | None) -> str:
 
 def base_lock_path(python_version: str | None) -> Path:
     """Per-version build lock so two bases do not overwrite each other's record."""
-    tag = base_tag_for(python_version)
-    if tag == BASE_TAG:
-        return BASE_LOCK_PATH
-    return BASE_LOCK_PATH.with_name(f"{BASE_LOCK_PATH.stem}-py{python_version}.json")
+    return official_lock_path(python_version)
 
 
-def ensure_base_image(repo_root: Path, *, python_version: str | None = None) -> str:
+def ensure_base_image(*, python_version: str | None = None, platform: str | None = None) -> str:
     """Digest of the official base image, building it when absent.
 
-    The base bakes the ACP entries, so a run must never fall back to installing
-    an agent at invoke time. A base whose upstream ``python:`` tag cannot be
-    pulled fails the build once — there is no fallback to the default version.
+    The recipe is the packaged ``attempt/`` directory next to this plugin, not
+    the process cwd. The base bakes the ACP entries, so a run must never fall
+    back to installing an agent at invoke time. A base whose upstream
+    ``python:`` tag cannot be pulled fails the build once — there is no
+    fallback to the default version.
     """
     tag = base_tag_for(python_version)
     digest = image_digest(tag)
     if digest is not None:
         return digest
-    build_script = repo_root / "docker" / "attempt" / "build.py"
-    if not build_script.is_file():
+    py = python_version or DEFAULT_PYTHON_VERSION
+    plat = platform or host_platform()
+    try:
+        digest = build_official_image(
+            tag=tag,
+            python_version=py,
+            platform=plat,
+            output_lock=official_lock_path(python_version),
+        )
+    except OfficialBuildError as exc:
         raise EnvironmentFailure(
             "environment_image_unresolved",
-            f"{tag} is missing and {build_script} is not in this checkout",
-        )
-    command = [
-        sys.executable,
-        str(build_script),
-        "--tag",
-        tag,
-        "--output-lock",
-        str(repo_root / base_lock_path(python_version)),
-    ]
-    if tag != BASE_TAG:
-        assert python_version is not None
-        command.extend(["--python-version", python_version])
-    built = subprocess.run(  # noqa: S603 — repo-local build entrypoint
-        command,
-        check=False,
-        cwd=str(repo_root),
-    )
-    digest = image_digest(tag)
-    if built.returncode != 0 or digest is None:
+            f"could not build the official base image {tag}: {exc}",
+        ) from exc
+    if not digest:
         raise EnvironmentFailure(
             "environment_image_unresolved",
             f"could not build the official base image {tag}",
@@ -127,7 +121,6 @@ def ensure_base_image(repo_root: Path, *, python_version: str | None = None) -> 
 def resolve_image(
     *,
     task_root: Path,
-    repo_root: Path,
     dockerfile_rel: str | None,
     declared_image: str | None,
     platform: str,
@@ -156,7 +149,7 @@ def resolve_image(
                 )
         return declared_image, digest
 
-    base_digest = ensure_base_image(repo_root, python_version=python_version)
+    base_digest = ensure_base_image(python_version=python_version, platform=platform)
     base_tag = base_tag_for(python_version)
     if dockerfile_rel is None and not plugin_layers:
         return base_tag, base_digest

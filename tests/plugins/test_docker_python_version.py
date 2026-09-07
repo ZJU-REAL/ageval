@@ -39,8 +39,13 @@ def test_base_tag_default_and_versioned() -> None:
     assert images.base_tag_for("3.13") == "ageval-attempt:py3.13"
 
 
-def test_base_lock_path_versions_non_default() -> None:
-    assert images.base_lock_path(None) == images.BASE_LOCK_PATH
+def test_base_lock_path_versions_non_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AGEVAL_HOME", str(tmp_path))
+    assert (
+        images.base_lock_path(None) == tmp_path.resolve() / "runtime-images" / "attempt-base.json"
+    )
     assert images.base_lock_path("3.13").name == "attempt-base-py3.13.json"
 
 
@@ -116,25 +121,33 @@ class _FakeDaemon:
         return subprocess.CompletedProcess(list(args), 1, stdout="", stderr=f"unexpected {args}")
 
 
-def _fake_base_build(monkeypatch: pytest.MonkeyPatch, daemon: _FakeDaemon) -> list[list[str]]:
-    calls: list[list[str]] = []
+def _fake_official_build(
+    monkeypatch: pytest.MonkeyPatch, daemon: _FakeDaemon
+) -> list[dict[str, object]]:
+    calls: list[dict[str, object]] = []
 
-    def run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        del kwargs
-        calls.append(list(argv))
-        daemon.images.add(argv[argv.index("--tag") + 1])
-        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+    def build_official_image(
+        *,
+        tag: str,
+        python_version: str,
+        platform: str,
+        output_lock: Path,
+        attempt_dir: Path | None = None,
+    ) -> str:
+        del attempt_dir
+        calls.append(
+            {
+                "tag": tag,
+                "python_version": python_version,
+                "platform": platform,
+                "output_lock": output_lock,
+            }
+        )
+        daemon.images.add(tag)
+        return f"sha256:{tag}"
 
-    monkeypatch.setattr(images.subprocess, "run", run)
+    monkeypatch.setattr(images, "build_official_image", build_official_image)
     return calls
-
-
-def _fake_repo(tmp_path: Path) -> Path:
-    """A repo root whose build.py exists; the subprocess itself is faked."""
-    attempt_dir = tmp_path / "docker" / "attempt"
-    attempt_dir.mkdir(parents=True, exist_ok=True)
-    (attempt_dir / "build.py").write_text("# stub\n", encoding="utf-8")
-    return tmp_path
 
 
 def test_resolve_image_builds_versioned_base_and_resolves_recipe(
@@ -142,13 +155,11 @@ def test_resolve_image_builds_versioned_base_and_resolves_recipe(
 ) -> None:
     daemon = _FakeDaemon()
     monkeypatch.setattr(images, "docker", daemon)
-    build_calls = _fake_base_build(monkeypatch, daemon)
-    repo = _fake_repo(tmp_path)
+    build_calls = _fake_official_build(monkeypatch, daemon)
     (tmp_path / "Dockerfile").write_text("FROM ageval-attempt:base\n", encoding="utf-8")
 
     tag, _digest = images.resolve_image(
         task_root=tmp_path,
-        repo_root=repo,
         dockerfile_rel="Dockerfile",
         declared_image=None,
         platform="linux/arm64",
@@ -158,16 +169,12 @@ def test_resolve_image_builds_versioned_base_and_resolves_recipe(
 
     assert tag.startswith("ageval-pkg:")
     assert build_calls == [
-        [
-            images.sys.executable,
-            str(tmp_path / "docker" / "attempt" / "build.py"),
-            "--tag",
-            "ageval-attempt:py3.13",
-            "--output-lock",
-            str(tmp_path / ".ageval" / "runtime-images" / "attempt-base-py3.13.json"),
-            "--python-version",
-            "3.13",
-        ]
+        {
+            "tag": "ageval-attempt:py3.13",
+            "python_version": "3.13",
+            "platform": "linux/arm64",
+            "output_lock": images.base_lock_path("3.13"),
+        }
     ]
     assert len(daemon.builds) == 1
     assert daemon.builds[0][1].startswith("FROM ageval-attempt:py3.13")
@@ -178,12 +185,10 @@ def test_resolve_image_without_recipe_returns_versioned_base(
 ) -> None:
     daemon = _FakeDaemon()
     monkeypatch.setattr(images, "docker", daemon)
-    _fake_base_build(monkeypatch, daemon)
-    repo = _fake_repo(tmp_path)
+    _fake_official_build(monkeypatch, daemon)
 
     tag, _digest = images.resolve_image(
         task_root=tmp_path,
-        repo_root=repo,
         dockerfile_rel=None,
         declared_image=None,
         platform="linux/arm64",
@@ -197,14 +202,13 @@ def test_resolve_image_without_recipe_returns_versioned_base(
 def test_resolve_image_default_keeps_base_tag(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    del tmp_path
     daemon = _FakeDaemon()
     monkeypatch.setattr(images, "docker", daemon)
-    build_calls = _fake_base_build(monkeypatch, daemon)
-    repo = _fake_repo(tmp_path)
+    build_calls = _fake_official_build(monkeypatch, daemon)
 
     tag, _digest = images.resolve_image(
-        task_root=tmp_path,
-        repo_root=repo,
+        task_root=Path("."),
         dockerfile_rel=None,
         declared_image=None,
         platform="linux/arm64",
@@ -212,21 +216,35 @@ def test_resolve_image_default_keeps_base_tag(
     )
 
     assert tag == "ageval-attempt:base"
-    assert build_calls[0][build_calls[0].index("--tag") + 1] == "ageval-attempt:base"
-    assert "--python-version" not in build_calls[0]
+    assert build_calls[0]["tag"] == "ageval-attempt:base"
+    assert build_calls[0]["python_version"] == "3.12"
+
+
+def test_ensure_base_image_ignores_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    daemon = _FakeDaemon()
+    monkeypatch.setattr(images, "docker", daemon)
+    calls = _fake_official_build(monkeypatch, daemon)
+
+    digest = images.ensure_base_image(python_version="3.13", platform="linux/amd64")
+
+    assert digest == "sha256:ageval-attempt:py3.13"
+    assert calls[0]["tag"] == "ageval-attempt:py3.13"
+    assert calls[0]["platform"] == "linux/amd64"
+    assert not (tmp_path / "docker").exists()
 
 
 def test_missing_upstream_base_fails_once_without_fallback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     daemon = _FakeDaemon()
     monkeypatch.setattr(images, "docker", daemon)
 
-    def fail_build(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        del argv, kwargs
-        return subprocess.CompletedProcess(["docker"], 1, stdout="", stderr="pull access denied")
+    def fail_build(**kwargs: object) -> str:
+        del kwargs
+        raise images.OfficialBuildError("pull access denied")
 
-    monkeypatch.setattr(images.subprocess, "run", fail_build)
+    monkeypatch.setattr(images, "build_official_image", fail_build)
 
     with pytest.raises(EnvironmentFailure, match="ageval-attempt:py3.13"):
-        images.ensure_base_image(_fake_repo(tmp_path), python_version="3.13")
+        images.ensure_base_image(python_version="3.13")

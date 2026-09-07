@@ -157,7 +157,7 @@ apps/* / services/* README  ← SPA / 服务开发细节；非产品教程权威
 
 - Coding-agent **Target inlet**：`executor: acp` + `- plugin: acp` / `options.entry`；parent **唯一** ACP JSON-RPC client → evidence。
 - Vendor 私有格式翻译在 **进程外** ACP entry（Mode 1 shim / Mode 2 原生 / Mode 3 厂商包）；**禁止**在 ageval 内再写第二套 vendor stdout scrape。
-- **官方 Attempt 镜像** `docker/attempt` 在 **build 期** 写入镜像 最低 entry 的 engine + ACP 入口（Mode 1 **同时装 engine 和 adapter**：codex/claude/**pi** + 各自 adapter）。题包配方再叠 ACP `image_layers`，只 bake 绑定的 `options.entry`；禁止 invoke 时 `npm i` / floating `npx`。Python ACP SDK **只在 parent**，不进 Attempt 镜像。
+- **官方 Attempt 镜像** `src/ageval/plugins/contrib/docker/attempt/` 在 **build 期** 写入镜像 最低 entry 的 engine + ACP 入口（Mode 1 **同时装 engine 和 adapter**：codex/claude/**pi** + 各自 adapter）。配方打进 wheel；`ageval run` 从包内路径构建，不依赖 cwd checkout。题包配方再叠 ACP `image_layers`，只 bake 绑定的 `options.entry`；禁止 invoke 时 `npm i` / floating `npx`。Python ACP SDK **只在 parent**，不进 Attempt 镜像。
 - Pi：官方 registry **`pi-acp`**（npm `pi-acp`，桥 `pi --mode rpc`）；勿与反向桥 `pi-shell-acp` 混淆。
 - **可见性**：mount + `docker exec -u/-w` + UID/GID（只在 docker contrib）。**Permission**：batch 默认 ACP auto-approve，**不**提权、**不**突破未投影路径；evidence 记录 decision。
 - 权威：[docs/design/05-runtime/agent-service.md](docs/design/05-runtime/agent-service.md)。

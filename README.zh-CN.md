@@ -244,7 +244,7 @@ ageval/
 │   ├── environments/protocol.py     # EnvironmentProvider · 能力；不含厂商 SDK
 │   ├── plugins/
 │   │   ├── slots.py                 # exclusive / chain
-│   │   └── contrib/                 # acp · local · docker · e2b · daytona · ssh
+│   │   └── contrib/                 # acp · local · docker/attempt（官方基座，打进 wheel）· e2b · daytona · ssh
 │   ├── runtime/                     # 身份、父进程 Agent Service、task_worker
 │   ├── evaluation/                  # 绑定 PASS
 │   └── evidence/                    # trajectory.jsonl 布局
@@ -258,7 +258,6 @@ ageval/
 ├── apps/viewer                      # ageval view SPA
 ├── apps/hub                         # Hub SPA
 ├── services/registry/               # 包与结果 HTTP
-├── docker/attempt/                  # 官方镜像；ACP entry 在 build 期装入
 ├── docs/                            # 机制设计
 └── website/                         # 产品文档
 ```

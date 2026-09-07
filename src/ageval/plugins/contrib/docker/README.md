@@ -3,8 +3,9 @@
 First-party exclusive-slot winner for `environment: docker`.
 
 The Attempt runs in a container built from the task's own recipe (plus
-plugin `image_layers` when declared). The official Attempt image bakes
-every shipped ACP entry at **build** time. A task recipe that is not that
+plugin `image_layers` when declared). The official Attempt image
+(``attempt/`` in this package, shipped in the wheel) bakes every shipped
+ACP entry at **build** time. A task recipe that is not that
 base still gets the bound `options.entry` from the ACP plugin layer.
 Invoke does not `npm i`.
 Container id, `docker exec -u/-w`, and UID/GID stay in this package.
