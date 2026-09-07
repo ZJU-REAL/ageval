@@ -9,10 +9,16 @@ official Attempt build). Unset omits the build-arg and leaves the content
 key unchanged. A non-empty value is ``PIP_INDEX_URL`` on the plugin-layer
 build only — task recipes and the official base path are untouched.
 
-``python_version`` selects the official base's CPython. The default keeps the
-historical ``ageval-attempt:base`` tag; another minor builds
-``ageval-attempt:py<version>`` and the recipe's ``FROM ageval-attempt:base``
-resolves onto that tag, so two bases coexist locally.
+``python_version`` selects the official base's CPython. The default keeps
+``ageval-attempt:base``; another minor builds ``ageval-attempt:py<version>``.
+A recipe ``FROM ageval-attempt:base`` resolves onto that tag, so two bases
+coexist locally.
+
+When the local tag is missing, ``ensure_base_image`` pulls
+``ghcr.io/zju-real/ageval-attempt:<cli-version>`` (same version as the
+installed ``ageval-cli`` wheel) and retags it locally. A miss — private
+package, no matching tag, wrong arch — falls through to the packaged
+Dockerfile once. Invoke still does not ``npm i``.
 """
 
 from __future__ import annotations
@@ -36,6 +42,7 @@ from ageval.plugins.contrib.docker.attempt.build import (
 )
 
 BASE_TAG = "ageval-attempt:base"
+GHCR_ATTEMPT_IMAGE = "ghcr.io/zju-real/ageval-attempt"
 PACKAGE_TAG_PREFIX = "ageval-pkg"
 DEFAULT_PYTHON_VERSION = "3.12"
 
@@ -83,14 +90,50 @@ def base_lock_path(python_version: str | None) -> Path:
     return official_lock_path(python_version)
 
 
+def cli_package_version() -> str:
+    """Installed ``ageval-cli`` version; empty when it cannot be resolved."""
+    try:
+        from importlib.metadata import version as pkg_version
+
+        text = pkg_version("ageval-cli").strip()
+    except Exception:  # noqa: BLE001 — offline / editable edge cases
+        text = ""
+    if not text or text.endswith("+unknown"):
+        return ""
+    return text
+
+
+def official_remote_ref(python_version: str | None, *, version: str | None = None) -> str | None:
+    """GHCR tag matching this CLI version, or None when we should not pull."""
+    ver = (version if version is not None else cli_package_version()).strip()
+    if not ver:
+        return None
+    if not python_version or python_version == DEFAULT_PYTHON_VERSION:
+        return f"{GHCR_ATTEMPT_IMAGE}:{ver}"
+    return f"{GHCR_ATTEMPT_IMAGE}:{ver}-py{python_version}"
+
+
+def _pull_official_base(tag: str, *, python_version: str | None, platform: str) -> str | None:
+    remote = official_remote_ref(python_version)
+    if remote is None:
+        return None
+    pulled = docker("pull", "--platform", platform, remote)
+    if pulled.returncode != 0:
+        return None
+    tagged = docker("tag", remote, tag)
+    if tagged.returncode != 0:
+        return None
+    return image_digest(tag)
+
+
 def ensure_base_image(*, python_version: str | None = None, platform: str | None = None) -> str:
     """Digest of the official base image, building it when absent.
 
-    The recipe is the packaged ``attempt/`` directory next to this plugin, not
-    the process cwd. The base bakes the ACP entries, so a run must never fall
-    back to installing an agent at invoke time. A base whose upstream
-    ``python:`` tag cannot be pulled fails the build once — there is no
-    fallback to the default version.
+    Local tag first, then GHCR ``ageval-attempt:<cli-version>``, then the
+    packaged ``attempt/`` Dockerfile. The base bakes the ACP entries, so a
+    run must never fall back to installing an agent at invoke time. A base
+    whose upstream ``python:`` tag cannot be pulled fails the build once —
+    there is no fallback to the default version.
     """
     tag = base_tag_for(python_version)
     digest = image_digest(tag)
@@ -98,6 +141,9 @@ def ensure_base_image(*, python_version: str | None = None, platform: str | None
         return digest
     py = python_version or DEFAULT_PYTHON_VERSION
     plat = platform or host_platform()
+    pulled = _pull_official_base(tag, python_version=python_version, platform=plat)
+    if pulled:
+        return pulled
     try:
         digest = build_official_image(
             tag=tag,
@@ -306,8 +352,6 @@ def _recipe_text(task_root: Path, dockerfile_rel: str | None, base_tag: str = BA
             f"missing task recipe: {dockerfile_rel}",
         )
     recipe = dockerfile.read_text(encoding="utf-8")
-    if base_tag == BASE_TAG:
-        return recipe
     return _BASE_FROM_RE.sub(lambda m: f"FROM{m.group('flags')} {base_tag}", recipe)
 
 

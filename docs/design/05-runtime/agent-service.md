@@ -183,4 +183,4 @@ batch 默认 auto-approve，不提权、不突破未投影路径。decision 进 
 
 Pi：官方 registry `pi-acp`（npm `pi-acp`，桥 `pi --mode rpc`）。勿与反向桥 `pi-shell-acp` 混淆。
 
-官方 Attempt 镜像 `src/ageval/plugins/contrib/docker/attempt/` 在 **build 期** 写入镜像 最低 entry 的 engine + ACP 入口（Mode 1 同时装 engine 和 adapter：codex/claude/**pi** + 各自 adapter）。配方随 CLI wheel 分发；`ageval run` 从包内路径构建。题包配方不是这份基座时（例如 `FROM ubuntu:24.04`），由 ACP `image_layers` 在题图上再 bake **绑定的** `options.entry`；不要为此改写题包 `FROM`，也不要在 invoke 后再 `npm i`。
+官方 Attempt 镜像 `src/ageval/plugins/contrib/docker/attempt/` 在 **build 期** 写入镜像 最低 entry 的 engine + ACP 入口（Mode 1 同时装 engine 和 adapter：codex/claude/**pi** + 各自 adapter）。配方随 CLI wheel 分发。`ageval run` 先 pull `ghcr.io/zju-real/ageval-attempt:<cli-ver>` 为本地 `ageval-attempt:base`，没有再用包内 Dockerfile 构建。题包配方不是这份基座时（例如 `FROM ubuntu:24.04`），由 ACP `image_layers` 在题图上再 bake **绑定的** `options.entry`；不要为此改写题包 `FROM`，也不要在 invoke 后再 `npm i`。

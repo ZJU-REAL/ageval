@@ -1,7 +1,7 @@
-# ageval L1 Attempt base image — non-privileged, no Docker socket.
-# Preinstalls coding-agent engines + ACP entries (Spec 19 BOM, five entries).
+# Official Attempt base image — non-privileged, no Docker socket.
+# Preinstalls coding-agent engines + ACP entries (five entries).
 # Build: python -m ageval.plugins.contrib.docker.attempt.build
-# Packages FROM ageval-attempt:base (or the historical l1 tag) or extend upstream.
+# Local tag: ageval-attempt:base. GHCR: ghcr.io/zju-real/ageval-attempt:<cli-ver>
 # Python ACP SDK stays on the parent host — never installed here.
 
 # Base CPython minor; build.py passes --build-arg to pick another 3.x.

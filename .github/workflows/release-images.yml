@@ -1,5 +1,6 @@
-# Build and push Hub + Registry images on a version tag / GitHub Release.
-# PR ci.yml does not push GHCR.
+# Build and push Hub, Registry, and the official Attempt base on a version tag.
+# PR ci.yml does not push GHCR. CLI pulls ghcr.io/zju-real/ageval-attempt:<ver>
+# then retags locally as ageval-attempt:base; a miss falls back to the packaged Dockerfile.
 name: release-images
 
 on:
@@ -57,3 +58,45 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  attempt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/zju-real/ageval-attempt
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=tag
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: src/ageval/plugins/contrib/docker/attempt
+          file: src/ageval/plugins/contrib/docker/attempt/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PYTHON_VERSION=3.12

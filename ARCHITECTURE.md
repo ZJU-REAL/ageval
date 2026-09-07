@@ -394,7 +394,7 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | `environment: ssh` A/B | `plugins/contrib/ssh` | A has no image; B has a remote tag |
 | ACP coding-agent | `plugins/contrib/acp` | Sole coding-agent inlet; `attach_stdio` |
 | Other Agent backends | `openai-http` / `anthropic-http` / external `nooa` `dsh` | Not vendor stdout scrape |
-| Official base image | `plugins/contrib/docker/attempt/` | Bake every shipped ACP entry at build; no `npm i` at invoke |
+| Official base image | `plugins/contrib/docker/attempt/` | GHCR `ageval-attempt:<cli-ver>` then local `ageval-attempt:base`; miss → packaged Dockerfile. Bake ACP entries at image build; no `npm i` at invoke |
 | ACP task image layer | `plugins/contrib/acp` | `config.image_layers` bakes the bound `options.entry` onto the task recipe |
 | Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is four aggregate stores (`store_*.py`) behind narrow protocols, one schema init in `store_schema.open_stores`, SQL only in `queries.py`, dialect only in `sql_adapter.py` |
 

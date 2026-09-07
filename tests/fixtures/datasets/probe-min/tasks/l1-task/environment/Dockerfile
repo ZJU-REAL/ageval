@@ -1,1 +1,1 @@
-FROM ageval-attempt:l1
+FROM ageval-attempt:base

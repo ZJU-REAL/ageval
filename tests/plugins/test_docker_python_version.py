@@ -112,6 +112,11 @@ class _FakeDaemon:
             self.builds.append((tag, source.read_text(encoding="utf-8")))
             self.images.add(tag)
             return subprocess.CompletedProcess(list(args), 0, stdout="", stderr="")
+        if args[0] == "pull":
+            image = args[-1]
+            if image in self.images:
+                return subprocess.CompletedProcess(list(args), 0, stdout="", stderr="")
+            return subprocess.CompletedProcess(list(args), 1, stdout="", stderr="missing")
         if args[0] == "tag":
             src, dest = args[1], args[2]
             if src in self.images:
@@ -218,6 +223,47 @@ def test_resolve_image_default_keeps_base_tag(
     assert tag == "ageval-attempt:base"
     assert build_calls[0]["tag"] == "ageval-attempt:base"
     assert build_calls[0]["python_version"] == "3.12"
+
+
+def test_ensure_base_image_pulls_ghcr_before_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    daemon = _FakeDaemon()
+    monkeypatch.setattr(images, "docker", daemon)
+    monkeypatch.setattr(images, "cli_package_version", lambda: "0.7.3")
+    remote = "ghcr.io/zju-real/ageval-attempt:0.7.3"
+    daemon.images.add(remote)
+    builds = _fake_official_build(monkeypatch, daemon)
+
+    digest = images.ensure_base_image(platform="linux/arm64")
+
+    assert digest == f"sha256:{images.BASE_TAG}"
+    assert images.BASE_TAG in daemon.images
+    assert builds == []
+
+
+def test_ensure_base_image_builds_when_ghcr_misses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    daemon = _FakeDaemon()
+    monkeypatch.setattr(images, "docker", daemon)
+    monkeypatch.setattr(images, "cli_package_version", lambda: "0.7.3")
+    builds = _fake_official_build(monkeypatch, daemon)
+
+    digest = images.ensure_base_image(platform="linux/amd64")
+
+    assert digest == f"sha256:{images.BASE_TAG}"
+    assert builds[0]["tag"] == images.BASE_TAG
+
+
+def test_official_remote_ref_versions() -> None:
+    assert images.official_remote_ref(None, version="0.7.3") == (
+        "ghcr.io/zju-real/ageval-attempt:0.7.3"
+    )
+    assert images.official_remote_ref("3.13", version="0.7.3") == (
+        "ghcr.io/zju-real/ageval-attempt:0.7.3-py3.13"
+    )
+    assert images.official_remote_ref(None, version="") is None
 
 
 def test_ensure_base_image_ignores_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

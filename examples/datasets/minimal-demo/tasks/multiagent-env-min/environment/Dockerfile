@@ -1,4 +1,4 @@
-FROM ageval-attempt:l1
+FROM ageval-attempt:base
 
 # multiagent-env-min runs its PostgreSQL inside the Attempt box (task-local
 # resource; no runtime-managed environment_resource behind it).

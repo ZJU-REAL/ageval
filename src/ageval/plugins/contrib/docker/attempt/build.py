@@ -60,9 +60,9 @@ def versioned_tag(version: str) -> str:
 
 
 def default_tag(python_version: str) -> str:
-    """3.12 keeps the historical ``l1`` tag; other versions get their own."""
+    """3.12 is ``ageval-attempt:base``; other versions get their own tag."""
     if python_version == DEFAULT_PYTHON_VERSION:
-        return "ageval-attempt:l1"
+        return "ageval-attempt:base"
     return versioned_tag(python_version)
 
 

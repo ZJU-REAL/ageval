@@ -38,7 +38,7 @@ environment: e2b    # local | docker | e2b | ssh | daytona
 
 `environment/Dockerfile`（或 `docker_image`）对 docker 与 e2b 是同一配方。docker 本机编；e2b `Template.from_dockerfile` 再 `Sandbox.create`。daytona 把同一配方编成 **snapshot**（`Image.from_dockerfile` 或公开 OCI tag），再 `Sandbox.create` from snapshot。OCI tag 须带具体 tag/digest；Daytona 拒绝 `latest` / `lts` / `stable`。
 
-官方 Attempt 镜像由 `src/ageval/plugins/contrib/docker/attempt/` 构建（打进 `ageval-cli` wheel；运行时从包内路径取配方，不依赖 cwd），`ARG PYTHON_VERSION` 选基座 CPython（缺省 3.12）。题包 Dockerfile 用 `FROM ageval-attempt:base`；job 声明非缺省 `python_version` 时 docker 插件把该 `FROM` 解析到版本化 tag（如 `ageval-attempt:py3.13`），镜像内容键含 `python_version`，两个版本的本地基座并存、不互相覆盖。题包也可以 `FROM ubuntu:24.04`（或其它发行版）：docker 按配方构建，再叠绑定插件的 `image_layers`。ACP 只 bake lock 的 `options.entry`（钉死包来自 `acp_entries.json`），不改写题包 `FROM`，也不把全部 ACP entry 写进每张题图。官方基座配方仍然有效；叠层在 pin 已存在时幂等。invoke 时禁止 `npm i` / 浮动 `npx`。Python ACP SDK 只在 parent，不进 Attempt 镜像。
+官方 Attempt 镜像配方在 `src/ageval/plugins/contrib/docker/attempt/`（打进 `ageval-cli` wheel）。运行时先看本地 `ageval-attempt:base`；没有则 pull `ghcr.io/zju-real/ageval-attempt:<ageval-cli 版本>`（与 CLI 发版 tag 对齐，再 tag 成本地 `ageval-attempt:base`）；再没有则用包内 Dockerfile 构建一次。`ARG PYTHON_VERSION` 选基座 CPython（缺省 3.12）。题包 Dockerfile 用 `FROM ageval-attempt:base`；job 声明非缺省 `python_version` 时 docker 插件把该 `FROM` 解析到版本化 tag（如 `ageval-attempt:py3.13`），镜像内容键含 `python_version`，两个版本的本地基座并存、不互相覆盖。非缺省 CPython 的 GHCR tag 是 `<ver>-py3.13`；CI 只推默认 3.12，其它 minor pull 不到就走本地构建。题包也可以 `FROM ubuntu:24.04`（或其它发行版）：docker 按配方构建，再叠绑定插件的 `image_layers`。ACP 只 bake lock 的 `options.entry`（钉死包来自 `acp_entries.json`），不改写题包 `FROM`，也不把全部 ACP entry 写进每张题图。官方基座配方仍然有效；叠层在 pin 已存在时幂等。invoke 时禁止 `npm i` / 浮动 `npx`。Python ACP SDK 只在 parent，不进 Attempt 镜像。
 
 docker `environment_options`：
 

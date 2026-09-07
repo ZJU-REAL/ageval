@@ -19,8 +19,8 @@ def test_invalid_python_version_shape(version: str) -> None:
     assert not build.valid_python_version(version)
 
 
-def test_default_tag_keeps_l1_for_312_and_versions_others() -> None:
-    assert build.default_tag("3.12") == "ageval-attempt:l1"
+def test_default_tag_keeps_base_for_312_and_versions_others() -> None:
+    assert build.default_tag("3.12") == "ageval-attempt:base"
     assert build.default_tag("3.13") == "ageval-attempt:py3.13"
 
 

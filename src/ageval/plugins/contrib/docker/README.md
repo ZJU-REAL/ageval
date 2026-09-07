@@ -5,7 +5,10 @@ First-party exclusive-slot winner for `environment: docker`.
 The Attempt runs in a container built from the task's own recipe (plus
 plugin `image_layers` when declared). The official Attempt image
 (``attempt/`` in this package, shipped in the wheel) bakes every shipped
-ACP entry at **build** time. A task recipe that is not that
+ACP entry at **build** time. ``ageval run`` pulls
+``ghcr.io/zju-real/ageval-attempt:<cli-version>`` into local
+``ageval-attempt:base`` when that tag is missing; a miss builds from the
+packaged Dockerfile. A task recipe that is not that
 base still gets the bound `options.entry` from the ACP plugin layer.
 Invoke does not `npm i`.
 Container id, `docker exec -u/-w`, and UID/GID stay in this package.
