@@ -133,7 +133,7 @@ contrib/local    → 本机目录
 
 `docker exec` 只在 `plugins/contrib/docker/`。ACP 禁止 import docker/e2b/daytona/ssh。`attempt` / `run.py` 不见 `container_id`、不见 `if kind == e2b`。换 kind 不必改 executor 源码。
 
-`run.py` 是 parent 子进程。seed 在 launch 投影到 `ctx.workspace_root`（local/docker 即共享盘；ssh/e2b/daytona 是 evidence 上的 seed 拷贝）。Agent Service **不**在每次 invoke 后 `download` workspace。writer 停后 runtime 按题包 `artifacts.publishable` harvest **一次**：`kind` 省略/`file` 收缺的单文件（环境内 `/attempt/workspace/<basename>` → parent `task-artifacts/`）；`kind: tree` 按 `exclude` 把工作区树拷成 evidence 上的不可变快照。共享盘上 `run.py` 已从磁盘 `publish_json` 的 file 跳过；远程环境走 Protocol `download`。tree 在 docker 上读已有 bind-mount 再拷，不要三次 export。搬哪些由题包声明，不写 `if kind`。聊天文本不是 Terminal 类题的权威产物，不得 publish 成功并挡住 harvest。evaluate 消费快照拷贝，不是 Agent 活目录。
+`run.py` 是 parent 子进程。seed 在 launch 投影到 `ctx.workspace_root`（local/docker 即共享盘；ssh/e2b/daytona 是 evidence 上的 seed 拷贝）。Agent Service **不**在每次 invoke 后 `download` workspace。writer 停后 runtime 按题包 `artifacts.publishable` harvest **一次**：`kind` 省略/`file` 收缺的单文件（环境内 `/attempt/workspace/<basename>` → parent `task-artifacts/`）；`kind: tree` 按 `exclude` 把工作区树拷成 evidence 上的不可变快照。共享盘上 `run.py` 已从磁盘 `publish_json` 的 file 跳过；远程环境走 Protocol `download`。tree 在 docker 上读已有 bind-mount 再拷（符号链接拷节点、不跟随），不要三次 export。搬哪些由题包声明，不写 `if kind`。聊天文本不是 Terminal 类题的权威产物，不得 publish 成功并挡住 harvest。evaluate 消费快照拷贝，不是 Agent 活目录。
 
 ## setup.sh 与侧车
 

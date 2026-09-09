@@ -259,7 +259,7 @@ class DockerHost:
                 else:
                     target.unlink()
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(src, target)
+            copy_bind_tree(src, target)
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, target)
@@ -275,8 +275,7 @@ class DockerHost:
             )
         target = Path(dest).expanduser()
         if src.is_dir():
-            target.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(src, target, dirs_exist_ok=True)
+            copy_bind_tree(src, target)
             return
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, target)
@@ -505,6 +504,16 @@ class DockerHost:
             raise EnvironmentFailure("environment_not_started", "docker box is not started")
         if self._stopped:
             raise EnvironmentFailure("environment_stopped", "docker box is already stopped")
+
+
+def copy_bind_tree(src: Path, dest: Path) -> None:
+    """Copy a docker bind tree onto evidence.
+
+    Workspace venv links point at in-box interpreters. Following them on the
+    host raises and aborts harvest (run ERROR). Copy the symlink node.
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(src, dest, dirs_exist_ok=True, symlinks=True)
 
 
 def _box_python_version(raw: object) -> str | None:

@@ -70,7 +70,7 @@ evaluate 开头         打分 Host.upload(evaluation_src, /attempt/evaluation)
 
 - harvest **一次**。后面 evaluate 的 upload / 再 upload / 环境内读取都消费这份快照的拷贝，不是 Agent 活目录，也不是三次 export。
 - `evaluation.inputs[].target: workspace` 把 tree 铺到打分 Host 的 `/attempt/workspace`。省略 target 的 file 产物仍上 `/attempt/artifacts`。有名表时，每只 **已 start** 的 Host 各收一份拷贝。
-- docker：tree download 读已有 bind-mount 再按 exclude 拷到 evidence；不要 `docker cp` 一整棵再在 Core 里拆。
+- docker：tree download 读已有 bind-mount 再按 exclude 拷到 evidence；不要 `docker cp` 一整棵再在 Core 里拆。download 与 evaluate 的 upload 都拷符号链接节点本身，不跟随到宿主机上不存在的目标（venv 的 `python` 链到容器内解释器）。
 - 打分 Host 的 workspace **不是** Agent bind-mount。harvest 之后改 Agent 树，evaluator 看不见。
 
 快照在不在、exclude 清没清，都不是 PASS。
