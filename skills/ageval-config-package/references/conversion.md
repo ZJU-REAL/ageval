@@ -41,7 +41,7 @@ Shared glue lives under `shared/lib`; the task entry is `run.py`.
 | Domain tools / bridge / dual-agent loop | `shared/lib/` (multi-task) or `tasks/<id>/lib/` | `run.py` + evaluator import | Gold files |
 | Shared policies / DB dumps / static assets | `shared/assets/` | Code paths | Agent default mount of gold |
 | Offline known-good workspace files | `tasks/<id>/solution/` | Human / CI / offline flag only | Default Agent seed |
-| Job binding (executor / entry / model) | dataset `profiles.yaml` | Runtime / job overlay | Secrets in yaml |
+| Job binding (executor / entry / model) | dataset `profiles.yaml` (default job) | Runtime / job overlay | Secrets in yaml; extra `profiles*.yaml` at dataset root also enter `ageval publish` / packageDigest |
 
 ## Scenario cut
 
