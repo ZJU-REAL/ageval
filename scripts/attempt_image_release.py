@@ -207,7 +207,6 @@ def inspect_ghcr(image: str, version: str) -> str:
 def decide(
     *,
     version: str,
-    python_version: str,
     force_rebuild: bool,
     head_digest: str,
     previous_versions: Sequence[str],
@@ -250,7 +249,6 @@ def plan_from_git(
     head = bake_digest(head_bake_files(repo), python_version)
     return decide(
         version=version,
-        python_version=python_version,
         force_rebuild=force_rebuild,
         head_digest=head,
         previous_versions=git_release_versions(repo),

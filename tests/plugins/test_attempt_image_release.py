@@ -149,7 +149,6 @@ def test_older_release_versions_are_strictly_less_and_newest_first() -> None:
 def test_skip_when_this_version_tag_already_exists() -> None:
     decision = mod.decide(
         version="0.8.1",
-        python_version="3.12",
         force_rebuild=False,
         head_digest=_digest(),
         previous_versions=["0.8.0"],
@@ -163,7 +162,6 @@ def test_skip_when_this_version_tag_already_exists() -> None:
 def test_force_rebuild_overrides_existing_tag() -> None:
     decision = mod.decide(
         version="0.8.1",
-        python_version="3.12",
         force_rebuild=True,
         head_digest=_digest(),
         previous_versions=["0.8.0"],
@@ -178,7 +176,6 @@ def test_retag_when_inputs_match_previous_published_image() -> None:
     digest = _digest()
     decision = mod.decide(
         version="v0.8.1",
-        python_version="3.12",
         force_rebuild=False,
         head_digest=digest,
         previous_versions=["0.8.0", "0.7.3"],
@@ -196,7 +193,6 @@ def test_rebuild_when_pins_change_even_if_dockerfile_matches() -> None:
     previous = _digest()
     decision = mod.decide(
         version="0.8.1",
-        python_version="3.12",
         force_rebuild=False,
         head_digest=head,
         previous_versions=["0.8.0"],
@@ -211,7 +207,6 @@ def test_walk_past_missing_ghcr_tag_to_older_published_image() -> None:
     digest = _digest()
     decision = mod.decide(
         version="0.8.1",
-        python_version="3.12",
         force_rebuild=False,
         head_digest=digest,
         previous_versions=["0.8.0", "0.7.3"],
@@ -225,7 +220,6 @@ def test_walk_past_missing_ghcr_tag_to_older_published_image() -> None:
 def test_inspect_error_on_previous_tag_rebuilds() -> None:
     decision = mod.decide(
         version="0.8.1",
-        python_version="3.12",
         force_rebuild=False,
         head_digest=_digest(),
         previous_versions=["0.8.0"],
@@ -239,7 +233,6 @@ def test_inspect_error_on_previous_tag_rebuilds() -> None:
 def test_first_tag_or_no_previous_image_rebuilds() -> None:
     decision = mod.decide(
         version="0.1.0",
-        python_version="3.12",
         force_rebuild=False,
         head_digest=_digest(),
         previous_versions=[],
