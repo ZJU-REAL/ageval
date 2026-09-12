@@ -40,6 +40,11 @@ function parseView(raw: string | null): PlazaView {
   return "dataset";
 }
 
+function formatErr(err: unknown): string {
+  if (err instanceof RegistryHttpError) return `${err.code}: ${err.message}`;
+  return err instanceof Error ? err.message : String(err);
+}
+
 export function LeaderboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = parseView(searchParams.get("view"));
@@ -49,49 +54,76 @@ export function LeaderboardPage() {
   const [datasets, setDatasets] = useState<PackageRelease[]>([]);
   const [agents, setAgents] = useState<PackageRelease[]>([]);
   const [orgs, setOrgs] = useState<Map<string, OrgRow>>(new Map());
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [boardError, setBoardError] = useState<string | null>(null);
+  const [perfError, setPerfError] = useState<string | null>(null);
+  const [boardLoading, setBoardLoading] = useState(true);
+  const [perfLoading, setPerfLoading] = useState(false);
   const token = getToken();
   const chromeRef = useRef<HTMLDivElement>(null);
+  const perfOnce = useRef(false);
+
+  useEffect(() => {
+    perfOnce.current = false;
+  }, [token]);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    setBoardLoading(true);
     Promise.all([
       listSuites(null, token, { board: true }),
-      listPerformances(token),
       listPackages(token, { packageKind: "dataset", visibility: "public" }),
-      listPackages(token, { packageKind: "agent", visibility: "public" }),
       token ? listOrgs(token).catch(() => [] as OrgRow[]) : Promise.resolve([] as OrgRow[]),
     ])
-      .then(([board, rows, datasetPacks, agentPacks, orgRows]) => {
+      .then(([board, datasetPacks, orgRows]) => {
         if (cancelled) return;
         setSuites(board);
-        setPerformances(rows);
         setDatasets(datasetPacks);
-        setAgents(agentPacks);
         setOrgs(new Map(orgRows.map((org) => [org.org_id, org])));
-        setError(null);
+        setBoardError(null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        if (err instanceof RegistryHttpError) {
-          setError(`${err.code}: ${err.message}`);
-        } else {
-          setError(err instanceof Error ? err.message : String(err));
-        }
+        setBoardError(formatErr(err));
         setSuites([]);
-        setPerformances([]);
         setDatasets([]);
-        setAgents([]);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setBoardLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, [token]);
+
+  useEffect(() => {
+    if (view === "dataset") return;
+    if (perfOnce.current) return;
+    let cancelled = false;
+    setPerfLoading(true);
+    Promise.all([
+      listPerformances(token),
+      listPackages(token, { packageKind: "agent", visibility: "public" }),
+    ])
+      .then(([rows, agentPacks]) => {
+        if (cancelled) return;
+        perfOnce.current = true;
+        setPerformances(rows);
+        setAgents(agentPacks);
+        setPerfError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setPerfError(formatErr(err));
+        setPerformances([]);
+        setAgents([]);
+      })
+      .finally(() => {
+        if (!cancelled) setPerfLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, view]);
 
   useLayoutEffect(() => {
     const chrome = chromeRef.current;
@@ -112,7 +144,7 @@ export function LeaderboardPage() {
       window.removeEventListener("resize", apply);
       scroller.style.removeProperty("--leaderboard-stick-top");
     };
-  }, [view, loading]);
+  }, [view, boardLoading, perfLoading]);
 
   const q = query.trim().toLowerCase();
   const datasetPacks = useMemo(() => latestPackageByDataset(datasets), [datasets]);
@@ -152,6 +184,8 @@ export function LeaderboardPage() {
       : view === "agent"
         ? visiblePerformances.length
         : plazaModelRowCount(visiblePerformances);
+  const loading = view === "dataset" ? boardLoading : perfLoading;
+  const error = view === "dataset" ? boardError : perfError;
 
   function setView(next: PlazaView) {
     const n = new URLSearchParams(searchParams);
