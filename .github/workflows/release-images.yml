@@ -139,6 +139,12 @@ jobs:
             --image "${ATTEMPT_IMAGE}" \
             --force-rebuild "${ATTEMPT_FORCE_REBUILD}"
 
+      - name: Reject unknown plan action
+        if: ${{ success() && !contains(fromJSON('["skip","retag","rebuild"]'), steps.plan.outputs.action) }}
+        run: |
+          echo "::error::attempt plan action must be skip, retag, or rebuild; got '${{ steps.plan.outputs.action }}'"
+          exit 1
+
       - name: Version tag already on GHCR
         if: steps.plan.outputs.action == 'skip'
         run: echo "${ATTEMPT_IMAGE}:${ATTEMPT_VERSION} already exists; nothing to do"
@@ -147,20 +153,31 @@ jobs:
         if: steps.plan.outputs.action == 'retag'
         env:
           SOURCE_REF: ${{ steps.plan.outputs.source_ref }}
+          DEST_TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           set -euo pipefail
           if [ -z "${SOURCE_REF}" ]; then
             echo "::error::retag planned without source_ref"
             exit 1
           fi
-          major_minor="${ATTEMPT_VERSION%.*}"
-          docker buildx imagetools create \
-            -t "${ATTEMPT_IMAGE}:${ATTEMPT_VERSION}" \
-            -t "${ATTEMPT_IMAGE}:${major_minor}" \
-            -t "${ATTEMPT_IMAGE}:v${ATTEMPT_VERSION}" \
-            "${SOURCE_REF}"
+          if [ -z "${DEST_TAGS}" ]; then
+            echo "::error::retag planned without destination tags"
+            exit 1
+          fi
+          # metadata-action is newline-separated; GHA env may flatten that to spaces.
+          set -f
+          tag_args=()
+          for tag in ${DEST_TAGS}; do
+            tag_args+=(-t "${tag}")
+          done
+          set +f
+          if [ "${#tag_args[@]}" -eq 0 ]; then
+            echo "::error::retag planned without destination tags"
+            exit 1
+          fi
+          docker buildx imagetools create "${tag_args[@]}" "${SOURCE_REF}"
           digest_of() {
-            docker buildx imagetools inspect "$1" | awk -F': ' '/^Digest:/ {print $2; exit}'
+            docker buildx imagetools inspect "$1" | awk -F': ' '/^Digest:/ {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}'
           }
           src_digest="$(digest_of "${SOURCE_REF}")"
           new_digest="$(digest_of "${ATTEMPT_IMAGE}:${ATTEMPT_VERSION}")"

@@ -201,7 +201,7 @@ def inspect_ghcr(image: str, version: str) -> str:
         text=True,
         check=False,
     )
-    return classify_inspect(result.returncode, result.stderr)
+    return classify_inspect(result.returncode, f"{result.stdout}\n{result.stderr}")
 
 
 def decide(
@@ -220,6 +220,8 @@ def decide(
     status = inspect(current)
     if status == "exists":
         return Decision(action="skip", reason="version_tag_exists")
+    if status == "error":
+        return Decision(action="rebuild", reason="inspect_failed")
     for previous in older_release_versions(previous_versions, current):
         previous_status = inspect(previous)
         if previous_status == "error":

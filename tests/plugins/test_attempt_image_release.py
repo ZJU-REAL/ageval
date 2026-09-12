@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 from collections.abc import Callable
@@ -29,7 +30,9 @@ mod = _load()
 
 
 def _files(payload: dict[str, str] | None = None) -> dict[str, bytes | None]:
-    body = {relpath: f"{relpath}\n".encode() for relpath in mod.BAKE_RELPATHS}
+    body: dict[str, bytes | None] = {
+        relpath: f"{relpath}\n".encode() for relpath in mod.BAKE_RELPATHS
+    }
     if payload:
         for relpath, text in payload.items():
             body[relpath] = text.encode()
@@ -48,11 +51,23 @@ def _inspect_map(mapping: dict[str, str]) -> Callable[[str], str]:
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "GIT_CONFIG_GLOBAL": "/dev/null",
+            "GIT_CONFIG_SYSTEM": "/dev/null",
+            "GIT_AUTHOR_NAME": "ageval",
+            "GIT_AUTHOR_EMAIL": "ageval@example.com",
+            "GIT_COMMITTER_NAME": "ageval",
+            "GIT_COMMITTER_EMAIL": "ageval@example.com",
+        }
+    )
     return subprocess.run(
         ["git", "-C", str(repo), *args],
         check=check,
         capture_output=True,
         text=True,
+        env=env,
     )
 
 
@@ -230,6 +245,19 @@ def test_inspect_error_on_previous_tag_rebuilds() -> None:
     assert decision.reason == "inspect_failed"
 
 
+def test_inspect_error_on_current_tag_rebuilds() -> None:
+    decision = mod.decide(
+        version="0.8.1",
+        force_rebuild=False,
+        head_digest=_digest(),
+        previous_versions=["0.8.0"],
+        inspect=_inspect_map({"0.8.1": "error", "0.8.0": "exists"}),
+        digest_for=lambda _version: _digest(),
+    )
+    assert decision.action == "rebuild"
+    assert decision.reason == "inspect_failed"
+
+
 def test_first_tag_or_no_previous_image_rebuilds() -> None:
     decision = mod.decide(
         version="0.1.0",
@@ -250,6 +278,21 @@ def test_classify_inspect_distinguishes_not_found_from_error() -> None:
         mod.classify_inspect(1, "name unknown: ghcr.io/zju-real/ageval-attempt:0.8.0") == "missing"
     )
     assert mod.classify_inspect(1, "failed to authorize: denied") == "error"
+
+
+def test_inspect_ghcr_classifies_not_found_on_stdout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args=["docker"],
+            returncode=1,
+            stdout="ERROR: manifest unknown\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    assert mod.inspect_ghcr(mod.ATTEMPT_IMAGE, "0.8.0") == "missing"
 
 
 def test_workflow_python_version_reads_job_build_arg() -> None:
@@ -294,6 +337,39 @@ def test_plan_from_git_retags_unchanged_inputs(tmp_path: Path) -> None:
     )
     assert decision.action == "retag"
     assert decision.source_version == "0.8.0"
+
+
+def test_plan_from_git_skips_when_version_tag_exists(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_bake(repo)
+    _commit_tag(repo, "0.8.0")
+    _git(repo, "tag", "v0.8.1")
+    decision = mod.plan_from_git(
+        repo,
+        version="0.8.1",
+        python_version="3.12",
+        force_rebuild=False,
+        inspect=_inspect_map({"0.8.1": "exists", "0.8.0": "exists"}),
+    )
+    assert decision.action == "skip"
+    assert decision.reason == "version_tag_exists"
+
+
+def test_plan_from_git_rebuilds_when_python_version_changes(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_bake(repo, python_version="3.12")
+    _commit_tag(repo, "0.8.0")
+    _write_bake(repo, python_version="3.13")
+    _commit_tag(repo, "0.8.1")
+    decision = mod.plan_from_git(
+        repo,
+        version="0.8.1",
+        python_version="3.13",
+        force_rebuild=False,
+        inspect=_inspect_map({"0.8.0": "exists"}),
+    )
+    assert decision.action == "rebuild"
+    assert decision.reason == "inputs_changed"
 
 
 def test_plan_from_git_rebuilds_when_lock_changes(tmp_path: Path) -> None:
@@ -354,3 +430,9 @@ def test_release_images_workflow_wires_content_aware_attempt_job() -> None:
     assert "steps.plan.outputs.action == 'rebuild'" in jobs
     assert "steps.plan.outputs.action == 'retag'" in jobs
     assert "steps.plan.outputs.action == 'skip'" in jobs
+    assert "Reject unknown plan action" in jobs
+    assert "DEST_TAGS: ${{ steps.meta.outputs.tags }}" in jobs
+    assert "for tag in ${DEST_TAGS}" in jobs
+    assert "if: steps.plan.outputs.action == 'rebuild'" in jobs
+    assert "docker/setup-qemu-action@v3" in jobs
+    assert "docker/build-push-action@v6" in jobs
