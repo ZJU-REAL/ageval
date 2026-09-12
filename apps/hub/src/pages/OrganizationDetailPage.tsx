@@ -1034,15 +1034,6 @@ export function OrganizationDetailPage() {
                 </section>
               )}
 
-              <section>
-                <h2 className="text-sm font-medium text-ink mb-1">Secrets</h2>
-                <div className="rounded-[14px] border border-dashed border-hairline/70 p-6 text-sm text-mute">
-                  Organization-scoped secrets (API keys for hosted jobs) are not
-                  implemented in AGEVAL Registry. Use host env / CLI credentials
-                  instead.
-                </div>
-              </section>
-
               <section className="pt-4 border-t border-hairline">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0">
