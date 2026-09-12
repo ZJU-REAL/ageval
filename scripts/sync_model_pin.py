@@ -74,6 +74,24 @@ LITELLM_URL = (
 # Gateways used in ageval overlays that are not models.dev provider ids.
 EXTRA_PREFIXES = ("dashscope", "dashscope-", "litellm")
 
+# Labs omitted from pin.json. models.dev still lists them; we just do not pin.
+SKIP_LABS = frozenset({
+    "aisingapore",
+    "amazon",
+    "arcee-ai",
+    "deepreinforce",
+    "inclusionai",
+    "openbmb",
+    "poolside",
+    "sakana",
+    "sarvam",
+    "sdaia",
+    "swiss-ai",
+    "trendyol",
+    "upstage",
+    "writer",
+})
+
 LAB_NAMES = {
     "aisingapore": "AI Singapore",
     "alibaba": "Alibaba",
@@ -241,7 +259,13 @@ def _litellm_price(row: object) -> dict[str, float] | None:
 
 
 def build_pin(models: dict, api: dict, litellm: dict | None) -> dict:
-    canonicals = {cid for cid in models if isinstance(cid, str) and "/" in cid}
+    canonicals = {
+        cid
+        for cid in models
+        if isinstance(cid, str)
+        and "/" in cid
+        and cid.split("/", 1)[0] not in SKIP_LABS
+    }
     leaves: dict[str, list[str]] = {}
     for cid in sorted(canonicals):
         leaf = cid.rsplit("/", 1)[-1]
@@ -477,6 +501,8 @@ def main() -> int:
         f"pinned {len(pin['models'])} models, {len(pin['labs'])} labs, "
         f"{len(pin['lookup'])} lookup keys → {PIN_DIR / 'pin.json'}"
     )
+    if SKIP_LABS:
+        print("skipped labs: " + ", ".join(sorted(SKIP_LABS)))
     print(
         "logos "
         f"brand={counts['brand']} color={counts['color']} "
