@@ -228,7 +228,7 @@ export function LeaderboardPage() {
     <>
       <PageHead
         title="Leaderboard"
-        sub="Index of listed Dataset suites and Agent / Model Performance. Observational metrics only — not PASS, not comparable across datasets."
+        sub="Index of listed Dataset suites and Agent / Model Performance."
       />
 
       <div

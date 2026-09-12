@@ -78,6 +78,18 @@ export function pinnedModel(canonical: string | null | undefined, pin: ModelPin 
   return pin.models[canonical] ?? null;
 }
 
+/** Lab id for a unique overlay join. Empty when unmatched — do not invent a letter. */
+export function overlayLab(
+  overlay: string | null | undefined,
+  pin: ModelPin | null | undefined,
+): string {
+  const text = (overlay || "").trim();
+  if (!text || !pin) return "";
+  const first = text.split("+").map((part) => part.trim()).filter(Boolean)[0] || text;
+  const info = pinnedModel(joinOverlay(first, pin).canonical, pin);
+  return info?.lab || "";
+}
+
 export function directoryPrice(
   canonical: string | null | undefined,
   overlay: string,

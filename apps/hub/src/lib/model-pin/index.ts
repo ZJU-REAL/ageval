@@ -2,6 +2,7 @@ export {
   directoryPrice,
   joinOverlay,
   overlayCandidates,
+  overlayLab,
   pinnedModel,
 } from "./join";
 export { LAB_INFO } from "./lab-info";

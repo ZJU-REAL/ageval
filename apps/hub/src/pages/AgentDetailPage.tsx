@@ -21,6 +21,7 @@ import { suiteDetailPath } from "@/components/suite-inspector";
 import { InlineMarkdown } from "@/components/markdown";
 import { Chip } from "@/components/ui/chip";
 import { ModelDirectory } from "@/components/model-directory";
+import { ModelLabel } from "@/components/model-label";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/confirm-dialog";
 import { UnderlineTabs } from "@/components/underline-tabs";
@@ -775,8 +776,8 @@ export function AgentDetailPage() {
                                 <TableCell>
                                   {row.role}
                                 </TableCell>
-                                <TableCell>
-                                  {row.model || "—"}
+                                <TableCell className="max-w-[12rem] overflow-hidden">
+                                  <ModelLabel value={row.model} empty="—" />
                                 </TableCell>
                                 <TableCell className="tabular-nums">
                                   <ScoreRing value={row.pass_rate}>

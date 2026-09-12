@@ -535,7 +535,9 @@ export function PlazaAgentTables({
                 </Link>
               </TableCell>
               <TableCell>{row.role}</TableCell>
-              <TableCell>{row.model || "—"}</TableCell>
+              <TableCell className="max-w-[12rem] overflow-hidden">
+                <ModelLabel value={row.model} empty="—" />
+              </TableCell>
               <PassMeanCells passRate={row.pass_rate} meanScore={row.mean_score} />
             </TableRow>
           ))}

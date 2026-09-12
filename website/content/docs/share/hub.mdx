@@ -55,7 +55,7 @@ pnpm dev   # http://127.0.0.1:5174
 - plaza Dataset 视图可切 Table / Pareto / Waffle（与 Dataset 详情 Leaderboard 同一套控件，在 Dataset tab 行右侧；图按 Dataset 组分）。指标写在每一行上，是观测、不是 PASS、不可跨 Dataset 比；没有名次列。Agent / Model 只要表。
 - **Public** 只列完备、绑定 release、且经 dataset 所属组织 owner 批准上榜的整份运行；**Internal** 用同一张表列当前可见的缺题 / draft 绑定结果
 - 同一 tab 可切 **Table** / **Pareto** / **Waffle**。Pareto 横轴是整份运行里 **全部 job** 的花费、token 或时间加总（左便宜、右更贵）；没有 agent 上报 USD 时用目录价估算（不是账单）。更高 pass rate、又不更贵的点连成前沿
-- 指标是观测汇总，不是整份 dataset 的 PASS；表头可排序
+- 指标是观测汇总，不是整份 dataset 的 PASS；表头可排序。Dataset / Agent 表的 Model 格在能对应到目录模型时前置 lab 标；plaza Model 视图组头已有标，行内不再重复
 - 点行打开详情页：**Profiles** / **Plugin** / **Jobs**，附无密钥 YAML 与再跑命令。上传者可 Share、Delete，或 Attach 一条已发布的 model / agent 溯源
 - 上榜与 Performance 申请由组织 owner 在 **Inbox** 批量处理
 

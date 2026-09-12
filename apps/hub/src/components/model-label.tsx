@@ -2,6 +2,8 @@ import type { MouseEvent } from "react";
 import { Link } from "react-router-dom";
 
 import { HoverTip, TruncateTip } from "@/components/hover-tip";
+import { LabMark } from "@/components/lab-mark";
+import { loadModelPin, overlayLab } from "@/lib/model-pin";
 import { cn, formatModelLabel } from "@/lib/utils";
 
 export function ModelLabel({
@@ -11,6 +13,7 @@ export function ModelLabel({
   empty = "-",
   to,
   onClick,
+  mark = true,
 }: {
   value?: string | null;
   effort?: string | null;
@@ -19,6 +22,11 @@ export function ModelLabel({
   /** When set, only the model name is a link; ``[effort]`` stays outside. */
   to?: string;
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
+  /**
+   * Prepend LabMark when overlay uniquely joins a pin model.
+   * Off when the group head already shows the lab (plaza Model / `/models`).
+   */
+  mark?: boolean;
 }) {
   const { text, title } = formatModelLabel(value);
   const extra = (effort || "").trim();
@@ -26,6 +34,8 @@ export function ModelLabel({
   if (!value?.trim() || shown === empty) {
     return <span className={className}>{shown}</span>;
   }
+
+  const lab = mark ? overlayLab(value, loadModelPin()) : "";
 
   const model =
     title && title !== shown ? (
@@ -44,7 +54,8 @@ export function ModelLabel({
     );
 
   return (
-    <span className={cn("inline-flex min-w-0 max-w-full items-baseline", className)}>
+    <span className={cn("inline-flex min-w-0 max-w-full items-center", className)}>
+      {lab ? <LabMark lab={lab} size={16} className="mr-1.5" /> : null}
       {to ? (
         <Link
           to={to}

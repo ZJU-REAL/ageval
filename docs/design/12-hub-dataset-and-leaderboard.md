@@ -37,20 +37,20 @@ Hub 侧栏 Catalog 首位是 **Leaderboard**（`/leaderboard`），其后是 Dat
 - 组头 = Dataset（名称 + 描述；有包标则同市场解析）。一个 Dataset 一张表，不要按 org 再拆。
 - 内行 = 一条已列出的 suite（Harness / Model / Pass rate / Mean）。不要 Dataset 列（组头已经是该 Dataset）。suite 有 `created_at` 则加 Uploaded 列。同一 Dataset 多条已列出 suite → 多行，不是一条汇总。Table / Pareto / Waffle 切到该组的已有图表组件，不另发明跨 Dataset 汇总。
 - 组头 Dataset 名 → `/datasets/{id}?tab=leaderboard`。行点击 → 已有 suite 详情 `/datasets/{id}/suites/{suite_run_id}`。
-- Harness / Model 格行为与 Dataset Leaderboard 相同（内置短 id 可链；定制 `org/name` 仅在已同意时）。不要按 executor / overlay 文案猜包。
+- Harness / Model 格行为与 Dataset Leaderboard 相同（内置短 id 可链；定制 `org/name` 仅在已同意时）。不要按 executor / overlay 文案猜包。Model 格短名（去 provider 前缀）在 unique join 到 pin 时前置 `LabMark`（brand-marks 闭包或 pin lab SVG）；无 unique hit 不加标、不加字母占位。
 - 读：一次 `GET /v1/results/suites?board=1`（可省略 `dataset_id`）。不要按 Dataset N+1。
 
 **Agent**（`?view=agent`）
 
 - 门 = 已有 Agent Performance（plaza 采集或 Agent-org 同意）。不是 `board_listed`。
 - 组头 = Agent org；**内置短 id 一组**（它们没有 `org_id`）。
-- 内行 = 已有 Performance 行（组内必有 Agent 列；Dataset / Role / Model / Pass rate / Mean）。
+- 内行 = 已有 Performance 行（组内必有 Agent 列；Dataset / Role / Model / Pass rate / Mean）。Model 格同 Dataset 视图：unique join 前置 `LabMark`。
 - Agent 名 → `/agents/{id}?tab=performance`。行点击 → Agent 页已打开的同一 suite 详情。
 
 **Model**（`?view=model`）
 
 - 门 = Agent Performance 经 canonical join。评测事实仍是那些行；不要混第三方 bench。
-- 组头 = lab（`LabGroupHead`），与 `/models` 相同。
+- 组头 = lab（`LabGroupHead`），与 `/models` 相同。组头已有 lab 标，内行 Model 列不再前置 `LabMark`。
 - 内行 = 已 join 的 appearance（Model / Harness / Dataset / overlay / Pass）。未 join 的 overlay **本视图省略**（Dataset / Agent 视图仍可按 overlay 原文出现）。
 - Model 名 → `/models/{canonical}?tab=performance`。Harness → `/agents/{id}?model={overlay}`。
 
