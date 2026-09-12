@@ -22,6 +22,7 @@ import {
   getAttemptFile,
   overlayAgentProfiles,
   pluginsUsedBySuite,
+  uniqueAgentRefs,
   type PackageRelease,
   type SuiteRow,
 } from "@/lib/api";
@@ -30,7 +31,9 @@ import {
   toArchivePath,
 } from "@/lib/attempt-evidence";
 import { getToken } from "@/lib/auth";
+import { agentPackageHref } from "@/lib/agent-models";
 import { resolveMechanismMark } from "@/lib/brand-marks";
+import { INTERNAL_LINK_CLASS, harnessHref, modelCatalogHref } from "@/lib/links";
 import {
   displayLabelsFromOverlay,
   formatDay,
@@ -413,6 +416,11 @@ export function SuiteInspector({
   const derived = displayLabelsFromOverlay(suite.job_overlay);
   const agentText = derived.agent || suite.agent_label || "";
   const modelText = derived.model || suite.model_label || "";
+  const runtimeLinks = uniqueAgentRefs(suite.agent_refs);
+  const harnessTo = runtimeLinks[0]
+    ? agentPackageHref(runtimeLinks[0].package_id)
+    : harnessHref(agentText);
+  const modelTo = modelCatalogHref(modelText);
   const environment = environmentFromOverlay(suite.job_overlay) || "";
   const environmentKey = resolveMechanismMark(environment);
   const yamlText = jobOverlayToProfilesYaml(suite.job_overlay);
@@ -446,13 +454,14 @@ export function SuiteInspector({
                 size={16}
               />
             ) : null}
-            <HarnessLabel value={agentText} empty="—" />
+            <HarnessLabel value={agentText} to={harnessTo} empty="—" />
             <span className="text-mute" aria-hidden>
               ·
             </span>
             <ModelLabel
               value={modelText}
               effort={reasoningEffortFromOverlay(suite.job_overlay)}
+              to={modelTo}
             />
             {environment ? (
               <>
@@ -558,7 +567,7 @@ export function SuiteInspector({
                       to={`/plugins/${encodeDatasetId(p.plugin_id)}`}
                       className="flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-row-hover"
                     >
-                      <span className="inline-flex min-w-0 items-center gap-1.5 text-link hover:text-link-deep">
+                      <span className={`inline-flex min-w-0 items-center gap-1.5 ${INTERNAL_LINK_CLASS}`}>
                         {p.plugin_id}
                         {bundled ? <BuiltinMark /> : null}
                       </span>

@@ -11,6 +11,7 @@ import {
 } from "@/components/suite-inspector";
 import { toast } from "@/components/ui/toast";
 import { toastError } from "@/lib/toast-error";
+import { INTERNAL_LINK_CLASS } from "@/lib/links";
 import {
   decodeDatasetId,
   detachPerformance,
@@ -218,7 +219,7 @@ export function SuiteDetailPage() {
             This suite may be private, deleted, or not uploaded. Return to{" "}
             <Link
               to={leaderboardHref}
-              className="text-link hover:text-link-deep underline-offset-2 hover:underline"
+              className={INTERNAL_LINK_CLASS}
             >
               Leaderboard
             </Link>

@@ -20,6 +20,7 @@ import {
   type SuiteRow,
 } from "@/lib/api";
 import { agentPackageHref } from "@/lib/agent-models";
+import { harnessHref, modelCatalogHref } from "@/lib/links";
 import {
   displayLabelsFromOverlay,
   formatScore,
@@ -276,33 +277,24 @@ export function LeaderboardTable({
                               key={ref.package_id}
                               value={ref.package_id}
                               to={agentPackageHref(ref.package_id)}
-                              onClick={(e) => e.stopPropagation()}
                             />
                           ))}
                         </span>
                       </TableCell>
                     ) : (
                       <TableCell className={COL_TEXT}>
-                        <HarnessLabel value={agentText} empty="—" />
+                        <HarnessLabel
+                          value={agentText}
+                          to={harnessHref(agentText)}
+                          empty="—"
+                        />
                       </TableCell>
                     )}
                     <TableCell className={COL_TEXT}>
                       <ModelLabel
                         value={modelText}
                         effort={reasoningEffortFromOverlay(s.job_overlay)}
-                        to={
-                          runtimeLinks.length && modelText
-                            ? agentPackageHref(
-                                runtimeLinks[0].package_id,
-                                modelText,
-                              )
-                            : undefined
-                        }
-                        onClick={
-                          runtimeLinks.length
-                            ? (e) => e.stopPropagation()
-                            : undefined
-                        }
+                        to={modelCatalogHref(modelText)}
                       />
                     </TableCell>
                     <TableCell

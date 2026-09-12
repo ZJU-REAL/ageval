@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { HoverTip, TruncateTip } from "@/components/hover-tip";
 import { LabMark } from "@/components/lab-mark";
+import { INTERNAL_LINK_CLASS } from "@/lib/links";
 import { loadModelPin, overlayLab } from "@/lib/model-pin";
 import { cn, formatModelLabel } from "@/lib/utils";
 
@@ -59,8 +60,11 @@ export function ModelLabel({
       {to ? (
         <Link
           to={to}
-          onClick={onClick}
-          className="inline-flex min-w-0 text-link hover:text-link-deep hover:underline underline-offset-2"
+          onClick={(event) => {
+            event.stopPropagation();
+            onClick?.(event);
+          }}
+          className={cn("inline-flex min-w-0", INTERNAL_LINK_CLASS)}
         >
           {model}
         </Link>

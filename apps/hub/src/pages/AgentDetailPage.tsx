@@ -14,6 +14,7 @@ import { CommandStrip } from "@/components/command-strip";
 import { DisplayNameEditor } from "@/components/display-name-editor";
 import { EntityMarkControl } from "@/components/entity-mark-control";
 import { entityHintFromPackage, markFromPackage } from "@/lib/brand-marks";
+import { INTERNAL_LINK_CLASS, modelCatalogHref } from "@/lib/links";
 import { OfficialMark } from "@/components/official-mark";
 import { FileSplitPanel } from "@/components/file-split-panel";
 import { PackageOwnerOps } from "@/components/package-owner-ops";
@@ -542,7 +543,7 @@ export function AgentDetailPage() {
                     org{" "}
                     <Link
                       to={`/organizations/${encodeURIComponent(release.org_id)}`}
-                      className="text-link hover:text-link-deep"
+                      className={INTERNAL_LINK_CLASS}
                     >
                       {release.org_id}
                     </Link>
@@ -609,7 +610,7 @@ export function AgentDetailPage() {
           <p className="text-error font-medium">Could not load agent</p>
           <p className="mt-1 text-xs text-body">{error}</p>
           <p className="mt-3">
-            <Link to="/agents" className="text-link hover:text-link-deep underline underline-offset-2">
+            <Link to="/agents" className={INTERNAL_LINK_CLASS}>
               ← Back to Agent hub
             </Link>
           </p>
@@ -767,7 +768,7 @@ export function AgentDetailPage() {
                                 <TableCell>
                                   <Link
                                     to={`/datasets/${encodeDatasetId(row.dataset_id)}?tab=leaderboard`}
-                                    className="text-link hover:text-link-deep hover:underline underline-offset-2"
+                                    className={INTERNAL_LINK_CLASS}
                                     onClick={(event) => event.stopPropagation()}
                                   >
                                     {row.dataset_id}
@@ -777,7 +778,11 @@ export function AgentDetailPage() {
                                   {row.role}
                                 </TableCell>
                                 <TableCell className="max-w-[12rem] overflow-hidden">
-                                  <ModelLabel value={row.model} empty="—" />
+                                  <ModelLabel
+                                    value={row.model}
+                                    empty="—"
+                                    to={modelCatalogHref(row.model)}
+                                  />
                                 </TableCell>
                                 <TableCell className="tabular-nums">
                                   <ScoreRing value={row.pass_rate}>

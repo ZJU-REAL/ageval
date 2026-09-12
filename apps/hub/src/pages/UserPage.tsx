@@ -8,6 +8,7 @@ import { GitHubIcon } from "@/components/github-icon";
 import { PageHead } from "@/components/page-head";
 import { MaintainerMark } from "@/components/maintainer-mark";
 import { OfficialMark } from "@/components/official-mark";
+import { INTERNAL_LINK_CLASS } from "@/lib/links";
 import {
   Table,
   TableBody,
@@ -195,7 +196,7 @@ export function UserPage() {
                         <TableCell>
                           <Link
                             to={`/organizations/${encodeURIComponent(org.org_id)}`}
-                            className="inline-flex items-center gap-1.5 text-link hover:text-link-deep hover:underline"
+                            className={`inline-flex items-center gap-1.5 ${INTERNAL_LINK_CLASS}`}
                           >
                             <span>
                               {org.display_name || org.org_id}
@@ -283,7 +284,7 @@ function UserPackageSection({
                   <TableCell>
                     <Link
                       to={href(row)}
-                      className="inline-flex items-center gap-1.5 text-sm text-link hover:text-link-deep hover:underline min-w-0"
+                      className={`inline-flex min-w-0 items-center gap-1.5 text-sm ${INTERNAL_LINK_CLASS}`}
                     >
                       <span className="truncate">
                         {packageDisplayTitle(row.dataset_id, row.display_name)}

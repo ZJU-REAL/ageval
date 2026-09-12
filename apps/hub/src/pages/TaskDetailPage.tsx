@@ -49,6 +49,7 @@ import {
   type TreeNode,
 } from "@/lib/file-tree";
 import { HarnessLabel } from "@/components/harness-label";
+import { harnessHref, modelCatalogHref } from "@/lib/links";
 import { TruncateTip } from "@/components/hover-tip";
 import { ModelLabel } from "@/components/model-label";
 import {
@@ -747,12 +748,16 @@ export function TaskDetailPage() {
                           {formatScore(j.score)}
                         </TableCell>
                         <TableCell className="text-body">
-                          <HarnessLabel value={j.agent_label} />
+                          <HarnessLabel
+                            value={j.agent_label}
+                            to={harnessHref(j.agent_label)}
+                          />
                         </TableCell>
                         <TableCell>
                           <ModelLabel
                             value={j.model_label}
                             effort={j.reasoning_effort}
+                            to={modelCatalogHref(j.model_label)}
                           />
                         </TableCell>
                         {jobColumns.includes("environment") ? (

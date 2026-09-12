@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import { splitMarkdownFrontmatter } from "@/lib/markdown-frontmatter";
 import { codeToHtml } from "@/lib/shiki-preview";
 import { useTheme } from "@/lib/theme";
+import { EXTERNAL_LINK_CLASS } from "@/lib/links";
 import { cn } from "@/lib/utils";
 
 function FencedCode({ lang, text }: { lang: string; text: string }) {
@@ -90,7 +91,7 @@ function MarkdownLink({
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="text-link hover:text-link-deep underline-offset-2 hover:underline"
+      className={EXTERNAL_LINK_CLASS}
     >
       {children}
     </a>

@@ -5,6 +5,7 @@ import { Navigate } from "react-router-dom";
 import { EmptyState, LoadingState } from "@/components/empty-state";
 import { DisabledTip } from "@/components/hover-tip";
 import { PageHead } from "@/components/page-head";
+import { INTERNAL_LINK_CLASS } from "@/lib/links";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
@@ -97,7 +98,7 @@ function PeekCell({
   return (
     <button
       type="button"
-      className="text-link hover:text-link-deep hover:underline underline-offset-2"
+      className={INTERNAL_LINK_CLASS}
       onClick={onPeek}
     >
       {label}

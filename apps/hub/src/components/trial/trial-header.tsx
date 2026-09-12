@@ -5,6 +5,7 @@ import {
   SlotHistorySelect,
   type SlotHistoryEntry,
 } from "@/components/trial/slot-history-select";
+import { EXTERNAL_LINK_CLASS } from "@/lib/links";
 import type { Trial } from "@/lib/trial-types";
 
 /** Header without sibling nav (Hub has no local trial list siblings by default). */
@@ -77,7 +78,7 @@ export function TrialHeader({
                   href={trial.upstream_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-link hover:text-link-deep truncate max-w-[min(48ch,100%)]"
+                  className={`${EXTERNAL_LINK_CLASS} truncate max-w-[min(48ch,100%)]`}
                 >
                   {trial.upstream_url}
                 </a>

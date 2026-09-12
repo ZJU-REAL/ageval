@@ -26,6 +26,7 @@ import {
   type OrgRow,
   type PackageRelease,
 } from "@/lib/api";
+import { INTERNAL_LINK_CLASS } from "@/lib/links";
 import { formatDay } from "@/lib/utils";
 
 const CELL_MUTE = "whitespace-nowrap text-sm text-mute tabular-nums";
@@ -212,7 +213,7 @@ export function DatasetOrgTables({
                   <span className="flex min-w-0 flex-wrap items-center gap-2">
                     <Link
                       to={`/datasets/${encodeDatasetId(row.dataset_id)}`}
-                      className="shrink-0 font-medium text-ink hover:text-link-deep hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70"
+                      className={`shrink-0 font-medium ${INTERNAL_LINK_CLASS}`}
                     >
                       {datasetLeaf(row)}
                     </Link>

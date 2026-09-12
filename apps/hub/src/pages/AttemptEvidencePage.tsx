@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import { toArchivePath } from "@/lib/attempt-evidence";
 import { getGithubUser, getToken } from "@/lib/auth";
+import { INTERNAL_LINK_CLASS } from "@/lib/links";
 
 async function readAttemptStartedAt(
   runId: string,
@@ -230,7 +231,7 @@ export function AttemptEvidencePage() {
               then return from{" "}
               <Link
                 to={jobsHref}
-                className="text-link hover:text-link-deep underline-offset-2 hover:underline"
+                className={INTERNAL_LINK_CLASS}
               >
                 Jobs
               </Link>

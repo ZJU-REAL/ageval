@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { agentPackageHref } from "@/lib/agent-models";
+import { INTERNAL_LINK_CLASS, harnessHref, modelCatalogHref } from "@/lib/links";
 import { comparePerformances } from "@/lib/agent-performances";
 import {
   encodeDatasetId,
@@ -163,7 +164,7 @@ function PlazaDatasetHead({
         {datasetId ? (
           <Link
             to={`/datasets/${encodeDatasetId(datasetId)}?tab=leaderboard`}
-            className="inline-flex items-center gap-1 hover:text-link-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70"
+            className={`inline-flex items-center gap-1 ${INTERNAL_LINK_CLASS}`}
           >
             {name}
           </Link>
@@ -200,28 +201,17 @@ function HarnessCells({ suite }: { suite: SuiteRow }) {
                 key={ref.package_id}
                 value={ref.package_id}
                 to={agentPackageHref(ref.package_id)}
-                onClick={(event) => event.stopPropagation()}
               />
             ))}
           </span>
         </TableCell>
       ) : (
         <TableCell className="max-w-[12rem] overflow-hidden">
-          <HarnessLabel value={agentText} empty="—" />
+          <HarnessLabel value={agentText} to={harnessHref(agentText)} empty="—" />
         </TableCell>
       )}
       <TableCell className="max-w-[12rem] overflow-hidden">
-        <ModelLabel
-          value={modelText}
-          to={
-            runtimeLinks.length && modelText
-              ? agentPackageHref(runtimeLinks[0].package_id, modelText)
-              : undefined
-          }
-          onClick={
-            runtimeLinks.length ? (event) => event.stopPropagation() : undefined
-          }
-        />
+        <ModelLabel value={modelText} to={modelCatalogHref(modelText)} />
       </TableCell>
     </>
   );
@@ -525,7 +515,7 @@ export function PlazaAgentTables({
               <TableCell>
                 <Link
                   to={`/datasets/${encodeDatasetId(row.dataset_id)}?tab=leaderboard`}
-                  className="text-link hover:text-link-deep hover:underline underline-offset-2"
+                  className={INTERNAL_LINK_CLASS}
                   onClick={(event) => event.stopPropagation()}
                 >
                   {row.dataset_id}
@@ -635,7 +625,7 @@ export function PlazaModelTables({
                 <TableCell>
                   <Link
                     to={`/models/${encodeDatasetId(row.canonical)}?tab=performance`}
-                    className="font-medium text-ink hover:text-link-deep hover:underline underline-offset-2"
+                    className={`font-medium ${INTERNAL_LINK_CLASS}`}
                     onClick={(event) => event.stopPropagation()}
                   >
                     {info?.name || row.canonical}
@@ -653,7 +643,7 @@ export function PlazaModelTables({
                 <TableCell>
                   <Link
                     to={`/datasets/${encodeDatasetId(row.dataset_id)}?tab=leaderboard`}
-                    className="text-link hover:text-link-deep hover:underline underline-offset-2"
+                    className={INTERNAL_LINK_CLASS}
                     onClick={(event) => event.stopPropagation()}
                   >
                     {row.dataset_id}

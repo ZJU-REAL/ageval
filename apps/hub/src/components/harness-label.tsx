@@ -10,6 +10,7 @@ import {
 } from "@/lib/brand-marks";
 import { harnessBrandId } from "@/lib/brand-marks/harness";
 import type { PackageRelease } from "@/lib/api";
+import { INTERNAL_LINK_CLASS } from "@/lib/links";
 import { cn, formatAxisLabel } from "@/lib/utils";
 
 function resolvedHarnessMark(
@@ -90,8 +91,11 @@ export function HarnessLabel({
       {to ? (
         <Link
           to={to}
-          onClick={onClick}
-          className="inline-flex min-w-0 text-link hover:text-link-deep hover:underline underline-offset-2"
+          onClick={(event) => {
+            event.stopPropagation();
+            onClick?.(event);
+          }}
+          className={cn("inline-flex min-w-0", INTERNAL_LINK_CLASS)}
         >
           {name}
         </Link>

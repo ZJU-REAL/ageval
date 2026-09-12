@@ -11,6 +11,7 @@ import { DisplayNameEditor } from "@/components/display-name-editor";
 import { EntityMarkControl } from "@/components/entity-mark-control";
 import { DisabledTip, HoverTip, TruncateTip } from "@/components/hover-tip";
 import { OfficialMark } from "@/components/official-mark";
+import { INTERNAL_LINK_CLASS } from "@/lib/links";
 import { SignInLink } from "@/components/sign-in-button";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -675,7 +676,7 @@ export function OrganizationDetailPage() {
                               {s.dataset_id ? (
                                 <Link
                                   to={`/datasets/${encodeDatasetId(s.dataset_id)}`}
-                                  className="text-link hover:text-link-deep hover:underline"
+                                  className={INTERNAL_LINK_CLASS}
                                 >
                                   {datasetRef(s.dataset_id, s.dataset_version) ||
                                     "—"}

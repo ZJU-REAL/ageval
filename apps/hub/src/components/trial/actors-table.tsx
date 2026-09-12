@@ -1,4 +1,5 @@
 import { HarnessLabel } from "@/components/harness-label";
+import { harnessHref, modelCatalogHref } from "@/lib/links";
 import { HoverTip } from "@/components/hover-tip";
 import { ModelLabel } from "@/components/model-label";
 import {
@@ -35,10 +36,14 @@ export function ActorsTable({ actors }: { actors: NonNullable<Trial["actors"]> }
                   {a.role}
                 </TableCell>
                 <TableCell className="text-body">
-                  <HarnessLabel value={a.agent} />
+                  <HarnessLabel value={a.agent} to={harnessHref(a.agent)} />
                 </TableCell>
                 <TableCell className="text-mute">
-                  <ModelLabel value={a.model} effort={a.reasoning_effort} />
+                  <ModelLabel
+                    value={a.model}
+                    effort={a.reasoning_effort}
+                    to={modelCatalogHref(a.model)}
+                  />
                 </TableCell>
                 <TableCell className="tabular-nums text-body">
                   {a.time_label || "-"}

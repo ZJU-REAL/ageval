@@ -37,6 +37,7 @@ import {
   modalityBadges,
   modelModalities,
 } from "@/lib/model-pin";
+import { EXTERNAL_LINK_CLASS, INTERNAL_LINK_CLASS } from "@/lib/links";
 import { formatScore } from "@/lib/utils";
 
 type ModelDetailTab = "overview" | "performance";
@@ -135,7 +136,7 @@ export function ModelDetailPage() {
                     href={hfHref}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-link hover:text-link-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70"
+                    className={`inline-flex items-center gap-1 ${EXTERNAL_LINK_CLASS}`}
                   >
                     <HuggingFaceMark size={16} />
                     <span className="text-xs">{hfRepo(hfHref)}</span>
@@ -231,7 +232,7 @@ export function ModelDetailPage() {
                         href={hfHref}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex min-w-0 items-center gap-1.5 text-link hover:text-link-deep hover:underline underline-offset-2"
+                        className={`inline-flex min-w-0 items-center gap-1.5 ${EXTERNAL_LINK_CLASS}`}
                       >
                         <HuggingFaceMark size={16} />
                         <span className="truncate">{hfRepo(hfHref)}</span>
@@ -315,7 +316,7 @@ export function ModelDetailPage() {
                         <TableCell>
                           <Link
                             to={agentPackageHref(row.packageId, row.overlay)}
-                            className="text-link hover:text-link-deep hover:underline underline-offset-2"
+                            className={INTERNAL_LINK_CLASS}
                           >
                             {row.packageId}
                           </Link>
@@ -323,7 +324,7 @@ export function ModelDetailPage() {
                         <TableCell>
                           <Link
                             to={suiteDetailPath(row.datasetId, row.suiteRunId)}
-                            className="text-link hover:text-link-deep hover:underline underline-offset-2"
+                            className={INTERNAL_LINK_CLASS}
                           >
                             {row.datasetId}
                           </Link>

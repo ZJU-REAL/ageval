@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { encodeDatasetId } from "@/lib/api";
+import { INTERNAL_LINK_CLASS } from "@/lib/links";
 import {
   compactTokens,
   directoryPrice,
@@ -157,7 +158,7 @@ export function ModelLabTables({ rows }: { rows: ModelLabRow[] }) {
                       {row.canonical ? (
                         <Link
                           to={`/models/${encodeDatasetId(row.canonical)}`}
-                          className="shrink-0 font-medium text-ink hover:text-link-deep hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70"
+                          className={`shrink-0 font-medium ${INTERNAL_LINK_CLASS}`}
                         >
                           {info?.name || row.overlay}
                         </Link>

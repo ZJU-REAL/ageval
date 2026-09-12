@@ -29,6 +29,7 @@ import {
 import { TableColumnPicker } from "@/components/ui/table-column-picker";
 import { useTableColumns } from "@/hooks/use-table-columns";
 import { OfficialMark } from "@/components/official-mark";
+import { INTERNAL_LINK_CLASS } from "@/lib/links";
 import { OverlayFilePanel } from "@/components/overlay-file-panel";
 import { Markdown } from "@/components/markdown";
 import { PackageOwnerOps } from "@/components/package-owner-ops";
@@ -705,7 +706,7 @@ export function DatasetDetailPage() {
             <p className="text-body">
               <Link
                 to={`/plugins/${encodeDatasetId(datasetId)}`}
-                className="text-link hover:text-link-deep underline underline-offset-2"
+                className={INTERNAL_LINK_CLASS}
               >
                 Open in Plugin marketplace
               </Link>
@@ -715,7 +716,7 @@ export function DatasetDetailPage() {
             <p className="text-body">
               <Link
                 to={`/agents/${encodeDatasetId(datasetId)}`}
-                className="text-link hover:text-link-deep underline underline-offset-2"
+                className={INTERNAL_LINK_CLASS}
               >
                 Open in Agent hub
               </Link>

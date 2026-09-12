@@ -9,6 +9,7 @@ import { DisplayNameEditor } from "@/components/display-name-editor";
 import { EntityMarkControl } from "@/components/entity-mark-control";
 import { BrandMark } from "@/components/brand-mark";
 import { entityHintFromPackage, markFromPackage } from "@/lib/brand-marks";
+import { INTERNAL_LINK_CLASS } from "@/lib/links";
 import { OfficialMark } from "@/components/official-mark";
 import { FileSplitPanel } from "@/components/file-split-panel";
 import { FieldLabel } from "@/components/field-label";
@@ -319,7 +320,7 @@ export function PluginDetailPage() {
                     org{" "}
                     <Link
                       to={`/organizations/${encodeURIComponent(release.org_id)}`}
-                      className="text-link hover:text-link-deep"
+                      className={INTERNAL_LINK_CLASS}
                     >
                       {release.org_id}
                     </Link>
@@ -371,7 +372,7 @@ export function PluginDetailPage() {
           <p className="text-error font-medium">Could not load plugin</p>
           <p className="mt-1 text-xs text-body">{error}</p>
           <p className="mt-3">
-            <Link to="/plugins" className="text-link hover:text-link-deep underline underline-offset-2">
+            <Link to="/plugins" className={INTERNAL_LINK_CLASS}>
               ← Back to marketplace
             </Link>
           </p>
