@@ -1,0 +1,61 @@
+---
+title: ACP Profiles
+description: "用 executor: acp 与 - plugin: acp 的 options.entry 接 coding agent。"
+---
+
+## 推荐配置
+
+```yaml
+# profiles.yaml
+format: ageval.profiles/1
+environment: local
+agent_profiles:
+  main:
+    executor: acp
+    extensions:
+      - plugin: acp
+        options:
+          entry: codex
+          # reasoning_effort: high   # 可选；必须是该 session 广告的 value
+    model: gpt-5.4-mini
+    # api_key: ${MY_ENV_NAME}
+```
+
+| 字段 | 说明 |
+| --- | --- |
+| `executor` | coding agent 用 `acp`（不要用已废弃的 `executor: codex` 等） |
+| `- plugin: acp` / `options.entry` | **必填**；本机可用 id 以 `ageval executors -v` 为准 |
+| `options.reasoning_effort` | 可选；广告了 thinking selector 的 entry 走 `set_config_option`。`grok-build` 写进 `grok agent --reasoning-effort … stdio` |
+| `options.idle_timeout_seconds` | 可选；`session/prompt` 静默上限。任意 `session/update` 或 permission 会重置。省略或 ≤0 只用墙钟 invoke timeout。触发 `acp_idle_timeout`（仍受 Parent 墙钟封顶） |
+| `model` | 交给该 entry 的模型 |
+| `api_key` | 可选；`${ENV_NAME}` locator |
+| `base_url` | 可选；字面 URL 或 `${ENV_NAME}` |
+
+不要在 yaml 里写 command / version / install。版本钉在安装与镜像构建。
+
+evaluate 阶段的 ACP（如 `judge`）在 task.yaml 写了 `evaluation.environments`（按名的打分环境表）时，必须 `Agent.session("judge", environment="<name>")`，连到对应的那个打分 Host。run 阶段写了名字、或表里有名字时省略名字，一次失败。HTTP judge 忽略 `environment=`。
+
+## 本机是否已安装
+
+```bash
+ageval executors -v
+```
+
+`ageval executors -v` 按 entry 报三个信号：
+
+| 信号 | 含义 |
+| --- | --- |
+| `engine_ready` | 该 entry 的 agent 运行时（`pi` / `codex` 这些 CLI）已装在本机 |
+| `acp_entry_ready` | 运行时之上的 ACP 入口已就绪 |
+| `credential_missing` | 声明的 credential 环境变量全空、binding 又没写 `api_key` |
+
+需要密钥的 entry（如 `pi`）在 `--probe` / session-open 过不了检查就不能进入运行；支持 OAuth / 本机登录的 entry 只警告。子进程环境只投影 allowlist（`PATH` / `HOME` / `LANG`、entry 声明的 credential 名、binding 的 `api_key` / `base_url`）；宿主里未声明的 token 进不了 entry。
+
+## 运行时切换
+
+```bash
+ageval run <dataset> --task <id> \
+  --set '/parameters/active_profile="main"'
+```
+
+父进程只维护**一个** ACP 客户端；各家协议翻译在 entry 进程外完成。也可以用 `--agent pi --model glm-4.7` 直接指定这次的 agent 与模型；非 ACP 的 Agent 运行时用 `--profiles` 整份替换。

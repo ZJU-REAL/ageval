@@ -1,49 +1,49 @@
 ---
-title: 配置字段参考
-description: ageval.yaml / task.yaml 的字段和校验规则。
+title: Config field reference
+description: Fields and validation rules for ageval.yaml and task.yaml.
 ---
 
-字段规则如下。
+Field rules:
 
-## 根 `ageval.yaml`
+## Root `ageval.yaml`
 
-| 字段 | 规则 |
+| Field | Rules |
 | --- | --- |
 | `format` | `ageval.dataset/1` |
-| `dataset_id` | 1–128；`^[a-z0-9]([a-z0-9._/-]*[a-z0-9])?$`；禁 `..` / `//`；推荐 `org/name` |
-| `version` | 非空 |
-| `tasks.root` | 默认 `tasks` |
-| `defaults` | 仅 `max_concurrent_tasks`（≥1） |
-| 禁止 | `harness` / `provider` / `limits` / `evaluation` / `agent_profiles` |
+| `dataset_id` | 1–128; charset `^[a-z0-9]([a-z0-9._/-]*[a-z0-9])?$`; no `..` / `//` |
+| `version` | Non-empty |
+| `tasks.root` | Default `tasks` |
+| `defaults` | Only `max_concurrent_tasks` (≥1) |
+| Forbidden | `harness` / `provider` / `limits` / `evaluation` / profiles |
 
-**不在** yaml 里：`n_attempts` / Always-k（只走 CLI/job）。
+**Not** in yaml: `n_attempts` / Always-k (CLI/job only).
 
-没有 task 的 dataset → lock 失败。未知 format → `invalid_format`。
+A dataset with no tasks fails lock. Unknown format → `invalid_format`.
 
-## 成员 `task.yaml`
+## Member `task.yaml`
 
-| 区块 | 要点 |
+| Block | Notes |
 | --- | --- |
 | `format` | `ageval.task/1` |
-| `task_id` | = 目录名 = `--task` |
-| `parameters` | 给 `run.py`（`ctx.params`） |
-| `agent_profiles` | 成员只写 `{id}`；ACP `entry` 写在根 `profiles.yaml` |
-| `limits` | wall / agent_invocations / environment_actions / memory_mb |
-| `artifacts.publishable` | id + path + producer |
-| `evaluation` | 可选 inputs / output；有 `evaluator.py` 就认 |
-| `provenance` | 可选 |
-| 禁止 | `harness:` 块、`provider.kind`、`assurance`、角色上的 `executor` / `api_key` |
+| `task_id` | = dir name = `--task` |
+| `parameters` | For `run.py` (`ctx.params`) |
+| `agent_profiles` | Role ids `{id}` only; ACP `entry` lives on root `profiles.yaml` |
+| `limits` | wall / invokes / env actions / memory |
+| `artifacts` | publishable id + path |
+| `evaluation` | optional inputs / output; `evaluator.py` is recognized |
+| `provenance` | optional |
+| Forbidden | `harness:` block, `provider.kind`, `assurance`, `executor` / `api_key` on the member role |
 
-可选的 `evaluation.*` 字段：
+Optional `evaluation.*` fields:
 
-| 字段 | 说明 |
+| Field | Notes |
 | --- | --- |
-| `evaluation.tmpfs_mb` | 环境内 evaluator `/tmp`（正整数 MiB），省略 32。**不是** `limits.*` |
-| `evaluation.environments` | 按名打分 Host（`dockerfile` 和/或 `docker_image`）。写出则必须 job `evaluate_host.isolated: true` + `environment: docker`，并忽略 `evaluate.Dockerfile` |
+| `evaluation.tmpfs_mb` | in-environment evaluator `/tmp`, positive MiB, default 32. **Not** `limits.*` |
+| `evaluation.environments` | named scoring hosts (`dockerfile` and/or `docker_image`). Setting it requires job `evaluate_host.isolated: true` + `environment: docker` and ignores `evaluate.Dockerfile` |
 
-有文件就认：`run.py`、`evaluator.py`、`environment/Dockerfile`、`environment/setup.sh`。
+Files present are recognized: `run.py`, `evaluator.py`, Dockerfile, `setup.sh`.
 
-## Job binding（`profiles.yaml`）
+## Job binding (`profiles.yaml`)
 
 ```yaml
 format: ageval.profiles/1
@@ -59,18 +59,16 @@ agent_profiles:
       - plugin: docker
 ```
 
-role 上可选 `label`。缺省：ACP 用 `options.entry`，其它路径用 `executor`。**不要**把 `options.agent` 当展示名。`--agent` 与 `--profiles` 互斥。`--model` 须配合 `--agent`。
+Optional `label` on a role. `--agent` is mutually exclusive with `--profiles`. `--model` requires `--agent`. Optional `overlays` paths must start with `overlays/` and stay locator-only.
 
-可选 `overlays` 是该 role 在 Hub 上的发布文件集（路径必须以 `overlays/` 开头）。列出的文件只能含 locator，不能含密钥。
+Optional `evaluate_host.isolated: true` (Current: docker) starts a scoring environment. Combined with member `evaluation.environments`, Core lazily starts one host per name.
 
-可选 `evaluate_host.isolated: true`（Current：docker）：另起打分环境。与成员 `evaluation.environments` 一起用时，Core 按名懒启动多个 Host。
+Optional docker `environment_options`: `image` / `platform` / `network` / `user` / `egress` / `egress_allow` / `python_version`. `python_version` is the official image CPython minor (e.g. `"3.13"`; omit = 3.12, shape `^\d+\.\d+$`); an image that cannot be pulled fails once, with no fallback. `egress: llm` allows outbound traffic only to bound profile `base_url` hosts; `egress_allow` on the same map is extra hostnames (omit = none). `evaluate_host.environment_options` may set `network` / `egress` / `egress_allow` / `platform` / `user` / `python_version` (not `image`); when omitted, the scoring host inherits the job's `platform` / `user` / `python_version` and does not inherit the agent's `egress` / `egress_allow` / `network`.
 
-docker 可选 `environment_options`：`image` / `platform` / `network` / `user` / `egress` / `egress_allow` / `python_version`。`python_version` 是官方镜像的 CPython minor（如 `"3.13"`；省略 = 3.12，形状 `^\d+\.\d+$`）；上游 tag 拉不到一次失败，不回退。`egress: llm` 时出站只放行绑定 profile 的 `base_url` 主机；`egress_allow` 是同一 map 上的额外 hostname 列表（省略 = 不加）。`evaluate_host.environment_options` 可写 `network` / `egress` / `egress_allow` / `platform` / `user` / `python_version`（不是 `image`）；省略时打分 Host 只继承 job 的 `platform` / `user` / `python_version`，不继承 agent 的 `egress` / `egress_allow` / `network`。
-
-## 成员一级目录白名单
+## Allowed top-level dirs
 
 `prompts` · `schemas` · `environment` · `evaluation` · `data` · `lib` · `upstream` · `solution`
 
-## lock 常见失败
+## Common lock failures
 
-task_id 不一致 · format 错 · dataset_id 非法 · docker 无 Dockerfile · ACP 缺 entry · 密钥写进 yaml · 非法一级目录 · 没有 task
+id mismatch · bad format · illegal dataset_id · docker without Dockerfile · missing ACP entry · secrets in yaml · illegal folders · no tasks

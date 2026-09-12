@@ -1,22 +1,22 @@
 ---
-title: Campaign 参数矩阵
-description: 在同一道 task 上扫 seed、profile 等允许改的字段。
+title: Campaign parameter matrix
+description: Sweep allowlisted fields on one task.
 ---
 
-Campaign 解决的是：**固定一题**，换一批允许的参数点，各点各自出 Result。
+Campaign means: **one task**, many allowlisted parameter points, each with its own Result.
 
 ```bash
 ageval campaign <dataset> --task <id> ...
 ```
 
-具体矩阵参数以 `ageval campaign --help` 为准。
+See `ageval campaign --help` for matrix flags.
 
-| | 整份 dataset | Campaign | Always-k (`-k`) |
+| | Suite | Campaign | Always-k (`-k`) |
 | --- | --- | --- | --- |
-| 轴 | 多个 task | 同一 task 的参数组合 | 同一 task **重复独立运行** |
-| 典型用途 | 全成员回归 | 对比 seed / profile / binding | 攒 pass@k / pass^k 样本 |
-| 入口 | `ageval run`（可省略 `--task`） | `ageval campaign` | `ageval run … -k N` |
+| Axis | Many tasks | Parameter combos on one task | Repeated independent Attempts |
+| Typical use | Full-suite regression | Compare seed / profile / binding | Samples for pass@k / pass^k |
+| Entry | `ageval run` (optional `--task`) | `ageval campaign` | `ageval run … -k N` |
 
-**矩阵轴 ≠ k 次运行轴。** Always-k 不写进 campaign matrix，也不写进 `task.yaml`。
+**Matrix axis ≠ k-attempt axis.** Always-k is not a campaign matrix field and is not in `task.yaml`.
 
-覆盖仍受 `--set` 白名单约束，不能随意改任意字段。
+Overrides still follow the `--set` allowlist.

@@ -1,50 +1,50 @@
 ---
-title: 运行单个 Task
-description: 指定 --task，读 Result 和 logs。
+title: Run a single task
+description: Use --task, read the Result and logs path.
 ---
 
-## 命令
+## Command
 
 ```bash
 ageval run <dataset> --task <task_id>
 ```
 
-例子：
+Example:
 
 ```bash
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg
 
-# Always-k：同一 task 固定 k 次独立运行（CLI only；默认 k=1）
+# Always-k: fixed k independent Attempts for one task (CLI only; default k=1)
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg -k 5
 ```
 
-只检查配置、不跑 agent：
+Config only, no agent:
 
 ```bash
 ageval lock examples/datasets/minimal-demo --task terminal-jsonl-agg
 ```
 
-`--task` 必须等于成员目录名和 `task.yaml` 里的 `task_id`。  
-TTY 下 stdout 是短 recap（单题含 `logs` 路径）；管道或 `--json` 仍是完整文档。`k>1` 走整份 dataset 的 job，写 `.ageval/suite-runs/`。
+`--task` must match the member directory name and `task_id` in `task.yaml`.  
+On a TTY, stdout is a short recap (single task: `logs` path). A pipe or `--json` still writes the JSON document. With `k>1`, the run is a suite job under `.ageval/suite-runs/`.
 
-<Callout type="info" title="整份 dataset 跑一遍">
+<Callout type="info" title="The whole dataset">
 
-不加 `--task` 就会整份跑，所有成员进同一个 job。`ageval status <suite_run_id> --dataset <dataset>` 看 progress，`ageval cancel <suite_run_id> --dataset <dataset>` 叫停。
+Omit `--task` to run every member in one job. `ageval status <suite_run_id> --dataset <dataset>` shows progress; `ageval cancel <suite_run_id> --dataset <dataset>` stops it.
 
 </Callout>
 
-## 跑完你会看到什么
+## What you get
 
-- 终端里的 **Result 摘要**（状态、分数相关字段、错误信息）  
-- **`logs` 路径**：Dataset 根下 `.ageval/runs/<run_id>/`（`k=1`）  
-- `k>1` 时：`summary.json` 里的 **pass@k / pass^k** 等 job 指标  
+- A **Result** summary on the terminal  
+- A **`logs` path** under the Dataset root: `.ageval/runs/<run_id>/` (when `k=1`)  
+- For `k>1`: job metrics such as **pass@k / pass^k** in suite `summary.json`  
 
-PASS / FAIL 仅来自 `evaluator.py`，与 Agent 完成态分离。评测没过或超时都算 FAIL（score 0）；环境起不来、evaluator 崩了记 ERROR。
+PASS / FAIL comes only from `evaluator.py`, not from the Agent finishing. A low score or a timeout is FAIL (score 0); a dead environment or a crashed evaluator is ERROR.
 
-## 常见失败
+## Common failures
 
-| 现象 | 先查 |
+| Symptom | Check |
 | --- | --- |
-| lock 失败 | 配置 / `task_id` / 目录约定 |
-| agent 起不来 | `ageval executors -v`、凭据 |
-| 评测 FAIL | artifacts 是否写出、evaluator 输入 |
+| Lock fails | Config / ids / layout |
+| Agent won’t start | `ageval executors -v`, credentials |
+| Eval FAIL | Artifacts / evaluator inputs |

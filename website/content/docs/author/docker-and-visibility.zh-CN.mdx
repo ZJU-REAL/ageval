@@ -1,0 +1,48 @@
+---
+title: Docker 与 Agent 能看见的文件
+description: 何时用 docker、Dockerfile、Agent 能看见什么。
+---
+
+## local 还是 docker
+
+环境写在 **`profiles.yaml`**，不是 `task.yaml` 的 `provider.kind`：
+
+```yaml
+# profiles.yaml
+format: ageval.profiles/1
+environment: docker    # 或 local / e2b / ssh / daytona
+```
+
+| 环境 | 适合 |
+| --- | --- |
+| `local` | 开发、多数 example |
+| `docker` | 需要容器边界 |
+| `e2b` / `ssh` / `daytona` | 云上环境；缺钥 `--probe` 失败 |
+
+选 `docker`（或 `e2b` / `daytona`）时，成员下应有 **`environment/Dockerfile`**（或 image 选项），否则 lock 失败。docker / e2b / daytona 用同一份配方。
+
+## 官方镜像的 Python
+
+```yaml
+environment: docker
+environment_options:
+  python_version: "3.13"   # 省略 = 3.12
+```
+
+`python_version` 只选官方镜像的 CPython minor。成员 `FROM ageval-attempt:base` 会解析到版本化 tag（如 `ageval-attempt:py3.13`），3.12 与 3.13 两套镜像可以同时留在本地。形状必须是 `^\d+\.\d+$`；空串 / `latest` / `3` 一次拒绝。上游 tag 拉不到就失败，不回退 3.12。ACP 引擎版本不受这项影响。打分 Host 省略自己的 `evaluate_host.environment_options.python_version` 时沿用 job 这份。
+
+插件 bake 层构建可读宿主 `AGEVAL_PIP_INDEX`，作为 `PIP_INDEX_URL`；未设置则用 pip 默认源。
+
+## 谁看得见什么
+
+| 目录 | 谁用 |
+| --- | --- |
+| `prompts/`、`data/` 等 | 业务 / 可能进 agent 视野 |
+| `evaluation/` | 只给评测（evaluate 阶段才 upload）。**不要**放打分 Dockerfile |
+| `environment/` | Agent `Dockerfile`、`setup.sh` |
+| `environment/evaluate.Dockerfile` | 单个打分配方（`evaluate_host.isolated` 且未写 `evaluation.environments`） |
+| `environment/evaluate/<name>/` | 按名打分配方；成员 yaml 的 `evaluation.environments` |
+
+真隔离靠 **不 mount + 评测前 upload**，不是靠删配置字段。这不是 `path_views`。打分 Host 的 work root 不是 Agent 的 bind-mount：harvest 的 tree 快照（含 `exclude`）在第一次 `exec` / `session(environment=)` 时拷到那个 Host。
+
+多 actor 的逻辑 isolation（`shared-container` / `container-per-group`）也声明在 `profiles.yaml`，container id 与 UID 由 ageval 安排；agent 引擎与 ACP entry 在构建期写入镜像，运行期不会现场安装。

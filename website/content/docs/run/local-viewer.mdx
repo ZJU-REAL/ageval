@@ -1,49 +1,47 @@
 ---
-title: 本地结果查看器
-description: 在浏览器里查看本地运行结果，不连 Registry。
+title: Local results viewer
+description: Browse local results in the browser. No Registry.
 ---
 
-整份 dataset 跑完，或只跑一题之后，要对照分数、点开轨迹、复制命令，用 Viewer。它只读你打开的那一份 dataset：`.ageval/suite-runs/` 和 `.ageval/runs/`，不连 Registry。
+After the whole dataset finishes, or after a single task, use Viewer for scores, trajectories, and copyable commands. It reads only the dataset you opened (`.ageval/suite-runs/` and `.ageval/runs/`) and never talks to Registry.
 
-Jobs 表可以删掉本地一行 Job（先 preview 路径，再确认）。删掉 Kind 为 suite 的那一行，会把它引用的各次运行一起删掉，不会再以 single 冒出来。不能从 suite 里单独删一次运行。这是删本地结果，不是 Registry 上的删除（`ageval results delete` 是另一对象）。CLI 对等：`ageval jobs delete --local <dataset> --job <id> --yes`。
+From the Jobs table you can delete a local Job after a path preview. Deleting a suite row also deletes the runs it references; they do not come back as singles. You cannot delete one run from inside a suite. That wipes local results, not a Registry object (`ageval results delete` is different). Same command: `ageval jobs delete --local <dataset> --job <id> --yes`.
 
-置顶和备注只存在**这个浏览器**，不写进 evidence / lock / Registry。
+Pin and notes stay in **this browser** only. They are not written to evidence, lock, or Registry.
 
-## 打开
+## Open
 
 ```bash
-# 首次构建前端（生产 ageval view）
 cd apps/viewer && pnpm install && pnpm build && cd ../..
-
 ageval view examples/datasets/minimal-demo
-# 或
+# or
 ageval view examples/datasets/minimal-demo --no-browser --port 8765
-# 已缓存的 Hub ref（唯一命中不打 Hub）
+# Cached Hub ref (a unique hit does not contact Hub)
 ageval view official/demo@0.1.0
 
-# 开发：一条命令（能起 Vite 就起；否则打印两行 fallback）
+# Dev: one command (starts Vite when possible; otherwise prints fallback)
 ageval view examples/datasets/minimal-demo --dev --port 8765
 
-# 跑完后深链到该 job / task / run
+# Deep-link the run you just finished
 ageval view examples/datasets/minimal-demo --open /jobs/<id>
 ```
 
-`--dev` 对着**同一套**本地 API，并尽量自己拉起 Vite。起不了会在终端打印 `pnpm --dir apps/viewer dev`。两进程：API 端口（默认 8765）+ UI 端口（默认 5173）。服务的生产包是 `apps/viewer/dist/`。端口占用就换 `--port`。
+`ageval view --dev` talks to the **same** local API and starts Vite when it can. If it cannot, it prints `pnpm --dir apps/viewer dev`. Two-process contract: API port (default 8765) + UI port (default 5173). Production `ageval view` serves `apps/viewer/dist/`.
 
-## 界面结构
+## Layout
 
 **Jobs → Tasks → Attempt**
 
-| 层 | 内容 |
+| Layer | Content |
 | --- | --- |
-| Jobs | 本地整份 dataset 的运行结果，以及只跑一题的结果（Kind：suite / single）。Kind / Source 是过滤器；suite 的 Source 只列 task id |
-| Tasks | 每题状态 / 分数。整份跑完且一题只有一次运行时，点进后直接打开那一次 |
-| Attempt | 结果条、**Timing**（有数据时还有 **Tokens**）、角色、证据页签（Trajectory / Agent / …） |
+| Jobs | Local results for the whole dataset, and for a single task (Kind: suite / single). Kind / Source are filters; suite Source lists task ids only |
+| Tasks | Per-task status / score. A suite task with one run opens that run directly |
+| Attempt | Outcome, **Timing** (and **Tokens** when present), actors, evidence tabs |
 
-Timing 来自 Attempt `phase_timing`（prepare / run / evaluate / cleanup）；hover 色条看分段耗时。  
-轨迹按轨迹文件顺序展示：一段 thought，紧接着它调用的工具，再下一段 thought。轨迹行（thought / `tool_call` / 最终 assistant）若带 `elapsed_ms`，步骤头会显示该步耗时；没有就不画标签。Viewer 不会用文件 mtime 或页面时钟补造。  
-耗时、token、单步耗时 **只是参考**，不是 PASS。轨迹也不是评分依据。Trajectory 里每条 **tool-call**（以及过长行）可折叠；观测 PASS 条上有全部展开 / 全部收起，和 Hub 上 Attempt 页一样。
+Timing comes from Attempt `phase_timing` (`prepare` / `run` / `evaluate` / `cleanup`); hover bar segments for durations.  
+Trajectory steps follow the sealed file order: a thought, then the tools that thought invoked, then the next thought. When a sealed step (thought, `tool_call`, or final assistant) carries `elapsed_ms`, the step header shows that duration. Missing timing is omitted — Viewer does not invent it from file mtimes or the page clock.  
+Time, tokens, and step duration are **hints**, not PASS. Trajectory is not how scoring is decided. Each **tool-call** row (and other long rows) can collapse; the observational PASS note has expand-all / collapse-all, same as the Hub Attempt page.
 
-**Verifier**：缺省是 `result.json` + `evaluation/` 文件树。若有 `evaluation/observation.jsonl`（evaluate 阶段 SDK invoke，LLM-as-judge），该页签复用 Trajectory 的步骤卡片；Agent 的 Trajectory 页仍只读根 `trajectory.jsonl`。观察不是 PASS。
+**Verifier:** default is `result.json` plus the `evaluation/` tree. When `evaluation/observation.jsonl` exists (evaluate-phase SDK invoke, LLM-as-judge), that tab reuses the Trajectory step cards. The Agent Trajectory tab still reads only root `trajectory.jsonl`. Observation is not PASS.
 
-Viewer **不连** Registry；远程目录走 Hub。改 SPA 看仓库 `apps/viewer/README.md`。
+Viewer does **not** talk to Registry; remote directories live on the Hub. SPA details: `apps/viewer/README.md`.

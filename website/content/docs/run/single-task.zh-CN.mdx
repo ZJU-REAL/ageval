@@ -1,0 +1,50 @@
+---
+title: 运行单个 Task
+description: 指定 --task，读 Result 和 logs。
+---
+
+## 命令
+
+```bash
+ageval run <dataset> --task <task_id>
+```
+
+例子：
+
+```bash
+ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg
+
+# Always-k：同一 task 固定 k 次独立运行（CLI only；默认 k=1）
+ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg -k 5
+```
+
+只检查配置、不跑 agent：
+
+```bash
+ageval lock examples/datasets/minimal-demo --task terminal-jsonl-agg
+```
+
+`--task` 必须等于成员目录名和 `task.yaml` 里的 `task_id`。  
+TTY 下 stdout 是短 recap（单题含 `logs` 路径）；管道或 `--json` 仍是完整文档。`k>1` 走整份 dataset 的 job，写 `.ageval/suite-runs/`。
+
+<Callout type="info" title="整份 dataset 跑一遍">
+
+不加 `--task` 就会整份跑，所有成员进同一个 job。`ageval status <suite_run_id> --dataset <dataset>` 看 progress，`ageval cancel <suite_run_id> --dataset <dataset>` 叫停。
+
+</Callout>
+
+## 跑完你会看到什么
+
+- 终端里的 **Result 摘要**（状态、分数相关字段、错误信息）  
+- **`logs` 路径**：Dataset 根下 `.ageval/runs/<run_id>/`（`k=1`）  
+- `k>1` 时：`summary.json` 里的 **pass@k / pass^k** 等 job 指标  
+
+PASS / FAIL 仅来自 `evaluator.py`，与 Agent 完成态分离。评测没过或超时都算 FAIL（score 0）；环境起不来、evaluator 崩了记 ERROR。
+
+## 常见失败
+
+| 现象 | 先查 |
+| --- | --- |
+| lock 失败 | 配置 / `task_id` / 目录约定 |
+| agent 起不来 | `ageval executors -v`、凭据 |
+| 评测 FAIL | artifacts 是否写出、evaluator 输入 |

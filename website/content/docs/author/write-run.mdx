@@ -1,24 +1,24 @@
 ---
-title: 编写 run.py
-description: 任务循环写在 dataset 里；用 SDK 调 agent。
+title: Write run.py
+description: The task loop lives in the dataset; call the agent through the SDK.
 ---
 
-`run.py` 决定这一题怎么走：多轮对话、角色、本地工具、把产物写到声明路径。
+`run.py` owns the loop, roles, local tools, and published artifacts.
 
-| 你负责 | 不要做 |
+| You own | Do not |
 | --- | --- |
-| loop、角色、handoff、本地 Tool | 最终 PASS、宿主凭据、自己提隔离 |
-| 经 SDK `session` / `invoke` | 把某家私有 SDK 当 Core |
+| loop, roles, tools | PASS, host credentials, isolation |
+| SDK `session` / `invoke` | A vendor SDK as Core |
 
-`RunTerminal.completed` **不等于** PASS。分数由 `evaluator.py` 给出：确定性脚本比对参考答案，或参考答案就位后的可选 LLM-as-judge。
+`RunTerminal.completed` is **not** PASS. Scoring lives in `evaluator.py`: a deterministic script against gold, or an optional LLM-as-judge after gold lands.
 
-<Callout type="idea" title="让 agent 代写">
+<Callout type="idea" title="Have an agent write it">
 
 ```bash
 npx skills add ZJU-REAL/ageval --skill ageval-sdk-harness
 ```
 
-说清 loop 要怎么走，让本机 coding agent 写 `run.py`；下面的片段就是它要满足的约定。
+Describe the loop you need and let your coding agent produce `run.py`; the snippet below is what it must satisfy.
 
 </Callout>
 
@@ -34,6 +34,8 @@ async def run(ctx: RunContext) -> RunTerminal:
     return RunTerminal.completed("ok")
 ```
 
-`session.invoke` 可传 `tools` 与 `messages`。`openai-http` / `anthropic-http` 返回结构化 `tool_calls`；ACP 忽略工具目录，仍走文本 invoke。省略这两项就是 prompt-only。`tool_calls` 不是 PASS。
+`session.invoke` may take `tools` and `messages`. `openai-http` /
+`anthropic-http` return structured `tool_calls`; ACP ignores the catalog
+and stays on text invoke. Omit both for prompt-only. `tool_calls` is not PASS.
 
-有文件就认，不必再写 `harness.entrypoint`。
+Files present are recognized. Do not declare a harness entrypoint.

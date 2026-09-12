@@ -1,19 +1,16 @@
 ---
-title: 溯源（Provenance）
-description: 可选声明这题从哪移植来；不是分数。
+title: Provenance
+description: Optional upstream declaration. Not a score.
 ---
 
 ```yaml
 provenance:
-  kind: port          # port | reimplementation | wrapper | original
+  kind: port
   upstream:
     name: some-bench
     url: https://github.com/…
     ref: v0.1.0
-  parity:
-    claims: [protocol, scoring]
-    known_gaps: []
 ```
 
-可写在根 `ageval.yaml`（dataset 默认）或成员 `task.yaml`。成员一旦写了，**整块替换**根默认。  
-`port` 类一般要有 `upstream.url` 和 `ref` 或 `commit`。这与 PASS 无关。
+Root dataset default and/or member override (member **replaces** root).  
+`port`-like kinds need `upstream.url` plus `ref` or `commit`. Not related to PASS.

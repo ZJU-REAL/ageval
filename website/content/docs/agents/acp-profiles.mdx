@@ -1,9 +1,9 @@
 ---
-title: ACP Profiles
-description: "用 executor: acp 与 - plugin: acp 的 options.entry 接 coding agent。"
+title: ACP profiles
+description: "Plug coding agents with executor: acp and - plugin: acp options.entry."
 ---
 
-## 推荐配置
+## Recommended config
 
 ```yaml
 # profiles.yaml
@@ -16,46 +16,44 @@ agent_profiles:
       - plugin: acp
         options:
           entry: codex
-          # reasoning_effort: high   # 可选；必须是该 session 广告的 value
+          # reasoning_effort: high   # optional; must be a value the session advertises
     model: gpt-5.4-mini
-    # api_key: ${MY_ENV_NAME}
 ```
 
-| 字段 | 说明 |
+| Field | Note |
 | --- | --- |
-| `executor` | coding agent 用 `acp`（不要用已废弃的 `executor: codex` 等） |
-| `- plugin: acp` / `options.entry` | **必填**；本机可用 id 以 `ageval executors -v` 为准 |
-| `options.reasoning_effort` | 可选；广告了 thinking selector 的 entry 走 `set_config_option`。`grok-build` 写进 `grok agent --reasoning-effort … stdio` |
-| `options.idle_timeout_seconds` | 可选；`session/prompt` 静默上限。任意 `session/update` 或 permission 会重置。省略或 ≤0 只用墙钟 invoke timeout。触发 `acp_idle_timeout`（仍受 Parent 墙钟封顶） |
-| `model` | 交给该 entry 的模型 |
-| `api_key` | 可选；`${ENV_NAME}` locator |
-| `base_url` | 可选；字面 URL 或 `${ENV_NAME}` |
+| `executor` | Use `acp` for coding agents |
+| `- plugin: acp` / `options.entry` | **Required**; discover with `ageval executors -v` |
+| `options.reasoning_effort` | Optional. Entries with an advertised thinking selector use `set_config_option`. `grok-build` adds `--reasoning-effort` on `grok agent … stdio` |
+| `options.idle_timeout_seconds` | Optional stall ceiling during `session/prompt`. Any `session/update` or permission resets it. Unset / ≤0 → wall-clock invoke timeout only. Fires `acp_idle_timeout` (still capped by the Parent wall) |
+| `model` | Model id for that entry |
+| `api_key` | Optional env **name** |
 
-不要在 yaml 里写 command / version / install。版本钉在安装与镜像构建。
+No command/version/install in package yaml.
 
-evaluate 阶段的 ACP（如 `judge`）在 task.yaml 写了 `evaluation.environments`（按名的打分环境表）时，必须 `Agent.session("judge", environment="<name>")`，连到对应的那个打分 Host。run 阶段写了名字、或表里有名字时省略名字，一次失败。HTTP judge 忽略 `environment=`。
+Evaluate-phase ACP (for example `judge`) must `Agent.session("judge", environment="<name>")` when the task declares `evaluation.environments`, the named scoring-host map; attach targets that scoring host. Naming a host during run, or omitting the name when the map is set, fails once. HTTP judges ignore `environment=`.
 
-## 本机是否已安装
+## What's installed on this machine
 
 ```bash
 ageval executors -v
 ```
 
-`ageval executors -v` 按 entry 报三个信号：
+`ageval executors -v` reports three signals per entry:
 
-| 信号 | 含义 |
+| Signal | Meaning |
 | --- | --- |
-| `engine_ready` | 该 entry 的 agent 运行时（`pi` / `codex` 这些 CLI）已装在本机 |
-| `acp_entry_ready` | 运行时之上的 ACP 入口已就绪 |
-| `credential_missing` | 声明的 credential 环境变量全空、binding 又没写 `api_key` |
+| `engine_ready` | the entry's agent runtime (the `pi` / `codex` CLIs) is installed on this host |
+| `acp_entry_ready` | the ACP entry on top of that runtime is ready |
+| `credential_missing` | every declared credential env name is unset and the binding has no `api_key` |
 
-需要密钥的 entry（如 `pi`）在 `--probe` / session-open 过不了检查就不能进入运行；支持 OAuth / 本机登录的 entry 只警告。子进程环境只投影 allowlist（`PATH` / `HOME` / `LANG`、entry 声明的 credential 名、binding 的 `api_key` / `base_url`）；宿主里未声明的 token 进不了 entry。
+Entries that require a key (for example `pi`) fail `--probe` / session-open, and the run does not start; entries that document keyless (OAuth) auth warn only. The child environment is allowlisted (`PATH` / `HOME` / `LANG`, the entry’s credential names, and the binding’s `api_key` / `base_url`). Undeclared host tokens do not reach the entry.
 
-## 运行时切换
+## Runtime switch
 
 ```bash
 ageval run <dataset> --task <id> \
   --set '/parameters/active_profile="main"'
 ```
 
-父进程只维护**一个** ACP 客户端；各家协议翻译在 entry 进程外完成。也可以用 `--agent pi --model glm-4.7` 直接指定这次的 agent 与模型；非 ACP 的 Agent 运行时用 `--profiles` 整份替换。
+One ACP client in the parent process; each vendor's protocol translation runs outside the process, in the entry. `--agent pi --model glm-4.7` picks this run's agent and model directly; non-ACP agent runtimes take a whole `--profiles` file instead.

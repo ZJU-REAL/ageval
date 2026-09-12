@@ -1,18 +1,18 @@
 ---
-title: 环境
-description: 本机、Docker、e2b、ssh、daytona；ACP 用法相同。
+title: Environments
+description: Host, Docker, e2b, ssh, daytona. ACP does not change.
 ---
 
-环境写在 `profiles.yaml` 的 `environment:`。ACP 只要求环境提供 `attach_stdio`，配置里不要写 `plugin_id: docker`。换环境不用改 ACP。`exec` 是同一环境上的一次性命令，不是另一种环境。docker 会在启动时把绑定的 `options.entry` 写入镜像；镜像里已经有这个入口，就不会再 `npm i`。换 `model` 不重建镜像，换 `entry` 会重建。
+Set the environment in `profiles.yaml` with `environment:`. ACP only needs the environment to provide `attach_stdio`. Do not write `plugin_id: docker`. Changing the environment does not change ACP. `exec` is a one-shot command on the same environment, not a second environment. On docker, startup writes the bound `options.entry` into the image; if that entry is already there, it does not run `npm i`. Switching `model` does not rebuild; switching `entry` does.
 
-| 环境 | 怎么开 | 真跑条件 |
+| Environment | Opens | To actually run |
 | --- | --- | --- |
-| `local` | 本机目录 | `examples/datasets/tau3-airline-5` 默认 |
-| `docker` | 本机容器 | `examples/datasets/minimal-demo` 默认 `profiles.yaml` |
-| `e2b` | 云沙箱 | `E2B_API_KEY`；extra：`uv tool install 'ageval-cli[e2b]'`；缺 extras/钥则 `--probe` `ready: false`，不能进入运行 |
-| `ssh` A | 远端整机 | `AGEVAL_SSH_HOST` / `USER` / `KEY` |
-| `ssh` B | 远端已有 image | 同上，且 `image:` 已在远端 |
-| `daytona` | 云沙箱（OCI snapshot） | `DAYTONA_API_KEY`；缺钥 `--probe` `ready: false`。默认 CI 不跑真 Daytona |
+| `local` | Host directory | Default `examples/datasets/tau3-airline-5` |
+| `docker` | Local container | Default `examples/datasets/minimal-demo` `profiles.yaml` |
+| `e2b` | Cloud sandbox | `E2B_API_KEY`; extra: `uv tool install 'ageval-cli[e2b]'`; missing extra/key → `--probe` `ready: false` |
+| `ssh` A | Remote machine | `AGEVAL_SSH_HOST` / `USER` / `KEY` |
+| `ssh` B | Remote existing image | Same locators plus `image:` already on the host |
+| `daytona` | Cloud sandbox (OCI snapshot) | `DAYTONA_API_KEY`; missing key → `--probe` `ready: false`. Default CI does not run live Daytona |
 
 ```bash
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg
@@ -20,10 +20,10 @@ ageval run examples/datasets/tau3-airline-5 --task airline-00
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg --probe
 ```
 
-缺 extras 或钥时 `--probe` 应 `ready: false`、`started: false`。ACP 只使用 `attach_stdio`，代码里不应出现 `container_id`。
+Missing extras or keys: `--probe` must report `ready: false` and `started: false`. ACP only sees `attach_stdio`.
 
-**ssh A 不支持 live ACP stdio。** 该面上的 dsh / nooa 走 `host.exec`，不是 ACP 长会话。
+**ssh A does not support live ACP stdio.** dsh / nooa on that surface use `host.exec`, not a long ACP session.
 
-`environment/setup.sh` 是 environment 阶段最后一步，不是独立 phase。参考答案（`evaluation/`）在 evaluate 才进打分 Host。`profiles.yaml` 可写 `evaluate_host.isolated: true`（Current：`docker`）：另起打分环境，参考答案只上第二环境；省略 = 同一环境。
+`environment/setup.sh` is the last step of the environment phase, not its own phase. Gold (`evaluation/`) enters the scoring host at evaluate. `profiles.yaml` may set `evaluate_host.isolated: true` (Current: `docker`) to start a second scoring environment so gold never enters the Agent environment; omit it to stay on the run environment.
 
-多个打分镜像（安装内容不同、顺序 stage）写在成员 `evaluation.environments`：每个名字一份 `dockerfile` 和/或 `docker_image`，放 `environment/evaluate/<name>/`，不要放 `evaluation/`。Core 第一次 `scoring.exec` / `session(environment=)` 才 start；未指定名字的不 build。写出该表则必须 `evaluate_host.isolated` + docker，且忽略 `environment/evaluate.Dockerfile`。ACP 连到对应名字的 Host；HTTP judge 忽略 `environment=`。`--agent` 与 `--profiles` 互斥。`--model` 须配合 `--agent`。
+Several scoring images (different installed closures, sequential stages) are declared on the member as `evaluation.environments`: each name has a `dockerfile` and/or `docker_image` under `environment/evaluate/<name>/`, never under the gold tree. Core starts a host on first `scoring.exec` / `session(environment=)`; unused names are not built. Setting the map requires `evaluate_host.isolated` + docker and ignores `environment/evaluate.Dockerfile`. ACP attaches to the named host; HTTP judges ignore `environment=`. `--agent` and `--profiles` are mutually exclusive. `--model` requires `--agent`.

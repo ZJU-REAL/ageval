@@ -1,0 +1,39 @@
+---
+title: 编写 run.py
+description: 任务循环写在 dataset 里；用 SDK 调 agent。
+---
+
+`run.py` 决定这一题怎么走：多轮对话、角色、本地工具、把产物写到声明路径。
+
+| 你负责 | 不要做 |
+| --- | --- |
+| loop、角色、handoff、本地 Tool | 最终 PASS、宿主凭据、自己提隔离 |
+| 经 SDK `session` / `invoke` | 把某家私有 SDK 当 Core |
+
+`RunTerminal.completed` **不等于** PASS。分数由 `evaluator.py` 给出：确定性脚本比对参考答案，或参考答案就位后的可选 LLM-as-judge。
+
+<Callout type="idea" title="让 agent 代写">
+
+```bash
+npx skills add ZJU-REAL/ageval --skill ageval-sdk-harness
+```
+
+说清 loop 要怎么走，让本机 coding agent 写 `run.py`；下面的片段就是它要满足的约定。
+
+</Callout>
+
+```python
+from ageval_sdk import RunContext, RunTerminal
+
+async def run(ctx: RunContext) -> RunTerminal:
+    async with ctx.agent.session("solver", max_turns=1) as session:
+        reply = await session.invoke(ctx.params["instruction"])
+    ctx.publish_json("reply", {"ok": bool(reply.get("ok")), "text": reply.get("text") or ""})
+    if not reply.get("ok"):
+        return RunTerminal.failed(str(reply.get("error") or "invoke_failed"))
+    return RunTerminal.completed("ok")
+```
+
+`session.invoke` 可传 `tools` 与 `messages`。`openai-http` / `anthropic-http` 返回结构化 `tool_calls`；ACP 忽略工具目录，仍走文本 invoke。省略这两项就是 prompt-only。`tool_calls` 不是 PASS。
+
+有文件就认，不必再写 `harness.entrypoint`。

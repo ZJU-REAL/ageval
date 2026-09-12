@@ -1,19 +1,19 @@
 ---
-title: 切换 Agent 与模型
-description: 用 profile、--agent、--model 或 --set 切换 coding-agent 入口。
+title: Switch agent and model
+description: Swap coding-agent entries with profiles, --agent, --model, or --set.
 ---
 
-同一题可以声明多个 `agent_profiles`，运行时换「用谁」。
+One task can declare several `agent_profiles` and pick which to use at run time.
 
-## 先看本机装了什么
+## What’s on this host?
 
 ```bash
 ageval executors -v
 ```
 
-关注 ACP entry 的 `engine_ready` / `acp_entry_ready`。yaml 写对了但本机没装，照样跑不起来。
+Check `engine_ready` / `acp_entry_ready` per ACP entry.
 
-## 配置里声明
+## Declare in config
 
 ```yaml
 # profiles.yaml
@@ -29,19 +29,19 @@ agent_profiles:
     model: gpt-5.4-mini
 ```
 
-ACP 的 `entry` 写在 `- plugin: acp` / `options.entry`。
+ACP `entry` lives on `- plugin: acp` / `options.entry`.
 
-## Agent 包（`--agent`）
+## Agent packages (`--agent`)
 
-`ageval.agent/1` 是 Agent 包（executor、entry、overlays）；`binding.model` 是缺省，不是身份。
+`ageval.agent/1` is an Agent package (executor, entry, overlays); `binding.model` is the default, not identity.
 
-| 想做 | 写法 |
+| Goal | How |
 | --- | --- |
-| 用内置包 | `--agent pi`。内置 `pi` / `opencode` / `codex` / `claude-code` / `grok-build` / `openai-http` / `anthropic-http` 随 ageval 提供，不必 install |
-| 用定制 overlays 包 | 先 `ageval agent install org/name@0.1.0` 再绑。install 会顺带安装 `binding.extensions[].plugin`（contrib 跳过；缺插件或 `host_requires` 不满足则整条失败，不能进入运行） |
-| 只改这次的模型 | `--model <名>`（配合 `--agent`；省略则用包缺省。不是 `ageval results upload-suite --model`，那是上传观测标签） |
+| Built-in package | `--agent pi`. Built-ins `pi` / `opencode` / `codex` / `claude-code` / `grok-build` / `openai-http` / `anthropic-http` ship with ageval — no install |
+| Custom overlay pack | `ageval agent install org/name@0.1.0` first, then bind. Install also pulls `binding.extensions[].plugin` (skips contrib; a missing plugin or unsatisfied `host_requires` rejects the whole install) |
+| Model for this run only | `--model <name>` (with `--agent`; omit to keep the package default. Not `ageval results upload-suite --model` — that is an observational upload label) |
 
-`--agent` 与 `--profiles` **互斥**。
+`--agent` and `--profiles` are mutually exclusive.
 
 ```bash
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg --agent pi --model glm-4.7
@@ -49,15 +49,15 @@ ageval agent install examples/agents/pi-default
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg --agent local/pi-default@0.1.0
 ```
 
-## 临时切换（不用改文件）
+## Temporary switch
 
 ```bash
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
   --set '/bindings/solver/options/entry="codex"'
 ```
 
-`--set` 只允许白名单指针，例如 `/bindings/solver/options/reasoning_effort="high"`。允许的指针列在 CLI 页的 `--set` 表里。
+Only allowlisted `--set` pointers work, e.g. `/bindings/solver/options/reasoning_effort="high"`. The CLI page lists the pointers.
 
-`api_key` 永远写**环境变量名**，不要写密钥本身。可选 profile 字段还有 `options.reasoning_effort`（思考档位）、`options.idle_timeout_seconds`（静默上限）与 `base_url`。
+`api_key` is always an env **name**, never the secret. Optional profile fields: `options.reasoning_effort` (thinking level), `options.idle_timeout_seconds` (stall ceiling), and `base_url`.
 
-非 ACP 的 Agent 运行时（nooa / dsh / miniswe）用 `--profiles` 整份替换。它们以插件提供：`ageval plugin install plugins/<名>` 装好后，profiles 里 `executor:` 写对应名字，并挂上同名 `plugin:` 行。
+Non-ACP agent runtimes (nooa / dsh / miniswe) switch with a whole `--profiles` file. They ship as plugins: `ageval plugin install plugins/<name>`, then set `executor:` to that name and attach the matching `plugin:` line in profiles.

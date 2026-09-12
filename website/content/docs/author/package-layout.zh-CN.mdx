@@ -1,0 +1,92 @@
+---
+title: Package 布局
+description: Dataset 根与 task 成员目录、根 yaml 与成员 yaml 怎么分工。
+---
+
+<Callout type="idea" title="让 agent 代写">
+
+```bash
+npx skills add ZJU-REAL/ageval --skill ageval-config-package
+```
+
+装好后把需求说给本机 coding agent，让它写出 dataset 根和 `tasks/<id>/`；照下面的约定手写也一样。
+
+</Callout>
+
+## 两层
+
+| 层 | 文件 | 职责 |
+| --- | --- | --- |
+| Dataset | 根 `ageval.yaml` | dataset 身份、版本、成员在哪 |
+| Task | `tasks/<id>/task.yaml` | 这一题怎么跑、怎么评 |
+
+CLI 路径永远是 Dataset 根；`--task` 选成员。
+
+```text
+my-dataset/
+├── ageval.yaml
+├── profiles.yaml           # 可选：job binding 默认
+├── shared/                 # 可选：跨 task 共享（进 packageDigest）
+│   ├── lib/                # 以 shared.lib.* 导入
+│   ├── assets/             # 只读领域数据（代码路径读取）
+│   └── README.md
+└── tasks/
+    └── hello/              # 目录名 == task_id
+        ├── task.yaml
+        ├── run.py
+        ├── evaluator.py
+        ├── prompts/
+        ├── environment/    # Agent Dockerfile；打分配方在 evaluate.Dockerfile 或 evaluate/<name>/
+        ├── evaluation/     # 参考答案等，默认不给 agent；禁止放打分 Dockerfile
+        ├── data/
+        └── lib/            # 仅本 task；以 lib.* 导入
+```
+
+成员一级目录只认：`prompts` · `schemas` · `environment` · `evaluation` · `data` · `lib` · `upstream` · `solution`。别的名字可能 lock 失败。
+
+## Dataset 级 `shared/`（可选）
+
+同构多 task 包可把公共 bridge / 领域资产放在根 `shared/`，**不要**复制进每个 `tasks/*/lib/`。
+
+| 路径 | 用途 | 导入 |
+| --- | --- | --- |
+| `shared/lib/` | 跨 task Python 模块 | `from shared.lib…` |
+| `shared/assets/` | 只读 fixture / policy / db | 代码路径 |
+| `tasks/*/lib/` | 仅本 task 扩展 | `from lib…` |
+
+Core 注入的 path 前缀是 **`[task_dir, dataset_root]`**，**不会**再把 `shared/lib` 叶子目录塞进 path。
+
+硬规则（摘要）：
+
+- 有 `shared/` 则 **必须** 进入 `packageDigest` / publish blob；改它会改整份 dataset 的 digest  
+- 默认 **不** 挂到 Agent workspace；参考答案 **只** 放 `tasks/*/evaluation/`  
+- 成员 task **禁止** 占用顶层名 `shared`（`shared/` 目录或 `shared.py`）— lock 失败  
+- `shared/lib` 与 `tasks/*/lib` **允许** 同名 stem（命名空间已区分）  
+- docker 镜像 **不会** 由 Core 隐式 COPY `shared/`；容器内要用时在 Dockerfile 里显式 `COPY`，并把 **dataset 根** 放进 `PYTHONPATH`  
+- 本地自检：`uv run python scripts/check_shared_lib_collisions.py <dataset-root>`  
+
+**有 `shared/`、改 import 契约或在 Hub 上共享浏览，都不会让评测结果更可信。**
+
+## 根 `ageval.yaml`
+
+```yaml
+format: ageval.dataset/1
+dataset_id: org/my-suite    # 推荐 org/name；有字符集限制
+version: "0.1.0"
+tasks:
+  root: tasks
+# defaults:
+#   max_concurrent_tasks: 2   # 仅整份 dataset 调度；不要写 harness/limits
+```
+
+`dataset_id`：1–128 字符，小写字母数字开头结尾，中间可有 `.` `_` `/` `-`，禁止 `..` 与 `//`。**不参与打分**。
+
+根上**不能**写 `harness` / `provider` / `agent_profiles` / `evaluation`。
+
+## 成员里 parameters vs 其它
+
+- **`parameters`**：给 `run.py`（`ctx.params`）
+- **`limits` / `evaluation` / `environment/`**：给 Core
+- 环境与 ACP entry：根上 `profiles.yaml`
+
+`run.py` 不要再读第二份「真配置」。运行时改允许的项用 `--set`。

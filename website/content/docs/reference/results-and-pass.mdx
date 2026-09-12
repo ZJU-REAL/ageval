@@ -1,37 +1,37 @@
 ---
-title: 结果与 PASS
-description: Result 怎么读；pass@k 是 job 指标，不是整份 dataset 的 PASS。
+title: Results and PASS
+description: How to read Result; pass@k is a job metric, not a PASS for the whole dataset.
 ---
 
-## 不要搞混
+## Do not mix these up
 
-1. `run.py` 跑完 **≠** PASS  
-2. 轨迹 / token / agent 自述 **≠** 分数（含 `evaluation/observation.jsonl`）  
-3. PASS / FAIL 仅来自 `evaluator.py` 的返回值  
-4. 整份 dataset / job 汇总（含 pass@k）**≠** 整份 dataset 的 PASS  
+1. `run.py` completed **≠** PASS  
+2. Trajectory / tokens / agent self-report **≠** score (including `evaluation/observation.jsonl`)  
+3. PASS / FAIL comes only from the `evaluator.py` return value  
+4. Whole-dataset / job aggregates (including pass@k) **≠** a PASS for the whole dataset  
 
-## 终端上
+## On the terminal
 
-- **Result**：绑定到这次运行的状态与评测结论  
-- **`logs`**：这次运行的证据路径（相对 dataset 根，如 `.ageval/runs/<run_id>`；单次 `k=1` 常见）  
-- 整份跑完时的 `pass_rate` / `mean_score`：只供观测  
+- **Result**: status and evaluation for this run  
+- **`logs`**: evidence path under the dataset root (e.g. `.ageval/runs/<run_id>`; typical when `k=1`)  
+- Whole-dataset `pass_rate` / `mean_score`: observational only  
 
-## Always-k 与 pass@k / pass^k
+## Always-k and pass@k / pass^k
 
-用 `-k` / `--n-attempts` 跑满 k 次后，整份跑完的 `summary.json` → `metrics` 会写：
+After Always-k (`-k` / `--n-attempts`), the whole-dataset `summary.json` → `metrics` includes:
 
-| 键 | 含义 |
+| Key | Meaning |
 | --- | --- |
-| `pass_at_k` | pass@k（至少一次成功的无偏估计；Harbor 同构） |
-| `pass_power_k` | pass^k（k 次都成功的估计） |
-| `n_attempts` | 本 job 的 Always-k 预算（来自 CLI / job，不是 `task.yaml`） |
-| `k_values` | 本 summary 计算过的 k 列表 |
-| `per_task` | 各 task 的 `n` / `c` 与 per-k 映射（审计） |
-| 整份汇总分 | 各 **task** 上该指标的 **mean**（样本不够的 task 不进分母） |
+| `pass_at_k` | pass@k (unbiased “≥1 success”; Harbor-style) |
+| `pass_power_k` | pass^k (all-k success estimate) |
+| `n_attempts` | Always-k budget for this job (CLI / job only — not `task.yaml`) |
+| `k_values` | k list computed for this summary |
+| `per_task` | Per-task `n` / `c` and per-k maps (audit) |
+| Whole-dataset score | **Mean over tasks** for that metric (omit tasks with too few samples) |
 
-### `metrics.pass_at_k` / `pass_power_k` 契约
+### Contract: `metrics.pass_at_k` / `pass_power_k`
 
-每个键是 **字符串化的 k**（如 `"1"`、`"2"`、`"5"`），值为：
+Each key is a **stringified k** (`"1"`, `"2"`, `"5"`, …). Value shape:
 
 ```json
 {
@@ -40,46 +40,46 @@ description: Result 怎么读；pass@k 是 job 指标，不是整份 dataset 的
 }
 ```
 
-| 字段 | 含义 |
+| Field | Meaning |
 | --- | --- |
-| `value` | 对该 k 可计算的 task 取 mean；若无 task 可算则为 `null` |
-| `n_tasks` | 进入该 k 分母的 task 数 |
-| `incomplete_tasks` | 因 `n < k`（pass@k）等原因未进入分母的 task 数 |
+| `value` | Mean over tasks that can compute that k; `null` if none |
+| `n_tasks` | Tasks included in that k’s denominator |
+| `incomplete_tasks` | Tasks omitted (e.g. pass@k when `n < k`) |
 
-**上传 / Registry：**
+**Upload / Registry:**
 
-- `ageval results upload-suite` 在本地先 **ensure / recompute**（有 `attempts[]` 或 task `n`/`c` 即可补全 k 指标），再 POST 整份 `metrics` blob。
-- Registry 原样存入 `metrics_json`，list/get **不剥除** `pass_at_k` / `pass_power_k`。
-- 主列仍是 `pass_rate` / `mean_score`；k 指标在 `metrics` 内读。
-- **不**写入 `config_fingerprint` / job identity；不同 k 的 job 可并列，身份仍是 agent×model 绑定。
-- 无 k 数据的旧上传：`metrics.pass_at_k` 缺失 → Hub 显示 `—`。
+- `ageval results upload-suite` **ensures / recomputes** k metrics locally (from `attempts[]` or per-task `n`/`c`) before POST of the full `metrics` blob.
+- Registry stores `metrics_json` as-is; list/get suite **does not strip** `pass_at_k` / `pass_power_k`.
+- First-class columns remain `pass_rate` / `mean_score`; k metrics live under `metrics`.
+- **Not** part of `config_fingerprint` / job identity; different k jobs may sit side by side.
+- Legacy suites without k data: missing `metrics.pass_at_k` → Hub shows `—`.
 
-**`task_refs`（多 attempt）：** 可含 `n`、`c`、`attempt_run_ids`（及主 `run_id`），供审计与 `--with-attempts` 上传全样本。
+**`task_refs` (multi-attempt):** may include `n`, `c`, `attempt_run_ids` (plus primary `run_id`) for audit and `--with-attempts`.
 
-这些是 **观测汇总**，不是整份 dataset 的 PASS。
+These are **observational aggregates**, not a PASS for the whole dataset.
 
-## Hub 上看得到什么
+## What Hub actually lists
 
-| 上传命令 | 产物 | Hub 主界面 |
+| Upload command | Artifact | Hub primary UI |
 | --- | --- | --- |
-| `ageval results upload --run …` | 单次运行 | **一般不进** Dataset Leaderboard / Task Jobs 主列表 |
-| `ageval results upload-suite --suite-run …` | 整份运行的一行 + metrics / task_refs | **完备且绑定 release** 才上 Leaderboard；缺题或 draft 绑定只出现在 Task Jobs |
-| `… --with-attempts` | 额外上传各 attempt 目录 | Jobs 可点进 Attempt 详情 / 轨迹 |
+| `ageval results upload --run …` | Single Attempt | **Usually not** on Dataset Leaderboard / Task Jobs |
+| `ageval results upload-suite --suite-run …` | Suite row + metrics / task_refs | **Leaderboard** only when complete and release-bound; incomplete or draft-bound rows stay on Task Jobs |
+| `… --with-attempts` | Also packs attempt dirs | Jobs can open Attempt detail / trajectory |
 
-因此：要在 Hub 上看整份 dataset 的结果，流程是 **整份跑完 → upload-suite**，并且绑定已发布 release。不是只 upload 单题。
+So: to show whole-dataset results on the public board, **run the whole dataset → upload-suite** against a published release. Uploading one task is not enough.
 
-## 本地查看
+## Local view
 
-`ageval view` 打开 Jobs → Tasks → Attempt。  
-Attempt 页可有 **Timing**（及有数据时的 **Tokens**）条。轨迹按文件顺序展示（thought 紧挨着它后面的工具）。轨迹行带 `elapsed_ms` 时步骤头显示单步耗时。耗时 / token / 单步耗时 **只是参考**，不是 PASS。
+`ageval view` opens Jobs → Tasks → Attempt.  
+Attempt pages may show **Timing** (and **Tokens** when present). Trajectory steps follow file order (thought next to the tools it precedes). A step may show a duration when the row has `elapsed_ms`. Time, tokens, and step duration are **hints**, not PASS.
 
-## 失败怎么分
+## Failure kinds
 
-| 类型 | 直觉 |
+| Kind | Intuition |
 | --- | --- |
-| 配置 / lock | 还没进入正式执行 |
-| 执行 ERROR | 执行边界内出错（agent、超时、隔离等） |
-| FAIL | 评测认为没过 |
-| PASS | 评测通过 |
+| Config / lock | Never entered formal execution |
+| Execution ERROR | Failed inside the boundary |
+| FAIL | Evaluator says no |
+| PASS | Evaluator says yes |
 
-具体 exit code 与字段以当前 CLI 输出和 skill `ageval-cli` 为准。
+Exit codes: current CLI + skill `ageval-cli`.

@@ -1,0 +1,50 @@
+---
+title: 首次运行
+description: 锁定配置、跑一道 task，找到结果目录。
+---
+
+CLI 的 dataset 参数始终是 **dataset 根**（含 `ageval.yaml` 的目录）或 **registry ref**（`<dataset_id>@<version>`），不是 `tasks/<id>/`。
+
+## 从 Hub 运行
+
+```bash
+ageval registry list
+ageval lock official/minimal-demo@0.1.3 --task terminal-jsonl-agg
+ageval run  official/minimal-demo@0.1.3 --task terminal-jsonl-agg
+ageval lock <org>/<name>@<version> --task <task-id>
+ageval run  <org>/<name>@<version> --task <task-id>
+```
+
+登录与 `registry list` 默认连公开 Hub，不必先设 `AGEVAL_REGISTRY_URL`。registry ref 会把已发布的 dataset 下载并缓存到本机（`ageval cache` 查看 / 清理），再按锁定配置执行。默认 profiles 多为 **docker** 环境，需要本机 Docker 引擎；实际运行 coding agent 还需要 ACP 入口与凭据。
+
+## 仓库内示例
+
+公开示例 [`examples/datasets/minimal-demo`](https://github.com/ZJU-REAL/ageval/tree/main/examples/datasets/minimal-demo) 随仓库 checkout 提供：
+
+<Callout type="info" title="开始之前">
+
+minimal-demo 默认 docker 环境，先确认 Docker 引擎已启动；再用 `ageval executors -v` 确认要用的 agent 是 `engine_ready` / `acp_entry_ready`，缺密钥会标 `credential_missing`。
+
+</Callout>
+
+```bash
+ageval tasks examples/datasets/minimal-demo
+ageval lock examples/datasets/minimal-demo --task terminal-jsonl-agg
+ageval run  examples/datasets/minimal-demo --task terminal-jsonl-agg
+ageval run  examples/datasets/minimal-demo --task terminal-jsonl-agg --probe
+```
+
+`ageval run` 在 TTY 下打印短 recap（单题含 `logs` 路径，整份 dataset 含 `summary` 路径）。管道或 `--json` 仍输出 JSON 文档。证据在 `.ageval/runs/<id>/`。
+
+| 词 | 说明 |
+| --- | --- |
+| **dataset** | 根 `ageval.yaml` + 若干 task |
+| **一次运行** | 一次 lock 之后的执行；目录 `.ageval/runs/<id>/` |
+| **环境** | 本机 / Docker / e2b / ssh / daytona |
+
+```bash
+ageval executors -v
+ageval view examples/datasets/minimal-demo --no-browser
+```
+
+`--probe` 只做 lock + preflight，不 invoke。`--profiles` 整份替换配置文件。`--agent` 与 `--profiles` 互斥。`--model` 须配合 `--agent`。

@@ -1,22 +1,22 @@
 ---
-title: 编写 Evaluator
-description: 独立打分；evaluation 块与 artifacts 怎么接。
+title: Write an evaluator
+description: Independent scoring; wire evaluation inputs to artifacts.
 ---
 
-Evaluator 只负责**算法与真值**，不启 agent、不持宿主密钥。PASS/FAIL 只能从这里来（再写进 Result）。
+The evaluator owns **scoring and truth** — no agent start, no host secrets. PASS/FAIL comes only from here (then the Result).
 
-<Callout type="idea" title="让 agent 代写">
+<Callout type="idea" title="Have an agent write it">
 
 ```bash
 npx skills add ZJU-REAL/ageval --skill ageval-config-package
 npx skills add ZJU-REAL/ageval --skill ageval-sdk-harness
 ```
 
-`ageval-config-package` 覆盖 evaluation 段与脚本打分；`evaluator.py` 里还要 `Agent.session`（LLM-as-judge）才需要 `ageval-sdk-harness`。装好后把打分需求说给本机 coding agent，让它写完即可。
+`ageval-config-package` covers the evaluation block and script scoring; `ageval-sdk-harness` is only needed when `evaluator.py` also calls `Agent.session` (LLM-as-judge). Then describe the scoring you need and let your coding agent finish it.
 
 </Callout>
 
-## `task.yaml` 片段
+## Config snippet
 
 ```yaml
 artifacts:
@@ -30,62 +30,57 @@ evaluation:
   runtime: python
   entrypoint: evaluator:evaluate
   network: none
-  # tmpfs_mb: 256   # 可选；环境内 evaluator /tmp（MiB），省略则 32。不是 limits.*
+  # tmpfs_mb: 256   # optional in-environment evaluator /tmp (MiB); omit → 32. Not limits.*
   inputs:
     - artifact: session-output
       target: artifacts/session-output.json
-    # 参考答案示例：
-    # - package_path: evaluation/gold.json
-    #   target: gold.json
   output:
     format: json
 ```
 
-| 点 | 说明 |
+| Point | Note |
 | --- | --- |
-| 屏障 | `run.py` 结束后才进入环境 输入 |
-| 参考答案 | 放 `evaluation/`，evaluate 阶段才 upload |
-| artifact id | 必须和 `run.py` 实际写出的文件对上 |
-| `tmpfs_mb` | 只改环境内 evaluator `/tmp`；省略 32 MiB。大 snapshot 在 **task** 上声明，不要写进 `limits` |
+| Barrier | Inputs appear only after `run.py` ends |
+| Gold | Under `evaluation/`; uploaded at evaluate |
+| Artifact ids | Must match files `run.py` actually writes |
+| `tmpfs_mb` | In-environment evaluator `/tmp` only; omit → 32 MiB. Declare a larger sandbox on the **task**, not under `limits` |
 
-`evaluator.py` 在 **parent 子进程**里跑（与 `run.py` 同一形态）。PASS 仍只由引擎写入结果。读结果时，执行与评测是分开的事实。配置可写 `evaluate_host.isolated: true`（Current：docker）另起打分环境；参考答案只上打分 Host。需要**多个、安装内容不同**的打分镜像时，在 `task.yaml` 写 `evaluation.environments`，用 `inputs["scoring"].exec(<name>, argv)` 或 `Agent.session(..., environment=<name>)` 指定名字；未用到的名字不 start。省略该表 = 单个打分 Host（或同一环境）；此时 `scoring.exec` 打这只缺省 Host。写出有名表则必须点名；未知名一次失败，不 start。
+`evaluator.py` is a **parent subprocess** (same shape as `run.py`). PASS still binds only in the engine. Run execution and evaluation stay separate facts. A profiles file may set `evaluate_host.isolated: true` (Current: docker) to start a scoring environment so gold never enters the Agent environment. Sequential stages with **different installed closures** use `evaluation.environments` on the task; the evaluator names a host with `inputs["scoring"].exec(<name>, argv)` or `Agent.session(..., environment=<name>)`. Unused names are not started. Omit the map → the single scoring host (or same-environment evaluate); `scoring.exec` hits that default host. A named map still requires an exact name; unknown names fail once and do not start.
 
-## 两种评测
+## Two scoring styles
 
-缺省是**确定性脚本**：读产物和 `evaluation/` 里的参考答案，返回 `{status, score, metrics}`；status 取 PASS / FAIL / ERROR，低分与超时都算 FAIL（score 0），环境起不来、evaluator 崩了记 ERROR。不必调 Agent。没有 `evaluation/observation.jsonl`，Verifier 仍是 `result.json` 与文件树。
+Default is a **deterministic script**: read published artifacts and gold under `evaluation/`, return `{status, score, metrics}`; `status` is PASS / FAIL / ERROR — a low score and a timeout are FAIL (score 0), a dead environment or a crashed evaluator is ERROR. No Agent call. No `evaluation/observation.jsonl`. Verifier stays `result.json` plus the file tree.
 
-可选 **LLM-as-judge**：同一份 job `profiles.yaml` 再写一个角色（如 `judge`），`task.yaml` 的 `agent_profiles` 列入同一 id。参考答案 **已经** upload 之后，`evaluator.py` 可以 `Agent.session("judge").invoke(...)`。提示词归 dataset。`invoke` 不得改 `profile_id` / executor。
+Optional **LLM-as-judge**: add another role on the same job `profiles.yaml` (e.g. `judge`) and list that id on `task.yaml` `agent_profiles`. After gold is uploaded, `evaluator.py` may `Agent.session("judge").invoke(...)`. The dataset owns the prompt. `invoke` must not override `profile_id` / executor.
 
 ```python
 def evaluate(inputs):
-    # inputs["agent"] 在本机环境上会注入（parent socket）；没有就走脚本路径
+    # inputs["agent"] is injected on this machine (parent socket); omit → script path
     ...
     return {"status": "PASS", "score": 1.0, "metrics": {}}
 ```
 
-约束：
-
-| 点 | 说明 |
+| Point | Note |
 | --- | --- |
-| PASS | 仍只看这次返回值；judge 文本 / `observation.jsonl` 不是分数 |
-| 轨迹 | evaluate 阶段的步写入 `evaluation/observation.jsonl`（省略 `user` 行，避免参考答案进 evidence）。不并进根 `trajectory.jsonl` |
-| 调用预算 | `limits.agent_invocations` 要覆盖 solver **和** judge |
-| 环境 | SDK session 走 parent 的 Unix socket。ACP `attach_stdio` 打 **打分 Host**（缺省 = run 环境；job `evaluate_host.isolated: true` 时是 docker 第二实例）。有 `evaluation.environments` 时 ACP 必须 `session(id, environment=<name>)`；`openai-http` / `anthropic-http` 忽略 `environment=`（出站仍在 parent）。不要把 Agent Service socket bind-mount 进容器 |
+| PASS | Still this return value only. Judge prose / `observation.jsonl` is not a score |
+| Trace | Evaluate-phase steps go to `evaluation/observation.jsonl` (`user` rows omitted so gold stays out of evidence). Not merged into root `trajectory.jsonl` |
+| Budget | `limits.agent_invocations` must cover solver **and** judge |
+| Environment | SDK session uses the parent Unix socket. ACP `attach_stdio` targets the **scoring host** (the run environment by default; a second docker instance when `evaluate_host.isolated: true`). With `evaluation.environments`, ACP must `session(id, environment=<name>)`; `openai-http` / `anthropic-http` ignore `environment=` (egress stays on the parent). Do not bind-mount the Agent Service socket into a container |
 
-## 多 stage 打分 Host
+## Named scoring hosts
 
-顺序阶梯（审计 / 行为 / 编译）需要**不同已装内容**时，不要复用 `environment/evaluate.Dockerfile`。成员 yaml：
+When sequential stages need **different installed closures**, do not reuse `environment/evaluate.Dockerfile`. On the member yaml:
 
 ```yaml
 evaluation:
   environments:
     audit:
-      docker_image: python:3.12-slim          # 已有 OCI 标签
+      docker_image: python:3.12-slim          # existing OCI tag
     verification:
       dockerfile: environment/evaluate/verification/Dockerfile
 ```
 
-配方文件放 `environment/evaluate/<name>/`，**不要**放 `evaluation/`（那是参考答案）。写出该表则忽略 `evaluate.Dockerfile` / `evaluation.docker_image`。job 必须 `evaluate_host.isolated: true` 且 `environment: docker`。
+Recipe files live under `environment/evaluate/<name>/`, **never** under `evaluation/` (that tree is gold). Setting the map ignores `evaluate.Dockerfile` / `evaluation.docker_image`. The job must set `evaluate_host.isolated: true` and `environment: docker`.
 
 ```python
 async def evaluate(inputs):
@@ -98,6 +93,6 @@ async def evaluate(inputs):
     return {"status": "PASS" if reply.get("ok") else "FAIL", "score": 1.0 if reply.get("ok") else 0.0}
 ```
 
-`exec` 的 argv 是列表；stdout / stderr / exit_code 来自**那个容器内**。第一次用到某名字才 start 并 upload 快照和参考答案。未知名、run 阶段写了名字、或表里有名字时 ACP 省略名字：一次失败，不 start。v1 只顺序 stage，不要并发 `exec` 与 `session` 打同一名字。start / `exec` 退出 / observation 文件都不是 PASS。
+`exec` argv is a list; stdout / stderr / exit_code come from **inside that container**. The first use of a name starts that host and uploads the snapshot + gold. Unknown names, run-phase `environment=`, or omitting the name on a named map fail once and do not start. v1 is sequential stages only — do not run `exec` and `session` concurrently on the same name. Start, `exec` exit, and the observation file are not PASS.
 
-不调 `Agent.session` = 脚本路径。Verifier 有 observation 时复用 Trajectory 那种步骤卡片；没有则保持文件树。本地查看用 `ageval view`。
+No `Agent.session` = the script path. With observation.jsonl, Verifier reuses the Trajectory step cards; without it, the file tree. Browse locally with `ageval view`.

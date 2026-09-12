@@ -1,97 +1,97 @@
 ---
-title: 整份 dataset 一次跑完
-description: 一次跑完 dataset 里所有 task；可 Always-k 与 pass@k；汇总分不是整份 dataset 的 PASS。
+title: Run the whole dataset
+description: Run every task; optional Always-k and pass@k; aggregates are not a PASS for the whole dataset.
 ---
 
-省略 `--task` 时，`ageval run` 把 dataset 里每一个 task 都跑一遍，各自独立 lock / 执行 / 评测：
+Omit `--task` and `ageval run` schedules **every** member — each locks, runs, and evaluates independently:
 
 ```bash
 ageval run examples/datasets/minimal-demo
 ageval run examples/datasets/minimal-demo --max-concurrent-tasks 2
 ```
 
-## 两轴别混
+## Two axes (do not mix)
 
-| 轴 | 干什么 | 不干什么 |
+| Axis | Purpose | Not for |
 | --- | --- | --- |
-| **并发** `--max-concurrent-tasks` | **少等一会儿**：多开几路压总耗时 | 不改 k，也不改 PASS/FAIL |
-| **Always-k** `--n-attempts` / `-k` | 每题固定跑满 k 次独立运行，给 **pass@k / pass^k** 攒样本 | 不是「失败再试」的条件 retry；**不进** `task.yaml` / fingerprint |
+| **Concurrency** `--max-concurrent-tasks` | **Finish sooner** — more units in flight | Does not change k or PASS/FAIL |
+| **Always-k** `--n-attempts` / `-k` | Fixed k independent Attempts per task for **pass@k / pass^k** samples | Not conditional “retry on fail”; **not** a `task.yaml` / fingerprint field |
 
 ```bash
-# 整份 dataset，每题 k=5（只写在 CLI / job 上）
+# Full suite, k=5 per task (CLI/job only)
 ageval run examples/datasets/minimal-demo -k 5 --max-concurrent-tasks 2
 
-# 只对一题 Always-k
+# Always-k on one task
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg -k 5
 
-# 补跑：并进已有 job，重算指标（可加 --task 只补一题）
+# Resume: append into an existing suite job and recompute metrics
 ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task terminal-jsonl-agg -k 5
 
-# 指定要换的成员（PASS / FAIL / ERROR）：新的一次运行，同一个 `suite_run_id`
+# Replace one finished row (PASS / FAIL / ERROR): new Attempt, same suite id
 ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task terminal-jsonl-agg --replace-slot
-# Always-k：只换一格 (task_id, attempt_index)
+# Always-k: one (task_id, attempt_index)
 # ageval run examples/datasets/minimal-demo --resume-suite <id> --task terminal-jsonl-agg --replace-slot --attempt-index 1
 ```
 
-规则：
+Hard rules:
 
-- `n_attempts` **禁止**写进 `task.yaml`；也不进 `config_fingerprint`  
-- 不加 `--replace-slot` 的补跑只**追加**缺失 index；已完成的 PASS / FAIL / ERROR 仍跳过  
-- `--replace-slot` 写**新**的一次运行；旧行留在盘上并进入 `previous[]`；指标只按现行指针重算  
-- Hub / Viewer 历史列表是 `patch N` + 该次运行开始时间（不是补跑时刻，也不展示 `run_id`）  
-- 因 **cancel 未真正跑过** 的占位会在 resume 时**重跑**（避免 pass@k 永久偏低）
-- 进度和取消写在下面；Hub Leaderboard 在有 `metrics.pass_at_k` 时展示 pass@k / pass^k / n_attempts；本地 summary 始终可写 metrics  
-- 系统默认 `suite_run_id` 为 **8 位 hex**（无 `suite_` 前缀）
+- `n_attempts` is **not** allowed in `task.yaml` and is **not** part of `config_fingerprint`  
+- Resume without `--replace-slot` only **appends** missing indices; finished PASS / FAIL / ERROR stay skipped  
+- `--replace-slot` writes a **new** Attempt; the old row stays on disk and in `previous[]`; metrics use the new current only  
+- Hub / Viewer history is `patch N` plus that Attempt’s start time (not the suite replace clock, not the `run_id`)  
+- Rows that only have a **suite-cancel placeholder** (never actually ran) are **retried** on resume so pass@k is not permanently deflated
+- Progress / cancel below; Hub Leaderboard shows pass@k / pass^k / n_attempts when `metrics.pass_at_k` is present; local `metrics` are always written after Always-k  
+- Default system `suite_run_id` is **8 hex** (no `suite_` prefix)
 
 
-## 汇总指标
+## Aggregate metrics
 
-写在 `.ageval/suite-runs/<suite_run_id>/summary.json` 的 `metrics`：
+Under `.ageval/suite-runs/<suite_run_id>/summary.json` → `metrics`:
 
-| 字段 | 含义 |
+| Field | Meaning |
 | --- | --- |
-| `pass_rate` / `mean_score` | 只供观测，不是整份 dataset 的 PASS |
-| `pass_at_k` | **pass@k**（Harbor 无偏估计）；整份汇总分 = **各 task 上该指标的 mean** |
-| `pass_power_k` | **pass^k**（k 次都成功的估计）；同样按 task 取 mean |
-| `n_attempts` | 本次 job 的 k 预算 |
+| `pass_rate` / `mean_score` | Observational skim (not suite PASS) |
+| `pass_at_k` | **pass@k** (Harbor-style unbiased); suite score = **mean over tasks** |
+| `pass_power_k` | **pass^k** (all-k success estimate); also mean over tasks |
+| `n_attempts` | Job k budget |
 
-样本数不够的 task **不进**该 k 的分母。PASS 仍只来自**每题 evaluator**。
+Tasks with too few samples are **omitted** from that k’s denominator. PASS remains **per-task evaluator** only.
 
-同目录还有 `progress.json`（多 unit 进度）；一次运行的 `result.json` 可含 `phase_timing`（prepare / run / evaluate / cleanup）。
+Same directory: `progress.json`. Attempt `result.json` may include `phase_timing` (`prepare` / `run` / `evaluate` / `cleanup`).
 
-## 进度与取消
+## Progress and cancel
 
 ```bash
 ageval status <suite_run_id> --dataset examples/datasets/minimal-demo
 ageval cancel <suite_run_id> --dataset examples/datasets/minimal-demo
 ```
 
-- **status**：ControlStore 记录 + 可读 progress  
-- **cancel**：写 `cancel.requested`，不再开新 unit；有 pid 则 SIGTERM  
+- **status** — ControlStore record + suite progress when present  
+- **cancel** — writes `cancel.requested` (no new units); SIGTERM stored pid if any  
 
-整份 dataset 一次跑完是 **task 轴**（多题）；campaign 是 **同一题扫参数**。Always-k **不是** campaign 矩阵轴。
+Running the whole dataset is the **task axis**; campaign sweeps **parameters on one task**. Always-k is **not** the campaign matrix axis.
 
-结果写在 dataset 下的 `.ageval/suite-runs/`。用本地查看器打开这份 dataset，可以看到 Timing 条。
+Results land under `.ageval/suite-runs/`. Open the dataset in the local viewer to see Timing bars.
 
-## 上传到 Hub（Leaderboard / Jobs）
+## Upload to Hub (Leaderboard / Jobs)
 
-Hub 的 **Dataset → Leaderboard** 和 **Task → Jobs** 读的是 Registry 里整份 dataset 跑完的结果，不是零散的单次上传。
+Hub **Dataset → Leaderboard** and **Task → Jobs** list whole-dataset results in Registry, not a feed of single-task uploads.
 
-| 步骤 | 命令 |
+| Step | Command |
 | --- | --- |
-| 1. 整份跑完 | `ageval run <dataset>`（**不要**加 `--task`；可用 `--profiles`） |
-| 2. 记下 id | 输出 / `summary.json` 里的 `suite_run_id`（默认 8 位 hex） |
-| 3. 上传整份结果 | `ageval results upload-suite <dataset> --suite-run <id> --public`（也可 `id@version`） |
-| 4. 需要点开轨迹时 | 加上 `--with-attempts` |
+| 1. Run suite | `ageval run <dataset>` (**omit** `--task`; optional `--profiles`) |
+| 2. Note id | `suite_run_id` in stdout / `summary.json` (default 8 hex) |
+| 3. Upload suite | `ageval results upload-suite <dataset> --suite-run <id> --public` (or `id@version`) |
+| 4. Deep-link trajectory | Add `--with-attempts` |
 
 ```bash
 ageval run examples/datasets/minimal-demo --profiles examples/datasets/minimal-demo/profiles.yaml
-# suite_run_id 例：d3e5fba6
+# suite_run_id e.g. d3e5fba6
 ageval results upload-suite examples/datasets/minimal-demo \
   --suite-run d3e5fba6 --public --with-attempts \
   --agent acp-pi --model zai-coding-cn/glm-5.2
 ```
 
-**常见误解：** 只跑 `ageval run … --task X` 再 `ageval results upload --run …`。那一次运行可能已经进 Registry，但 **Leaderboard 通常仍没有一行**。要上榜必须先整份跑完，再 `upload-suite`。
+**Common mistake:** only `ageval run … --task X` then `ageval results upload --run …` — the attempt may exist in Registry, but **Leaderboard usually still has no row**. Leaderboard needs a suite job + `upload-suite`.
 
-公开榜还有两道门：整份运行必须 **完备**（绑定版本的每题都有一条 result；题上 FAIL / ERROR 也算），且绑定 **release**。缺题或绑定 draft 的行只出现在 Task **Jobs**。先 `ageval publish --draft`、owner 再 `ageval release`，或直接 `ageval publish` 发 release。
+The public board has two more gates: the suite must be **complete** (every task on the bound version has a result; FAIL / ERROR still count) and bound to a **release**. Incomplete or draft-bound rows stay on Task **Jobs**. Upload a working tree with `ageval publish --draft`, then an owner runs `ageval release` — or `ageval publish` a release directly.

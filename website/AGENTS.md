@@ -10,7 +10,7 @@ Readers: people who install the CLI, run a dataset, or author one. Not contribut
 
 ## Do not index the docs in the body
 
-The sidebar and `content/docs/index.mdx` (`index.en.mdx`) are the catalog. Do not build a second one in the prose.
+The sidebar and `content/docs/index.mdx` (`index.zh-CN.mdx`) are the catalog. Do not build a second one in the prose.
 
 Do not:
 
@@ -20,7 +20,7 @@ Do not:
 
 Write what this page owes. If the fact belongs on another path, the sidebar takes them there.
 
-Exception: `index.mdx` / `index.en.mdx` may carry a site map.
+Exception: `index.mdx` / `index.zh-CN.mdx` may carry a site map.
 
 When that catalog (or a necessary in-page cross-ref) must link, use a **relative MDX path** (`./getting-started/install.mdx`, `../reference/cli.mdx`). Absolute `/docs/...` drops the locale prefix and 404s. `createRelativeLink` only resolves `./` and `../`.
 
@@ -57,7 +57,7 @@ Chinese public copy follows glossary principle 2: **一次运行** / **整份 da
 
 ## Bilingual
 
-A Chinese page change needs the matching `*.en.mdx`. Same slug, same facts, natural phrasing per language — not a mirror translation.
+An English page change needs the matching `*.zh-CN.mdx`. Same slug, same facts, natural phrasing per language — not a mirror translation.
 
 ## Check
 

@@ -1,0 +1,14 @@
+---
+title: 架构地图
+description: 源码目录和结构说明。
+---
+
+模块放哪、谁依赖谁、生命周期与数据流，以仓库根 **[`ARCHITECTURE.md`](https://github.com/ZJU-REAL/ageval/blob/main/ARCHITECTURE.md)** 为准（含 Current 源码树、emit 图、失败归属表）。
+
+| 路径 | 角色 |
+| --- | --- |
+| `src/ageval/` | 一次运行的流水线、环境、CLI |
+| `src/ageval_sdk/` | `ageval_sdk`（`run.py` 用，与 `ageval` 同一发行） |
+| `apps/viewer` · `apps/hub` | 本机 Jobs / Hub SPA |
+| `website/` | 本站 |
+| `docs/` | 设计 |

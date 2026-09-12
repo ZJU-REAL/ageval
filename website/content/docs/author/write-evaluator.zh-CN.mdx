@@ -1,0 +1,103 @@
+---
+title: 编写 Evaluator
+description: 独立打分；evaluation 块与 artifacts 怎么接。
+---
+
+Evaluator 只负责**算法与真值**，不启 agent、不持宿主密钥。PASS/FAIL 只能从这里来（再写进 Result）。
+
+<Callout type="idea" title="让 agent 代写">
+
+```bash
+npx skills add ZJU-REAL/ageval --skill ageval-config-package
+npx skills add ZJU-REAL/ageval --skill ageval-sdk-harness
+```
+
+`ageval-config-package` 覆盖 evaluation 段与脚本打分；`evaluator.py` 里还要 `Agent.session`（LLM-as-judge）才需要 `ageval-sdk-harness`。装好后把打分需求说给本机 coding agent，让它写完即可。
+
+</Callout>
+
+## `task.yaml` 片段
+
+```yaml
+artifacts:
+  publishable:
+    - id: session-output
+      producer: run
+      path: artifacts/session-output.json
+      media_type: application/json
+
+evaluation:
+  runtime: python
+  entrypoint: evaluator:evaluate
+  network: none
+  # tmpfs_mb: 256   # 可选；环境内 evaluator /tmp（MiB），省略则 32。不是 limits.*
+  inputs:
+    - artifact: session-output
+      target: artifacts/session-output.json
+    # 参考答案示例：
+    # - package_path: evaluation/gold.json
+    #   target: gold.json
+  output:
+    format: json
+```
+
+| 点 | 说明 |
+| --- | --- |
+| 屏障 | `run.py` 结束后才进入环境 输入 |
+| 参考答案 | 放 `evaluation/`，evaluate 阶段才 upload |
+| artifact id | 必须和 `run.py` 实际写出的文件对上 |
+| `tmpfs_mb` | 只改环境内 evaluator `/tmp`；省略 32 MiB。大 snapshot 在 **task** 上声明，不要写进 `limits` |
+
+`evaluator.py` 在 **parent 子进程**里跑（与 `run.py` 同一形态）。PASS 仍只由引擎写入结果。读结果时，执行与评测是分开的事实。配置可写 `evaluate_host.isolated: true`（Current：docker）另起打分环境；参考答案只上打分 Host。需要**多个、安装内容不同**的打分镜像时，在 `task.yaml` 写 `evaluation.environments`，用 `inputs["scoring"].exec(<name>, argv)` 或 `Agent.session(..., environment=<name>)` 指定名字；未用到的名字不 start。省略该表 = 单个打分 Host（或同一环境）；此时 `scoring.exec` 打这只缺省 Host。写出有名表则必须点名；未知名一次失败，不 start。
+
+## 两种评测
+
+缺省是**确定性脚本**：读产物和 `evaluation/` 里的参考答案，返回 `{status, score, metrics}`；status 取 PASS / FAIL / ERROR，低分与超时都算 FAIL（score 0），环境起不来、evaluator 崩了记 ERROR。不必调 Agent。没有 `evaluation/observation.jsonl`，Verifier 仍是 `result.json` 与文件树。
+
+可选 **LLM-as-judge**：同一份 job `profiles.yaml` 再写一个角色（如 `judge`），`task.yaml` 的 `agent_profiles` 列入同一 id。参考答案 **已经** upload 之后，`evaluator.py` 可以 `Agent.session("judge").invoke(...)`。提示词归 dataset。`invoke` 不得改 `profile_id` / executor。
+
+```python
+def evaluate(inputs):
+    # inputs["agent"] 在本机环境上会注入（parent socket）；没有就走脚本路径
+    ...
+    return {"status": "PASS", "score": 1.0, "metrics": {}}
+```
+
+约束：
+
+| 点 | 说明 |
+| --- | --- |
+| PASS | 仍只看这次返回值；judge 文本 / `observation.jsonl` 不是分数 |
+| 轨迹 | evaluate 阶段的步写入 `evaluation/observation.jsonl`（省略 `user` 行，避免参考答案进 evidence）。不并进根 `trajectory.jsonl` |
+| 调用预算 | `limits.agent_invocations` 要覆盖 solver **和** judge |
+| 环境 | SDK session 走 parent 的 Unix socket。ACP `attach_stdio` 打 **打分 Host**（缺省 = run 环境；job `evaluate_host.isolated: true` 时是 docker 第二实例）。有 `evaluation.environments` 时 ACP 必须 `session(id, environment=<name>)`；`openai-http` / `anthropic-http` 忽略 `environment=`（出站仍在 parent）。不要把 Agent Service socket bind-mount 进容器 |
+
+## 多 stage 打分 Host
+
+顺序阶梯（审计 / 行为 / 编译）需要**不同已装内容**时，不要复用 `environment/evaluate.Dockerfile`。成员 yaml：
+
+```yaml
+evaluation:
+  environments:
+    audit:
+      docker_image: python:3.12-slim          # 已有 OCI 标签
+    verification:
+      dockerfile: environment/evaluate/verification/Dockerfile
+```
+
+配方文件放 `environment/evaluate/<name>/`，**不要**放 `evaluation/`（那是参考答案）。写出该表则忽略 `evaluate.Dockerfile` / `evaluation.docker_image`。job 必须 `evaluate_host.isolated: true` 且 `environment: docker`。
+
+```python
+async def evaluate(inputs):
+    scoring = inputs["scoring"]
+    audit = await scoring.exec("audit", ["python", "/attempt/evaluation/audit.py"])
+    if audit.exit_code != 0:
+        return {"status": "FAIL", "score": 0.0, "metrics": {"stage": "audit"}}
+    async with inputs["agent"].session("judge", environment="verification") as session:
+        reply = await session.invoke(inputs["parameters"]["verify_prompt"])
+    return {"status": "PASS" if reply.get("ok") else "FAIL", "score": 1.0 if reply.get("ok") else 0.0}
+```
+
+`exec` 的 argv 是列表；stdout / stderr / exit_code 来自**那个容器内**。第一次用到某名字才 start 并 upload 快照和参考答案。未知名、run 阶段写了名字、或表里有名字时 ACP 省略名字：一次失败，不 start。v1 只顺序 stage，不要并发 `exec` 与 `session` 打同一名字。start / `exec` 退出 / observation 文件都不是 PASS。
+
+不调 `Agent.session` = 脚本路径。Verifier 有 observation 时复用 Trajectory 那种步骤卡片；没有则保持文件树。本地查看用 `ageval view`。

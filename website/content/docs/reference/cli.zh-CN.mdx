@@ -1,0 +1,81 @@
+---
+title: CLI 参考
+description: 命令、--task、Always-k、--set 白名单。
+---
+
+以本机 `ageval --help` 为准。TTY 下命令打短 recap（不含 digest / sha256）；管道仍是 JSON。`ageval run --json` 强制完整文档。
+
+```bash
+ageval tasks <dataset>
+ageval lock <dataset> --task <id>
+ageval lock <dataset> --task <id> --probe
+ageval run <dataset> --task <id>
+ageval run <dataset> --task <id> --probe
+ageval run <dataset>                         # 整份 dataset
+ageval run official/demo@0.1.0 --dir tmp --task <id>
+ageval run <dataset> --max-concurrent-tasks 2
+ageval run <dataset> -k 5                    # Always-k（每题 k 次）
+ageval run <dataset> --resume-suite <suite_run_id> --task <id> -k 5
+ageval campaign <dataset> --task <id> ...
+ageval status <suite_run_id> --dataset <dataset>
+ageval cancel <suite_run_id> --dataset <dataset>
+ageval executors -v
+ageval plugin install <path|ref>
+ageval plugin list
+ageval plugin uninstall <plugin_id>
+ageval agent install <path|ref>
+ageval agent list
+ageval agent uninstall <agent_id>
+ageval evidence --help
+ageval view <dataset|id@version> [--dev] [--open /jobs/<id>]
+ageval jobs delete --local <dataset> --job <id> --yes
+# Registry / 结果（需 login）
+ageval publish <dataset> --org <org> [--draft] [--public] [--replace]
+ageval release <dataset_id> [--public] [--replace]
+ageval registry list|show|set-visibility|delete|org-create|org-list|org-add-member|org-set-role|org-transfer|org-remove-member …
+ageval results upload-suite <dataset|id@version> --suite-run <8-hex>
+ageval results upload|attach-agent|request|inbox|decide|share|unshare|set-visibility|delete …
+```
+
+路径 = dataset 根（含 `ageval.yaml`）。`run` / `lock` / `view` / `upload-suite` 也可是 Hub ref（`id@version`）；`--dir` 只配合 Hub ref。`tasks` / `campaign` 仍是本地目录。`--agent` 与 `--profiles` 互斥。`--model` 须配合 `--agent`。`ageval agent install` 还会安装包声明的非 contrib 插件。删除类命令须显式 `--yes`；同 identity 覆盖须显式 `--replace`（默认 409）。`AGEVAL_REGISTRY_URL` / `--registry-url` 覆盖 Registry 源；省略则连公开 Hub。
+
+## `ageval run` 常用选项
+
+| 选项 | 含义 |
+| --- | --- |
+| `--task <id>` | 只跑该成员；省略 = 整份 dataset 跑完 |
+| `--max-concurrent-tasks N` | 并行上限；**只加速**，不改 k / PASS |
+| `--n-attempts` / `-k N` | Always-k：每题 N 次独立运行（默认 1）；只写在 CLI / job 上 |
+| `--resume-suite <suite_run_id>` | 并进已有 job：跳过已完成的，追加一次运行，重算 pass@k / pass^k |
+| `--replace-slot` | 配合 `--resume-suite --task`：重跑那一行；新的一次运行；旧行进 `previous[]` |
+| `--attempt-index N` | Always-k 要换的格（默认 0）。只与 `--replace-slot` 一起用 |
+| `--keep-workspace` | 清理后保留环境工作根（默认删除）。 |
+| `--keep-vendor-raw` | 写入成功后保留 vendor raw / layer B；默认丢掉。与 `--keep-workspace` 独立 |
+| `--dir <path>` | 只配合 Hub ref：在 `<path>/<dataset_id>/` 找包；已匹配则复用 |
+| `--agent` | 绑定 `ageval.agent/1` Agent 包（`pi`、`org/name@version` 或本地路径）；与 `--profiles` 互斥 |
+| `--model` | 改这次 run 已绑角色的 `binding.model`；须配合 `--agent`。不是 `results upload-suite --model` |
+| `--set` / `--profiles` | 覆盖项 / 换一份配置文件 |
+| `--probe` | 只做可行性：按绑定 / `environment` 打印 plan + readiness。不 invoke Agent、不写入镜像、不改 lock digest。选中路径不满足则 exit 1。 |
+| `--json` | stdout 打完整结果文档。TTY 默认是短 recap（整份跑完时含 `summary` 路径与 `ageval view` / `upload-suite`）；管道默认仍是 JSON。 |
+
+## `status` / `cancel`
+
+| 命令 | 含义 |
+| --- | --- |
+| `ageval status <run_id\|suite_run_id>` | 进度记录；整份跑完时可加 `--dataset` 读 `progress.json` |
+| `ageval cancel <run_id\|suite_…>` | 一次运行或整份 job；整份跑完时可加 `--dataset` 写 `cancel.requested` |
+
+## `--set`
+
+格式：`<JSON Pointer>=<JSON 值>`，可重复。
+
+| 指针 | 含义 |
+| --- | --- |
+| `/parameters/seed` | 业务 seed 等 |
+| `/parameters/active_profile` | 切换 profile |
+| `/bindings/<role>/options/<key>` | job binding 覆盖（含 `entry`、插件 `agent` 等；ACP 仍拒绝 `command` / engine 键） |
+| `/limits/wall_time_seconds` | 墙钟（intent；**不可**覆盖 — 见下） |
+
+Intent `limits.*` **不能**经 `--set` 覆盖。其它指针在 lock 阶段失败。
+
+细节：`src/ageval/cli/README.md` · skill `ageval-cli`。

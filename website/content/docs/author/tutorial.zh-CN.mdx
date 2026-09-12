@@ -1,0 +1,69 @@
+---
+title: Task 编写教程
+description: 从 examples/datasets/minimal-demo 抄一题，改 run.py 与评测并跑通。
+---
+
+目标：本机能 lock、能 run、能出评测结果。
+
+<Callout type="info" title="开始之前">
+
+教程命令用仓库内的 `examples/…` 路径，需要先 clone 仓库；CLI 用 `uv tool install ageval-cli` 安装即可，改 ageval 本体才需要 `uv sync`。
+
+</Callout>
+
+<Callout type="idea" title="让 agent 代写">
+
+```bash
+npx skills add ZJU-REAL/ageval --skill ageval-config-package
+npx skills add ZJU-REAL/ageval --skill ageval-sdk-harness
+```
+
+把你要的 task 描述给本机 coding agent，它会写完目录、`task.yaml`、`run.py`、`evaluator.py`；照下面的步骤手抄也一样。
+
+</Callout>
+
+## 1. 复制最小结构
+
+[`examples/datasets/minimal-demo`](https://github.com/ZJU-REAL/ageval/tree/main/examples/datasets/minimal-demo) 已是完整 dataset。复制一个 `tasks/<id>/`（可从 `terminal-jsonl-agg` 起步），目录名必须等于 `task_id`。
+
+```text
+tasks/hello/
+├── task.yaml
+├── run.py
+└── evaluator.py
+```
+
+## 2. `task.yaml`
+
+```yaml
+format: ageval.task/1
+task_id: hello
+parameters:
+  instruction: "Reply DONE"
+agent_profiles:
+  - id: solver
+limits:
+  wall_time_seconds: 300
+  agent_invocations: 1
+artifacts:
+  publishable:
+    - id: reply
+      path: artifacts/reply.json
+evaluation:
+  inputs:
+    - artifact: reply
+      target: artifacts/reply.json
+```
+
+不要写 `harness:`、`provider:`、`assurance`。环境和 ACP entry 在根上 `profiles.yaml`。
+
+## 3. 跑
+
+```bash
+ageval lock examples/datasets/minimal-demo --task hello
+ageval run  examples/datasets/minimal-demo --task hello
+```
+
+ACP 报缺 entry：`profiles.yaml` 里该角色没写 `- plugin: acp` / `options.entry`。先 `ageval executors -v` 看本机装了哪些 agent 与入口，再补上配置。
+
+评测默认是脚本比对参考答案。若要用 LLM-as-judge，在同一份 `profiles.yaml` 加角色，参考答案进入环境后再 `Agent.session`；要多个安装内容不同的打分镜像按顺序打分，在 `task.yaml` 写 `evaluation.environments`，evaluator 按名字指定用哪个。

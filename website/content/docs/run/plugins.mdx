@@ -1,37 +1,39 @@
 ---
-title: 用插件换 Agent 或环境
-description: 装插件，在 profiles 里切一行，同一份 dataset 原样跑。
+title: Swap Agent or environment with plugins
+description: Install a plugin, flip one line in profiles, run the same dataset.
 ---
 
-换 Agent 或环境不必改 dataset：装上对应插件，在 `profiles.yaml` 里切换。
+Swapping the Agent or the environment does not rewrite the dataset: install the
+plugin and switch it in `profiles.yaml`.
 
-默认走 ACP（pi / Codex / Claude Code / OpenCode）。dsh、nooa、miniswe 也是同一类插件。把 `environment: docker` 换成 `e2b` / `ssh` / `daytona` 时，ACP 的 profiles 只改环境那一行。
+ACP is the default path (pi / Codex / Claude Code / OpenCode). dsh, nooa, and
+miniswe are the same kind of plugin. Switching `environment: docker` to `e2b`,
+`ssh`, or `daytona` changes that one line in the ACP profiles — not ACP code.
 
-## 安装
+## Install
 
 ```bash
 ageval plugin install plugins/nooa
-# 或：ageval plugin install plugins/dsh
-# 或：ageval plugin install plugins/miniswe   # 模型在本机，bash 走 environment.exec
-# 或：ageval plugin install plugins/acp-oneshot  # 环境内一次性 ACP client+server，只要 exec
+# or: ageval plugin install plugins/dsh
+# or: ageval plugin install plugins/miniswe   # model on the host; bash via environment.exec
+# or: ageval plugin install plugins/acp-oneshot  # one-shot ACP pair in the environment; exec only
 ageval plugin list
 ```
 
-安装只更新 `$AGEVAL_HOME/plugins`（默认 `~/.ageval/plugins`），**不会**改写
-`profiles.yaml`、`ageval.yaml` 或 `task.yaml`。
+Install updates `$AGEVAL_HOME/plugins` (default `~/.ageval/plugins`) only. It **never**
+rewrites `profiles.yaml`, `ageval.yaml`, or `task.yaml`.
 
-`plugin.yaml` 可写 `description`：一段功能说明，Hub 插件详情画在 Install (CLI) 上方。Markdown 链接（`[text](https://…)`）会渲染成可点的链接。
+`plugin.yaml` may include `description`: one paragraph Hub shows above Install (CLI). Markdown links (`[text](https://…)`) render there.
 
-卸载：
+Uninstall:
 
 ```bash
 ageval plugin uninstall nooa
 ```
 
-## 在配置里切换
+## Switch in config
 
 ```yaml
-# profiles.yaml
 format: ageval.profiles/1
 environment: local
 agent_profiles:
@@ -44,47 +46,49 @@ agent_profiles:
           method: "run"
 ```
 
-`executor:` 选出这份配置里的 Agent。插件自己的选项写在该插件的 `extensions` 行上。docker 的镜像层由环境在启动时写入。ACP 的 `entry` 写在 `- plugin: acp` / `options.entry`；该 entry 会写入镜像，换模型不重建。
-
-用另一份 profiles 切换，不必改 dataset：
+`executor:` selects the Agent for this profiles file. Plugin options live on that
+plugin's `extensions` row. Docker image layers are written when the environment
+starts. ACP `entry` lives on `- plugin: acp` / `options.entry` and is written
+into the image; switching model does not rebuild.
 
 ```bash
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
   --profiles examples/datasets/minimal-demo/profiles.nooa.yaml
 ```
 
-`ageval lock` 把解析后的扩展图写入摘要中的 `extension_bindings`。缺能力或凭证时检查不过，不会开始跑。
+`ageval lock` writes the resolved graph as `extension_bindings`. If capabilities
+or credentials do not match, the check fails and the run does not start.
 
 ```bash
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
   --profiles examples/datasets/minimal-demo/profiles.dsh.yaml --probe
 ```
 
-`--probe` 按 **`environment`** 检查本机能否开这个环境：`host_requires`、Docker daemon（docker）、locator **名**。缺项则非零退出，这次运行不会开始。
+`--probe` checks whether this **`environment`** can open here: `host_requires`, Docker daemon (docker), locator **names**. If something is missing, the command exits non-zero and the run does not start.
 
-## 装上不等于能跑
+## Installed is not the same as runnable
 
-| 你看到的 | 含义 |
+| What you see | Meaning |
 | --- | --- |
-| **install / list** | 本机认得这个插件 |
-| **本机具备条件** | 声明的 `host_requires` 满足，能在本机构造 |
-| **profiles 绑定** | 这份配置选了该 executor / environment |
-| **写入镜像** | docker 下 `image_layers` 存在且已写入 |
+| **install / list** | This machine recognizes the plugin |
+| **host can run** | Declared `host_requires` satisfied |
+| **profiles bind** | This profiles file selected that executor / environment |
+| **image layers** | docker: `image_layers` present and written |
 
-`ageval executors.host_ready` 不是「已安装」也不是「镜像层已写入」。已安装但未写入 `extensions` 的插件不会进这次运行的镜像。
+`ageval executors.host_ready` is not “installed” and not “layers are in the image”. Installed plugins that are not listed in `extensions` stay off this run's image.
 
-## 和 ACP 的关系
+## Relation to ACP
 
-默认 coding-agent 路径仍是 `executor: acp` + `options.entry`（parent JSON-RPC，要 `attach_stdio`）。`acp-oneshot` 是另一条路径：环境内一次性 client+server，只要 `exec`。插件是可选的；同一份 dataset 只靠 profiles 切换。miniswe 把模型放在本机，bash 只经 `host.exec`；缺 `exec` 则 lock 失败。
+The default coding-agent path remains `executor: acp` + `options.entry` (parent JSON-RPC, needs `attach_stdio`). `acp-oneshot` is the other path: a one-shot client+server inside the environment, over `exec` only. Plugins are optional; the same dataset switches only via profiles. miniswe keeps the model on the host; bash goes only through `host.exec`. Missing `exec` fails at lock.
 
-PASS 仍只来自 `evaluator.py`。
+PASS still comes only from `evaluator.py`.
 
-<Callout type="idea" title="想自己写一份插件？">
+<Callout type="idea" title="Writing your own?">
 
 ```bash
 npx skills add ZJU-REAL/ageval --skill ageval-plugin
 ```
 
-上面各节是**使用**已有插件。想自己写 `ageval.plugin/1`（`plugin.yaml`、README 里的能力表和参数表），装好后把要接的能力和参数说给本机 coding agent 即可；手写也可以，格式约定看 skill。
+Everything above **uses** an existing plugin. To author your own `ageval.plugin/1` (`plugin.yaml`, plus capability and parameter tables in the README), install `ageval-plugin` and describe the capabilities and parameters to your coding agent. Hand-writing works too — the skill documents the format.
 
 </Callout>

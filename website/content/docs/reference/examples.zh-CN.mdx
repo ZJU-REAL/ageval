@@ -1,0 +1,27 @@
+---
+title: 仓库示例
+description: 怎么选 minimal-demo、Agent 包，以及从上游转过来的 dataset。
+---
+
+| 路径                                                                                                                | 适合                                                 |
+| ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| [`examples/datasets/minimal-demo`](https://github.com/ZJU-REAL/ageval/tree/main/examples/datasets/minimal-demo)     | 对话 / 终端 / 多 agent 案例；默认 docker             |
+| [`examples/agents`](https://github.com/ZJU-REAL/ageval/tree/main/examples/agents)                                   | `ageval.agent/1` 目录包，配合 `--agent`              |
+| [`examples/datasets/tau3-airline-5`](https://github.com/ZJU-REAL/ageval/tree/main/examples/datasets/tau3-airline-5) | 上游 airline 对话域转换的五题缩略：双角色 + 独立评分 |
+
+先 `ageval tasks <path>` 看成员列表。写自己的包时从 `minimal-demo` 抄结构最省事。
+
+## `tau3-airline-5`
+
+这是把 [tau2-bench](https://github.com/sierra-research/tau2-bench)（τ³-bench）的 **airline** 域接到 ageval 外层生命周期上的 dataset：`user` / `service` 双角色经 ACP 对话，工具与 DB 在包内 bridge 中执行，PASS 仅来自 `evaluator.py`（与 `run.py` 完成态分离）。本仓库只收 **五题**（`airline-00` … `airline-04`）；跨 task 的 bridge 与领域资产放在根目录 `shared/lib`、`shared/assets`，避免每个 task 再复制一份 `lib/`。
+
+本机完整 run 需要包内 `requirements.txt` 里的 `tau2` pin；只做 `ageval lock` 不必装。包内说明见仓库 [`examples/datasets/tau3-airline-5/README.md`](https://github.com/ZJU-REAL/ageval/blob/main/examples/datasets/tau3-airline-5/README.md)。入仓或发布都不会让评测结果更可信。
+
+## 只在 Hub 上发布的 dataset
+
+本仓库 `examples/datasets/` 收录 **minimal-demo** 与 **五题缩略**的 `tau3-airline-5`。完整 50 题 airline 与其他热门 bench 的转换**不**再放进这个仓库，只通过 Hub 发布 + 上传整份运行结果，用来控制 clone 体积与 CI 路径：
+
+| 上游               | Hub 包 id（组织 `my-lab`）                      | 说明                                    |
+| ------------------ | ----------------------------------------------- | --------------------------------------- |
+| Terminal-Bench 2.0 | `terminal-bench-2` / 轻量 `terminal-bench-2-10` | docker + Harbor 风格 pytest 评测        |
+| MARBLE coding      | `marble-coding` / 轻量 `marble-coding-10`       | docker shared-container 多 agent coding |

@@ -36,7 +36,7 @@ pnpm --dir website install
 pnpm --dir website dev
 ```
 
-Open `http://localhost:3000`. Default locale is Simplified Chinese at `/zh-CN`; English at `/en`.
+Open `http://localhost:3000/en`. Default locale is English at `/en`; Simplified Chinese at `/zh-CN`.
 
 | Env | Meaning |
 | --- | --- |
@@ -45,10 +45,10 @@ Open `http://localhost:3000`. Default locale is Simplified Chinese at `/zh-CN`; 
 
 ## Content layout
 
-- `content/docs/*.mdx` — Simplified Chinese (default locale)
-- `content/docs/*.en.mdx` — English, same slug
-- `content/docs/**/meta.json` — Chinese navigation
-- `content/docs/**/meta.en.json` — English navigation
+- `content/docs/*.mdx` — English (default locale)
+- `content/docs/*.zh-CN.mdx` — Simplified Chinese, same slug
+- `content/docs/**/meta.json` — English navigation
+- `content/docs/**/meta.zh-CN.json` — Chinese navigation
 
 ### Information architecture (job-oriented)
 
@@ -79,7 +79,7 @@ pnpm --dir website build
 
 ## Static export
 
-`pnpm build` writes HTML to `out/` (`output: "export"`). Search indexes are baked into `search-index.json` and queried in the browser. There is no Node server and no locale-detecting middleware: `/` redirects to `/zh-CN/`; `/en/` is the English site. Chinese queries use the default tokenizer (no Mandarin segmenter).
+`pnpm build` writes HTML to `out/` (`output: "export"`). Search indexes are baked into `search-index.json` and queried in the browser. There is no Node server and no locale-detecting middleware: `/` redirects to `/en/`; `/zh-CN/` is the Chinese site. Chinese queries use the default tokenizer (no Mandarin segmenter).
 
 ```sh
 pnpm --dir website build

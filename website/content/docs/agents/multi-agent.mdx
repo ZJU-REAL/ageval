@@ -1,9 +1,9 @@
 ---
-title: 多 Agent 与多角色
-description: 多个 profile、角色映射与 run.py 调度。
+title: Multi-agent and multi-role
+description: Several profiles, role maps, run.py scheduling.
 ---
 
-一题里可以声明多个 `agent_profiles`，由 **`run.py`** 按角色打开不同 session。
+A task can declare multiple `agent_profiles`; **`run.py`** opens sessions per role.
 
 ```yaml
 # task.yaml
@@ -32,8 +32,8 @@ agent_profiles:
       - plugin: docker
 ```
 
-- `run.py` 负责**何时** invoke 谁；Core 负责边界与轨迹
-- 每个 profile 的 invoke 会进各自证据；Viewer 可按 `profile_id` 分组
-- docker 上多 actor 必须与 local 相同 SDK 表面：`Agent.session(...).invoke`。YAML 只声明逻辑 isolation（`shared-container` / `container-per-group`）；container id / UID 由 Core 拥有。本轮不承诺多 group 真调度 run（lock 有 topology 即可）
+- `run.py` decides **when** to invoke whom; Core owns bounds and trajectory
+- Per-profile invokes land in evidence; Viewer groups by `profile_id`
+- On docker, multi-actor must use the same SDK surface as local: `Agent.session(...).invoke`. YAML declares logical isolation only (`shared-container` / `container-per-group`); container id / UID stay with Core. This round does not promise a true multi-group scheduled run (lock with topology is enough)
 
-`examples/datasets/minimal-demo` 里有多角色例子。
+`examples/datasets/minimal-demo` has multi-role examples.

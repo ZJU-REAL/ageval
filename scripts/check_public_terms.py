@@ -100,7 +100,7 @@ def line_allowed(line: str) -> bool:
 
 def is_zh_facing(path: Path) -> bool:
     name = path.name
-    return name.endswith(".zh-CN.md") or (name.endswith(".mdx") and ".en." not in name)
+    return ".zh-CN." in name
 
 
 def main() -> int:

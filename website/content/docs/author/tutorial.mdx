@@ -1,39 +1,28 @@
 ---
-title: Task 编写教程
-description: 从 examples/datasets/minimal-demo 抄一题，改 run.py 与评测并跑通。
+title: Task authoring tutorial
+description: Copy a task from examples/datasets/minimal-demo, edit run.py and the evaluator, run it.
 ---
 
-目标：本机能 lock、能 run、能出评测结果。
+Goal: lock, run, and get an evaluation result on this machine.
 
-<Callout type="info" title="开始之前">
+<Callout type="info" title="Prerequisites">
 
-教程命令用仓库内的 `examples/…` 路径，需要先 clone 仓库；CLI 用 `uv tool install ageval-cli` 安装即可，改 ageval 本体才需要 `uv sync`。
+Tutorial commands use in-repo `examples/…` paths, so clone the repo first. The CLI itself installs with `uv tool install ageval-cli`; `uv sync` is only for changing ageval itself.
 
 </Callout>
 
-<Callout type="idea" title="让 agent 代写">
+<Callout type="idea" title="Have an agent write it">
 
 ```bash
 npx skills add ZJU-REAL/ageval --skill ageval-config-package
 npx skills add ZJU-REAL/ageval --skill ageval-sdk-harness
 ```
 
-把你要的 task 描述给本机 coding agent，它会写完目录、`task.yaml`、`run.py`、`evaluator.py`；照下面的步骤手抄也一样。
+Describe the task you want and your coding agent produces the directory, `task.yaml`, `run.py`, and `evaluator.py`. Copying the steps below by hand works just as well.
 
 </Callout>
 
-## 1. 复制最小结构
-
-[`examples/datasets/minimal-demo`](https://github.com/ZJU-REAL/ageval/tree/main/examples/datasets/minimal-demo) 已是完整 dataset。复制一个 `tasks/<id>/`（可从 `terminal-jsonl-agg` 起步），目录名必须等于 `task_id`。
-
-```text
-tasks/hello/
-├── task.yaml
-├── run.py
-└── evaluator.py
-```
-
-## 2. `task.yaml`
+Copy a `tasks/<id>/` directory from [`examples/datasets/minimal-demo`](https://github.com/ZJU-REAL/ageval/tree/main/examples/datasets/minimal-demo) (start from `terminal-jsonl-agg`). The directory name must equal `task_id`.
 
 ```yaml
 format: ageval.task/1
@@ -55,15 +44,11 @@ evaluation:
       target: artifacts/reply.json
 ```
 
-不要写 `harness:`、`provider:`、`assurance`。环境和 ACP entry 在根上 `profiles.yaml`。
-
-## 3. 跑
+Do not write `harness:`, `provider:`, or `assurance`. The environment and ACP entry live in `profiles.yaml`.
 
 ```bash
 ageval lock examples/datasets/minimal-demo --task hello
 ageval run  examples/datasets/minimal-demo --task hello
 ```
 
-ACP 报缺 entry：`profiles.yaml` 里该角色没写 `- plugin: acp` / `options.entry`。先 `ageval executors -v` 看本机装了哪些 agent 与入口，再补上配置。
-
-评测默认是脚本比对参考答案。若要用 LLM-as-judge，在同一份 `profiles.yaml` 加角色，参考答案进入环境后再 `Agent.session`；要多个安装内容不同的打分镜像按顺序打分，在 `task.yaml` 写 `evaluation.environments`，evaluator 按名字指定用哪个。
+Scoring defaults to a script against gold. For LLM-as-judge, add a role on the same `profiles.yaml` and `Agent.session` after gold lands. For several scoring images with different closures scored in sequence, declare `evaluation.environments` on the task; the evaluator names the host for each stage.

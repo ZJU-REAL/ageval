@@ -1,0 +1,39 @@
+---
+title: 多 Agent 与多角色
+description: 多个 profile、角色映射与 run.py 调度。
+---
+
+一题里可以声明多个 `agent_profiles`，由 **`run.py`** 按角色打开不同 session。
+
+```yaml
+# task.yaml
+parameters:
+  roles:
+    planner: planner-pi
+    worker: worker-codex
+
+# profiles.yaml
+format: ageval.profiles/1
+environment: docker
+agent_profiles:
+  planner-pi:
+    executor: acp
+    options:
+      entry: pi
+    extensions:
+      - plugin: acp
+      - plugin: docker
+  worker-codex:
+    executor: acp
+    options:
+      entry: codex
+    extensions:
+      - plugin: acp
+      - plugin: docker
+```
+
+- `run.py` 负责**何时** invoke 谁；Core 负责边界与轨迹
+- 每个 profile 的 invoke 会进各自证据；Viewer 可按 `profile_id` 分组
+- docker 上多 actor 必须与 local 相同 SDK 表面：`Agent.session(...).invoke`。YAML 只声明逻辑 isolation（`shared-container` / `container-per-group`）；container id / UID 由 Core 拥有。本轮不承诺多 group 真调度 run（lock 有 topology 即可）
+
+`examples/datasets/minimal-demo` 里有多角色例子。

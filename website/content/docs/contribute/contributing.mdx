@@ -1,21 +1,21 @@
 ---
-title: 贡献指南
-description: Issues 跟踪；改机制先改 docs。
+title: Contributing guide
+description: Track work with Issues; design changes start in docs.
 ---
 
 ```text
-docs/design     → 机制（自包含；不要读仓外 BRIEF）
-ARCHITECTURE.md → 结构
-GitHub Issues   → 要做什么、怎么验收
-代码 / 测试     → 实际行为
-website/        → 怎么用
+docs/design     → mechanism (self-contained; no external BRIEF)
+ARCHITECTURE.md → structure
+GitHub Issues   → work and acceptance
+code / tests    → behavior
+website/        → how-to
 ```
 
-1. 开或认领 [Issue](https://github.com/ZJU-REAL/ageval/issues)
-2. 动机制先改 `docs/design/`；动目录树先改 `ARCHITECTURE.md`
-3. 实现、测试、PR 挂 Issue
-4. 用户可见行为变了，更新本站对应页
+1. Open or claim an [Issue](https://github.com/ZJU-REAL/ageval/issues)
+2. Mechanism → `docs/design/`; layout → `ARCHITECTURE.md`
+3. Implement, test, link the Issue
+4. Update this site when user-visible behavior changes
 
-请别：重建 Spec 勾选机；secret 进 yaml/证据；轨迹当 PASS；按 Benchmark 名写适配器。
+Don’t rebuild Spec checkbox machines; don’t put secrets in yaml/evidence; don’t treat trajectory as PASS; don’t name adapters after benchmarks.
 
-完整路由：[`AGENTS.md`](https://github.com/ZJU-REAL/ageval/blob/main/AGENTS.md)。
+Full routing: [`AGENTS.md`](https://github.com/ZJU-REAL/ageval/blob/main/AGENTS.md).

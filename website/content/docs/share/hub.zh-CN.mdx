@@ -1,0 +1,107 @@
+---
+title: Hub
+description: 远程 dataset 目录、组织、Jobs 和排行榜。
+---
+
+Hub（`apps/hub`）是连 Registry 的网页端，浏览共享的 dataset、插件、Agent 和运行结果。浏览器里点 **Sign in with GitHub** 登录即用；CLI 仍走 Device Flow。
+
+## 本地开发
+
+```bash
+# 终端 A — 先起 Registry（需配置 OAuth）
+export VITE_REGISTRY_PROXY_TARGET=http://127.0.0.1:8700
+uv run --extra registry python -m services.registry.app --host 127.0.0.1 --port 8700
+
+# 终端 B
+cd apps/hub
+pnpm install
+pnpm dev   # http://127.0.0.1:5174
+```
+
+也可用 `docker compose -f services/registry/docker-compose.yml up -d` 一次起 Hub（`http://127.0.0.1:8080`）与 Registry。发版镜像在 GHCR：`ghcr.io/zju-real/ageval-hub`、`ageval-registry`。
+
+| 路径 | 页面 |
+| --- | --- |
+| `/home` | 个人主页（需登录） |
+| `/datasets` | 列表（Explore / Your organizations，默认 Explore） |
+| `/leaderboard` | Leaderboard plaza：已上榜 Dataset suite 与 Agent / Model Performance 的索引（默认 Dataset 视图；`?view=agent` / `?view=model`） |
+| `/datasets/:id` | README · Tasks · Shared（有 shared/ 时）· Overlays（声明了 `overlays:` 时）· Leaderboard |
+| `/datasets/:id/tasks/:task` | README · Files（Local \| Shared \| Overlays）· Jobs |
+| `/plugins` | 插件市场 |
+| `/plugins/:id` | 插件详情（声明接入点时间线 · 文件预览 · CLI 安装命令） |
+| `/agents` | Agent 目录（内置 Agent 包在前，再是 upload） |
+| `/inbox` | 调用方可决定的待处理上榜 / Performance 申请 |
+| `/agents/:id` | 绑定、文件、已登记 model、Performance |
+| `/models` | Models plaza（按 lab 分组目录表 · 模态过滤 · Cmd/Ctrl+F 搜索） |
+| `/models/:canonical` | 模型百科（Overview 规格 · Performance） |
+| `/organizations` | 我的组织 · 创建 / 加入 · Dataset / 插件 / Agent 计数 |
+| `/organizations/:orgId` | 概览（成员 · Dataset · 插件 · Agent）· 设置 |
+| `/users/:login` | 公开用户页（官方组织与公开 Dataset / 插件 / Agent；未登录可看） |
+| `/datasets/:id/tasks/:task/attempts/:runId` | 远程 Attempt 详情（需已上传对应运行产物） |
+| `/datasets/:id/suites/:suiteRunId` | 整份运行详情（Profiles / Plugin / Jobs / Share） |
+
+命令与部署写在 `apps/hub/README.md`、`services/registry/README.md`。
+
+## Dataset 与 Task
+
+- 列表按组织分组：组头是组织名与描述，行里有名称、描述、task 数与更新日期；点开读 README、预览 Task 文件
+- 版本切换：有权限的人能看到 **draft (current)**，其他人切已发布的 release；org owner 可发布 draft、改公开/私有、删版本
+- 包声明了根 `shared/` 或 `overlays:` 时，Task **Files** 顶栏多出 **Shared** / **Overlays** 范围（默认 Local）
+- Task 下的 **Jobs** 列出已上传的运行结果，能点进详情看轨迹（界面和本地 Viewer 相近）
+
+## Leaderboard
+
+- 侧栏 Catalog 首位是 **Leaderboard**（`/leaderboard`），是已有三面的**索引**，不是第四套排名：Dataset 视图按 Dataset 分组（组头是名称与描述），只列公开上榜的整份运行；Agent / Model 视图走已有 Performance 门（plaza 采集或 Agent 组织同意）。三张表成员可以不一致。未登录可看。Internal、draft 绑定、未列出的 suite **不**出现在 plaza，仍只在 Dataset 详情的 Leaderboard tab。
+- plaza Dataset 视图可切 Table / Pareto / Waffle（与 Dataset 详情 Leaderboard 同一套控件，在 Dataset tab 行右侧；图按 Dataset 组分）。指标写在每一行上，是观测、不是 PASS、不可跨 Dataset 比；没有名次列。Agent / Model 只要表。
+- **Public** 只列完备、绑定 release、且经 dataset 所属组织 owner 批准上榜的整份运行；**Internal** 用同一张表列当前可见的缺题 / draft 绑定结果
+- 同一 tab 可切 **Table** / **Pareto** / **Waffle**。Pareto 横轴是整份运行里 **全部 job** 的花费、token 或时间加总（左便宜、右更贵）；没有 agent 上报 USD 时用目录价估算（不是账单）。更高 pass rate、又不更贵的点连成前沿
+- 指标是观测汇总，不是整份 dataset 的 PASS；表头可排序。Dataset / Agent 表的 Model 格在能对应到目录模型时前置 lab 标；plaza Model 视图组头已有标，行内不再重复。Harness / Agent 格在能对应到内置 harness 时前置产品标
+- 点行打开详情页：**Profiles** / **Plugin** / **Jobs**，附无密钥 YAML 与再跑命令。Dataset 表里点 Harness / Model 分别进对应 Agent 页 / 模型百科（能匹配时）；suite 详情标题行同一套。站内文字链 rest 用正文色，hover 才下划线；站外链接仍是蓝色。上传者可 Share、Delete，或 Attach 一条已发布的 model / agent 溯源
+- 上榜与 Performance 申请由组织 owner 在 **Inbox** 批量处理
+
+## 插件、Agent 与模型
+
+- 插件 / Agent 市场用卡片展示：说明、标签、下载量与收藏；详情页有声明接入点时间线、文件预览与 CLI 安装命令
+- Agent 详情含绑定、文件与 Performance
+- 侧栏 **Models** 是按 lab 分组的模型目录（Context / 价格等规格，可搜索，行名进百科页）；价格是目录价，不是账单，也不是 PASS
+- 官方组织、其成员与插件带验证标识
+
+## 组织与协作
+
+- 创建组织，或用邀请码加入；邀请码只在创建时完整展示一次
+- owner / admin 按 GitHub login 管成员与角色，可转让组织；member 可在该组织下 publish
+- 私有结果可分享给某个组织或用户；登录后的 **Home** 汇总你上传的 Jobs、包、插件与 Agent
+
+## 和 Viewer 的区别
+
+| | Viewer | Hub |
+| --- | --- | --- |
+| 数据 | 本机 `.ageval/suite-runs/` | Registry |
+| 入口 | `ageval view` | 浏览器打开 Hub |
+| Jobs 产物 | 本地 run 目录 | 需先上传到 Registry |
+
+Jobs 列表里，已有运行产物的行可以点进去看；没上传的会显示 **Not uploaded**，不会编造轨迹。
+
+## 上传什么才能在 Hub 上看到
+
+| 你想看 | 需要上传 | 怎么跑 / 传 |
+| --- | --- | --- |
+| Dataset **Public Leaderboard** 一行 | **完备**、绑定 **release**、且 Dataset org owner 已批准上榜的整份运行 | 先 `ageval publish --draft` 再 `ageval release`（或直接 `ageval publish`）→ 省略 `--task` 的 `ageval run` → `upload-suite --suite-run <id>` → `ageval results request --kind leaderboard_list --suite-run <id>`（owner 在 Hub Inbox 批准） |
+| Leaderboard **Internal** | 当前可见的缺题或 draft 绑定的整份运行 | 同样 `upload-suite`；不会出现在 Public |
+| Task **Jobs** 可点开 Attempt / 轨迹 | 整份运行 + 各次运行的证据 | `upload-suite --with-attempts`（或等价挂上 task_refs 的各次运行）；缺题 / draft 绑定也出现在这里 |
+| 给已上传的整份运行补一个 finished 成员 | 新的一次运行 + 现行指针 | 本机 `--resume-suite --replace-slot`，再 `upload-suite --suite-run <id> --task <id> [--run <run_id>]`。Hub / Viewer 默认现行；版本列表是 `patch N` + 该次运行开始时间 |
+| 只归档一次运行 | `ageval results upload --run <run_id>` | 可以进 Registry，但 **通常不会**出现在 Leaderboard |
+
+```bash
+# 正确：整份 dataset 跑完再上榜
+ageval run <dataset> --profiles <profiles.yaml>
+ageval results upload-suite <dataset|id@version> --suite-run <8-hex> --public --with-attempts
+
+# 不够：只上传单题的一次运行 → 榜上经常空白
+# ageval run <dataset> --task <id>
+# ageval results upload <dataset> --run <run_id>
+```
+
+Dataset Leaderboard 默认列出该包全部过门的整份运行。页顶版本切换只切 README / Tasks；榜上 Public 右侧的版本选择器才按这次上传的 `dataset_version` 过滤，默认 All versions。
+
+Hub 前端必须指向与 `ageval login` / `~/.ageval/credentials` **同一** Registry（本机开发常见 `127.0.0.1:8700`）。

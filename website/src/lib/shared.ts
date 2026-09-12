@@ -25,7 +25,7 @@ export function siteBasePath(): string {
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }
 
-/** Prefix a site-relative page path (`/zh-CN/docs`) for `basePath` + trailingSlash. */
+/** Prefix a site-relative page path (`/en/docs`) for `basePath` + trailingSlash. */
 export function sitePath(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
   const withSlash = p.endsWith("/") ? p : `${p}/`;

@@ -1,92 +1,89 @@
 ---
-title: Package 布局
-description: Dataset 根与 task 成员目录、根 yaml 与成员 yaml 怎么分工。
+title: Package layout
+description: Dataset root vs task members; how the two yamls split work.
 ---
 
-<Callout type="idea" title="让 agent 代写">
+<Callout type="idea" title="Have an agent write it">
 
 ```bash
 npx skills add ZJU-REAL/ageval --skill ageval-config-package
 ```
 
-装好后把需求说给本机 coding agent，让它写出 dataset 根和 `tasks/<id>/`；照下面的约定手写也一样。
+Install it, tell your coding agent what you need, and it writes the dataset root and `tasks/<id>/`. Hand-writing against the conventions below works just as well.
 
 </Callout>
 
-## 两层
+## Two layers
 
-| 层 | 文件 | 职责 |
+| Layer | File | Owns |
 | --- | --- | --- |
-| Dataset | 根 `ageval.yaml` | dataset 身份、版本、成员在哪 |
-| Task | `tasks/<id>/task.yaml` | 这一题怎么跑、怎么评 |
+| Dataset | Root `ageval.yaml` | Dataset identity, version, member root |
+| Task | `tasks/<id>/task.yaml` | How this task runs and is scored |
 
-CLI 路径永远是 Dataset 根；`--task` 选成员。
+CLI path is always the Dataset root; `--task` selects a member.
 
 ```text
 my-dataset/
 ├── ageval.yaml
-├── profiles.yaml           # 可选：job binding 默认
-├── shared/                 # 可选：跨 task 共享（进 packageDigest）
-│   ├── lib/                # 以 shared.lib.* 导入
-│   ├── assets/             # 只读领域数据（代码路径读取）
+├── profiles.yaml           # optional job binding defaults
+├── shared/                 # optional cross-task share (in packageDigest)
+│   ├── lib/                # import as shared.lib.*
+│   ├── assets/             # read-only domain data (code paths)
 │   └── README.md
 └── tasks/
-    └── hello/              # 目录名 == task_id
+    └── hello/
         ├── task.yaml
         ├── run.py
         ├── evaluator.py
         ├── prompts/
-        ├── environment/    # Agent Dockerfile；打分配方在 evaluate.Dockerfile 或 evaluate/<name>/
-        ├── evaluation/     # 参考答案等，默认不给 agent；禁止放打分 Dockerfile
+        ├── environment/    # Agent Dockerfile; scoring recipes in evaluate.Dockerfile or evaluate/<name>/
+        ├── evaluation/     # gold — not for Agent by default; no scoring Dockerfiles
         ├── data/
-        └── lib/            # 仅本 task；以 lib.* 导入
+        └── lib/            # task-only; import as lib.*
 ```
 
-成员一级目录只认：`prompts` · `schemas` · `environment` · `evaluation` · `data` · `lib` · `upstream` · `solution`。别的名字可能 lock 失败。
+Allowed task top-level dirs: `prompts`, `schemas`, `environment`, `evaluation`, `data`, `lib`, `upstream`, `solution`.
 
-## Dataset 级 `shared/`（可选）
+## Optional Dataset-level `shared/`
 
-同构多 task 包可把公共 bridge / 领域资产放在根 `shared/`，**不要**复制进每个 `tasks/*/lib/`。
+Homogeneous multi-task packages can keep shared bridges and domain assets under root `shared/` instead of copying into every `tasks/*/lib/`.
 
-| 路径 | 用途 | 导入 |
+| Path | Role | Import |
 | --- | --- | --- |
-| `shared/lib/` | 跨 task Python 模块 | `from shared.lib…` |
-| `shared/assets/` | 只读 fixture / policy / db | 代码路径 |
-| `tasks/*/lib/` | 仅本 task 扩展 | `from lib…` |
+| `shared/lib/` | Cross-task Python modules | `from shared.lib…` |
+| `shared/assets/` | Read-only fixtures / policy / db | code paths |
+| `tasks/*/lib/` | Task-only extensions | `from lib…` |
 
-Core 注入的 path 前缀是 **`[task_dir, dataset_root]`**，**不会**再把 `shared/lib` 叶子目录塞进 path。
+The Core-injected path prefix is **`[task_dir, dataset_root]`** — the `shared/lib` leaf is **not** injected as a path root.
 
-硬规则（摘要）：
+Hard rules (summary):
 
-- 有 `shared/` 则 **必须** 进入 `packageDigest` / publish blob；改它会改整份 dataset 的 digest  
-- 默认 **不** 挂到 Agent workspace；参考答案 **只** 放 `tasks/*/evaluation/`  
-- 成员 task **禁止** 占用顶层名 `shared`（`shared/` 目录或 `shared.py`）— lock 失败  
-- `shared/lib` 与 `tasks/*/lib` **允许** 同名 stem（命名空间已区分）  
-- docker 镜像 **不会** 由 Core 隐式 COPY `shared/`；容器内要用时在 Dockerfile 里显式 `COPY`，并把 **dataset 根** 放进 `PYTHONPATH`  
-- 本地自检：`uv run python scripts/check_shared_lib_collisions.py <dataset-root>`  
+- If present, `shared/**` **must** enter `packageDigest` / the publish blob  
+- Not Agent-mounted by default; gold stays under `tasks/*/evaluation/` only  
+- Task members must **not** own top-level name `shared` (`shared/` dir or `shared.py`) — lock fails  
+- Same stem under `shared/lib` and `tasks/*/lib` is **allowed** (namespaces differ)  
+- Core never silently COPYs `shared/` into docker images — task Dockerfile must declare it and put **dataset root** on `PYTHONPATH`  
+- Author gate: `uv run python scripts/check_shared_lib_collisions.py <dataset-root>`  
 
-**有 `shared/`、改 import 契约或在 Hub 上共享浏览，都不会让评测结果更可信。**
+**Having `shared/`, changing the import contract, or Hub Shared browse does not make the evaluation results more credible.**
 
-## 根 `ageval.yaml`
+## Root `ageval.yaml`
 
 ```yaml
 format: ageval.dataset/1
-dataset_id: org/my-suite    # 推荐 org/name；有字符集限制
+dataset_id: org/my-suite
 version: "0.1.0"
 tasks:
   root: tasks
-# defaults:
-#   max_concurrent_tasks: 2   # 仅整份 dataset 调度；不要写 harness/limits
 ```
 
-`dataset_id`：1–128 字符，小写字母数字开头结尾，中间可有 `.` `_` `/` `-`，禁止 `..` 与 `//`。**不参与打分**。
+`dataset_id` has a strict charset; it is **not** part of scoring.  
+Do **not** put `harness` / `provider` / `agent_profiles` / `evaluation` on the root.
 
-根上**不能**写 `harness` / `provider` / `agent_profiles` / `evaluation`。
+## parameters vs envelope
 
-## 成员里 parameters vs 其它
+- **`parameters`** → `run.py` (`ctx.params`)
+- **`limits` / `evaluation` / `environment/`** → Core
+- Environment and ACP entry → root `profiles.yaml`
 
-- **`parameters`**：给 `run.py`（`ctx.params`）
-- **`limits` / `evaluation` / `environment/`**：给 Core
-- 环境与 ACP entry：根上 `profiles.yaml`
-
-`run.py` 不要再读第二份「真配置」。运行时改允许的项用 `--set`。
+No second config truth in `run.py`. Allowed runtime overrides go through `--set`.

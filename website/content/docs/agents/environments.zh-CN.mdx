@@ -1,0 +1,29 @@
+---
+title: 环境
+description: 本机、Docker、e2b、ssh、daytona；ACP 用法相同。
+---
+
+环境写在 `profiles.yaml` 的 `environment:`。ACP 只要求环境提供 `attach_stdio`，配置里不要写 `plugin_id: docker`。换环境不用改 ACP。`exec` 是同一环境上的一次性命令，不是另一种环境。docker 会在启动时把绑定的 `options.entry` 写入镜像；镜像里已经有这个入口，就不会再 `npm i`。换 `model` 不重建镜像，换 `entry` 会重建。
+
+| 环境 | 怎么开 | 真跑条件 |
+| --- | --- | --- |
+| `local` | 本机目录 | `examples/datasets/tau3-airline-5` 默认 |
+| `docker` | 本机容器 | `examples/datasets/minimal-demo` 默认 `profiles.yaml` |
+| `e2b` | 云沙箱 | `E2B_API_KEY`；extra：`uv tool install 'ageval-cli[e2b]'`；缺 extras/钥则 `--probe` `ready: false`，不能进入运行 |
+| `ssh` A | 远端整机 | `AGEVAL_SSH_HOST` / `USER` / `KEY` |
+| `ssh` B | 远端已有 image | 同上，且 `image:` 已在远端 |
+| `daytona` | 云沙箱（OCI snapshot） | `DAYTONA_API_KEY`；缺钥 `--probe` `ready: false`。默认 CI 不跑真 Daytona |
+
+```bash
+ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg
+ageval run examples/datasets/tau3-airline-5 --task airline-00
+ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg --probe
+```
+
+缺 extras 或钥时 `--probe` 应 `ready: false`、`started: false`。ACP 只使用 `attach_stdio`，代码里不应出现 `container_id`。
+
+**ssh A 不支持 live ACP stdio。** 该面上的 dsh / nooa 走 `host.exec`，不是 ACP 长会话。
+
+`environment/setup.sh` 是 environment 阶段最后一步，不是独立 phase。参考答案（`evaluation/`）在 evaluate 才进打分 Host。`profiles.yaml` 可写 `evaluate_host.isolated: true`（Current：`docker`）：另起打分环境，参考答案只上第二环境；省略 = 同一环境。
+
+多个打分镜像（安装内容不同、顺序 stage）写在成员 `evaluation.environments`：每个名字一份 `dockerfile` 和/或 `docker_image`，放 `environment/evaluate/<name>/`，不要放 `evaluation/`。Core 第一次 `scoring.exec` / `session(environment=)` 才 start；未指定名字的不 build。写出该表则必须 `evaluate_host.isolated` + docker，且忽略 `environment/evaluate.Dockerfile`。ACP 连到对应名字的 Host；HTTP judge 忽略 `environment=`。`--agent` 与 `--profiles` 互斥。`--model` 须配合 `--agent`。
