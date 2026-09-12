@@ -5,6 +5,7 @@
  */
 import { useLayoutEffect, useRef, useState } from "react";
 
+import type { BrandMarkTone } from "@/lib/brand-marks";
 import type { LeaderLine } from "@/lib/scatter-label-layout";
 
 export const MORPH_MS = 500;
@@ -18,6 +19,10 @@ export type ScatterPose = {
   ty: number;
   textAnchor: "start" | "middle" | "end";
   text: string;
+  extraW: number;
+  textW: number;
+  iconSrc?: string;
+  iconTone?: BrandMarkTone;
   leader: LeaderLine | null;
   onFront: boolean;
   opacity: number;

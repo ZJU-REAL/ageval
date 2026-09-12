@@ -1,12 +1,15 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { HoverTip } from "@/components/hover-tip";
+import { resolveLabMarkAsset } from "@/lib/lab-mark-asset";
 import {
   joinOverlay,
   loadModelPin,
+  overlayLab,
   pinnedModel,
   type ModelPin,
 } from "@/lib/model-pin";
+import type { BrandMarkTone } from "@/lib/brand-marks";
 import type { SuiteRow } from "@/lib/api";
 import {
   axisValue,
@@ -84,15 +87,87 @@ function axisLabel(axis: ParetoAxis): string {
   return "Suite time";
 }
 
+function chartModelOverlay(suite: SuiteRow): string {
+  return displayLabelsFromOverlay(suite.job_overlay).model || suite.model_label || "";
+}
+
 function chartModelName(suite: SuiteRow, pin: ModelPin): string {
-  const overlay =
-    displayLabelsFromOverlay(suite.job_overlay).model || suite.model_label || "";
+  const overlay = chartModelOverlay(suite);
   const pretty = pinnedModel(joinOverlay(overlay, pin).canonical, pin)?.name;
   if (pretty) return pretty;
   const trimmed = overlay.trim();
   if (!trimmed) return "—";
   const slash = trimmed.lastIndexOf("/");
   return slash >= 0 ? trimmed.slice(slash + 1) : trimmed;
+}
+
+function chartModelIcon(suite: SuiteRow, pin: ModelPin) {
+  const lab = overlayLab(chartModelOverlay(suite), pin);
+  return lab ? resolveLabMarkAsset(lab, pin) : null;
+}
+
+const ICON_GAP_PX = 3;
+
+function scatterLabelDraw(pose: ScatterPose) {
+  const extra = pose.extraW || 0;
+  const hasIcon = Boolean(pose.iconSrc && extra > 0);
+  if (!hasIcon) {
+    return { textX: pose.tx, iconX: 0, hasIcon: false };
+  }
+  if (pose.textAnchor === "start") {
+    return { textX: pose.tx + extra, iconX: pose.tx, hasIcon: true };
+  }
+  if (pose.textAnchor === "end") {
+    return {
+      textX: pose.tx,
+      iconX: pose.tx - pose.textW - extra,
+      hasIcon: true,
+    };
+  }
+  return {
+    textX: pose.tx + extra / 2,
+    iconX: pose.tx - (pose.textW + extra) / 2,
+    hasIcon: true,
+  };
+}
+
+function ScatterLabIcon({
+  x,
+  y,
+  size,
+  src,
+  tone,
+  opacity,
+}: {
+  x: number;
+  y: number;
+  size: number;
+  src: string;
+  tone?: BrandMarkTone;
+  opacity: number;
+}) {
+  const pad = tone === "ink" || tone === "paper" ? size * 0.12 : 0;
+  const inner = Math.max(1, size - pad * 2);
+  return (
+    <g opacity={opacity} className="pointer-events-none">
+      {tone === "ink" || tone === "paper" ? (
+        <circle
+          cx={x + size / 2}
+          cy={y + size / 2}
+          r={size / 2}
+          className={tone === "ink" ? "fill-white" : "fill-black"}
+        />
+      ) : null}
+      <image
+        href={src}
+        x={x + pad}
+        y={y + pad}
+        width={inner}
+        height={inner}
+        preserveAspectRatio="xMidYMid meet"
+      />
+    </g>
+  );
 }
 
 export function LeaderboardPareto({
@@ -156,6 +231,7 @@ export function LeaderboardPareto({
         x: xAt(axisValue(p, axis) as number),
         y: yAt(p.passRate ?? 0),
         text: chartModelName(p.suite, pin),
+        extraW: chartModelIcon(p.suite, pin) ? mark.fontPx + ICON_GAP_PX : 0,
       })),
       { left: L + 4, top: 8, right: W - 8, bottom: H - 36 },
       [],
@@ -171,6 +247,7 @@ export function LeaderboardPareto({
     return plotted.map((p, i) => {
       const placed = placedLabels[i];
       const xv = axisValue(p, axis) as number;
+      const icon = chartModelIcon(p.suite, pin);
       return {
         id: p.suite.suite_run_id,
         colorIndex: colorById.get(p.suite.suite_run_id) ?? i,
@@ -180,6 +257,10 @@ export function LeaderboardPareto({
         ty: placed?.ty ?? yOf(p.passRate ?? 0) + 14,
         textAnchor: placed?.textAnchor ?? "middle",
         text: placed?.text ?? chartModelName(p.suite, pin),
+        extraW: placed?.extraW ?? 0,
+        textW: placed?.textW ?? 0,
+        iconSrc: icon?.src,
+        iconTone: icon?.tone,
         leader: placed?.leader ?? null,
         onFront: frontIds.has(p.suite.suite_run_id),
         opacity: 1,
@@ -399,21 +480,37 @@ export function LeaderboardPareto({
           >
             Pass rate
           </text>
-          {poses.map((pose) => (
-            <text
-              key={`${pose.id}-lab`}
-              x={pose.tx}
-              y={pose.ty}
-              textAnchor={pose.textAnchor}
-              fontSize={fontPx}
-              opacity={poseOpacity(pose)}
-              className="fill-body stroke-canvas font-sans"
-              strokeWidth={3 * unit}
-              paintOrder="stroke"
-            >
-              {pose.text}
-            </text>
-          ))}
+          {poses.map((pose) => {
+            const draw = scatterLabelDraw(pose);
+            const iconSize = fontPx * 0.95;
+            const op = poseOpacity(pose);
+            return (
+              <g key={`${pose.id}-lab`}>
+                {draw.hasIcon && pose.iconSrc ? (
+                  <ScatterLabIcon
+                    x={draw.iconX}
+                    y={pose.ty - iconSize * 0.86}
+                    size={iconSize}
+                    src={pose.iconSrc}
+                    tone={pose.iconTone}
+                    opacity={op}
+                  />
+                ) : null}
+                <text
+                  x={draw.textX}
+                  y={pose.ty}
+                  textAnchor={pose.textAnchor}
+                  fontSize={fontPx}
+                  opacity={op}
+                  className="fill-body stroke-canvas font-sans"
+                  strokeWidth={3 * unit}
+                  paintOrder="stroke"
+                >
+                  {pose.text}
+                </text>
+              </g>
+            );
+          })}
         </svg>
         <div className="pointer-events-none absolute inset-0">
           {plotted.map((p) => {

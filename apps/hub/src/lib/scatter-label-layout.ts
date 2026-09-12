@@ -13,6 +13,8 @@ export type ScatterLabelInput = {
   x: number;
   y: number;
   text: string;
+  /** Extra CSS-px width to the left of the text (lab mark). Not truncated. */
+  extraW?: number;
 };
 
 export type LeaderLine = {
@@ -30,6 +32,8 @@ export type LeaderLine = {
 
 export type PlacedScatterLabel = {
   text: string;
+  extraW: number;
+  textW: number;
   box: Rect;
   tx: number;
   ty: number;
@@ -295,6 +299,25 @@ function leaderGeometry(
   };
 }
 
+function placedFrom(
+  item: { text: string; extraW: number; textW: number },
+  box: Rect,
+  anchor: "start" | "middle" | "end",
+  leader: LeaderLine | null,
+): PlacedScatterLabel {
+  const { tx, ty } = textPos(box, anchor);
+  return {
+    text: item.text,
+    extraW: item.extraW,
+    textW: item.textW,
+    box,
+    tx,
+    ty,
+    textAnchor: anchor,
+    leader,
+  };
+}
+
 function textPos(
   box: Rect,
   anchor: "start" | "middle" | "end",
@@ -430,6 +453,8 @@ export function placeScatterLabels(
     );
     return placed.map((p) => ({
       ...p,
+      extraW: p.extraW * unit,
+      textW: p.textW * unit,
       box: scaleRect(p.box, unit),
       tx: p.tx * unit,
       ty: p.ty * unit,
@@ -451,12 +476,11 @@ function placeScatterLabelsCss(
   const labelH = fontPx * 1.3;
   const maxLabelW = fontPx * 13;
   const prepared = items.map((item, index) => {
+    const extraW = Math.max(0, item.extraW ?? 0);
     const text = truncateToWidth(item.text, maxLabelW, fontPx);
-    const w = Math.min(
-      maxLabelW,
-      Math.max(8, Math.ceil(measureWidth(text, fontPx) + 2)),
-    );
-    return { index, x: item.x, y: item.y, text, w, h: labelH };
+    const textW = Math.max(8, Math.ceil(measureWidth(text, fontPx) + 2));
+    const w = Math.min(maxLabelW + extraW, textW + extraW);
+    return { index, x: item.x, y: item.y, text, extraW, textW, w, h: labelH };
   });
   const neighborCounts = prepared.map((a) =>
     prepared.reduce((n, b) => {
@@ -528,10 +552,9 @@ function placeScatterLabelsCss(
           pointClear,
         });
         if (!best || score < best.score) {
-          const { tx, ty } = textPos(box, anchor);
           best = {
             score,
-            label: { text: item.text, box, tx, ty, textAnchor: anchor, leader },
+            label: placedFrom(item, box, anchor, leader),
           };
         }
       }
@@ -569,17 +592,9 @@ function placeScatterLabelsCss(
             pointClear,
           });
           if (!fallback || score < fallback.score) {
-            const { tx, ty } = textPos(box, anchor);
             fallback = {
               score,
-              label: {
-                text: item.text,
-                box,
-                tx,
-                ty,
-                textAnchor: anchor,
-                leader,
-              },
+              label: placedFrom(item, box, anchor, leader),
             };
           }
         }
@@ -593,15 +608,12 @@ function placeScatterLabelsCss(
           boxFor(item.x, item.y, item.w, item.h, 0, 1, RINGS[0]),
           bounds,
         );
-        const { tx, ty } = textPos(box, "middle");
-        return {
-          text: item.text,
+        return placedFrom(
+          item,
           box,
-          tx,
-          ty,
-          textAnchor: "middle" as const,
-          leader: leaderGeometry(item.x, item.y, box, points, idx, pointClear),
-        };
+          "middle",
+          leaderGeometry(item.x, item.y, box, points, idx, pointClear),
+        );
       })();
   }
 
@@ -612,14 +624,11 @@ function placeScatterLabelsCss(
       boxFor(item.x, item.y, item.w, item.h, 0, 1, RINGS[0]),
       bounds,
     );
-    const { tx, ty } = textPos(box, "middle");
-    return {
-      text: item.text,
+    return placedFrom(
+      item,
       box,
-      tx,
-      ty,
-      textAnchor: "middle",
-      leader: leaderGeometry(item.x, item.y, box, points, i, pointClear),
-    };
+      "middle",
+      leaderGeometry(item.x, item.y, box, points, i, pointClear),
+    );
   });
 }
