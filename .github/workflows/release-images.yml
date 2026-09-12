@@ -1,6 +1,14 @@
 # Build and push Hub, Registry, and the official Attempt base on a version tag.
 # PR ci.yml does not push GHCR. CLI pulls ghcr.io/zju-real/ageval-attempt:<ver>
 # then retags locally as ageval-attempt:base; a miss falls back to the packaged Dockerfile.
+#
+# Job `attempt` always publishes :cli-ver (plus {{major}}.{{minor}} and the git-tag
+# alias). Same-tag re-entry is a no-op. Unchanged bake inputs copy the previous
+# multi-arch manifest list — no QEMU. Do not add `on.paths` filters; skipping the
+# job would leave the new CLI version without a GHCR tag.
+#
+# Bake inputs (see scripts/attempt_image_release.py): Dockerfile,
+# install-executors.sh, acp-entries.lock.json, sitecustomize.py, PYTHON_VERSION.
 name: release-images
 
 on:
@@ -9,6 +17,12 @@ on:
       - "v*"
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: Rebuild the Attempt image even when bake inputs match the previous GHCR tag
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,6 +30,7 @@ permissions:
 
 jobs:
   images:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -62,9 +77,36 @@ jobs:
   attempt:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    concurrency:
+      group: release-images-attempt-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      ATTEMPT_IMAGE: ghcr.io/zju-real/ageval-attempt
+      ATTEMPT_PYTHON_VERSION: "3.12"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve CLI version
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            tag="${{ github.ref_name }}"
+          else
+            tag="v$(tr -d '[:space:]' < VERSION)"
+          fi
+          version="${tag#v}"
+          if ! printf '%s' "${version}" | grep -qxE '[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::attempt image version must be vMAJOR.MINOR.PATCH, got ${tag}"
+            exit 1
+          fi
+          echo "ATTEMPT_VERSION=${version}" >> "${GITHUB_ENV}"
+          echo "publishing ${ATTEMPT_IMAGE}:${version}"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -79,17 +121,61 @@ jobs:
         with:
           images: ghcr.io/zju-real/ageval-attempt
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=ref,event=tag
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+            type=semver,pattern={{version}},value=v${{ env.ATTEMPT_VERSION }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ env.ATTEMPT_VERSION }}
+            type=raw,value=v${{ env.ATTEMPT_VERSION }}
 
       - name: Set up buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Plan skip, retag, or rebuild
+        id: plan
+        env:
+          ATTEMPT_FORCE_REBUILD: ${{ github.event.inputs.force_rebuild || 'false' }}
+        run: |
+          python3 scripts/attempt_image_release.py \
+            --version "${ATTEMPT_VERSION}" \
+            --python-version "${ATTEMPT_PYTHON_VERSION}" \
+            --image "${ATTEMPT_IMAGE}" \
+            --force-rebuild "${ATTEMPT_FORCE_REBUILD}"
+
+      - name: Version tag already on GHCR
+        if: steps.plan.outputs.action == 'skip'
+        run: echo "${ATTEMPT_IMAGE}:${ATTEMPT_VERSION} already exists; nothing to do"
+
+      - name: Copy previous manifest list onto this version
+        if: steps.plan.outputs.action == 'retag'
+        env:
+          SOURCE_REF: ${{ steps.plan.outputs.source_ref }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SOURCE_REF}" ]; then
+            echo "::error::retag planned without source_ref"
+            exit 1
+          fi
+          major_minor="${ATTEMPT_VERSION%.*}"
+          docker buildx imagetools create \
+            -t "${ATTEMPT_IMAGE}:${ATTEMPT_VERSION}" \
+            -t "${ATTEMPT_IMAGE}:${major_minor}" \
+            -t "${ATTEMPT_IMAGE}:v${ATTEMPT_VERSION}" \
+            "${SOURCE_REF}"
+          digest_of() {
+            docker buildx imagetools inspect "$1" | awk -F': ' '/^Digest:/ {print $2; exit}'
+          }
+          src_digest="$(digest_of "${SOURCE_REF}")"
+          new_digest="$(digest_of "${ATTEMPT_IMAGE}:${ATTEMPT_VERSION}")"
+          if [ -z "${src_digest}" ] || [ "${src_digest}" != "${new_digest}" ]; then
+            echo "::error::retag digest mismatch src=${src_digest} new=${new_digest}"
+            exit 1
+          fi
+          echo "retagged ${ATTEMPT_IMAGE}:${ATTEMPT_VERSION} -> ${new_digest} (from ${SOURCE_REF})"
+
+      - name: Set up QEMU
+        if: steps.plan.outputs.action == 'rebuild'
+        uses: docker/setup-qemu-action@v3
+
       - name: Build and push
+        if: steps.plan.outputs.action == 'rebuild'
         uses: docker/build-push-action@v6
         with:
           context: src/ageval/plugins/contrib/docker/attempt
@@ -99,4 +185,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            PYTHON_VERSION=3.12
+            PYTHON_VERSION=${{ env.ATTEMPT_PYTHON_VERSION }}

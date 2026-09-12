@@ -346,9 +346,18 @@ def test_cli_writes_github_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert "source_version=0.8.0\n" in text
 
 
-def test_release_images_workflow_still_pushes_the_cli_version_tag() -> None:
+def test_release_images_workflow_wires_content_aware_attempt_job() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert "ghcr.io/zju-real/ageval-attempt" in text
-    assert "platforms: linux/amd64,linux/arm64" in text
-    assert "PYTHON_VERSION=3.12" in text
-    assert "paths:" not in text.split("jobs:")[0]
+    header, jobs = text.split("jobs:", 1)
+    assert "paths:" not in header
+    assert "scripts/attempt_image_release.py" in jobs
+    assert "imagetools create" in jobs
+    assert "fetch-depth: 0" in jobs
+    assert "fetch-tags: true" in jobs
+    assert "force_rebuild" in header
+    assert "ghcr.io/zju-real/ageval-attempt" in jobs
+    assert "linux/amd64,linux/arm64" in jobs
+    assert 'ATTEMPT_PYTHON_VERSION: "3.12"' in jobs
+    assert "steps.plan.outputs.action == 'rebuild'" in jobs
+    assert "steps.plan.outputs.action == 'retag'" in jobs
+    assert "steps.plan.outputs.action == 'skip'" in jobs
