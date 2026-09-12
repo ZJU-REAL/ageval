@@ -47,7 +47,7 @@ Matcher（确定性，无编辑距离）：
 3. 每个候选对 pin 的 canonical id、canonical leaf、provider model id 做 **exact** lookup。
 4. **恰好一条** canonical → join。0 或大于 1 → 不自动 join。不要剥到 `flash` / `max`。
 
-`qwen-flash` vs `qwen3.6-flash` vs `qwen3.8-flash`：无 unique hit → 不 join。未 join 的 overlay 仍按原文字渲染（`ModelItem` 用字母标，无百科）。Leaderboard / Jobs / Agent Performance 的 Model 格走 `ModelLabel`：unique join 前置 `LabMark`；未 join 只留短名，不加字母标。plaza `?view=model` 与 `/models` 组头已是 `LabGroupHead`，内行不加。
+`qwen-flash` vs `qwen3.6-flash` vs `qwen3.8-flash`：无 unique hit → 不 join。未 join 的 overlay 仍按原文字渲染（`ModelItem` 用字母标，无百科）。Leaderboard / Jobs / Agent Performance 的 Model 格走 `ModelLabel`：unique join 前置 `LabMark`；未 join 只留短名，不加字母标。plaza `?view=model` 与 `/models` 组头已是 `LabGroupHead`，内行不加。Harness / Agent 格走 `HarnessLabel`：builtin 短 id 对 `brand-marks/assets` 闭包（与 Registry `HARNESS_ICON_KEY` 同步）；未匹配只留原文。
 
 ### `/agents` 与 harness 页
 

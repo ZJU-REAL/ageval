@@ -55,6 +55,26 @@ def _meta_archive(tmp_path: Path) -> tuple[dict[str, object], Path]:
     )
 
 
+def test_hub_harness_marks_match_registry() -> None:
+    from services.registry.builtin_agents import HARNESS_ICON_KEY
+
+    ts = (REPO / "apps/hub/src/lib/brand-marks/harness.ts").read_text(encoding="utf-8")
+    block = re.search(
+        r"export const HARNESS_BRAND_MARK[^{]+\{([^}]+)\}",
+        ts,
+    )
+    assert block is not None
+    hub: dict[str, str] = {}
+    for unquoted, quoted, value in re.findall(
+        r'(?:([\w-]+)|"([^"]+)"):\s*"([^"]+)"',
+        block.group(1),
+    ):
+        hub[unquoted or quoted] = value
+    assert hub == HARNESS_ICON_KEY
+    for mark in HARNESS_ICON_KEY.values():
+        assert mark in ALLOWED_KEYS
+
+
 def test_hub_catalog_keys_match_assets() -> None:
     allow = json.loads(
         (REPO / "services/registry/brand_marks.json").read_text(encoding="utf-8"),

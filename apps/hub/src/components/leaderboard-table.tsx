@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 
 import {
   compareValues,
@@ -32,6 +31,7 @@ import {
   passPowerPrimaryK,
 } from "@/lib/suite-metrics";
 import { BrandMark } from "@/components/brand-mark";
+import { HarnessLabel } from "@/components/harness-label";
 import { HoverTip, TruncateTip } from "@/components/hover-tip";
 import { ModelLabel } from "@/components/model-label";
 import { ScoreRing } from "@/components/score-ring";
@@ -272,20 +272,18 @@ export function LeaderboardTable({
                       <TableCell className={COL_TEXT}>
                         <span className="flex flex-col gap-0.5 min-w-0">
                           {runtimeLinks.map((ref) => (
-                            <Link
+                            <HarnessLabel
                               key={ref.package_id}
+                              value={ref.package_id}
                               to={agentPackageHref(ref.package_id)}
                               onClick={(e) => e.stopPropagation()}
-                              className="inline-flex max-w-full text-link hover:text-link-deep hover:underline underline-offset-2"
-                            >
-                              <TruncateTip text={ref.package_id} />
-                            </Link>
+                            />
                           ))}
                         </span>
                       </TableCell>
                     ) : (
                       <TableCell className={COL_TEXT}>
-                        <TruncateTip text={agentText || "—"} />
+                        <HarnessLabel value={agentText} empty="—" />
                       </TableCell>
                     )}
                     <TableCell className={COL_TEXT}>

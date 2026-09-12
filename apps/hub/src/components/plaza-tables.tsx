@@ -7,10 +7,10 @@ import {
   GroupedTables,
   type GroupedTableGroup,
 } from "@/components/grouped-tables";
-import { TruncateTip } from "@/components/hover-tip";
 import { LabGroupHead } from "@/components/lab-group-head";
 import { LeaderboardPareto } from "@/components/leaderboard-pareto";
 import { LeaderboardWaffle } from "@/components/leaderboard-waffle";
+import { HarnessLabel } from "@/components/harness-label";
 import { ModelLabel } from "@/components/model-label";
 import { OfficialMark } from "@/components/official-mark";
 import { ScoreRing } from "@/components/score-ring";
@@ -196,20 +196,18 @@ function HarnessCells({ suite }: { suite: SuiteRow }) {
         <TableCell className="max-w-[12rem] overflow-hidden">
           <span className="flex min-w-0 flex-col gap-0.5">
             {runtimeLinks.map((ref) => (
-              <Link
+              <HarnessLabel
                 key={ref.package_id}
+                value={ref.package_id}
                 to={agentPackageHref(ref.package_id)}
                 onClick={(event) => event.stopPropagation()}
-                className="inline-flex max-w-full text-link hover:text-link-deep hover:underline underline-offset-2"
-              >
-                <TruncateTip text={ref.package_id} />
-              </Link>
+              />
             ))}
           </span>
         </TableCell>
       ) : (
         <TableCell className="max-w-[12rem] overflow-hidden">
-          <TruncateTip text={agentText || "—"} />
+          <HarnessLabel value={agentText} empty="—" />
         </TableCell>
       )}
       <TableCell className="max-w-[12rem] overflow-hidden">
@@ -516,14 +514,13 @@ export function PlazaAgentTables({
               role="link"
               aria-label="Open suite run"
             >
-              <TableCell>
-                <Link
+              <TableCell className="max-w-[12rem] overflow-hidden">
+                <HarnessLabel
+                  value={row.package_id}
                   to={agentHref(row.package_id)}
-                  className="text-link hover:text-link-deep hover:underline underline-offset-2"
+                  pack={packs.get(row.package_id)}
                   onClick={(event) => event.stopPropagation()}
-                >
-                  {row.package_id}
-                </Link>
+                />
               </TableCell>
               <TableCell>
                 <Link
@@ -557,10 +554,23 @@ export function PlazaAgentTables({
 
 type ModelPlazaRow = AgentPerformance & { canonical: string };
 
-export function PlazaModelTables({ rows }: { rows: AgentPerformance[] }) {
+export function PlazaModelTables({
+  rows,
+  agents = [],
+}: {
+  rows: AgentPerformance[];
+  agents?: PackageRelease[];
+}) {
   const navigate = useNavigate();
   const { sortKey, sortDir, head } = usePlazaSort();
   const pin = loadModelPin();
+  const packs = useMemo(() => {
+    const map = new Map<string, PackageRelease>();
+    for (const row of latestPackageByDataset(agents)) {
+      map.set(row.dataset_id, row);
+    }
+    return map;
+  }, [agents]);
 
   const joined = useMemo(() => {
     const out: ModelPlazaRow[] = [];
@@ -632,14 +642,13 @@ export function PlazaModelTables({ rows }: { rows: AgentPerformance[] }) {
                   </Link>
                   <div className="truncate text-[13px] text-mute">{row.canonical}</div>
                 </TableCell>
-                <TableCell>
-                  <Link
+                <TableCell className="max-w-[12rem] overflow-hidden">
+                  <HarnessLabel
+                    value={row.package_id}
                     to={agentPackageHref(row.package_id, row.model)}
-                    className="text-link hover:text-link-deep hover:underline underline-offset-2"
+                    pack={packs.get(row.package_id)}
                     onClick={(event) => event.stopPropagation()}
-                  >
-                    {row.package_id}
-                  </Link>
+                  />
                 </TableCell>
                 <TableCell>
                   <Link

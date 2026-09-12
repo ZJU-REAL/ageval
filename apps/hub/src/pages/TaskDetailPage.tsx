@@ -48,7 +48,7 @@ import {
   unionOverlayPrefixes,
   type TreeNode,
 } from "@/lib/file-tree";
-import { AxisLabel } from "@/components/axis-label";
+import { HarnessLabel } from "@/components/harness-label";
 import { TruncateTip } from "@/components/hover-tip";
 import { ModelLabel } from "@/components/model-label";
 import {
@@ -747,7 +747,7 @@ export function TaskDetailPage() {
                           {formatScore(j.score)}
                         </TableCell>
                         <TableCell className="text-body">
-                          <AxisLabel value={j.agent_label} />
+                          <HarnessLabel value={j.agent_label} />
                         </TableCell>
                         <TableCell>
                           <ModelLabel

@@ -7,6 +7,7 @@ export {
   type BrandMarkTone,
 } from "@/lib/brand-marks/catalog";
 export { catalogAssetUrl } from "@/lib/brand-marks/assets";
+export { HARNESS_BRAND_MARK, harnessBrandId } from "@/lib/brand-marks/harness";
 export { githubAvatarUrl, parseGithubLogin } from "@/lib/brand-marks/github";
 export {
   resolveEntityMark,

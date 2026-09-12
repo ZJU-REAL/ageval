@@ -315,7 +315,7 @@ export function LeaderboardPage() {
               orgs={orgs}
             />
           ) : (
-            <PlazaModelTables rows={visiblePerformances} />
+            <PlazaModelTables rows={visiblePerformances} agents={agents} />
           )}
         </>
       )}

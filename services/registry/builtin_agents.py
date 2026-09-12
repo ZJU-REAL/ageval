@@ -19,7 +19,8 @@ from ageval.agents.reserved import (
     reserved_harness_leaf,
 )
 
-_ICON_KEY = {
+# Keep in lockstep with apps/hub/src/lib/brand-marks/harness.ts HARNESS_BRAND_MARK.
+HARNESS_ICON_KEY = {
     "pi": "pi",
     "opencode": "opencode",
     "codex": "codex",
@@ -84,7 +85,7 @@ def _overlay_item(row: dict[str, str]) -> dict[str, Any]:
         "display_name": str(preview.get("label") or row["label"]),
         "agent_preview": preview,
     }
-    icon = _ICON_KEY.get(harness_id)
+    icon = HARNESS_ICON_KEY.get(harness_id)
     if icon:
         item["icon_key"] = icon
     return item
@@ -168,4 +169,5 @@ __all__ = [
     "builtin_read_file",
     "is_builtin_agent_id",
     "reserved_harness_leaf",
+    "HARNESS_ICON_KEY",
 ]

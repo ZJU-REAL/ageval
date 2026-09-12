@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 
+import { HarnessLabel } from "@/components/harness-label";
 import { HoverTip } from "@/components/hover-tip";
 import { ModelLabel } from "@/components/model-label";
 import { encodeDatasetId, type SuiteRow } from "@/lib/api";
@@ -116,7 +117,7 @@ export function LeaderboardWaffle({
                   onClick={() => onOpenSuite?.(suite.suite_run_id)}
                 >
                   <ModelLabel value={model} />
-                  <span className="text-mute">{harness}</span>
+                  <HarnessLabel value={harness} className="text-mute" empty="—" />
                 </button>
               </HoverTip>
             );

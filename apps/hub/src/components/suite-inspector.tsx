@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { BrandMark } from "@/components/brand-mark";
 import { BuiltinMark } from "@/components/builtin-mark";
 import { CodeFence } from "@/components/code-fence";
+import { HarnessLabel } from "@/components/harness-label";
 import { TruncateTip } from "@/components/hover-tip";
 import { ModelLabel } from "@/components/model-label";
 import { JobOverlayPreview } from "@/components/overlay-file-panel";
@@ -445,11 +446,7 @@ export function SuiteInspector({
                 size={16}
               />
             ) : null}
-            {agentText ? (
-              <TruncateTip text={agentText} />
-            ) : (
-              <span className="text-mute">—</span>
-            )}
+            <HarnessLabel value={agentText} empty="—" />
             <span className="text-mute" aria-hidden>
               ·
             </span>
