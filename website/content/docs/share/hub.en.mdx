@@ -51,8 +51,8 @@ Ops detail: `apps/hub/README.md`, `services/registry/README.md`.
 
 ## Leaderboard
 
-- Sidebar **Leaderboard** (`/leaderboard`) is an **index** of the three existing surfaces, not a fourth ranking. The Dataset view lists public listed suites; Agent / Model views reuse the existing Performance gates (plaza collect or Agent-org consent). The three tables may disagree on membership. Signed-out is OK. Internal, draft-bound, and unlisted suites stay on the dataset Leaderboard tab — they never appear on the plaza.
-- The plaza is tables only. Scores sit on each inner row; they are observational, not PASS, and not comparable across datasets. There is no rank column. Pareto / Waffle stay on the dataset Leaderboard tab.
+- Catalog sidebar leads with **Leaderboard** (`/leaderboard`). It is an **index** of the three existing surfaces, not a fourth ranking. The Dataset view groups by dataset (name + description as the group head) and lists public listed suites; Agent / Model views reuse the existing Performance gates (plaza collect or Agent-org consent). The three tables may disagree on membership. Signed-out is OK. Internal, draft-bound, and unlisted suites stay on the dataset Leaderboard tab — they never appear on the plaza.
+- The plaza Dataset view switches Table / Pareto / Waffle with the same control as a dataset Leaderboard (right of the Dataset tab). Charts are per dataset group. Scores sit on each inner row; they are observational, not PASS, and not comparable across datasets. There is no rank column. Agent / Model views stay tables.
 - **Public** lists only suites that are complete, bound to a release, and approved for listing by the dataset org's owner; **Internal** shows caller-visible incomplete or draft-bound runs in the same table.
 - The same tab switches **Table** / **Pareto** / **Waffle**. Pareto’s x-axis is the **sum of every job** in the suite (cost, tokens, or time); left is cheaper, right is more. When the agent did not report USD, cost is tokens × catalog price — estimated, not a billed invoice. Higher pass rate at no extra cost forms the frontier.
 - Metrics are observational summaries, not a suite PASS; headers sort.
