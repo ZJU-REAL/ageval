@@ -9,7 +9,7 @@
 | `examples/datasets/minimal-demo` | `terminal-jsonl-agg`、`tau2-dialog-min`、`multiagent-env-min` |
 | docker topology 示例 | `sdk-session-single-actor` lock；`multi-agent-*` lock 有 topology 即可（本轮不承诺多 group 真调度 run） |
 | `examples/datasets/tau3-airline-5` | `airline-00` lock |
-| `examples/agents` | `pi-default` 等 `ageval.agent/1`；`--agent` 绑定 |
+| `examples/agents` | `dsh-default` / `nooa-default` / `miniswe-default`；`--agent` 绑定 |
 
 docker 默认在 `examples/datasets/minimal-demo/profiles.yaml`。e2b 见同目录 `profiles.e2b-*.yaml`。ssh A 不支持 live ACP stdio。
 

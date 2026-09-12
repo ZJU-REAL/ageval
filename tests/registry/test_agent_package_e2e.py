@@ -21,7 +21,7 @@ install_agent_from_registry = _agents.install_agent_from_registry
 publish_agent = _agents.publish_agent
 
 REPO = Path(__file__).resolve().parents[2]
-AGENT_FIXTURE = REPO / "examples" / "agents" / "pi-default"
+AGENT_FIXTURE = REPO / "tests" / "fixtures" / "agents" / "pi-default"
 TEST_ORG = "test"
 
 

@@ -6,7 +6,7 @@ description: 怎么选 minimal-demo、Agent 包，以及从上游转过来的 da
 | 路径                                                                                                                | 适合                                                 |
 | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | [`examples/datasets/minimal-demo`](https://github.com/ZJU-REAL/ageval/tree/main/examples/datasets/minimal-demo)     | 对话 / 终端 / 多 agent 案例；默认 docker             |
-| [`examples/agents`](https://github.com/ZJU-REAL/ageval/tree/main/examples/agents)                                   | `ageval.agent/1` 目录包，配合 `--agent`              |
+| [`examples/agents`](https://github.com/ZJU-REAL/ageval/tree/main/examples/agents)                                   | `dsh` / `nooa` / `miniswe` 配方包，配合 `--agent`（内置 ACP 用 `--agent pi`） |
 | [`examples/datasets/tau3-airline-5`](https://github.com/ZJU-REAL/ageval/tree/main/examples/datasets/tau3-airline-5) | 上游 airline 对话域转换的五题缩略：双角色 + 独立评分 |
 
 先 `ageval tasks <path>` 看成员列表。写自己的包时从 `minimal-demo` 抄结构最省事。

@@ -5,7 +5,7 @@ one abbreviated popular-bench conversion.
 
 ```text
 examples/
-├── agents/           # ageval.agent/1 (cc/pi/codex/opencode/dsh/nooa/miniswe)
+├── agents/           # ageval.agent/1 (dsh / nooa / miniswe; builtin ACP is --agent pi)
 └── datasets/
     ├── minimal-demo/   # dataset official/minimal-demo — case-class fidelity
     └── tau3-airline-5/   # dataset official/tau3-airline-5 — 5-task airline cut
@@ -134,15 +134,17 @@ Regenerate the in-repo cut:
 
 ## `agents/` (`ageval.agent/1`)
 
-Catalog Agent **harness** packages (`binding.model` is the default, not identity).
-Built-in Agent packages (`pi`, `opencode`, …) ship with ageval. These trees are custom
-overlay examples: install, then bind with `--agent` (mutually exclusive with
-`--profiles`). Optional `--model` overrides this run:
+Custom overlay packages for executors that are **not** builtin catalog cards:
+`dsh-default`, `nooa-default`, `miniswe-default`. Built-in Agent packages
+(`pi`, `opencode`, `codex`, `claude-code`, `grok-build`, `openai-http`,
+`anthropic-http`) ship with ageval — `--agent pi` needs no install.
+`binding.model` is the package default, not identity. `--agent` is mutually
+exclusive with `--profiles`. Optional `--model` overrides this run:
 
 ```bash
 uv run ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg --agent pi --model glm-4.7
-uv run ageval agent install examples/agents/pi-default
-uv run ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg --agent local/pi-default@0.1.0
+uv run ageval agent install examples/agents/dsh-default
+uv run ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg --agent local/dsh-default@0.1.0
 ```
 
 ## Hub-only conversions

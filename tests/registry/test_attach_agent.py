@@ -30,7 +30,7 @@ from ageval.registry.digest import compute_package_digest
 
 REPO = Path(__file__).resolve().parents[2]
 FIXTURE = REPO / "tests" / "fixtures" / "datasets" / "publish-min"
-AGENT = REPO / "examples" / "agents" / "pi-default"
+AGENT = REPO / "tests" / "fixtures" / "agents" / "pi-default"
 
 PI = {
     "executor": "acp",

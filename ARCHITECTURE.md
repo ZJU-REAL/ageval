@@ -182,7 +182,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   ├── datasets/
 │   │   ├── minimal-demo/            # terminal-jsonl-agg / tau2-dialog-min / multiagent-env-min
 │   │   └── tau3-airline-5/            # airline-00 … airline-04 lock
-│   └── agents/                      # ageval.agent/1 catalog packages
+│   └── agents/                      # ageval.agent/1: dsh / nooa / miniswe defaults
 ├── plugins/                         # external ageval.plugin/1
 │   ├── nooa/ / dsh/ / miniswe/ / acp-oneshot/
 │   └── home-files/ / agent-skills/

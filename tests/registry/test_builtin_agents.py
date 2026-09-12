@@ -26,7 +26,7 @@ from ageval.registry.agent_package import (
 )
 
 REPO = Path(__file__).resolve().parents[2]
-AGENT_FIXTURE = REPO / "examples" / "agents" / "pi-default"
+AGENT_FIXTURE = REPO / "tests" / "fixtures" / "agents" / "pi-default"
 SEVEN = frozenset(
     {"pi", "opencode", "codex", "claude-code", "grok-build", "openai-http", "anthropic-http"}
 )

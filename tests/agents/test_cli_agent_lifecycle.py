@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-EXAMPLE_AGENT = ROOT / "examples/agents/pi-default"
+EXAMPLE_AGENT = ROOT / "tests/fixtures/agents/pi-default"
 DATABASE = ROOT / "examples/datasets/minimal-demo"
 
 
