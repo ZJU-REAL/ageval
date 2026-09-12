@@ -1,7 +1,8 @@
 # ageval Hub (`apps/hub`)
 
 Registry **Dataset catalog** SPA: list packages, open README and tasks, preview
-files, browse Task Jobs, and Leaderboard.
+files, browse Task Jobs, and Leaderboard (per-dataset tab plus the `/leaderboard`
+plaza that indexes listed suites and collected Performance).
 
 Also covers the **Plugin marketplace** (`/plugins` — `ageval.plugin/1` browse +
 CLI install copy; no browser-side install), **Agents** (`/agents` —
@@ -72,6 +73,7 @@ modal; the list only shows a prefix. Members join from **Organizations → Join*
 | --- | --- |
 | `/home` | Personal home (uploaded jobs, orgs, maintainable datasets/tasks, uploaded plugins) |
 | `/datasets` | Dataset list (**Explore** / **Your organizations**, Explore default + search on one row) |
+| `/leaderboard` | Leaderboard plaza (Dataset / Agent / Model views). Index of listed suites and collected Performance; signed-out OK. No Pareto / Waffle / demo fixtures |
 | `/datasets/:id` | README (loads first) · Tasks (paginated) · Shared · Overlays (when declared) · Leaderboard. Org owner: visibility / delete version / release draft |
 | `/datasets/:id?tab=leaderboard&demo=1` | Leaderboard with mock pass@k rows (local smoke only) |
 | `/datasets/:id/tasks/:task` | README · Files (Local \| Shared \| Overlays) · Jobs (row opens detail when uploaded) |

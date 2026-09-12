@@ -228,6 +228,13 @@ ROUTES: tuple[Route, ...] = (
         groups=("run_id",),
     ),
     Route("GET", "list_suites", access="bearer", exact="/v1/results/suites", pass_qs=True),
+    Route(
+        "GET",
+        "list_performances",
+        access="bearer",
+        exact="/v1/results/performances",
+        pass_qs=True,
+    ),
     Route("GET", "list_requests", access="bearer", exact="/v1/requests", pass_qs=True),
     Route(
         "GET",

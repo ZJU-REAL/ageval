@@ -520,3 +520,113 @@ def test_builtin_collect_off_and_personal(tmp_path: Path, monkeypatch: pytest.Mo
             auth=TokenInfo(scopes=frozenset({"results:upload"}), user_id="bob"),
         )
     assert forbidden.value.http_status == 403
+
+
+def _perf_key(row: dict[str, object]) -> tuple[str, str, str]:
+    return (
+        str(row.get("package_id") or ""),
+        str(row.get("suite_run_id") or ""),
+        str(row.get("role") or ""),
+    )
+
+
+def test_list_performances_matches_per_agent_reducer(tmp_path: Path) -> None:
+    packages, results, runtimes = _services(tmp_path)
+    _publish(packages, tmp_path, dataset_id="official/gaia", org_id="official")
+    builtin_binding = {
+        "executor": "acp",
+        "extensions": [{"plugin": "acp", "options": {"entry": "pi"}}],
+        "model": "glm-4.7",
+        "agent_ref": "pi@0.1.0+sha256:aaaaaaaaaaaa",
+    }
+    _upload(
+        results,
+        tmp_path,
+        suite_run_id="suite_builtin",
+        dataset_id="official/gaia",
+        agent_profiles={"solver": builtin_binding},
+    )
+    _upload(
+        results,
+        tmp_path,
+        suite_run_id="suite_custom",
+        dataset_id="official/gaia",
+        agent_profiles={"solver": _bound("official/http-default")},
+    )
+    _consent(results, "suite_custom", "official/http-default")
+    _upload(
+        results,
+        tmp_path,
+        suite_run_id="suite_unconsented",
+        dataset_id="official/gaia",
+        agent_profiles={"solver": _bound("official/http-default")},
+    )
+    results.results.set_suite_board_listed("suite_unconsented", True)
+    auth = TokenInfo(scopes=frozenset(), user_id="")
+    plaza = runtimes.list_performances(auth)
+    by_agent: dict[str, list[dict[str, object]]] = {}
+    for row in plaza:
+        by_agent.setdefault(str(row["package_id"]), []).append(row)
+    assert "pi" in by_agent
+    assert "official/http-default" in by_agent
+    assert {r["suite_run_id"] for r in by_agent["pi"]} == {"suite_builtin"}
+    assert {r["suite_run_id"] for r in by_agent["official/http-default"]} == {"suite_custom"}
+    for package_id, rows in by_agent.items():
+        want = {_perf_key(r) for r in runtimes.performances_for_agent(package_id, auth)}
+        assert {_perf_key(r) for r in rows} == want
+    board = results.list_suites(auth=auth, dataset_id=None, board=True)
+    assert [i["suite_run_id"] for i in board["items"]] == ["suite_unconsented"]
+
+
+def test_list_performances_http_unknown_keys_and_signed_out(tmp_path: Path) -> None:
+    state, token = build_default_state(tmp_path / "http", bootstrap_token="tok", memory_blob=True)
+    api = RegistryHttpApi(state)
+    unknown = api.dispatch(
+        method="GET",
+        path="/v1/results/performances?foo=1",
+        headers={"Authorization": f"Bearer {token}"},
+        body=BytesIO(),
+        content_length=0,
+    )
+    assert unknown.status == 400
+    payload = json.loads(unknown.body.decode("utf-8"))
+    assert payload["error"] == "invalid_request"
+    assert "foo" in payload["message"]
+    empty = api.dispatch(
+        method="GET",
+        path="/v1/results/performances",
+        headers={},
+        body=BytesIO(),
+        content_length=0,
+    )
+    assert empty.status == 200
+    assert json.loads(empty.body.decode("utf-8")) == {"items": []}
+
+
+def test_list_performances_http_roundtrip(tmp_path: Path) -> None:
+    state, token = build_default_state(tmp_path / "http", bootstrap_token="tok", memory_blob=True)
+    packages, results, runtimes = state.packages, state.results, state.runtimes
+    _publish(packages, tmp_path, dataset_id="official/gaia", org_id="official")
+    _upload(
+        results,
+        tmp_path,
+        suite_run_id="suite_http_perf",
+        dataset_id="official/gaia",
+        agent_profiles={"solver": _bound("official/http-default")},
+    )
+    _consent(results, "suite_http_perf", "official/http-default")
+    api = RegistryHttpApi(state)
+    listed = api.dispatch(
+        method="GET",
+        path="/v1/results/performances",
+        headers={"Authorization": f"Bearer {token}"},
+        body=BytesIO(),
+        content_length=0,
+    )
+    assert listed.status == 200, listed.body.decode()
+    items = json.loads(listed.body.decode("utf-8"))["items"]
+    auth = TokenInfo(scopes=frozenset(), user_id="")
+    want = runtimes.list_performances(auth)
+    assert {_perf_key(r) for r in items} == {_perf_key(r) for r in want}
+    custom = [r for r in items if r["package_id"] == "official/http-default"]
+    assert [r["suite_run_id"] for r in custom] == ["suite_http_perf"]

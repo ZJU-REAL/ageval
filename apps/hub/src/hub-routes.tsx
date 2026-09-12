@@ -6,6 +6,7 @@ import { AttemptEvidencePage } from "@/pages/AttemptEvidencePage";
 import { DatasetDetailPage } from "@/pages/DatasetDetailPage";
 import { DatasetsPage } from "@/pages/DatasetsPage";
 import { HomePage } from "@/pages/HomePage";
+import { LeaderboardPage } from "@/pages/LeaderboardPage";
 import { InboxPage } from "@/pages/InboxPage";
 import { LoginCallbackPage } from "@/pages/LoginCallbackPage";
 import { LoginPage } from "@/pages/LoginPage";
@@ -31,6 +32,7 @@ export function HubRoutes({
       <Route path="/home" element={<HomePage />} />
       {includeWorkspace ? <Route path="/inbox" element={<InboxPage />} /> : null}
       <Route path="/datasets" element={<DatasetsPage />} />
+      <Route path="/leaderboard" element={<LeaderboardPage />} />
       <Route path="/datasets/:datasetId" element={<DatasetDetailPage />} />
       <Route
         path="/datasets/:datasetId/suites/:suiteRunId"

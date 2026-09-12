@@ -34,6 +34,7 @@ Endpoints:
   GET|POST|DELETE /v1/results/attempts/{run_id}/shares
   POST /v1/results/suites
   GET  /v1/results/suites
+  GET  /v1/results/performances
   GET  /v1/results/suites/{suite_run_id}
   DELETE /v1/results/suites/{suite_run_id}[?with_attempts=1]
   PATCH /v1/results/suites/{suite_run_id}  (visibility)

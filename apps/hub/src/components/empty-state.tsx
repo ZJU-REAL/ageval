@@ -1,5 +1,5 @@
 import type { ComponentType, HTMLAttributes, ReactNode } from "react";
-import { Bot, Database, Puzzle } from "lucide-react";
+import { Bot, ChartColumn, Database, Puzzle } from "lucide-react";
 
 import type { CatalogScope } from "@/components/catalog-scope-bar";
 import { CommandStrip } from "@/components/command-strip";
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 export type NavGlyph =
   | "home"
   | "datasets"
+  | "leaderboard"
   | "plugins"
   | "agents"
   | "models"
@@ -22,6 +23,7 @@ type Glyph = ComponentType<{ className?: string; strokeWidth?: number }>;
 const GLYPH_TEXT: Record<NavGlyph, string> = {
   home: "text-nav-home",
   datasets: "text-nav-datasets",
+  leaderboard: "text-nav-leaderboard",
   plugins: "text-nav-plugins",
   agents: "text-nav-agents",
   models: "text-nav-models",
@@ -90,16 +92,20 @@ export function EmptyState({
   );
 }
 
-const KIND_ICON: Record<"agent" | "plugin" | "dataset", Glyph> = {
+type CatalogKind = "agent" | "plugin" | "dataset" | "leaderboard";
+
+const KIND_ICON: Record<CatalogKind, Glyph> = {
   agent: Bot,
   plugin: Puzzle,
   dataset: Database,
+  leaderboard: ChartColumn,
 };
 
-const KIND_GLYPH: Record<"agent" | "plugin" | "dataset", NavGlyph> = {
+const KIND_GLYPH: Record<CatalogKind, NavGlyph> = {
   agent: "agents",
   plugin: "plugins",
   dataset: "datasets",
+  leaderboard: "leaderboard",
 };
 
 const PUBLISH: Record<"agent" | "plugin" | "dataset", string> = {
@@ -108,16 +114,17 @@ const PUBLISH: Record<"agent" | "plugin" | "dataset", string> = {
   dataset: "ageval publish --org <id>",
 };
 
-const LOADING: Record<"agent" | "plugin" | "dataset", string> = {
+const LOADING: Record<CatalogKind, string> = {
   agent: "Loading agents",
   plugin: "Loading plugins",
   dataset: "Loading datasets",
+  leaderboard: "Loading leaderboard",
 };
 
 export function CatalogLoading({
   kind,
 }: {
-  kind: "agent" | "plugin" | "dataset";
+  kind: CatalogKind;
 }) {
   return <LoadingState label={LOADING[kind]} />;
 }
@@ -130,7 +137,7 @@ export function CatalogEmpty({
   onExplore,
   onClearSearch,
 }: {
-  kind: "agent" | "plugin" | "dataset";
+  kind: CatalogKind;
   scope: CatalogScope;
   signedIn: boolean;
   searching: boolean;
@@ -139,6 +146,31 @@ export function CatalogEmpty({
 }) {
   const icon = KIND_ICON[kind];
   const glyph = KIND_GLYPH[kind];
+
+  if (kind === "leaderboard") {
+    if (searching) {
+      return (
+        <EmptyState
+          icon={icon}
+          glyph={glyph}
+          title="No matches"
+          action={
+            <Button type="button" variant="outline" size="sm" onClick={onClearSearch}>
+              Clear search
+            </Button>
+          }
+        />
+      );
+    }
+    return (
+      <EmptyState
+        icon={icon}
+        glyph={glyph}
+        title="No Leaderboard rows yet"
+        caption="Listed suites and collected Performance appear here. Metrics are observational, not PASS, and not comparable across datasets."
+      />
+    );
+  }
 
   if ((scope === "orgs" || scope === "favorites") && !signedIn) {
     return (

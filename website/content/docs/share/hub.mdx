@@ -24,6 +24,7 @@ pnpm dev   # http://127.0.0.1:5174
 | --- | --- |
 | `/home` | 个人主页（需登录） |
 | `/datasets` | 列表（Explore / Your organizations，默认 Explore） |
+| `/leaderboard` | Leaderboard plaza：已上榜 Dataset suite 与 Agent / Model Performance 的索引（默认 Dataset 视图；`?view=agent` / `?view=model`） |
 | `/datasets/:id` | README · Tasks · Shared（有 shared/ 时）· Overlays（声明了 `overlays:` 时）· Leaderboard |
 | `/datasets/:id/tasks/:task` | README · Files（Local \| Shared \| Overlays）· Jobs |
 | `/plugins` | 插件市场 |
@@ -50,6 +51,8 @@ pnpm dev   # http://127.0.0.1:5174
 
 ## Leaderboard
 
+- 侧栏 **Leaderboard**（`/leaderboard`）是已有三面的**索引**，不是第四套排名：Dataset 视图只列公开上榜的整份运行；Agent / Model 视图走已有 Performance 门（plaza 采集或 Agent 组织同意）。三张表成员可以不一致。未登录可看。Internal、draft 绑定、未列出的 suite **不**出现在 plaza，仍只在 Dataset 详情的 Leaderboard tab。
+- plaza 只要表。指标写在每一行上，是观测、不是 PASS、不可跨 Dataset 比；没有名次列。Pareto / Waffle 仍只在 Dataset 的 Leaderboard tab。
 - **Public** 只列完备、绑定 release、且经 dataset 所属组织 owner 批准上榜的整份运行；**Internal** 用同一张表列当前可见的缺题 / draft 绑定结果
 - 同一 tab 可切 **Table** / **Pareto** / **Waffle**。Pareto 横轴是整份运行里 **全部 job** 的花费、token 或时间加总（左便宜、右更贵）；没有 agent 上报 USD 时用目录价估算（不是账单）。更高 pass rate、又不更贵的点连成前沿
 - 指标是观测汇总，不是整份 dataset 的 PASS；表头可排序

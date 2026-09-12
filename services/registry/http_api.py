@@ -729,6 +729,21 @@ class RegistryHttpApi:
             return _caught(exc)
         return json_result(200, payload)
 
+    def _list_performances(self, *, auth: TokenInfo, qs: dict[str, list[str]]) -> HttpResult:
+        if qs:
+            return json_result(
+                400,
+                {
+                    "error": "invalid_request",
+                    "message": "unknown keys: " + ", ".join(sorted(qs)),
+                },
+            )
+        try:
+            items = self.state.runtimes.list_performances(auth)
+        except RegistryAppError as exc:
+            return _caught(exc)
+        return json_result(200, {"items": items})
+
     def _list_suites(self, *, auth: TokenInfo, qs: dict[str, list[str]]) -> HttpResult:
         try:
             board_raw = (qs.get("board") or [""])[0]

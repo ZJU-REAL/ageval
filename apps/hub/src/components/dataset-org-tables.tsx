@@ -57,7 +57,7 @@ const COLS_4 = (
 const STICKY_TH =
   "sticky z-10 bg-canvas-soft top-[var(--datasets-stick-top,0px)]";
 
-function DatasetOrgHead({
+export function DatasetOrgHead({
   orgId,
   name,
   info,

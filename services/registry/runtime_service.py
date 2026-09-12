@@ -9,7 +9,7 @@ Uploaded packs group by published Hub id ``org/name`` from ``agent_ref``
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, NamedTuple
 
 from services.registry.dataset import BOUND_RELEASE
 from services.registry.maintainers import (
@@ -23,7 +23,7 @@ from services.registry.official import official_dataset_ids
 from services.registry.store import TokenInfo
 
 from ageval.agents.refs import published_agent_ref_parts
-from ageval.agents.reserved import canonical_harness_id
+from ageval.agents.reserved import builtin_harness_ids, canonical_harness_id
 from ageval.application.suite.attach_agent_ref import hub_agent_ref_parts
 from ageval.config.runtime_identity import (
     agent_display_name,
@@ -82,6 +82,13 @@ def attach_agent_refs(
     return payload
 
 
+class _SuiteScan(NamedTuple):
+    items: list[Mapping[str, Any]]
+    consents: dict[str, set[str]]
+    canonicals: dict[str, dict[str, str]]
+    official: frozenset[str]
+
+
 class RuntimeService:
     def __init__(self, inbox: Any, packages: Any, results: Any) -> None:
         self.inbox = inbox
@@ -104,6 +111,35 @@ class RuntimeService:
                 str(a.get("agent_version") or ""),
                 -float(a.get("created_at") or 0),
                 str(a.get("role") or ""),
+            ),
+        )
+
+    def list_performances(self, auth: TokenInfo) -> list[dict[str, Any]]:
+        """All Agent Performance rows the plaza may index (one suite scan)."""
+        scan = self._suite_scan(auth)
+        digest_cache: dict[tuple[str, str], str] = {}
+        out: list[dict[str, Any]] = []
+        for rows in self._reduce(auth, scan=scan, digest_cache=digest_cache).values():
+            out.extend(rows)
+        modes = self._collect_modes()
+        for harness_id in sorted(builtin_harness_ids()):
+            out.extend(
+                self._reduce_builtin(
+                    harness_id,
+                    auth,
+                    scan=scan,
+                    digest_cache=digest_cache,
+                    mode=modes[harness_id],
+                )
+            )
+        return sorted(
+            out,
+            key=lambda a: (
+                str(a.get("package_id") or ""),
+                str(a.get("agent_version") or ""),
+                -float(a.get("created_at") or 0),
+                str(a.get("role") or ""),
+                str(a.get("suite_run_id") or ""),
             ),
         )
 
@@ -146,15 +182,46 @@ class RuntimeService:
             return stored
         return DEFAULT_BUILTIN_COLLECT
 
-    def _reduce_builtin(self, harness_id: str, auth: TokenInfo) -> list[dict[str, Any]]:
+    def _collect_modes(self) -> dict[str, str]:
+        stored = self.inbox.list_performance_collect_modes()
+        out: dict[str, str] = {}
+        for harness_id in builtin_harness_ids():
+            mode = stored.get(harness_id)
+            out[harness_id] = mode if mode in COLLECT_MODES else DEFAULT_BUILTIN_COLLECT
+        return out
+
+    def _suite_scan(self, auth: TokenInfo) -> _SuiteScan:
         official = official_dataset_ids(self.packages.list_releases(include_private=True))
         listed = self.results.list_suites(auth=auth, dataset_id=None)
         items = [s for s in (listed.get("items") or []) if isinstance(s, Mapping)]
         suite_ids = [str(s.get("suite_run_id") or "") for s in items]
-        consents = self.inbox.list_agent_consents_for_suites(suite_ids)
-        canonicals = self.inbox.list_canonical_models_for_suites(suite_ids)
-        mode = self._collect_mode(harness_id)
-        digest_cache: dict[tuple[str, str], str] = {}
+        return _SuiteScan(
+            items=items,
+            consents=self.inbox.list_agent_consents_for_suites(suite_ids),
+            canonicals=self.inbox.list_canonical_models_for_suites(suite_ids),
+            official=official,
+        )
+
+    def _reduce_builtin(
+        self,
+        harness_id: str,
+        auth: TokenInfo,
+        *,
+        scan: _SuiteScan | None = None,
+        digest_cache: dict[tuple[str, str], str] | None = None,
+        mode: str | None = None,
+    ) -> list[dict[str, Any]]:
+        ctx = scan or self._suite_scan(auth)
+        items, consents, canonicals, official = (
+            ctx.items,
+            ctx.consents,
+            ctx.canonicals,
+            ctx.official,
+        )
+        if mode is None:
+            mode = self._collect_mode(harness_id)
+        if digest_cache is None:
+            digest_cache = {}
         out: list[dict[str, Any]] = []
         for suite in items:
             if not is_public_complete_release(suite):
@@ -182,15 +249,23 @@ class RuntimeService:
             out.extend(_with_canonical_models(rows, canonicals.get(sid) or {}))
         return out
 
-    def _reduce(self, auth: TokenInfo) -> dict[str, list[dict[str, Any]]]:
-        official = official_dataset_ids(self.packages.list_releases(include_private=True))
-        listed = self.results.list_suites(auth=auth, dataset_id=None)
-        items = [s for s in (listed.get("items") or []) if isinstance(s, Mapping)]
-        suite_ids = [str(s.get("suite_run_id") or "") for s in items]
-        consents = self.inbox.list_agent_consents_for_suites(suite_ids)
-        canonicals = self.inbox.list_canonical_models_for_suites(suite_ids)
+    def _reduce(
+        self,
+        auth: TokenInfo,
+        *,
+        scan: _SuiteScan | None = None,
+        digest_cache: dict[tuple[str, str], str] | None = None,
+    ) -> dict[str, list[dict[str, Any]]]:
+        ctx = scan or self._suite_scan(auth)
+        items, consents, canonicals, official = (
+            ctx.items,
+            ctx.consents,
+            ctx.canonicals,
+            ctx.official,
+        )
         grouped: dict[str, list[dict[str, Any]]] = {}
-        digest_cache: dict[tuple[str, str], str] = {}
+        if digest_cache is None:
+            digest_cache = {}
         for suite in items:
             if not is_plaza_source_suite(suite, official):
                 continue

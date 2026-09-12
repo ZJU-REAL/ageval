@@ -221,6 +221,18 @@ class InboxStore(InboxStoreProtocol):
             return None
         return str(row["mode"] or "").strip() or None
 
+    def list_performance_collect_modes(self) -> dict[str, str]:
+        with self._connect() as conn:
+            cur = self._exec(conn, Q.LIST_PERFORMANCE_COLLECT, ())
+            rows = cur.fetchall()
+        out: dict[str, str] = {}
+        for row in rows:
+            pid = str(row["package_id"] or "").strip()
+            mode = str(row["mode"] or "").strip()
+            if pid:
+                out[pid] = mode
+        return out
+
     def set_performance_collect_mode(self, *, package_id: str, mode: str, updated_by: str) -> None:
         with self._connect() as conn:
             self._exec(

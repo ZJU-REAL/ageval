@@ -13,6 +13,7 @@ import {
   Bot,
   Boxes,
   Building2,
+  ChartColumn,
   Database,
   House,
   Inbox,
@@ -279,6 +280,14 @@ function SidebarNav({
             icon={Database}
             glyph="datasets"
             label="Datasets"
+            onNavigate={onNavigate}
+            collapsed={collapsed}
+          />
+          <SidebarLink
+            to="/leaderboard"
+            icon={ChartColumn}
+            glyph="leaderboard"
+            label="Leaderboard"
             onNavigate={onNavigate}
             collapsed={collapsed}
           />

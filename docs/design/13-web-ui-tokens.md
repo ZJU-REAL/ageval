@@ -38,6 +38,7 @@ SPA 实现对照的**常量清单**在 `apps/viewer/DESIGN.md` 文首 YAML(Hub �
 | star | `#E3B341` | `#F5C84C` | Star 填实金 | `star` | — |
 | nav-home | `#2F6E4A` | `#6FBF93` | Hub Home 侧栏 lucide,**仅字形** | `nav-home` | — |
 | nav-datasets | `#187A8C` | `#5EC4D4` | Hub Datasets 侧栏 lucide,**仅字形** | `nav-datasets` | — |
+| nav-leaderboard | `#7A3D62` | `#C88AA8` | Hub Leaderboard 侧栏 lucide,**仅字形** | `nav-leaderboard` | — |
 | nav-plugins | `#9A5C16` | `#D4924A` | Hub Plugins 侧栏 lucide,**仅字形** | `nav-plugins` | — |
 | nav-agents | `#5A4AA8` | `#A898E8` | Hub Agents 侧栏 lucide,**仅字形** | `nav-agents` | — |
 | nav-models | `#5A6B38` | `#B4C47A` | Hub Models 侧栏 lucide,**仅字形** | `nav-models` | — |
