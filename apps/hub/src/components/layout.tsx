@@ -276,18 +276,18 @@ function SidebarNav({
         <LiquidThumb bar={bar} ready={ready} />
         <SidebarGroup label="Catalog" collapsed={collapsed}>
           <SidebarLink
-            to="/datasets"
-            icon={Database}
-            glyph="datasets"
-            label="Datasets"
-            onNavigate={onNavigate}
-            collapsed={collapsed}
-          />
-          <SidebarLink
             to="/leaderboard"
             icon={ChartColumn}
             glyph="leaderboard"
             label="Leaderboard"
+            onNavigate={onNavigate}
+            collapsed={collapsed}
+          />
+          <SidebarLink
+            to="/datasets"
+            icon={Database}
+            glyph="datasets"
+            label="Datasets"
             onNavigate={onNavigate}
             collapsed={collapsed}
           />
