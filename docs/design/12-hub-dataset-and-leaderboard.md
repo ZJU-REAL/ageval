@@ -16,13 +16,13 @@ Leaderboard 两列保持 Harness / Model。plaza 行上的 `agent_refs` 变链�
 
 ## Leaderboard plaza
 
-Hub 侧栏 Catalog 在 Datasets 之后加 **Leaderboard**（`/leaderboard`）。这是已有三面的**索引**——Dataset Leaderboard、Agent Performance、Model Performance——不是第四套排名、不是新上传路径、不是 PASS 真值。三张表可以成员不一致：上榜 suite 可以没有 Agent Performance（未 attach / 未采集）；已同意的 Performance 行也不自动变成 Dataset Leaderboard 行。不要取交集，也不要因为 suite 已列出就把未同意的 harness 塞进 Agent / Model 视图。
+Hub 侧栏 Catalog 首位是 **Leaderboard**（`/leaderboard`），其后是 Datasets / Plugins / Agents / Models。这是已有三面的**索引**——Dataset Leaderboard、Agent Performance、Model Performance——不是第四套排名、不是新上传路径、不是 PASS 真值。三张表可以成员不一致：上榜 suite 可以没有 Agent Performance（未 attach / 未采集）；已同意的 Performance 行也不自动变成 Dataset Leaderboard 行。不要取交集，也不要因为 suite 已列出就把未同意的 harness 塞进 Agent / Model 视图。
 
 | 片 | 规则 |
 | --- | --- |
-| 侧栏 | Catalog 组、紧挨 Datasets 之后。标签 **Leaderboard**。lucide 新字形 + `nav-leaderboard`（只涂字形，不复用别的目的地 `nav-*`）。 |
+| 侧栏 | Catalog 组首位。标签 **Leaderboard**。lucide 新字形 + `nav-leaderboard`（只涂字形，不复用别的目的地 `nav-*`）。 |
 | 路由 | `/leaderboard`。视图是 query `?view=dataset\|agent\|model`。省略 `view` = dataset。页上一条 `UnderlineTabs`。 |
-| 活 | 索引已可见的 Performance。只要表。Pareto / Waffle 仍只在 Dataset 的 Leaderboard tab。 |
+| 活 | 索引已可见的 Performance。Dataset 视图复用 Dataset Leaderboard 的 Table / Pareto / Waffle Select（`?chart=` / `?axis=`；默认省略即 table），控件在 Dataset tab 行右侧。Pareto / Waffle **按 Dataset 组各画一份**，不要把不同 Dataset 的 task 混一张 waffle。Agent / Model 只要表。 |
 | Chrome | 复用 `GroupedTables` 粘组头（org pin slot / `--*-stick-top`），与 `DatasetOrgTables` / `ModelLabTables` 同一套，不要第二套粘头。搜索抄 `CatalogScopeBar` 查询框；**不是**市场，不要 Explore / orgs / Stars。 |
 | 分 | 内行带该 suite / Performance 行上的观测指标。不要发明 per-entity 汇总（latest / best）。说明：观测，不是 PASS，不可跨 Dataset 比。不要名次列。 |
 | 默认排序 | 与 Dataset Leaderboard 相同：pass rate desc → mean score desc → `created_at` desc。`SortableHead` 跨组共享。 |
@@ -34,9 +34,9 @@ Hub 侧栏 Catalog 在 Datasets 之后加 **Leaderboard**（`/leaderboard`）。
 **Dataset**（省略 `?view=`）
 
 - 门 = 公开 Dataset Leaderboard：完备 + release-bound + `board_listed`。
-- 组头 = Dataset org（与 `DatasetOrgTables` 同标）。
-- 内行 = 一条已列出的 suite（Harness / Model / Pass rate / Mean；Dataset 列必有，因为一个 org 有多 Dataset）。同一 Dataset 多条已列出 suite → 多行，不是一条汇总。
-- Dataset 名 → `/datasets/{id}?tab=leaderboard`。行点击 → 已有 suite 详情 `/datasets/{id}/suites/{suite_run_id}`。
+- 组头 = Dataset（名称 + 描述；有包标则同市场解析）。一个 Dataset 一张表，不要按 org 再拆。
+- 内行 = 一条已列出的 suite（Harness / Model / Pass rate / Mean）。不要 Dataset 列（组头已经是该 Dataset）。suite 有 `created_at` 则加 Uploaded 列。同一 Dataset 多条已列出 suite → 多行，不是一条汇总。Table / Pareto / Waffle 切到该组的已有图表组件，不另发明跨 Dataset 汇总。
+- 组头 Dataset 名 → `/datasets/{id}?tab=leaderboard`。行点击 → 已有 suite 详情 `/datasets/{id}/suites/{suite_run_id}`。
 - Harness / Model 格行为与 Dataset Leaderboard 相同（内置短 id 可链；定制 `org/name` 仅在已同意时）。不要按 executor / overlay 文案猜包。
 - 读：一次 `GET /v1/results/suites?board=1`（可省略 `dataset_id`）。不要按 Dataset N+1。
 

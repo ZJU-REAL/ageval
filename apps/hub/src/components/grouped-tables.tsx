@@ -11,7 +11,8 @@ export type GroupedTableGroup = {
   id: string;
   head: (count: number) => ReactNode;
   count: number;
-  columns: ReactNode;
+  /** Omit for a non-table body (waffle / Pareto). */
+  columns?: ReactNode;
   colgroup?: ReactNode;
   body: ReactNode;
 };
@@ -160,7 +161,7 @@ function GroupSection({
   head: ReactNode;
   pinned: boolean;
   onHead: (el: HTMLElement | null) => void;
-  columns: ReactNode;
+  columns?: ReactNode;
   colgroup?: ReactNode;
   children: ReactNode;
 }) {
@@ -169,18 +170,22 @@ function GroupSection({
       <div ref={onHead} className={pinned ? "invisible pb-2" : "pb-2"}>
         {head}
       </div>
-      <div className="blob-panel">
-        <Table
-          wrapClassName="overflow-visible"
-          className="border-separate border-spacing-0"
-        >
-          {colgroup}
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">{columns}</TableRow>
-          </TableHeader>
-          {children}
-        </Table>
-      </div>
+      {columns ? (
+        <div className="blob-panel">
+          <Table
+            wrapClassName="overflow-visible"
+            className="border-separate border-spacing-0"
+          >
+            {colgroup}
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">{columns}</TableRow>
+            </TableHeader>
+            {children}
+          </Table>
+        </div>
+      ) : (
+        children
+      )}
     </section>
   );
 }

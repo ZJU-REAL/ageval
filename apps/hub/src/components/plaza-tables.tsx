@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { BrandMark } from "@/components/brand-mark";
 import { DatasetOrgHead } from "@/components/dataset-org-tables";
 import {
   GroupedTables,
@@ -8,7 +9,10 @@ import {
 } from "@/components/grouped-tables";
 import { TruncateTip } from "@/components/hover-tip";
 import { LabGroupHead } from "@/components/lab-group-head";
+import { LeaderboardPareto } from "@/components/leaderboard-pareto";
+import { LeaderboardWaffle } from "@/components/leaderboard-waffle";
 import { ModelLabel } from "@/components/model-label";
+import { OfficialMark } from "@/components/official-mark";
 import { ScoreRing } from "@/components/score-ring";
 import {
   SortableHead,
@@ -35,9 +39,11 @@ import {
   type PackageRelease,
   type SuiteRow,
 } from "@/lib/api";
+import { markFromPackage, resolveEntityMark } from "@/lib/brand-marks";
+import type { BoardChart, ParetoAxis } from "@/lib/leaderboard-charts";
 import { performanceCanonical } from "@/lib/model-appearances";
 import { loadModelPin } from "@/lib/model-pin";
-import { displayLabelsFromOverlay, formatScore } from "@/lib/utils";
+import { displayLabelsFromOverlay, formatDate, formatScore } from "@/lib/utils";
 
 export const PLAZA_CHROME_ID = "leaderboard-chrome";
 export const PLAZA_PIN_SLOT_ID = "leaderboard-pin";
@@ -105,11 +111,78 @@ function datasetLeaf(
   packs: Map<string, PackageRelease>,
 ): string {
   const row = packs.get(datasetId);
-  return row?.display_name?.trim() || splitPackageId(datasetId).name;
+  return row?.display_name?.trim() || splitPackageId(datasetId).name || datasetId;
 }
 
 function suiteDatasetId(suite: SuiteRow): string {
   return suite.dataset_id || "";
+}
+
+function suiteCreatedAt(suite: SuiteRow): number | null {
+  const n = Number(suite.created_at);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function sortDatasetIds(
+  ids: string[],
+  packs: Map<string, PackageRelease>,
+): string[] {
+  return [...ids].sort((a, b) => {
+    if (!a && b) return 1;
+    if (a && !b) return -1;
+    const pa = packs.get(a);
+    const pb = packs.get(b);
+    const byOfficial = (pa?.official ? 0 : 1) - (pb?.official ? 0 : 1);
+    if (byOfficial !== 0) return byOfficial;
+    const byName = datasetLeaf(a, packs).localeCompare(datasetLeaf(b, packs));
+    if (byName !== 0) return byName;
+    return a.localeCompare(b);
+  });
+}
+
+function PlazaDatasetHead({
+  datasetId,
+  pack,
+  count,
+}: {
+  datasetId: string;
+  pack?: PackageRelease;
+  count: number;
+}) {
+  const name = datasetId
+    ? pack?.display_name?.trim() || splitPackageId(datasetId).name || datasetId
+    : "Unmatched";
+  const description = pack?.description?.trim() || "";
+  const mark = pack
+    ? markFromPackage(pack)
+    : resolveEntityMark({ displayName: name, packageId: datasetId || undefined });
+  return (
+    <div className="flex items-center gap-2">
+      <BrandMark mark={mark} size={22} title={name} />
+      <h3 className="text-base font-semibold text-ink">
+        {datasetId ? (
+          <Link
+            to={`/datasets/${encodeDatasetId(datasetId)}?tab=leaderboard`}
+            className="inline-flex items-center gap-1 hover:text-link-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70"
+          >
+            {name}
+          </Link>
+        ) : (
+          name
+        )}
+      </h3>
+      {pack?.official ? <OfficialMark kind="dataset" /> : null}
+      {description ? (
+        <span
+          className="hidden min-w-0 flex-1 truncate text-sm text-mute sm:block"
+          title={description}
+        >
+          {description}
+        </span>
+      ) : null}
+      <span className="ml-auto text-xs text-mute tabular-nums">{count}</span>
+    </div>
+  );
 }
 
 function HarnessCells({ suite }: { suite: SuiteRow }) {
@@ -186,11 +259,13 @@ function PassMeanCells({
 export function PlazaDatasetTables({
   suites,
   datasets,
-  orgs,
+  chart = "table",
+  axis = "cost",
 }: {
   suites: SuiteRow[];
   datasets: PackageRelease[];
-  orgs: Map<string, OrgRow>;
+  chart?: BoardChart;
+  axis?: ParetoAxis;
 }) {
   const navigate = useNavigate();
   const { sortKey, sortDir, head } = usePlazaSort();
@@ -201,11 +276,12 @@ export function PlazaDatasetTables({
     }
     return map;
   }, [datasets]);
+  const showUploaded = suites.some((row) => suiteCreatedAt(row) != null);
 
   function sortValue(row: SuiteRow, key: string): unknown {
-    if (key === "dataset") return datasetLeaf(suiteDatasetId(row), packs);
     if (key === "pass_rate") return row.pass_rate ?? null;
     if (key === "mean_score") return row.mean_score ?? null;
+    if (key === "created_at") return suiteCreatedAt(row);
     if (key === "harness") {
       return uniqueAgentRefs(row.agent_refs)
         .map((ref) => ref.package_id)
@@ -217,55 +293,71 @@ export function PlazaDatasetTables({
     return null;
   }
 
-  const byOrg = new Map<string, SuiteRow[]>();
+  const byDataset = new Map<string, SuiteRow[]>();
   for (const suite of suites) {
     const datasetId = suiteDatasetId(suite);
-    const org = packs.get(datasetId)?.org_id || splitPackageId(datasetId).org || "";
-    const list = byOrg.get(org) ?? [];
+    const list = byDataset.get(datasetId) ?? [];
     list.push(suite);
-    byOrg.set(org, list);
+    byDataset.set(datasetId, list);
   }
-  const orgIds = sortOrgIds([...byOrg.keys()], orgs, (orgId) => {
-    return (
-      orgs.get(orgId)?.official ||
-      (byOrg.get(orgId) ?? []).some((row) => packs.get(suiteDatasetId(row))?.official) ||
-      false
-    );
-  });
+  const datasetIds = sortDatasetIds([...byDataset.keys()], packs);
 
-  const groups: GroupedTableGroup[] = orgIds.map((orgId) => {
-    const items = sortRows(
-      byOrg.get(orgId) || [],
-      sortKey,
-      sortDir,
-      sortValue,
-      defaultScoreCompare,
+  const groups: GroupedTableGroup[] = datasetIds.map((datasetId) => {
+    const raw = byDataset.get(datasetId) || [];
+    const items =
+      chart === "table"
+        ? sortRows(raw, sortKey, sortDir, sortValue, defaultScoreCompare)
+        : raw;
+    const pack = packs.get(datasetId);
+    const headNode = (count: number) => (
+      <PlazaDatasetHead datasetId={datasetId} pack={pack} count={count} />
     );
-    const name = orgId ? orgNameOf(orgId, orgs) : "Unmatched";
-    const info = orgId ? orgs.get(orgId) : undefined;
-    const official =
-      info?.official ||
-      items.some((row) => packs.get(suiteDatasetId(row))?.official) ||
-      false;
+    const openSuite = (id: string | null) => {
+      if (!id) return;
+      navigate(suiteDetailPath(datasetId, id));
+    };
+    if (chart === "waffle") {
+      return {
+        id: datasetId || "unmatched",
+        count: items.length,
+        head: headNode,
+        body: (
+          <LeaderboardWaffle
+            suites={items}
+            datasetId={datasetId}
+            showCaption={false}
+            onOpenSuite={openSuite}
+          />
+        ),
+      };
+    }
+    if (chart === "pareto") {
+      return {
+        id: datasetId || "unmatched",
+        count: items.length,
+        head: headNode,
+        body: (
+          <LeaderboardPareto
+            suites={items}
+            axis={axis}
+            onOpenSuite={openSuite}
+          />
+        ),
+      };
+    }
     return {
-      id: orgId || "unmatched",
+      id: datasetId || "unmatched",
       count: items.length,
-      head: (count: number) => (
-        <DatasetOrgHead
-          orgId={orgId}
-          name={name}
-          info={info}
-          official={official}
-          count={count}
-        />
-      ),
+      head: headNode,
       columns: (
         <>
-          <TableHead className={STICKY_TH}>{head("dataset", "Dataset")}</TableHead>
           <TableHead className={STICKY_TH}>{head("harness", "Harness")}</TableHead>
           <TableHead className={STICKY_TH}>{head("model", "Model")}</TableHead>
           <TableHead className={STICKY_TH}>{head("pass_rate", "Pass rate")}</TableHead>
           <TableHead className={STICKY_TH}>{head("mean_score", "Mean")}</TableHead>
+          {showUploaded ? (
+            <TableHead className={STICKY_TH}>{head("created_at", "Uploaded")}</TableHead>
+          ) : null}
         </>
       ),
       body: (
@@ -280,22 +372,17 @@ export function PlazaDatasetTables({
               role="link"
               aria-label="Open suite run"
             >
-              <TableCell>
-                <Link
-                  to={`/datasets/${encodeDatasetId(suiteDatasetId(suite))}?tab=leaderboard`}
-                  className="font-medium text-ink hover:text-link-deep hover:underline underline-offset-2"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  {datasetLeaf(suiteDatasetId(suite), packs)}
-                </Link>
-                <div className="truncate text-[13px] text-mute">{suite.dataset_id}</div>
-              </TableCell>
               <HarnessCells suite={suite} />
               <PassMeanCells
                 passRate={suite.pass_rate}
                 meanScore={suite.mean_score}
                 passAsPercent
               />
+              {showUploaded ? (
+                <TableCell className="whitespace-nowrap text-sm text-mute tabular-nums">
+                  {suiteCreatedAt(suite) != null ? formatDate(suite.created_at) : "—"}
+                </TableCell>
+              ) : null}
             </TableRow>
           ))}
         </TableBody>

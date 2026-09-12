@@ -442,10 +442,12 @@
   stroke-width: 2;
 }
 [aria-current="page"] [data-nav-glyph],
+[aria-selected="true"] [data-nav-glyph],
 [data-nav-glyph][data-active="true"] {
   color: var(--nav-glyph-ink);
 }
 [aria-current="page"] [data-nav-glyph] svg,
+[aria-selected="true"] [data-nav-glyph] svg,
 [data-nav-glyph][data-active="true"] svg {
   stroke-width: 2.25;
 }

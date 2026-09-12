@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { Liquid } from "liquid-gooey";
 import type { LucideIcon } from "lucide-react";
 
+import type { NavGlyph } from "@/components/empty-state";
 import { LiquidThumb, useTrackedRect } from "@/components/liquid-thumb";
 import { liquidGroup } from "@/lib/liquid";
 import { cn } from "@/lib/utils";
@@ -10,6 +11,8 @@ type Item<T extends string> = {
   id: T;
   label: string;
   icon?: LucideIcon;
+  /** Sidebar glyph token: paints the icon only (`nav-*`), not the label. */
+  glyph?: NavGlyph;
   /** Applied to the icon only (selected / hover tone). Label stays body/mute. */
   iconClassName?: string;
 };
@@ -75,14 +78,20 @@ export function UnderlineTabs<T extends string>({
             )}
           >
             {Icon ? (
-              <Icon
-                strokeWidth={selected ? 2.5 : 2}
-                className={cn(
-                  "size-4 shrink-0 transition-[color,stroke-width] duration-200 ease-smooth",
-                  item.iconClassName,
-                )}
-                aria-hidden
-              />
+              item.glyph ? (
+                <span data-nav-glyph={item.glyph} className="inline-flex shrink-0">
+                  <Icon className="h-4 w-4" aria-hidden />
+                </span>
+              ) : (
+                <Icon
+                  strokeWidth={selected ? 2.5 : 2}
+                  className={cn(
+                    "size-4 shrink-0 transition-[color,stroke-width] duration-200 ease-smooth",
+                    item.iconClassName,
+                  )}
+                  aria-hidden
+                />
+              )
             ) : null}
             {item.label}
           </button>

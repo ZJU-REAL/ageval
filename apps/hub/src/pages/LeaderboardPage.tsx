@@ -1,9 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Bot, Boxes, Database } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
+import { BoardChartControls } from "@/components/board-chart-controls";
 import { CatalogScopeBar } from "@/components/catalog-scope-bar";
 import { CatalogEmpty, CatalogLoading } from "@/components/empty-state";
 import { PageHead } from "@/components/page-head";
+import { WaffleLegend } from "@/components/leaderboard-waffle";
 import {
   PLAZA_CHROME_ID,
   PLAZA_PIN_SLOT_ID,
@@ -26,13 +29,19 @@ import {
   RegistryHttpError,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import {
+  parseBoardChart,
+  parseParetoAxis,
+  type BoardChart,
+  type ParetoAxis,
+} from "@/lib/leaderboard-charts";
 
 type PlazaView = "dataset" | "agent" | "model";
 
 const VIEW_ITEMS = [
-  { id: "dataset" as const, label: "Dataset" },
-  { id: "agent" as const, label: "Agent" },
-  { id: "model" as const, label: "Model" },
+  { id: "dataset" as const, label: "Dataset", icon: Database, glyph: "datasets" as const },
+  { id: "agent" as const, label: "Agent", icon: Bot, glyph: "agents" as const },
+  { id: "model" as const, label: "Model", icon: Boxes, glyph: "models" as const },
 ];
 
 function parseView(raw: string | null): PlazaView {
@@ -48,6 +57,8 @@ function formatErr(err: unknown): string {
 export function LeaderboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = parseView(searchParams.get("view"));
+  const boardChart = parseBoardChart(searchParams.get("chart"));
+  const paretoAxis = parseParetoAxis(searchParams.get("axis"));
   const [query, setQuery] = useState("");
   const [suites, setSuites] = useState<SuiteRow[]>([]);
   const [performances, setPerformances] = useState<AgentPerformance[]>([]);
@@ -144,7 +155,7 @@ export function LeaderboardPage() {
       window.removeEventListener("resize", apply);
       scroller.style.removeProperty("--leaderboard-stick-top");
     };
-  }, [view, boardLoading, perfLoading]);
+  }, [view, boardChart, paretoAxis, boardLoading, perfLoading]);
 
   const q = query.trim().toLowerCase();
   const datasetPacks = useMemo(() => latestPackageByDataset(datasets), [datasets]);
@@ -156,6 +167,7 @@ export function LeaderboardPage() {
       const hay = [
         suite.dataset_id,
         pack?.display_name,
+        pack?.description,
         suite.agent_label,
         suite.model_label,
         ...(suite.agent_refs || []).map((ref) => ref.package_id),
@@ -194,6 +206,24 @@ export function LeaderboardPage() {
     setSearchParams(n, { replace: true });
   }
 
+  function setBoardChart(next: BoardChart) {
+    const n = new URLSearchParams(searchParams);
+    n.delete("view");
+    if (next === "table") n.delete("chart");
+    else n.set("chart", next);
+    if (next !== "pareto") n.delete("axis");
+    setSearchParams(n, { replace: true });
+  }
+
+  function setParetoAxis(next: ParetoAxis) {
+    const n = new URLSearchParams(searchParams);
+    n.delete("view");
+    n.set("chart", "pareto");
+    if (next === "cost") n.delete("axis");
+    else n.set("axis", next);
+    setSearchParams(n, { replace: true });
+  }
+
   return (
     <>
       <PageHead
@@ -218,13 +248,25 @@ export function LeaderboardPage() {
           searchPlaceholder="Search leaderboard…"
           className="mb-3"
         />
-        <UnderlineTabs
-          className="mb-3 shrink-0"
-          ariaLabel="Leaderboard view"
-          items={VIEW_ITEMS}
-          value={view}
-          onChange={setView}
-        />
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <UnderlineTabs
+            className="shrink-0"
+            ariaLabel="Leaderboard view"
+            items={VIEW_ITEMS}
+            value={view}
+            onChange={setView}
+          />
+          {view === "dataset" ? (
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <BoardChartControls
+                chart={boardChart}
+                axis={paretoAxis}
+                onChart={setBoardChart}
+                onAxis={setParetoAxis}
+              />
+            </div>
+          ) : null}
+        </div>
         <div
           id={PLAZA_PIN_SLOT_ID}
           className="bg-canvas pt-3 pb-3 empty:hidden"
@@ -249,15 +291,22 @@ export function LeaderboardPage() {
         />
       ) : (
         <>
-          <p className="mb-3 text-xs text-mute">
-            Observational metrics on each row — not PASS, not comparable across
-            datasets · click headers to sort
-          </p>
+          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-mute">
+            <span>
+              {view === "dataset" && boardChart === "waffle"
+                ? "Each square is one trial. Click a square with uploaded Attempt evidence to open that job. Observational, not PASS, not comparable across datasets."
+                : view === "dataset" && boardChart === "pareto"
+                  ? "Pass rate versus suite cost, tokens, or time. Observational, not PASS, not comparable across datasets."
+                  : "Observational metrics on each row — not PASS, not comparable across datasets · click headers to sort"}
+            </span>
+            {view === "dataset" && boardChart === "waffle" ? <WaffleLegend /> : null}
+          </div>
           {view === "dataset" ? (
             <PlazaDatasetTables
               suites={visibleSuites}
               datasets={datasets}
-              orgs={orgs}
+              chart={boardChart}
+              axis={paretoAxis}
             />
           ) : view === "agent" ? (
             <PlazaAgentTables

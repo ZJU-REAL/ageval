@@ -43,12 +43,14 @@ export function LeaderboardWaffle({
   onOpenSuite,
   emptyTitle,
   emptyBody,
+  showCaption = true,
 }: {
   suites: SuiteRow[];
   datasetId: string;
   onOpenSuite?: (suiteRunId: string | null) => void;
   emptyTitle?: string;
   emptyBody?: string;
+  showCaption?: boolean;
 }) {
   const navigate = useNavigate();
   const tasks = waffleTaskIds(suites);
@@ -75,10 +77,12 @@ export function LeaderboardWaffle({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-mute">
-        Each square is one trial. Click a square with uploaded Attempt evidence
-        to open that job. Metrics are observational, not a suite PASS.
-      </p>
+      {showCaption ? (
+        <p className="text-xs text-mute">
+          Each square is one trial. Click a square with uploaded Attempt evidence
+          to open that job. Metrics are observational, not a suite PASS.
+        </p>
+      ) : null}
       <div className="blob-panel max-h-[min(70vh,40rem)] overflow-auto">
         <div
           className="grid w-max min-w-full"
@@ -127,21 +131,27 @@ export function LeaderboardWaffle({
           ))}
         </div>
       </div>
-      <p className="flex flex-wrap items-center gap-3 text-xs text-body">
-        <span className="inline-flex items-center gap-1.5">
-          <i className="inline-block h-2.5 w-2.5 rounded-[2px] bg-ink" />
-          pass
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <i className="inline-block h-2.5 w-2.5 rounded-[2px] border border-hairline bg-canvas-soft-2" />
-          fail
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <i className="inline-block h-2.5 w-2.5 rounded-[2px] bg-error" />
-          error
-        </span>
-      </p>
+      {showCaption ? <WaffleLegend /> : null}
     </div>
+  );
+}
+
+export function WaffleLegend() {
+  return (
+    <p className="flex flex-wrap items-center gap-3 text-xs text-body">
+      <span className="inline-flex items-center gap-1.5">
+        <i className="inline-block h-2.5 w-2.5 rounded-[2px] bg-ink" />
+        pass
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <i className="inline-block h-2.5 w-2.5 rounded-[2px] border border-hairline bg-canvas-soft-2" />
+        fail
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <i className="inline-block h-2.5 w-2.5 rounded-[2px] bg-error" />
+        error
+      </span>
+    </p>
   );
 }
 
