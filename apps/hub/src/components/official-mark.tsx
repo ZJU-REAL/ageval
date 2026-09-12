@@ -2,17 +2,20 @@ import { BadgeCheck } from "lucide-react";
 
 import { HoverTip } from "@/components/hover-tip";
 
-const PLUGIN_TIP = "Verified official plugin";
-const ORG_TIP = "Verified official organization";
+const TIPS = {
+  plugin: "Verified official plugin",
+  org: "Verified official organization",
+  dataset: "Verified official dataset",
+} as const;
 
 export function OfficialMark({
   className = "",
   kind = "plugin",
 }: {
   className?: string;
-  kind?: "plugin" | "org";
+  kind?: keyof typeof TIPS;
 }) {
-  const tip = kind === "org" ? ORG_TIP : PLUGIN_TIP;
+  const tip = TIPS[kind];
   return (
     <HoverTip content={tip}>
       <span
