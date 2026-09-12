@@ -580,6 +580,7 @@ UPDATE resource_requests SET status=?, decided_at=?, decided_by=?
 WHERE request_id=? AND status='pending'
 """
 SELECT_PERFORMANCE_COLLECT = "SELECT mode FROM agent_performance_collect WHERE package_id=?"
+LIST_PERFORMANCE_COLLECT = "SELECT package_id, mode FROM agent_performance_collect"
 UPSERT_PERFORMANCE_COLLECT = """
 INSERT INTO agent_performance_collect(package_id, mode, updated_by, updated_at)
 VALUES (?, ?, ?, ?)
