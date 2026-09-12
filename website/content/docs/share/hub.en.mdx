@@ -24,6 +24,7 @@ Or `docker compose -f services/registry/docker-compose.yml up -d` for Hub at `ht
 | --- | --- |
 | `/home` | Personal home (signed in) |
 | `/datasets` | List (Explore / Your organizations, Explore default) |
+| `/leaderboard` | Leaderboard plaza: index of listed Dataset suites and Agent / Model Performance (Dataset view by default; `?view=agent` / `?view=model`) |
 | `/datasets/:id` | README · Tasks · Shared (when `shared/` present) · Overlays (when `overlays:` is declared) · Leaderboard |
 | `/datasets/:id/tasks/:task` | README · Files (Local \| Shared \| Overlays) · Jobs |
 | `/plugins` | Plugin marketplace |
@@ -50,6 +51,8 @@ Ops detail: `apps/hub/README.md`, `services/registry/README.md`.
 
 ## Leaderboard
 
+- Sidebar **Leaderboard** (`/leaderboard`) is an **index** of the three existing surfaces, not a fourth ranking. The Dataset view lists public listed suites; Agent / Model views reuse the existing Performance gates (plaza collect or Agent-org consent). The three tables may disagree on membership. Signed-out is OK. Internal, draft-bound, and unlisted suites stay on the dataset Leaderboard tab — they never appear on the plaza.
+- The plaza is tables only. Scores sit on each inner row; they are observational, not PASS, and not comparable across datasets. There is no rank column. Pareto / Waffle stay on the dataset Leaderboard tab.
 - **Public** lists only suites that are complete, bound to a release, and approved for listing by the dataset org's owner; **Internal** shows caller-visible incomplete or draft-bound runs in the same table.
 - The same tab switches **Table** / **Pareto** / **Waffle**. Pareto’s x-axis is the **sum of every job** in the suite (cost, tokens, or time). When the agent did not report USD, cost is tokens × catalog price — estimated, not a billed invoice.
 - Metrics are observational summaries, not a suite PASS; headers sort.
