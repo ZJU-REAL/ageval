@@ -22,9 +22,10 @@ pnpm dev   # http://127.0.0.1:5174
 
 | 路径 | 页面 |
 | --- | --- |
+| `/` | 重定向到 `/leaderboard` |
 | `/home` | 个人主页（需登录） |
+| `/leaderboard` | 默认落地。Leaderboard plaza：已上榜 Dataset suite 与 Agent / Model Performance 的索引（默认 Dataset 视图；`?view=agent` / `?view=model`） |
 | `/datasets` | 列表（Explore / Your organizations，默认 Explore） |
-| `/leaderboard` | Leaderboard plaza：已上榜 Dataset suite 与 Agent / Model Performance 的索引（默认 Dataset 视图；`?view=agent` / `?view=model`） |
 | `/datasets/:id` | README · Tasks · Shared（有 shared/ 时）· Overlays（声明了 `overlays:` 时）· Leaderboard |
 | `/datasets/:id/tasks/:task` | README · Files（Local \| Shared \| Overlays）· Jobs |
 | `/plugins` | 插件市场 |
@@ -51,7 +52,7 @@ pnpm dev   # http://127.0.0.1:5174
 
 ## Leaderboard
 
-- 侧栏 Catalog 首位是 **Leaderboard**（`/leaderboard`），是已有三面的**索引**，不是第四套排名：Dataset 视图按 Dataset 分组（组头是名称与描述），只列公开上榜的整份运行；Agent / Model 视图走已有 Performance 门（plaza 采集或 Agent 组织同意）。三张表成员可以不一致。未登录可看。Internal、draft 绑定、未列出的 suite **不**出现在 plaza，仍只在 Dataset 详情的 Leaderboard tab。
+- 侧栏 Catalog 首位是 **Leaderboard**（`/leaderboard`），`/` 也落到这里。是已有三面的**索引**，不是第四套排名：Dataset 视图按 Dataset 分组（组头是名称与描述），只列公开上榜的整份运行；Agent / Model 视图走已有 Performance 门（plaza 采集或 Agent 组织同意）。三张表成员可以不一致。未登录可看。Internal、draft 绑定、未列出的 suite **不**出现在 plaza，仍只在 Dataset 详情的 Leaderboard tab。
 - plaza Dataset 视图可切 Table / Pareto / Waffle（与 Dataset 详情 Leaderboard 同一套控件，在 Dataset tab 行右侧；图按 Dataset 组分）。指标写在每一行上，是观测、不是 PASS、不可跨 Dataset 比；没有名次列。Agent / Model 只要表。
 - **Public** 只列完备、绑定 release、且经 dataset 所属组织 owner 批准上榜的整份运行；**Internal** 用同一张表列当前可见的缺题 / draft 绑定结果
 - 同一 tab 可切 **Table** / **Pareto** / **Waffle**。Pareto 横轴是整份运行里 **全部 job** 的花费、token 或时间加总（左便宜、右更贵）；没有 agent 上报 USD 时用目录价估算（不是账单）。更高 pass rate、又不更贵的点连成前沿

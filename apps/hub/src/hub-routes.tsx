@@ -28,7 +28,7 @@ export function HubRoutes({
 }) {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/datasets" replace />} />
+      <Route path="/" element={<Navigate to="/leaderboard" replace />} />
       <Route path="/home" element={<HomePage />} />
       {includeWorkspace ? <Route path="/inbox" element={<InboxPage />} /> : null}
       <Route path="/datasets" element={<DatasetsPage />} />
@@ -59,7 +59,7 @@ export function HubRoutes({
           <Route path="/login/callback" element={<LoginCallbackPage />} />
         </>
       ) : null}
-      <Route path="*" element={<Navigate to="/datasets" replace />} />
+      <Route path="*" element={<Navigate to="/leaderboard" replace />} />
     </Routes>
   );
 }

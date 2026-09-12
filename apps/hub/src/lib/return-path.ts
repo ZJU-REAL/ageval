@@ -8,7 +8,7 @@ export function rememberReturnPath(path: string): void {
   }
 }
 
-export function takeReturnPath(fallback = "/datasets"): string {
+export function takeReturnPath(fallback = "/leaderboard"): string {
   try {
     const raw = sessionStorage.getItem(RETURN_KEY);
     sessionStorage.removeItem(RETURN_KEY);

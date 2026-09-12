@@ -7,7 +7,7 @@ import { setToken } from "@/lib/auth";
 import { formatLoginError } from "@/lib/github-login";
 import { takeReturnPath } from "@/lib/return-path";
 
-/** OAuth redirect target: ?code=&state= → Registry token → /datasets */
+/** OAuth redirect target: ?code=&state= → Registry token → /leaderboard */
 export function LoginCallbackPage() {
   const [params] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +40,7 @@ export function LoginCallbackPage() {
           session.github_name,
           session.avatar_url,
         );
-        window.location.replace(takeReturnPath("/datasets"));
+        window.location.replace(takeReturnPath("/leaderboard"));
       })
       .catch((err: unknown) => {
         if (err instanceof RegistryHttpError && err.code === "invalid_state") {

@@ -21,7 +21,7 @@ Hub 侧栏 Catalog 首位是 **Leaderboard**（`/leaderboard`），其后是 Dat
 | 片 | 规则 |
 | --- | --- |
 | 侧栏 | Catalog 组首位。标签 **Leaderboard**。lucide 新字形 + `nav-leaderboard`（只涂字形，不复用别的目的地 `nav-*`）。 |
-| 路由 | `/leaderboard`。视图是 query `?view=dataset\|agent\|model`。省略 `view` = dataset。页上一条 `UnderlineTabs`。 |
+| 路由 | `/leaderboard`。Hub `/` 与未知路径 `replace` 到这里（登录回跳无 return path 同此）。视图是 query `?view=dataset\|agent\|model`。省略 `view` = dataset。页上一条 `UnderlineTabs`。 |
 | 活 | 索引已可见的 Performance。Dataset 视图复用 Dataset Leaderboard 的 Table / Pareto / Waffle Select（`?chart=` / `?axis=`；默认省略即 table），控件在 Dataset tab 行右侧。Pareto / Waffle **按 Dataset 组各画一份**，不要把不同 Dataset 的 task 混一张 waffle。Agent / Model 只要表。 |
 | Chrome | 复用 `GroupedTables` 粘组头（org pin slot / `--*-stick-top`），与 `DatasetOrgTables` / `ModelLabTables` 同一套，不要第二套粘头。搜索抄 `CatalogScopeBar` 查询框；**不是**市场，不要 Explore / orgs / Stars。 |
 | 分 | 内行带该 suite / Performance 行上的观测指标。不要发明 per-entity 汇总（latest / best）。说明：观测，不是 PASS，不可跨 Dataset 比。不要名次列。 |
