@@ -56,7 +56,7 @@ Other subcommands: `0` on success, typically `2` on operator error.
 
 | Variable | Role |
 | --- | --- |
-| `AGEVAL_REGISTRY_URL` | Registry origin. Unset = `https://120.46.13.24`. Set to switch (self-host / compose / new public IP). |
+| `AGEVAL_REGISTRY_URL` | Registry origin. Unset = `https://ageval.zjureal.com`. Set to switch (self-host / compose / another origin). |
 | `AGEVAL_REGISTRY_TOKEN` | Bearer token (CI; overrides file token) |
 | `AGEVAL_RESULTS_URL` | Results store URL (defaults to Registry URL) |
 | `AGEVAL_CACHE_ROOT` | Local verified cache root (default `.ageval/cache`) |
@@ -67,7 +67,7 @@ Credentials file `~/.ageval/credentials` (mode `0600`):
 ```json
 {
   "registry": {
-    "url": "https://120.46.13.24",
+    "url": "https://ageval.zjureal.com",
     "token": "…"
   }
 }

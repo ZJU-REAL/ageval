@@ -4,7 +4,7 @@ Wire format (JSON)::
 
     {
       "registry": {
-        "url": "https://120.46.13.24",
+        "url": "https://ageval.zjureal.com",
         "token": "ageval_…",
         "token_env": "AGEVAL_REGISTRY_TOKEN"   # optional locator; wins over token if set
       }
@@ -26,7 +26,7 @@ from pathlib import Path
 
 REGISTRY_URL_ENV = "AGEVAL_REGISTRY_URL"
 # Unset value of AGEVAL_REGISTRY_URL. Change here when the public origin moves.
-DEFAULT_REGISTRY_URL = "https://120.46.13.24"
+DEFAULT_REGISTRY_URL = "https://ageval.zjureal.com"
 
 
 @dataclass(frozen=True, slots=True)

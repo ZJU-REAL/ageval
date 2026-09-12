@@ -95,7 +95,7 @@ Repo Settings → Pages → Source must be **GitHub Actions**.
 To preview the Pages-shaped build locally (links are under `/ageval/`):
 
 ```sh
-NEXT_PUBLIC_BASE_PATH=/ageval NEXT_PUBLIC_HUB_URL=https://120.46.13.24/ pnpm --dir website build
+NEXT_PUBLIC_BASE_PATH=/ageval NEXT_PUBLIC_HUB_URL=https://ageval.zjureal.com/ pnpm --dir website build
 mkdir -p /tmp/ageval-pages && rm -rf /tmp/ageval-pages/ageval && cp -R website/out /tmp/ageval-pages/ageval
 python3 -m http.server 3000 --bind 127.0.0.1 --directory /tmp/ageval-pages
 ```

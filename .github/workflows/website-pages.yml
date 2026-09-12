@@ -49,7 +49,7 @@ jobs:
         run: pnpm build
         env:
           NEXT_PUBLIC_BASE_PATH: /ageval
-          NEXT_PUBLIC_HUB_URL: https://120.46.13.24/
+          NEXT_PUBLIC_HUB_URL: https://ageval.zjureal.com/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
