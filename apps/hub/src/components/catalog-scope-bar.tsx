@@ -100,7 +100,7 @@ function CatalogSearch({
 export function CatalogScopeBar<T extends string>({
   scope,
   onScope,
-  items,
+  items = [],
   query,
   onQuery,
   searchLabel,
@@ -111,9 +111,9 @@ export function CatalogScopeBar<T extends string>({
   variant = "tabs",
   className,
 }: {
-  scope: T;
-  onScope: (next: T) => void;
-  items: readonly { id: T; label: string }[];
+  scope?: T;
+  onScope?: (next: T) => void;
+  items?: readonly { id: T; label: string }[];
   query: string;
   onQuery: (next: string) => void;
   searchLabel: string;
@@ -123,8 +123,8 @@ export function CatalogScopeBar<T extends string>({
   searchKeyshortcuts?: string;
   /** Trailing chrome on the search row. */
   end?: ReactNode;
-  /** tabs = UnderlineTabs row above the search; group = hairline button group right of the search; select = Select right of the search. */
-  variant?: "tabs" | "group" | "select";
+  /** tabs = UnderlineTabs row above the search; group = hairline button group right of the search; select = Select right of the search; search = query box only. */
+  variant?: "tabs" | "group" | "select" | "search";
   className?: string;
 }) {
   const search = (
@@ -137,6 +137,16 @@ export function CatalogScopeBar<T extends string>({
       keyshortcuts={searchKeyshortcuts}
     />
   );
+  if (variant === "search") {
+    return (
+      <div className={cn("mb-4", className)}>
+        <div className="flex items-center gap-2">
+          {search}
+          {end ? <div className="ml-auto shrink-0">{end}</div> : null}
+        </div>
+      </div>
+    );
+  }
   if (variant === "group") {
     return (
       <div className={cn("mb-4", className)}>
@@ -152,7 +162,7 @@ export function CatalogScopeBar<T extends string>({
                 key={item.id}
                 type="button"
                 aria-pressed={scope === item.id}
-                onClick={() => onScope(item.id)}
+                onClick={() => onScope?.(item.id)}
                 className={cn(
                   "rounded-[6px] px-2.5 py-1 text-sm transition-colors duration-200 ease-smooth",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70",
@@ -175,7 +185,7 @@ export function CatalogScopeBar<T extends string>({
       <div className={cn("mb-4", className)}>
         <div className="flex items-center gap-2">
           {search}
-          <Select value={scope} onValueChange={(next) => onScope(next as T)}>
+          <Select value={scope} onValueChange={(next) => onScope?.(next as T)}>
             <SelectTrigger aria-label="Catalog scope" className="shrink-0">
               <SelectValue />
             </SelectTrigger>
@@ -196,8 +206,8 @@ export function CatalogScopeBar<T extends string>({
     <div className={cn("mb-4", className)}>
       <UnderlineTabs
         items={items}
-        value={scope}
-        onChange={onScope}
+        value={scope as T}
+        onChange={onScope ?? (() => {})}
         ariaLabel="Catalog scope"
       />
       <div className="flex items-center gap-2 pt-3">

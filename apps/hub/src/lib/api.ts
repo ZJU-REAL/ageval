@@ -825,6 +825,16 @@ export async function listSuites(
   return Array.isArray(data.items) ? data.items : [];
 }
 
+export async function listPerformances(
+  token: string | null,
+): Promise<AgentPerformance[]> {
+  const data = await requestJson<{ items?: AgentPerformance[] }>(
+    "/v1/results/performances",
+    { token },
+  );
+  return Array.isArray(data.items) ? data.items : [];
+}
+
 export async function getSuite(
   suiteRunId: string,
   token: string | null,

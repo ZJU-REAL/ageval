@@ -77,6 +77,7 @@ Token values, type stacks, radii, and motion curves: the YAML in Viewer `DESIGN.
 | Model row | `ModelItem` (lab mark + name + modality badges + canonical/overlay; context / price chips, plus released when `meta="full"`). Search palette and harness Model region share this; plaza tables do not. |
 | Model search palette | `ModelSearchModal` (Cmd/Ctrl+F on `/models`; glass dialog of `ModelItem` rows over the pin — lab mark on; models only, no providers; Enter opens `/models/{canonical}`) |
 | Comparable rows (datasets, jobs, leaderboard, members, model Performance) | hairline `Table` inside `blob-panel` |
+| Leaderboard plaza (`/leaderboard`) | Index of existing Dataset Leaderboard / Agent Performance / Model Performance. `UnderlineTabs` Dataset / Agent / Model. Search copies `CatalogScopeBar` query box only (not Explore / orgs / Stars). Grouped sticky tables reuse `GroupedTables`. Empty uses `CatalogEmpty` + `nav-leaderboard`. No Pareto / Waffle / `?demo=1` fixtures. |
 | Sortable table column | `SortableHead` (click cycles asc → desc → default) |
 | Score in a comparable row | `ScoreRing` (IKB arc + number; fill is value/max, default max 1) |
 | Optional table columns | `TableColumnPicker` |
