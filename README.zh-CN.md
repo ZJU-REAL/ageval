@@ -60,7 +60,7 @@ uv tool install 'ageval-cli[e2b]' # 按需装单个 extra
 ageval -V
 ```
 
-直接跑 Hub 上的 dataset，或跑任意本地 dataset 根目录：
+直接跑 Hub 上的 dataset（[ageval.zjureal.com](https://ageval.zjureal.com)，CLI 默认），或跑任意本地 dataset 根目录：
 
 ```bash
 ageval registry list                        # 查看 Hub 上可见的 dataset
@@ -118,7 +118,7 @@ uv run ageval view examples/datasets/minimal-demo --no-browser
 
 **在 Hub 上分享与复用**
 
-把 dataset、插件、Agent 包和评测结果上传到 ageval Hub。榜单上的成绩会标明用的 Agent 和环境；已发布的 Agent 可用 `--agent` 直接拉取；也可以按模型横向对比。
+把 dataset、插件、Agent 包和评测结果上传到 [ageval Hub](https://ageval.zjureal.com)。榜单上的成绩会标明用的 Agent 和环境；已发布的 Agent 可用 `--agent` 直接拉取；也可以按模型横向对比。
 
 ### 截图
 

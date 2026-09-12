@@ -60,7 +60,7 @@ uv tool install 'ageval-cli[e2b]' # one extra at a time
 ageval -V
 ```
 
-Run a dataset straight from the Hub, or any local dataset root:
+Run a dataset straight from the Hub ([ageval.zjureal.com](https://ageval.zjureal.com); the CLI default), or any local dataset root:
 
 ```bash
 ageval registry list                        # datasets visible on the Hub
@@ -118,7 +118,7 @@ With the CLI and skills installed, a coding agent can author or convert a datase
 
 **Share and reuse on Hub**
 
-Upload datasets, plugins, Agent packages, and results to ageval Hub. Leaderboard scores name the Agent and environment used; pull a published Agent with `--agent`; compare models side by side.
+Upload datasets, plugins, Agent packages, and results to [ageval Hub](https://ageval.zjureal.com). Leaderboard scores name the Agent and environment used; pull a published Agent with `--agent`; compare models side by side.
 
 ### Screenshots
 

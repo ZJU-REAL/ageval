@@ -15,7 +15,7 @@ ageval lock <org>/<name>@<version> --task <task-id>
 ageval run  <org>/<name>@<version> --task <task-id>
 ```
 
-Login and `registry list` hit the public Hub by default — you do not need `AGEVAL_REGISTRY_URL` first. A registry ref downloads the published dataset into the local cache (`ageval cache` inspects / purges it), then executes under the locked config. Default profiles mostly use **docker**, which needs a local Docker engine; a live coding-agent run also needs an ACP entry and credentials.
+Login and `registry list` hit the public Hub (`https://ageval.zjureal.com`) by default — you do not need `AGEVAL_REGISTRY_URL` first. A registry ref downloads the published dataset into the local cache (`ageval cache` inspects / purges it), then executes under the locked config. Default profiles mostly use **docker**, which needs a local Docker engine; a live coding-agent run also needs an ACP entry and credentials.
 
 ## In-repo examples
 
