@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { HoverTip } from "@/components/hover-tip";
 import {
@@ -13,10 +13,12 @@ import {
   formatDurationS,
   formatTokenCount,
   formatUsd,
+  paretoFront,
   suiteChartPoint,
   type ParetoAxis,
 } from "@/lib/leaderboard-charts";
-import { placeScatterLabels } from "@/lib/scatter-label-layout";
+import { useScatterMorph, type ScatterPose } from "@/lib/chart-morph";
+import { markScaleForWidth, placeScatterLabels } from "@/lib/scatter-label-layout";
 import { cn, displayLabelsFromOverlay } from "@/lib/utils";
 
 const DOT_FILL = [
@@ -117,14 +119,37 @@ export function LeaderboardPareto({
   );
   const hidden = points.length - plotted.length;
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const plotRef = useRef<HTMLDivElement>(null);
+  const [cssW, setCssW] = useState(W);
+  useLayoutEffect(() => {
+    const el = plotRef.current;
+    if (!el) return;
+    const apply = () => {
+      const w = el.getBoundingClientRect().width;
+      if (w > 0) setCssW(w);
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [suites.length]);
+  const unit = W / cssW;
+  const mark = markScaleForWidth(cssW);
+  const fontPx = mark.fontPx * unit;
+  const dotR = mark.dotR * unit;
   const xs = plotted.map((p) => axisValue(p, axis) as number);
   const xmin = xs.length ? Math.min(...xs) * 0.7 : 0;
   const xmax = xs.length ? Math.max(...xs) * 1.15 || 1 : 1;
   const span = xmax - xmin || 1;
-  const xOf = (v: number) => L + (1 - (v - xmin) / span) * PLOT_W;
+  const xOf = (v: number) => L + ((v - xmin) / span) * PLOT_W;
   const yOf = (v: number) => T + (1 - v) * PLOT_H;
+  const front = useMemo(() => paretoFront(plotted, axis), [plotted, axis]);
+  const frontIds = useMemo(
+    () => new Set(front.map((p) => p.suite.suite_run_id)),
+    [front],
+  );
   const placedLabels = useMemo(() => {
-    const xAt = (v: number) => L + (1 - (v - xmin) / span) * PLOT_W;
+    const xAt = (v: number) => L + ((v - xmin) / span) * PLOT_W;
     const yAt = (v: number) => T + (1 - v) * PLOT_H;
     return placeScatterLabels(
       plotted.map((p) => ({
@@ -133,27 +158,71 @@ export function LeaderboardPareto({
         text: chartModelName(p.suite, pin),
       })),
       { left: L + 4, top: 8, right: W - 8, bottom: H - 36 },
-      plotted.length ? [{ x: W - R - 118, y: T - 26, w: 118, h: 18 }] : [],
+      [],
+      { unit, fontPx: mark.fontPx, dotR: mark.dotR },
     );
-  }, [plotted, pin, axis, xmin, span]);
+  }, [plotted, pin, axis, xmin, span, unit, mark.fontPx, mark.dotR]);
+  const colorById = useMemo(() => {
+    const m = new Map<string, number>();
+    points.forEach((p, i) => m.set(p.suite.suite_run_id, i));
+    return m;
+  }, [points]);
+  const targetPoses = useMemo((): ScatterPose[] => {
+    return plotted.map((p, i) => {
+      const placed = placedLabels[i];
+      const xv = axisValue(p, axis) as number;
+      return {
+        id: p.suite.suite_run_id,
+        colorIndex: colorById.get(p.suite.suite_run_id) ?? i,
+        cx: xOf(xv),
+        cy: yOf(p.passRate ?? 0),
+        tx: placed?.tx ?? xOf(xv),
+        ty: placed?.ty ?? yOf(p.passRate ?? 0) + 14,
+        textAnchor: placed?.textAnchor ?? "middle",
+        text: placed?.text ?? chartModelName(p.suite, pin),
+        leader: placed?.leader ?? null,
+        onFront: frontIds.has(p.suite.suite_run_id),
+        opacity: 1,
+      };
+    });
+  }, [plotted, placedLabels, axis, xmin, span, frontIds, pin, colorById]);
+  const poses = useScatterMorph(targetPoses, axis);
+  const poseById = useMemo(() => new Map(poses.map((p) => [p.id, p])), [poses]);
+  const frontPath = useMemo(() => {
+    const pts = poses.filter((p) => p.onFront).sort((a, b) => a.cx - b.cx);
+    if (pts.length < 2) return "";
+    return pts
+      .map((p, i) => `${i ? "L" : "M"} ${p.cx.toFixed(1)} ${p.cy.toFixed(1)}`)
+      .join(" ");
+  }, [poses]);
 
   if (suites.length === 0) {
     return <EmptyBoard emptyTitle={emptyTitle} emptyBody={emptyBody} />;
   }
 
   const yTicks = [0, 0.2, 0.4, 0.6, 0.8, 1];
-  const xTicks = [xmax, xmin + span / 2, xmin];
-  const hoveredIndex = plotted.findIndex((p) => p.suite.suite_run_id === hoveredId);
-  const hovered = hoveredIndex >= 0 ? plotted[hoveredIndex] : null;
-  const hx = hovered ? xOf(axisValue(hovered, axis) as number) : 0;
-  const hy = hovered ? yOf(hovered.passRate ?? 0) : 0;
+  const xTicks = [xmin, xmin + span / 2, xmax];
+  const hovered = plotted.find((p) => p.suite.suite_run_id === hoveredId);
+  const hoveredPose = hoveredId ? poseById.get(hoveredId) : undefined;
+  const hx = hoveredPose?.cx ?? 0;
+  const hy = hoveredPose?.cy ?? 0;
+  const hoveredFill = hoveredPose
+    ? DOT_FILL[hoveredPose.colorIndex % DOT_FILL.length]
+    : DOT_FILL[0];
   const xAxisY = T + PLOT_H;
   const yAxisX = L;
+
+  function poseOpacity(pose: ScatterPose): number {
+    const hover =
+      hoveredId == null ? (pose.onFront ? 1 : 0.4) : hoveredId === pose.id ? 1 : 0.2;
+    return pose.opacity * hover;
+  }
 
   return (
     <div className="space-y-3">
       <div className="blob-panel overflow-hidden p-2">
         <div
+          ref={plotRef}
           className="relative mx-auto w-full max-h-[min(62vh,32rem)]"
           style={{ aspectRatio: `${W} / ${H}` }}
           onPointerLeave={() => setHoveredId(null)}
@@ -178,10 +247,8 @@ export function LeaderboardPareto({
                 x={L - 10}
                 y={yOf(t) + 4}
                 textAnchor="end"
-                className={cn(
-                  "fill-mute text-[11px]",
-                  hovered && "opacity-30",
-                )}
+                fontSize={11}
+                className={cn("fill-mute font-sans", hovered && "opacity-30")}
               >
                 {Math.round(t * 100)}%
               </text>
@@ -191,61 +258,58 @@ export function LeaderboardPareto({
             <text
               key={t}
               x={xOf(t)}
-              y={H - 22}
+              y={H - 28}
               textAnchor="middle"
-              className={cn("fill-mute text-[11px]", hovered && "opacity-30")}
+              fontSize={11}
+              className={cn("fill-mute font-sans", hovered && "opacity-30")}
             >
               {formatAxis(axis, t)}
             </text>
           ))}
-          {plotted.map((p, i) => {
-            const placed = placedLabels[i];
-            const dim = hoveredId != null && hoveredId !== p.suite.suite_run_id;
-            if (!placed?.leader) return null;
-            const { leader } = placed;
+          {frontPath ? (
+            <path
+              d={frontPath}
+              fill="none"
+              className="stroke-mute"
+              strokeWidth={1.5}
+              vectorEffect="non-scaling-stroke"
+            />
+          ) : null}
+          {poses.map((pose) => {
+            if (!pose.leader) return null;
+            const { leader } = pose;
             return (
               <g
-                key={`${p.suite.suite_run_id}-lead`}
-                className={cn(
-                  "pointer-events-none motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-smooth",
-                  dim && "opacity-20",
-                )}
+                key={`${pose.id}-lead`}
+                className="pointer-events-none"
+                opacity={poseOpacity(pose)}
               >
                 <line
                   x1={leader.x1}
                   y1={leader.y1}
                   x2={leader.x2}
                   y2={leader.y2}
-                  className={DOT_STROKE[i % DOT_STROKE.length]}
+                  className={DOT_STROKE[pose.colorIndex % DOT_STROKE.length]}
                   strokeWidth={1}
                   vectorEffect="non-scaling-stroke"
                 />
                 <path
                   d={`M${leader.ax} ${leader.ay} L${leader.bx} ${leader.by} L${leader.cx} ${leader.cy} Z`}
-                  className={DOT_FILL[i % DOT_FILL.length]}
+                  className={DOT_FILL[pose.colorIndex % DOT_FILL.length]}
                 />
               </g>
             );
           })}
-          {plotted.map((p, i) => {
-            const xv = axisValue(p, axis) as number;
-            const cx = xOf(xv);
-            const cy = yOf(p.passRate ?? 0);
-            const dim = hoveredId != null && hoveredId !== p.suite.suite_run_id;
-            return (
-              <circle
-                key={p.suite.suite_run_id}
-                cx={cx}
-                cy={cy}
-                r={4}
-                className={cn(
-                  DOT_FILL[i % DOT_FILL.length],
-                  "motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-smooth",
-                  dim && "opacity-20",
-                )}
-              />
-            );
-          })}
+          {poses.map((pose) => (
+            <circle
+              key={pose.id}
+              cx={pose.cx}
+              cy={pose.cy}
+              r={dotR}
+              opacity={poseOpacity(pose)}
+              className={DOT_FILL[pose.colorIndex % DOT_FILL.length]}
+            />
+          ))}
           {hovered ? (
             <g className="pointer-events-none">
               <line
@@ -289,14 +353,15 @@ export function LeaderboardPareto({
               <circle
                 cx={hx}
                 cy={hy}
-                r={4}
-                className={DOT_FILL[hoveredIndex % DOT_FILL.length]}
+                r={dotR}
+                className={hoveredFill}
               />
               <text
                 x={hx}
-                y={H - 22}
+                y={H - 28}
                 textAnchor="middle"
-                className="fill-ink stroke-canvas text-[11px]"
+                fontSize={11}
+                className="fill-ink stroke-canvas font-sans"
                 strokeWidth={4}
                 paintOrder="stroke"
               >
@@ -306,7 +371,8 @@ export function LeaderboardPareto({
                 x={L - 10}
                 y={hy + 4}
                 textAnchor="end"
-                className="fill-ink stroke-canvas text-[11px]"
+                fontSize={11}
+                className="fill-ink stroke-canvas font-sans"
                 strokeWidth={4}
                 paintOrder="stroke"
               >
@@ -316,53 +382,38 @@ export function LeaderboardPareto({
           ) : null}
           <text
             x={L + PLOT_W / 2}
-            y={H - 4}
+            y={H - 8}
             textAnchor="middle"
-            className="fill-mute text-[11px]"
+            fontSize={12 * unit}
+            className="fill-mute font-sans motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-smooth"
           >
             {axisLabel(axis)}
           </text>
           <text
-            x={16}
+            x={18}
             y={T + PLOT_H / 2}
             textAnchor="middle"
-            className="fill-mute text-[11px]"
-            transform={`rotate(-90 16 ${T + PLOT_H / 2})`}
+            fontSize={12 * unit}
+            className="fill-mute font-sans"
+            transform={`rotate(-90 18 ${T + PLOT_H / 2})`}
           >
             Pass rate
           </text>
-          {plotted.length ? (
+          {poses.map((pose) => (
             <text
-              x={W - R}
-              y={T - 14}
-              textAnchor="end"
-              className="fill-link text-[11px]"
+              key={`${pose.id}-lab`}
+              x={pose.tx}
+              y={pose.ty}
+              textAnchor={pose.textAnchor}
+              fontSize={fontPx}
+              opacity={poseOpacity(pose)}
+              className="fill-body stroke-canvas font-sans"
+              strokeWidth={3 * unit}
+              paintOrder="stroke"
             >
-              most efficient →
+              {pose.text}
             </text>
-          ) : null}
-          {plotted.map((p, i) => {
-            const placed = placedLabels[i];
-            if (!placed) return null;
-            const dim = hoveredId != null && hoveredId !== p.suite.suite_run_id;
-            return (
-              <text
-                key={`${p.suite.suite_run_id}-lab`}
-                x={placed.tx}
-                y={placed.ty}
-                textAnchor={placed.textAnchor}
-                className={cn(
-                  "fill-body stroke-canvas font-sans text-[11px]",
-                  "motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-smooth",
-                  dim && "opacity-20",
-                )}
-                strokeWidth={3}
-                paintOrder="stroke"
-              >
-                {placed.text}
-              </text>
-            );
-          })}
+          ))}
         </svg>
         <div className="pointer-events-none absolute inset-0">
           {plotted.map((p) => {
@@ -370,8 +421,9 @@ export function LeaderboardPareto({
             const harness = labels.agent || p.suite.agent_label || "—";
             const model = labels.model || p.suite.model_label || "—";
             const xv = axisValue(p, axis) as number;
-            const left = ((xOf(xv) / W) * 100).toFixed(3);
-            const top = ((yOf(p.passRate ?? 0) / H) * 100).toFixed(3);
+            const pose = poseById.get(p.suite.suite_run_id);
+            const left = (((pose?.cx ?? xOf(xv)) / W) * 100).toFixed(3);
+            const top = (((pose?.cy ?? yOf(p.passRate ?? 0)) / H) * 100).toFixed(3);
             const resource = formatAxis(axis, xv);
             return (
               <HoverTip
@@ -420,8 +472,8 @@ export function LeaderboardPareto({
         {axis === "cost"
           ? hidden
             ? `${hidden} suite run${hidden === 1 ? " has" : "s have"} no cost (no agent cost and no catalog price). Hidden here. Switch to Tokens.`
-            : "Cost is the sum of every job in the suite. When the agent did not report USD, the axis uses tokens × catalog price (estimated, not a billed invoice)."
-          : "Right is cheaper / fewer. Metrics are observational, not a suite PASS. Cost and tokens are the sum of every job in the suite."}
+            : "Left is cheaper. Cost is the sum of every job in the suite. When the agent did not report USD, the axis uses tokens × catalog price (estimated, not a billed invoice)."
+          : "Left is cheaper / fewer. Cost and tokens are the sum of every job in the suite."}
       </p>
     </div>
   );

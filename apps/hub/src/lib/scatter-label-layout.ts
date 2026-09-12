@@ -44,16 +44,29 @@ export type ScatterLabelBounds = {
   bottom: number;
 };
 
-const FONT_PX = 11;
-const LABEL_H = 14;
-const MAX_LABEL_W = 144;
 const BOX_GAP = 4;
-const POINT_R = 4;
-const POINT_CLEAR = 8;
 const MIN_LEADER = 26;
 const ARROW = 6;
 const LINE_END_PAD = 12;
 const NEIGHBOR_R = 56;
+
+const MARK_W_MIN = 400;
+const MARK_W_MAX = 1000;
+const DOT_R_MIN = 4;
+const DOT_R_MAX = 5.5;
+const FONT_MIN = 11;
+const FONT_MAX = 14;
+
+export type MarkScale = { dotR: number; fontPx: number };
+
+/** CSS-pixel dot radius (4–5.5) and label size, linear in chart width. */
+export function markScaleForWidth(cssW: number): MarkScale {
+  const t = clamp((cssW - MARK_W_MIN) / (MARK_W_MAX - MARK_W_MIN), 0, 1);
+  return {
+    dotR: DOT_R_MIN + t * (DOT_R_MAX - DOT_R_MIN),
+    fontPx: FONT_MIN + t * (FONT_MAX - FONT_MIN),
+  };
+}
 
 const COMPASS = [
   { dx: 0, dy: 1, anchor: "middle" },
@@ -70,40 +83,47 @@ const RINGS = [10, 22, 36, 54, 76, 102, 132];
 
 let measureCtx: CanvasRenderingContext2D | null | undefined;
 
-function estimateWidth(text: string): number {
+function estimateWidth(text: string, fontPx: number): number {
+  const k = fontPx / 13;
   let w = 0;
   for (const ch of text) {
     const code = ch.codePointAt(0) ?? 0;
-    if (code > 0x2e80) w += FONT_PX;
-    else if (ch === " " || ch === "." || ch === "/" || ch === "-" || ch === "_") {
-      w += 3.6;
-    } else if (ch >= "A" && ch <= "Z") w += 7.1;
-    else w += 6.3;
+    if (code > 0x2e80) w += fontPx;
+    else if (
+      ch === " " ||
+      ch === "." ||
+      ch === "/" ||
+      ch === "-" ||
+      ch === "_"
+    ) {
+      w += 3.6 * k;
+    } else if (ch >= "A" && ch <= "Z") w += 7.1 * k;
+    else w += 6.3 * k;
   }
   return w;
 }
 
-function measureWidth(text: string): number {
+function measureWidth(text: string, fontPx: number): number {
   if (typeof document !== "undefined") {
     if (measureCtx === undefined) {
       measureCtx = document.createElement("canvas").getContext("2d");
     }
     if (measureCtx) {
-      measureCtx.font = `${FONT_PX}px Geist, Inter, system-ui, sans-serif`;
+      measureCtx.font = `${fontPx}px Geist, Inter, system-ui, sans-serif`;
       return measureCtx.measureText(text).width;
     }
   }
-  return estimateWidth(text);
+  return estimateWidth(text, fontPx);
 }
 
-function truncateToWidth(text: string, maxW: number): string {
-  if (measureWidth(text) <= maxW) return text;
+function truncateToWidth(text: string, maxW: number, fontPx: number): string {
+  if (measureWidth(text, fontPx) <= maxW) return text;
   const ellipsis = "…";
   let lo = 0;
   let hi = text.length;
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    if (measureWidth(text.slice(0, mid) + ellipsis) <= maxW) lo = mid;
+    if (measureWidth(text.slice(0, mid) + ellipsis, fontPx) <= maxW) lo = mid;
     else hi = mid - 1;
   }
   return lo <= 0 ? ellipsis : text.slice(0, lo) + ellipsis;
@@ -172,7 +192,11 @@ function boxesOverlap(a: Rect, b: Rect, pad = BOX_GAP): boolean {
   );
 }
 
-function closestOnRect(px: number, py: number, box: Rect): { x: number; y: number } {
+function closestOnRect(
+  px: number,
+  py: number,
+  box: Rect,
+): { x: number; y: number } {
   return {
     x: clamp(px, box.x, box.x + box.w),
     y: clamp(py, box.y, box.y + box.h),
@@ -221,6 +245,7 @@ function leaderGeometry(
   box: Rect,
   others: { x: number; y: number }[],
   selfIndex: number,
+  pointClear: number,
 ): LeaderLine | null {
   const q = closestOnRect(px, py, box);
   const dx = px - q.x;
@@ -243,7 +268,16 @@ function leaderGeometry(
   const line = { x1, y1, x2: tipX, y2: tipY };
   for (let i = 0; i < others.length; i++) {
     if (i === selfIndex) continue;
-    if (distPointToSeg(others[i].x, others[i].y, line.x1, line.y1, line.x2, line.y2) < POINT_CLEAR) {
+    if (
+      distPointToSeg(
+        others[i].x,
+        others[i].y,
+        line.x1,
+        line.y1,
+        line.x2,
+        line.y2,
+      ) < pointClear
+    ) {
       return null;
     }
   }
@@ -266,7 +300,11 @@ function textPos(
   anchor: "start" | "middle" | "end",
 ): { tx: number; ty: number } {
   const tx =
-    anchor === "start" ? box.x : anchor === "end" ? box.x + box.w : box.x + box.w / 2;
+    anchor === "start"
+      ? box.x
+      : anchor === "end"
+        ? box.x + box.w
+        : box.x + box.w / 2;
   return { tx, ty: box.y + box.h * 0.78 };
 }
 
@@ -281,8 +319,23 @@ function candidateScore(opts: {
   points: { x: number; y: number }[];
   self: number;
   obstacles: Rect[];
+  pointR: number;
+  pointClear: number;
 }): number {
-  const { ring, dir, box, raw, leader, gap, placed, points, self, obstacles } = opts;
+  const {
+    ring,
+    dir,
+    box,
+    raw,
+    leader,
+    gap,
+    placed,
+    points,
+    self,
+    obstacles,
+    pointR,
+    pointClear,
+  } = opts;
   let score = ring * 10 + dir;
   const shift = Math.abs(box.x - raw.x) + Math.abs(box.y - raw.y);
   score += shift * 0.15;
@@ -294,16 +347,28 @@ function candidateScore(opts: {
   for (const other of placed) {
     const area = overlapArea(box, other.box);
     if (area > 0) score += 4000 + area;
-    if (leader && other.leader && segmentsCross(leader, other.leader)) score += 55;
-    if (leader && distPointToSeg(other.tx, other.ty, leader.x1, leader.y1, leader.x2, leader.y2) < 8) {
+    if (leader && other.leader && segmentsCross(leader, other.leader))
+      score += 55;
+    if (
+      leader &&
+      distPointToSeg(
+        other.tx,
+        other.ty,
+        leader.x1,
+        leader.y1,
+        leader.x2,
+        leader.y2,
+      ) < 8
+    ) {
       score += 40;
     }
   }
   for (let i = 0; i < points.length; i++) {
     if (i === self) continue;
-    if (circleHitsBox(points[i].x, points[i].y, POINT_CLEAR, box)) score += 900;
+    if (circleHitsBox(points[i].x, points[i].y, pointClear, box)) score += 900;
   }
-  if (circleHitsBox(points[self].x, points[self].y, POINT_R + 1, box)) score += 1200;
+  if (circleHitsBox(points[self].x, points[self].y, pointR + 1, box))
+    score += 1200;
   for (const obs of obstacles) {
     const area = overlapArea(box, obs);
     if (area > 0) score += 200 + area;
@@ -311,15 +376,87 @@ function candidateScore(opts: {
   return score;
 }
 
+function scaleRect(box: Rect, k: number): Rect {
+  return { x: box.x * k, y: box.y * k, w: box.w * k, h: box.h * k };
+}
+
+function scaleLeader(leader: LeaderLine, k: number): LeaderLine {
+  return {
+    x1: leader.x1 * k,
+    y1: leader.y1 * k,
+    x2: leader.x2 * k,
+    y2: leader.y2 * k,
+    ax: leader.ax * k,
+    ay: leader.ay * k,
+    bx: leader.bx * k,
+    by: leader.by * k,
+    cx: leader.cx * k,
+    cy: leader.cy * k,
+  };
+}
+
+export type PlaceScatterLabelsOpts = {
+  /** Coordinate units per CSS pixel (viewBox width / rendered CSS width). */
+  unit?: number;
+  fontPx?: number;
+  dotR?: number;
+};
+
+/**
+ * Layout metrics are CSS pixels. `unit` maps them back into viewBox space.
+ */
 export function placeScatterLabels(
   items: readonly ScatterLabelInput[],
   bounds: ScatterLabelBounds,
   obstacles: readonly Rect[] = [],
+  opts: PlaceScatterLabelsOpts | number = 1,
 ): PlacedScatterLabel[] {
+  const unit = typeof opts === "number" ? opts : (opts.unit ?? 1);
+  const fontPx = typeof opts === "number" ? 13 : (opts.fontPx ?? 13);
+  const dotR = typeof opts === "number" ? 5 : (opts.dotR ?? 5);
+  if (unit !== 1 && Number.isFinite(unit) && unit > 0) {
+    const inv = 1 / unit;
+    const placed = placeScatterLabelsCss(
+      items.map((item) => ({ ...item, x: item.x * inv, y: item.y * inv })),
+      {
+        left: bounds.left * inv,
+        top: bounds.top * inv,
+        right: bounds.right * inv,
+        bottom: bounds.bottom * inv,
+      },
+      obstacles.map((box) => scaleRect(box, inv)),
+      fontPx,
+      dotR,
+    );
+    return placed.map((p) => ({
+      ...p,
+      box: scaleRect(p.box, unit),
+      tx: p.tx * unit,
+      ty: p.ty * unit,
+      leader: p.leader ? scaleLeader(p.leader, unit) : null,
+    }));
+  }
+  return placeScatterLabelsCss(items, bounds, obstacles, fontPx, dotR);
+}
+
+function placeScatterLabelsCss(
+  items: readonly ScatterLabelInput[],
+  bounds: ScatterLabelBounds,
+  obstacles: readonly Rect[],
+  fontPx: number,
+  dotR: number,
+): PlacedScatterLabel[] {
+  const pointR = dotR;
+  const pointClear = dotR * 2;
+  const labelH = fontPx * 1.3;
+  const maxLabelW = fontPx * 13;
   const prepared = items.map((item, index) => {
-    const text = truncateToWidth(item.text, MAX_LABEL_W);
-    const w = Math.min(MAX_LABEL_W, Math.max(8, Math.ceil(measureWidth(text) + 2)));
-    return { index, x: item.x, y: item.y, text, w, h: LABEL_H };
+    const text = truncateToWidth(item.text, maxLabelW, fontPx);
+    const w = Math.min(
+      maxLabelW,
+      Math.max(8, Math.ceil(measureWidth(text, fontPx) + 2)),
+    );
+    return { index, x: item.x, y: item.y, text, w, h: labelH };
   });
   const neighborCounts = prepared.map((a) =>
     prepared.reduce((n, b) => {
@@ -345,7 +482,9 @@ export function placeScatterLabels(
 
   for (const idx of order) {
     const item = prepared[idx];
-    const placed = placedByIndex.filter((p): p is PlacedScatterLabel => p != null);
+    const placed = placedByIndex.filter(
+      (p): p is PlacedScatterLabel => p != null,
+    );
     let best: { score: number; label: PlacedScatterLabel } | null = null;
     for (let ring = 0; ring < RINGS.length; ring++) {
       const pad = RINGS[ring];
@@ -354,18 +493,25 @@ export function placeScatterLabels(
         const raw = boxFor(item.x, item.y, item.w, item.h, dx, dy, pad);
         const box = clampBox(raw, bounds);
         if (placed.some((p) => boxesOverlap(box, p.box))) continue;
-        if (circleHitsBox(item.x, item.y, POINT_R + 1, box)) continue;
+        if (circleHitsBox(item.x, item.y, pointR + 1, box)) continue;
         let hitsOther = false;
         for (let i = 0; i < points.length; i++) {
           if (i === idx) continue;
-          if (circleHitsBox(points[i].x, points[i].y, POINT_CLEAR, box)) {
+          if (circleHitsBox(points[i].x, points[i].y, pointClear, box)) {
             hitsOther = true;
             break;
           }
         }
         if (hitsOther) continue;
         const gap = gapToPoint(item.x, item.y, box);
-        const leader = leaderGeometry(item.x, item.y, box, points, idx);
+        const leader = leaderGeometry(
+          item.x,
+          item.y,
+          box,
+          points,
+          idx,
+          pointClear,
+        );
         if (gap >= MIN_LEADER && !leader) continue;
         const score = candidateScore({
           ring,
@@ -378,6 +524,8 @@ export function placeScatterLabels(
           points,
           self: idx,
           obstacles: obstacleList,
+          pointR,
+          pointClear,
         });
         if (!best || score < best.score) {
           const { tx, ty } = textPos(box, anchor);
@@ -398,7 +546,14 @@ export function placeScatterLabels(
           const raw = boxFor(item.x, item.y, item.w, item.h, dx, dy, pad);
           const box = clampBox(raw, bounds);
           const gap = gapToPoint(item.x, item.y, box);
-          const leader = leaderGeometry(item.x, item.y, box, points, idx);
+          const leader = leaderGeometry(
+            item.x,
+            item.y,
+            box,
+            points,
+            idx,
+            pointClear,
+          );
           const score = candidateScore({
             ring,
             dir,
@@ -410,12 +565,21 @@ export function placeScatterLabels(
             points,
             self: idx,
             obstacles: obstacleList,
+            pointR,
+            pointClear,
           });
           if (!fallback || score < fallback.score) {
             const { tx, ty } = textPos(box, anchor);
             fallback = {
               score,
-              label: { text: item.text, box, tx, ty, textAnchor: anchor, leader },
+              label: {
+                text: item.text,
+                box,
+                tx,
+                ty,
+                textAnchor: anchor,
+                leader,
+              },
             };
           }
         }
@@ -436,7 +600,7 @@ export function placeScatterLabels(
           tx,
           ty,
           textAnchor: "middle" as const,
-          leader: leaderGeometry(item.x, item.y, box, points, idx),
+          leader: leaderGeometry(item.x, item.y, box, points, idx, pointClear),
         };
       })();
   }
@@ -444,7 +608,10 @@ export function placeScatterLabels(
   return placedByIndex.map((p, i) => {
     if (p) return p;
     const item = prepared[i];
-    const box = clampBox(boxFor(item.x, item.y, item.w, item.h, 0, 1, RINGS[0]), bounds);
+    const box = clampBox(
+      boxFor(item.x, item.y, item.w, item.h, 0, 1, RINGS[0]),
+      bounds,
+    );
     const { tx, ty } = textPos(box, "middle");
     return {
       text: item.text,
@@ -452,7 +619,7 @@ export function placeScatterLabels(
       tx,
       ty,
       textAnchor: "middle",
-      leader: leaderGeometry(item.x, item.y, box, points, i),
+      leader: leaderGeometry(item.x, item.y, box, points, i, pointClear),
     };
   });
 }

@@ -184,6 +184,33 @@ export function axisValue(point: SuiteChartPoint, axis: ParetoAxis): number | nu
   return point.durationS;
 }
 
+/**
+ * Minimize resource, maximize pass rate. A point is on the front iff no other
+ * plotted point is cheaper-or-equal and higher-or-equal, with at least one strict.
+ */
+export function paretoFront(
+  points: readonly SuiteChartPoint[],
+  axis: ParetoAxis,
+): SuiteChartPoint[] {
+  const usable = points
+    .filter((p) => p.passRate != null && axisValue(p, axis) != null)
+    .sort((a, b) => {
+      const dr = (axisValue(a, axis) as number) - (axisValue(b, axis) as number);
+      if (dr !== 0) return dr;
+      return (b.passRate ?? 0) - (a.passRate ?? 0);
+    });
+  const front: SuiteChartPoint[] = [];
+  let bestY = Number.NEGATIVE_INFINITY;
+  for (const p of usable) {
+    const y = p.passRate ?? 0;
+    if (y > bestY) {
+      front.push(p);
+      bestY = y;
+    }
+  }
+  return front;
+}
+
 type TaskRef = NonNullable<SuiteRow["task_refs"]>[number];
 
 function refRunIds(ref: TaskRef): string[] {
