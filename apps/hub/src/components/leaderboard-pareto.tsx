@@ -16,6 +16,7 @@ import {
   suiteChartPoint,
   type ParetoAxis,
 } from "@/lib/leaderboard-charts";
+import { placeScatterLabels } from "@/lib/scatter-label-layout";
 import { cn, displayLabelsFromOverlay } from "@/lib/utils";
 
 const DOT_FILL = [
@@ -28,6 +29,26 @@ const DOT_FILL = [
   "fill-nav-inbox",
   "fill-nav-orgs",
 ] as const;
+
+const DOT_STROKE = [
+  "stroke-ink",
+  "stroke-link",
+  "stroke-nav-agents",
+  "stroke-nav-datasets",
+  "stroke-nav-plugins",
+  "stroke-nav-models",
+  "stroke-nav-inbox",
+  "stroke-nav-orgs",
+] as const;
+
+const W = 1000;
+const H = 520;
+const L = 64;
+const R = 80;
+const T = 44;
+const B = 80;
+const PLOT_W = W - L - R;
+const PLOT_H = H - T - B;
 
 function EmptyBoard({
   emptyTitle,
@@ -90,37 +111,43 @@ export function LeaderboardPareto({
     () => suites.map((suite) => suiteChartPoint(suite, pin)),
     [suites, pin],
   );
-  const plotted = points.filter(
-    (p) => p.passRate != null && axisValue(p, axis) != null,
+  const plotted = useMemo(
+    () => points.filter((p) => p.passRate != null && axisValue(p, axis) != null),
+    [points, axis],
   );
   const hidden = points.length - plotted.length;
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const xs = plotted.map((p) => axisValue(p, axis) as number);
+  const xmin = xs.length ? Math.min(...xs) * 0.7 : 0;
+  const xmax = xs.length ? Math.max(...xs) * 1.15 || 1 : 1;
+  const span = xmax - xmin || 1;
+  const xOf = (v: number) => L + (1 - (v - xmin) / span) * PLOT_W;
+  const yOf = (v: number) => T + (1 - v) * PLOT_H;
+  const placedLabels = useMemo(() => {
+    const xAt = (v: number) => L + (1 - (v - xmin) / span) * PLOT_W;
+    const yAt = (v: number) => T + (1 - v) * PLOT_H;
+    return placeScatterLabels(
+      plotted.map((p) => ({
+        x: xAt(axisValue(p, axis) as number),
+        y: yAt(p.passRate ?? 0),
+        text: chartModelName(p.suite, pin),
+      })),
+      { left: L + 4, top: 8, right: W - 8, bottom: H - 36 },
+      plotted.length ? [{ x: W - R - 118, y: T - 26, w: 118, h: 18 }] : [],
+    );
+  }, [plotted, pin, axis, xmin, span]);
 
   if (suites.length === 0) {
     return <EmptyBoard emptyTitle={emptyTitle} emptyBody={emptyBody} />;
   }
 
-  const xs = plotted.map((p) => axisValue(p, axis) as number);
-  const xmin = xs.length ? Math.min(...xs) * 0.7 : 0;
-  const xmax = xs.length ? Math.max(...xs) * 1.15 || 1 : 1;
-  const span = xmax - xmin || 1;
-  const W = 1000;
-  const H = 520;
-  const L = 64;
-  const R = 80;
-  const T = 44;
-  const B = 80;
-  const plotW = W - L - R;
-  const plotH = H - T - B;
-  const xOf = (v: number) => L + (1 - (v - xmin) / span) * plotW;
-  const yOf = (v: number) => T + (1 - v) * plotH;
   const yTicks = [0, 0.2, 0.4, 0.6, 0.8, 1];
   const xTicks = [xmax, xmin + span / 2, xmin];
   const hoveredIndex = plotted.findIndex((p) => p.suite.suite_run_id === hoveredId);
   const hovered = hoveredIndex >= 0 ? plotted[hoveredIndex] : null;
   const hx = hovered ? xOf(axisValue(hovered, axis) as number) : 0;
   const hy = hovered ? yOf(hovered.passRate ?? 0) : 0;
-  const xAxisY = T + plotH;
+  const xAxisY = T + PLOT_H;
   const yAxisX = L;
 
   return (
@@ -171,6 +198,35 @@ export function LeaderboardPareto({
               {formatAxis(axis, t)}
             </text>
           ))}
+          {plotted.map((p, i) => {
+            const placed = placedLabels[i];
+            const dim = hoveredId != null && hoveredId !== p.suite.suite_run_id;
+            if (!placed?.leader) return null;
+            const { leader } = placed;
+            return (
+              <g
+                key={`${p.suite.suite_run_id}-lead`}
+                className={cn(
+                  "pointer-events-none motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-smooth",
+                  dim && "opacity-20",
+                )}
+              >
+                <line
+                  x1={leader.x1}
+                  y1={leader.y1}
+                  x2={leader.x2}
+                  y2={leader.y2}
+                  className={DOT_STROKE[i % DOT_STROKE.length]}
+                  strokeWidth={1}
+                  vectorEffect="non-scaling-stroke"
+                />
+                <path
+                  d={`M${leader.ax} ${leader.ay} L${leader.bx} ${leader.by} L${leader.cx} ${leader.cy} Z`}
+                  className={DOT_FILL[i % DOT_FILL.length]}
+                />
+              </g>
+            );
+          })}
           {plotted.map((p, i) => {
             const xv = axisValue(p, axis) as number;
             const cx = xOf(xv);
@@ -259,7 +315,7 @@ export function LeaderboardPareto({
             </g>
           ) : null}
           <text
-            x={L + plotW / 2}
+            x={L + PLOT_W / 2}
             y={H - 4}
             textAnchor="middle"
             className="fill-mute text-[11px]"
@@ -268,10 +324,10 @@ export function LeaderboardPareto({
           </text>
           <text
             x={16}
-            y={T + plotH / 2}
+            y={T + PLOT_H / 2}
             textAnchor="middle"
             className="fill-mute text-[11px]"
-            transform={`rotate(-90 16 ${T + plotH / 2})`}
+            transform={`rotate(-90 16 ${T + PLOT_H / 2})`}
           >
             Pass rate
           </text>
@@ -285,6 +341,28 @@ export function LeaderboardPareto({
               most efficient →
             </text>
           ) : null}
+          {plotted.map((p, i) => {
+            const placed = placedLabels[i];
+            if (!placed) return null;
+            const dim = hoveredId != null && hoveredId !== p.suite.suite_run_id;
+            return (
+              <text
+                key={`${p.suite.suite_run_id}-lab`}
+                x={placed.tx}
+                y={placed.ty}
+                textAnchor={placed.textAnchor}
+                className={cn(
+                  "fill-body stroke-canvas font-sans text-[11px]",
+                  "motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-smooth",
+                  dim && "opacity-20",
+                )}
+                strokeWidth={3}
+                paintOrder="stroke"
+              >
+                {placed.text}
+              </text>
+            );
+          })}
         </svg>
         <div className="pointer-events-none absolute inset-0">
           {plotted.map((p) => {
@@ -336,29 +414,6 @@ export function LeaderboardPareto({
             );
           })}
         </div>
-        {plotted.map((p) => {
-          const xv = axisValue(p, axis) as number;
-          const left = ((xOf(xv) / W) * 100).toFixed(3);
-          const top = ((yOf(p.passRate ?? 0) / H) * 100).toFixed(3);
-          const dim = hoveredId != null && hoveredId !== p.suite.suite_run_id;
-          return (
-            <div
-              key={`${p.suite.suite_run_id}-lab`}
-              className={cn(
-                "pointer-events-none absolute max-w-[9rem] truncate text-center text-[11px] leading-4 text-body",
-                "motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-smooth",
-                dim && "opacity-20",
-              )}
-              style={{
-                left: `${left}%`,
-                top: `${top}%`,
-                transform: "translate(-50%, 10px)",
-              }}
-            >
-              {chartModelName(p.suite, pin)}
-            </div>
-          );
-        })}
         </div>
       </div>
       <p className="text-xs text-mute">
