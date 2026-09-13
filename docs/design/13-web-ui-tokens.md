@@ -7,7 +7,7 @@
 本文件是视觉**宪法**:令牌、字体、圆角、动效曲线、焦点语言、组件角色。
 它不描述某条路由上有哪些块、tab 叫什么、控件排在标题左还是右。那些随页面改;改页面不必改本文件。
 
-SPA 实现对照的**常量清单**在 `apps/viewer/DESIGN.md` 文首 YAML(Hub 继承同一份,不要再开一套色板)。改本表必须同步那份 YAML 与 `scripts/check_design_tokens.py` 的 `CANONICAL`。YAML 只列主题常量,不写页面零件。
+SPA 实现对照的**常量清单**在 `apps/shared/DESIGN.md` 文首 YAML(Hub / Viewer 继承同一份,不要再开一套色板)。改本表必须同步那份 YAML 与 `scripts/check_design_tokens.py` 的 `CANONICAL`。YAML 只列主题常量,不写页面零件。
 实现先复用已有组件,再拿本文件核对语言。Hub / Viewer 的**气质与反 slop**在各自 `DESIGN.md`(组件地图也在那里)。landing / docs 例外在 `website/DESIGN.md`。
 
 三端已是同一套产品语言(冷纸 / 冷墨 + IKB + Geist)。不要再「设计一套新身份」。禁止用 shadcn 或 Tailwind 默认皮肤冒充本语言。Hub / Viewer 的落地页 playbook 禁令在 SPA `DESIGN.md` Taste。

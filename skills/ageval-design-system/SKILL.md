@@ -9,8 +9,8 @@ description: >
   scripts/check_design_tokens.py. Use when adding or restyling UI in any of the
   three web surfaces, picking colors or fonts, adding icons, or when a change
   touches raw hex, focus rings, buttons, search fields, or the owl brand assets.
-  Authority is docs/design/13-web-ui-tokens.md; apps/viewer/DESIGN.md YAML is
-  the SPA token listing (Hub inherits it); SPA DESIGN.md Taste is anti-slop
+  Authority is docs/design/13-web-ui-tokens.md; apps/shared/DESIGN.md YAML is
+  the SPA token listing (Hub/Viewer inherit it); SPA DESIGN.md Taste is anti-slop
   (product chrome, not landing) plus the reuse map.
   This skill only routes and summarizes — it is not a page inventory.
 ---
@@ -21,7 +21,7 @@ Three surfaces, one language: website landing, website docs (fumadocs),
 hub SPA, viewer SPA. Authority: `docs/design/13-web-ui-tokens.md`
 (constitution: tokens, focus roles, motion — **not** a page inventory).
 
-On Hub / Viewer, also read `apps/viewer/DESIGN.md` YAML (shared theme constants),
+On Hub / Viewer, also read `apps/shared/DESIGN.md` YAML (shared theme constants),
 that SPA's `DESIGN.md` **Taste** (anti-slop) and role table, and `AGENTS.md`
 (scope). Copy a shipped instance. Do not restyle a shadcn primitive default
 and call it on-brand.
@@ -36,13 +36,13 @@ magnetic / "invent a new identity"). Identity is already locked: cool paper
 | Surface      | Token file                                                              |
 | ------------ | ----------------------------------------------------------------------- |
 | constitution | `docs/design/13-web-ui-tokens.md`                                       |
-| SPA listing  | `apps/viewer/DESIGN.md` YAML (Hub inherits; do not fork)                |
-| hub / viewer | `apps/{hub,viewer}/src/index.css` (`--viewer-*` + `@theme`)             |
+| SPA listing  | `apps/shared/DESIGN.md` YAML (Hub/Viewer inherit; do not fork)          |
+| hub / viewer | `apps/shared/css/tokens.css` (`--viewer-*` + `@theme`; each `index.css` `@import`s it) |
 | docs         | `website/src/app/global.css` (`--color-fd-*`, `--ageval-link*`)           |
 | landing      | Token block at the top of `website/src/components/landing/landing.css`  |
 
 Change order: edit the table in `docs/design/13` first → sync script `CANONICAL`
-→ sync `apps/viewer/DESIGN.md` YAML and the surface CSS → run the machine check.
+→ sync `apps/shared/DESIGN.md` YAML and `apps/shared/css/tokens.css` → run the machine check.
 If they disagree, fix the copies to match docs/13 + the script.
 
 ## Quick rules (full list in docs/design/13)
@@ -99,7 +99,7 @@ If they disagree, fix the copies to match docs/13 + the script.
 python3 scripts/check_design_tokens.py
 ```
 
-Checks: docs/13 table ↔ script `CANONICAL` ↔ Viewer DESIGN.md YAML; mapped
+Checks: docs/13 table ↔ script `CANONICAL` ↔ `apps/shared/DESIGN.md` YAML; mapped
 variables stay inside the canonical set; no raw hex in app code (outside the
 allowlist).
 CI job `design-tokens` runs the same command. Run it locally after token or

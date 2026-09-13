@@ -1,7 +1,7 @@
 # ageval Hub design
 
 **Visual constitution:** [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md).
-**SPA token listing:** YAML frontmatter in [`apps/viewer/DESIGN.md`](../viewer/DESIGN.md) (shared Hub/Viewer constants; machine-checked against docs/13). Do not fork a second palette here.
+**SPA token listing:** YAML frontmatter in [`apps/shared/DESIGN.md`](../shared/DESIGN.md) (shared Hub/Viewer constants; machine-checked against docs/13). Do not fork a second palette here.
 **Hub product** (Registry, listing, Performance, `?model=`): [`docs/design/12-hub-dataset-and-leaderboard.md`](../../docs/design/12-hub-dataset-and-leaderboard.md), [`docs/design/14-agent-hub.md`](../../docs/design/14-agent-hub.md).
 
 This file does **not** inventory routes, tabs, or where a control sits on a page. It tells implementers which shipped component to reuse so a new control matches the product, not the shadcn default.

@@ -31,7 +31,7 @@ import { HoverTip } from "@/components/hover-tip";
 import { MarkdownBody } from "@/components/markdown";
 import type { TrajectoryStep } from "@/lib/api";
 import { CodeHighlight } from "@/lib/code-highlight";
-import { findScrollParent } from "@ageval/shared/scroll-port";
+import { findScrollParent } from "@ageval/shared/lib/scroll-port";
 import { cn } from "@/lib/utils";
 
 import { actorLabel, type ActorRow } from "./types";

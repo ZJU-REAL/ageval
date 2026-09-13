@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { UnderlineTabs } from "@/components/underline-tabs";
-import { revealTallPanel } from "@ageval/shared/scroll-port";
+import { revealTallPanel } from "@ageval/shared/lib/scroll-port";
 import type { TrajectoryStep, TreeEntry, Trial } from "@/lib/trial-types";
 
 import { FileSplitPanel } from "./file-split-panel";

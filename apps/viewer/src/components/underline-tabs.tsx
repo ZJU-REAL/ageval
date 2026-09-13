@@ -6,7 +6,7 @@ import { liquidGroup } from "@/lib/liquid";
 import {
   focusWithoutScroll,
   preventTabFocusScroll,
-} from "@ageval/shared/scroll-port";
+} from "@ageval/shared/lib/scroll-port";
 import { cn } from "@/lib/utils";
 
 type Item<T extends string> = { id: T; label: string };

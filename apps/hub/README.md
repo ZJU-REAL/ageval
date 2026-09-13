@@ -21,7 +21,7 @@ artifacts were uploaded.
 
 Vite + React + TypeScript · Tailwind + shadcn/ui · pnpm only  
 Visual tokens: [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md).
-SPA constants listing: YAML in [`apps/viewer/DESIGN.md`](../viewer/DESIGN.md).
+SPA constants listing: YAML in [`apps/shared/DESIGN.md`](../shared/DESIGN.md).
 Reuse map: [DESIGN.md](./DESIGN.md).
 
 ## Dev

@@ -8,7 +8,8 @@ Python serves the built SPA; React app lives here.
 | Doc | Role |
 | --- | --- |
 | [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md) | Visual constitution (tokens, focus, motion) |
-| [DESIGN.md](./DESIGN.md) | YAML constants + Taste (anti-slop) + which component to reuse |
+| [`apps/shared/DESIGN.md`](../shared/DESIGN.md) | SPA token YAML (Hub/Viewer share it) |
+| [DESIGN.md](./DESIGN.md) | Taste (anti-slop) + which component to reuse |
 | This file | Product scope + stack + API |
 | `src/ageval/viewer/` | HTTP API + static file serving (stdlib) |
 

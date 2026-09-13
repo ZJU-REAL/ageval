@@ -1,7 +1,7 @@
 # apps/hub — agent scope lock
 
 Visual language: [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md).
-Theme constants: YAML in [`apps/viewer/DESIGN.md`](../viewer/DESIGN.md) (shared).
+Theme constants: YAML in [`apps/shared/DESIGN.md`](../shared/DESIGN.md) (shared).
 Which component to reuse: [DESIGN.md](./DESIGN.md). This file is product scope.
 
 | Do | Do not |

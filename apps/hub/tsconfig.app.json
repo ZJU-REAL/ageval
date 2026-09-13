@@ -28,5 +28,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "../shared/**/*.ts"]
+  "include": ["src", "../shared"]
 }
