@@ -1,7 +1,11 @@
 /* Hub + Viewer semantic tokens and shared chrome utilities.
  * Constitution: docs/design/13-web-ui-tokens.md
  * Listing: apps/shared/DESIGN.md YAML
+ *
+ * Vite roots are apps/hub and apps/viewer. Scan this tree so class
+ * names in shared chrome are not dropped (disabled buttons, TruncateTip).
  */
+@source "..";
 
 /* Semantic color aliases → CSS variables (swapped by theme) */
 @theme {

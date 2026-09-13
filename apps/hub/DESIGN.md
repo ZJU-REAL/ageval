@@ -57,7 +57,7 @@ Before drawing a control:
 
 `Input`'s default `focus-visible:border-link` is the **edit-field** language in docs/13. Search, filter, and other scan chrome keep `border-hairline` on focus. Copy `CatalogScopeBar`, not the primitive default.
 
-Token values, type stacks, radii, and motion curves: the YAML in Viewer `DESIGN.md`. Focus roles and catalog-vs-table: docs/13.
+Token values, type stacks, radii, and motion curves: the YAML in [`apps/shared/DESIGN.md`](../shared/DESIGN.md). Focus roles and catalog-vs-table: docs/13.
 
 ## Role → component
 
@@ -75,7 +75,7 @@ Token values, type stacks, radii, and motion curves: the YAML in Viewer `DESIGN.
 | Harness model directory | `/agents/{id}` Model region: flat `ModelItem` list (same row as the search palette, including lab mark). One column, two at `lg`. Height caps at three rows (`--model-row: 4rem` plus `gap-2`), then the list scrolls. Each item has a hairline border. Chips are context + price only (`meta="compact"`); released stays on the search palette. No lab/provider grouping. Default badge on the package default. Click sets `?model=` on this page. |
 | Catalog list (scope + search) | `CatalogScopeBar` (`/models` Explore All = full pin; With Performance = has Performance) |
 | Model row | `ModelItem` (lab mark + name + modality badges + canonical/overlay; context / price chips, plus released when `meta="full"`). Search palette and harness Model region share this; plaza tables do not. |
-| In-app text link | `INTERNAL_LINK_CLASS` (`lib/links.ts`): ink at rest, underline + `link-deep` on hover, focus ring. Same as `/models` Model cells. Do not rest IKB on in-app jumps — it floods tables. |
+| In-app text link | `INTERNAL_LINK_CLASS` (`apps/shared/lib/links.ts`): ink at rest, underline + `link-deep` on hover, focus ring. Same as `/models` Model cells. Do not rest IKB on in-app jumps — it floods tables. |
 | Off-site text link | `EXTERNAL_LINK_CLASS`: IKB (`text-link`) at rest. README http(s), Hugging Face, trial upstream. |
 | Model cell (tables) | `ModelLabel` (last `/` segment; unique pin join prepends `LabMark` 16px from brand-marks / pin lab SVG). Pass `mark={false}` when the group head is already `LabGroupHead` (plaza Model view, `/models`). Unmatched overlay stays text-only — no letter mark. Unique join links `/models/{canonical}` with `INTERNAL_LINK_CLASS`. |
 | Harness cell (tables) | `HarnessLabel` (builtin short id → `BrandMark` 16px from `brand-marks/assets`; `grok-build`/`openai-http`/`anthropic-http` reuse the parent brand). Custom `org/name` uses the package `icon_key` / GitHub mark when the row is in hand. Unmatched stays text-only. Builtin / `org/name` links `/agents/{id}` with `INTERNAL_LINK_CLASS`. |

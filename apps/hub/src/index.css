@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../../shared";
 @import "../../shared/css/tokens.css";
 
 /* Hub shell: catalog lab motion + sidebar nav glyphs. Tokens live in apps/shared. */
