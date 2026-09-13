@@ -1,0 +1,6 @@
+format: ageval.dataset/1
+dataset_id: test/eval-checks-min
+version: "0.1.0"
+description: Opt-in evaluator checks.json (script and compose with judge)
+tasks:
+  root: tasks

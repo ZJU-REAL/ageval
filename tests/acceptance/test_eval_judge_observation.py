@@ -112,6 +112,7 @@ def test_no_sdk_evaluator_has_no_observation_jsonl(tmp_path: Path) -> None:
     run_dir = _run_dir(dataset, result)
     assert result["status"] == "PASS"
     assert not (run_dir / "evaluation" / "observation.jsonl").exists()
+    assert not (run_dir / "evaluation" / "checks.json").exists()
     assert (run_dir / "result.json").is_file()
 
 

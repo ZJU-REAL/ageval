@@ -1,0 +1,20 @@
+format: ageval.task/1
+task_id: compose-score
+description: Checks plus evaluate-phase judge invoke on the same Attempt.
+parameters:
+  seed: 1
+  active_profile: solver
+agent_profiles:
+  - id: solver
+  - id: judge
+limits:
+  wall_time_seconds: 60
+  agent_invocations: 2
+artifacts:
+  publishable:
+    - id: result
+      path: artifacts/result.json
+evaluation:
+  inputs:
+    - artifact: result
+      target: artifacts/result.json
