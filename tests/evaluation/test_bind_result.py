@@ -79,6 +79,22 @@ def test_bind_result_evaluate_timeout_is_fail() -> None:
     assert result.metrics["timeout_phase"] == "evaluate"
 
 
+def test_bind_result_ignores_checks_key() -> None:
+    result = bind_result(
+        evaluator_raw={
+            "status": "PASS",
+            "score": 1,
+            "metrics": {"n": 1},
+            "checks": [{"id": "audit", "status": "FAIL"}],
+        },
+        kind="local",
+        evidence_path="/tmp/evidence",
+    )
+    assert result.status == "PASS"
+    assert result.score == 1.0
+    assert result.metrics == {"n": 1}
+
+
 def test_bind_result_environment_timeout_stays_error() -> None:
     result = bind_result(
         evaluator_raw=None,
