@@ -10,6 +10,7 @@ import { EntityMarkControl } from "@/components/entity-mark-control";
 import { BrandMark } from "@/components/brand-mark";
 import { entityHintFromPackage, markFromPackage } from "@/lib/brand-marks";
 import { INTERNAL_LINK_CLASS } from "@/lib/links";
+import { alignInScrollParent } from "@/lib/scroll-port";
 import { OfficialMark } from "@/components/official-mark";
 import { FileSplitPanel } from "@/components/file-split-panel";
 import { FieldLabel } from "@/components/field-label";
@@ -233,7 +234,7 @@ export function PluginDetailPage() {
   function openSlotPath(path: string) {
     setSelectedPath(path);
     const el = document.getElementById("plugin-files");
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (el) alignInScrollParent(el, "start");
   }
 
   return (

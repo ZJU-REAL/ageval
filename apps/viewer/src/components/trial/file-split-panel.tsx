@@ -285,6 +285,7 @@ export function FileSplitPanel({
 
   return (
     <div
+      data-evidence-panel=""
       className={cn(
         "grid grid-cols-1 md:grid-cols-[280px_1fr] gap-0",
         "blob-panel overflow-hidden",

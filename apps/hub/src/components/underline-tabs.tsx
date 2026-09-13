@@ -64,7 +64,14 @@ export function UnderlineTabs<T extends string>({
             role="tab"
             data-tab-id={item.id}
             aria-selected={selected}
-            onClick={() => onChange(item.id)}
+            onMouseDown={(e) => {
+              // Keep focus without UA CenterIfNeeded scroll of #main.
+              if (e.button === 0) e.preventDefault();
+            }}
+            onClick={(e) => {
+              e.currentTarget.focus({ preventScroll: true });
+              onChange(item.id);
+            }}
             className={cn(
               "group relative z-10 inline-flex items-center gap-1.5 rounded-[8px] text-sm font-medium",
               "transition-colors duration-200 ease-smooth",

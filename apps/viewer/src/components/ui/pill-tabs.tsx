@@ -48,7 +48,13 @@ export function PillTabs<T extends string>({
           role="tab"
           data-tab-id={item.id}
           aria-selected={value === item.id}
-          onClick={() => onChange(item.id)}
+          onMouseDown={(e) => {
+            if (e.button === 0) e.preventDefault();
+          }}
+          onClick={(e) => {
+            e.currentTarget.focus({ preventScroll: true });
+            onChange(item.id);
+          }}
           className={cn(
             "relative z-10 rounded-[8px] px-2.5 py-0.5 text-[11px]",
             "transition-colors duration-200 ease-smooth",

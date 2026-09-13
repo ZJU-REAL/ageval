@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   availableTabsFromPaths,
@@ -86,6 +86,8 @@ export function useAttemptEvidence(
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [fileNote, setFileNote] = useState<string | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
+  const trajFetchedRef = useRef(false);
+  const obsFetchedRef = useRef(false);
 
   const availableTabs = useMemo(
     () => availableTabsFromPaths(relFiles.map((f) => f.path)),
@@ -104,6 +106,8 @@ export function useAttemptEvidence(
       setRelFiles([]);
       setActiveTab(null);
       setSteps([]);
+      trajFetchedRef.current = false;
+      obsFetchedRef.current = false;
       setTree([]);
       setSelectedPath(null);
       setFileContent(null);
@@ -219,29 +223,31 @@ export function useAttemptEvidence(
     if (activeTab === "verifier") {
       const hasObs = relFiles.some((f) => f.path === OBSERVATION_REL);
       if (hasObs) {
-        setObsLoading(true);
-        setObsNote(null);
-        setObservationSteps([]);
-        (async () => {
-          try {
-            const f = await getAttemptFile(
-              runId,
-              toArchivePath(OBSERVATION_REL, runId),
-              token,
-            );
-            if (cancelled) return;
-            const parsed = parseTrajectoryJsonl(decodeFileContent(f) || "");
-            setObservationSteps(parsed);
-            setObsNote(null);
-          } catch (e) {
-            if (!cancelled) {
-              setObservationSteps([]);
-              setObsNote(e instanceof Error ? e.message : String(e));
+        if (!obsFetchedRef.current) {
+          setObsLoading(true);
+          setObsNote(null);
+          (async () => {
+            try {
+              const f = await getAttemptFile(
+                runId,
+                toArchivePath(OBSERVATION_REL, runId),
+                token,
+              );
+              if (cancelled) return;
+              const parsed = parseTrajectoryJsonl(decodeFileContent(f) || "");
+              setObservationSteps(parsed);
+              obsFetchedRef.current = true;
+              setObsNote(null);
+            } catch (e) {
+              if (!cancelled) {
+                setObservationSteps([]);
+                setObsNote(e instanceof Error ? e.message : String(e));
+              }
+            } finally {
+              if (!cancelled) setObsLoading(false);
             }
-          } finally {
-            if (!cancelled) setObsLoading(false);
-          }
-        })();
+          })();
+        }
       } else {
         setObservationSteps([]);
         setObsNote(null);
@@ -250,9 +256,9 @@ export function useAttemptEvidence(
     }
 
     if (activeTab === "trajectory") {
+      if (trajFetchedRef.current) return;
       setTrajLoading(true);
       setTrajNote(null);
-      setSteps([]);
       (async () => {
         try {
           const trajPaths = trajectoryRelPaths(relFiles.map((f) => f.path));
@@ -283,6 +289,7 @@ export function useAttemptEvidence(
           }
           if (cancelled) return;
           setSteps(all);
+          trajFetchedRef.current = true;
           setTrajNote(
             all.length ? null : "No trajectory.jsonl steps for this Attempt.",
           );

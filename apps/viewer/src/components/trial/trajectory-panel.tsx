@@ -6,6 +6,7 @@ import {
   useState,
   type ComponentType,
   type MouseEvent,
+  type ReactNode,
 } from "react";
 import {
   BotMessageSquare,
@@ -29,6 +30,7 @@ import { HoverTip } from "@/components/hover-tip";
 import { MarkdownBody } from "@/components/markdown";
 import type { TrajectoryStep } from "@/lib/api";
 import { CodeHighlight } from "@/lib/code-highlight";
+import { findScrollParent } from "@/lib/scroll-port";
 import { cn } from "@/lib/utils";
 
 import { actorLabel, type ActorRow } from "./types";
@@ -58,6 +60,27 @@ const STEP_TONE: Record<StepMajor, string> = {
   permission: "text-nav-inbox",
   message: "text-mute",
 };
+
+const TRAJ_PORT_CLASS =
+  "h-[70vh] overflow-y-auto pr-1 [overflow-anchor:none]";
+
+function TrajectorySkeleton() {
+  return (
+    <div className="space-y-2" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="blob-panel overflow-clip">
+          <div className="border-b border-hairline bg-canvas px-3 pt-3 pb-1.5">
+            <div className="h-3 w-24 rounded-[4px] bg-canvas-soft-2" />
+          </div>
+          <div className="space-y-2 px-4 py-2">
+            <div className="h-3 w-[88%] rounded-[4px] bg-canvas-soft" />
+            <div className="h-3 w-[64%] rounded-[4px] bg-canvas-soft" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /* Folded steps preview ~this many lines; the next half-line fades as a hint. */
 const PREVIEW_LINES = 2.5;
@@ -95,16 +118,6 @@ function parsesAsJson(text: string): boolean {
   } catch {
     return false;
   }
-}
-
-function findScrollParent(el: HTMLElement): HTMLElement | null {
-  let p = el.parentElement;
-  while (p) {
-    const oy = getComputedStyle(p).overflowY;
-    if (oy === "auto" || oy === "scroll") return p;
-    p = p.parentElement;
-  }
-  return null;
 }
 
 function asFiniteNumber(value: unknown): number | null {
@@ -375,8 +388,8 @@ function StepItem({
   // the scrollport so the view stays on the block being operated on.
   function toggleOpen() {
     const li = liRef.current;
-    const scroller = li ? findScrollParent(li) : null;
-    if (li && scroller) {
+    if (li) {
+      const scroller = findScrollParent(li);
       const offset =
         parseFloat(getComputedStyle(scroller).getPropertyValue("--traj-invoke-h")) ||
         0;
@@ -391,8 +404,8 @@ function StepItem({
     if (!repositionRef.current) return;
     repositionRef.current = false;
     const li = liRef.current;
-    const scroller = li ? findScrollParent(li) : null;
-    if (!li || !scroller) return;
+    if (!li) return;
+    const scroller = findScrollParent(li);
     const offset =
       parseFloat(getComputedStyle(scroller).getPropertyValue("--traj-invoke-h")) ||
       0;
@@ -591,7 +604,34 @@ export function TrajectoryPanel({
     };
   }, [showInvokeHeaders, invokes]);
 
-  if (loading) return <p className="text-sm text-mute">Loading trajectory…</p>;
+  const scroller = (children: ReactNode) => (
+    <div
+      ref={trajScrollRef}
+      data-evidence-panel=""
+      className={cn(TRAJ_PORT_CLASS, showInvokeHeaders && "space-y-4")}
+    >
+      {children}
+    </div>
+  );
+
+  if (loading && !visibleSteps.length) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-mute">
+            Trajectory is observational only; independent evaluator owns PASS.
+          </p>
+          <span className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        </div>
+        {scroller(
+          <div role="status" aria-live="polite" aria-busy="true">
+            <span className="sr-only">Loading trajectory</span>
+            <TrajectorySkeleton />
+          </div>,
+        )}
+      </div>
+    );
+  }
   if (!visibleSteps.length) {
     return (
       <div className="space-y-2">
@@ -646,46 +686,39 @@ export function TrajectoryPanel({
         </button>
         </HoverTip>
       </div>
-      {showInvokeHeaders ? (
-        <div
-          ref={trajScrollRef}
-          className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 [overflow-anchor:none]"
-        >
-          {invokes.map((block, i) => {
-            const actor = block.profileId
-              ? actorByPid.get(block.profileId)
-              : undefined;
-            const who = block.profileId
-              ? actorLabel(actor, block.profileId)
-              : null;
-            const title =
-              block.turn != null
-                ? who
-                  ? `invoke ${block.turn} · ${who}`
-                  : `invoke ${block.turn}`
-                : who || "invoke";
-            return (
-              <section key={`${block.turn ?? "x"}-${i}`} className="space-y-2">
-                <h3
-                  ref={i === 0 ? invokeHeaderRef : undefined}
-                  className="relative sticky top-0 z-20 bg-canvas py-1 text-xs font-medium text-ink"
-                >
-                  {title}
-                  <span className="text-mute font-normal ml-2">
-                    {block.steps.length} step
-                    {block.steps.length === 1 ? "" : "s"}
-                  </span>
-                </h3>
-                {renderSteps(block.steps, true)}
-              </section>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="max-h-[70vh] overflow-y-auto pr-1 [overflow-anchor:none]">
-          {renderSteps(visibleSteps)}
-        </div>
-      )}
+      {showInvokeHeaders
+        ? scroller(
+            invokes.map((block, i) => {
+              const actor = block.profileId
+                ? actorByPid.get(block.profileId)
+                : undefined;
+              const who = block.profileId
+                ? actorLabel(actor, block.profileId)
+                : null;
+              const title =
+                block.turn != null
+                  ? who
+                    ? `invoke ${block.turn} · ${who}`
+                    : `invoke ${block.turn}`
+                  : who || "invoke";
+              return (
+                <section key={`${block.turn ?? "x"}-${i}`} className="space-y-2">
+                  <h3
+                    ref={i === 0 ? invokeHeaderRef : undefined}
+                    className="relative sticky top-0 z-20 bg-canvas py-1 text-xs font-medium text-ink"
+                  >
+                    {title}
+                    <span className="text-mute font-normal ml-2">
+                      {block.steps.length} step
+                      {block.steps.length === 1 ? "" : "s"}
+                    </span>
+                  </h3>
+                  {renderSteps(block.steps, true)}
+                </section>
+              );
+            }),
+          )
+        : scroller(renderSteps(visibleSteps))}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   FIRST_TAB_ORDER,
@@ -59,6 +59,8 @@ export function useTrialDetail(jobId: string, taskId: string, runId: string) {
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [fileNote, setFileNote] = useState<string | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
+  const trajFetchedRef = useRef(false);
+  const obsFetchedRef = useRef(false);
 
   const availableTabs = useMemo(() => {
     const raw = (trial?.available_tabs || []) as string[];
@@ -71,6 +73,8 @@ export function useTrialDetail(jobId: string, taskId: string, runId: string) {
     setLoading(true);
     setActiveTab(null);
     setSteps([]);
+    trajFetchedRef.current = false;
+    obsFetchedRef.current = false;
     setTree([]);
     setSelectedPath(null);
     setFileContent(null);
@@ -108,11 +112,13 @@ export function useTrialDetail(jobId: string, taskId: string, runId: string) {
     let cancelled = false;
 
     if (activeTab === "trajectory") {
+      if (trajFetchedRef.current) return;
       setTrajLoading(true);
       fetchTrialTrajectory(jobId, taskId, runId)
         .then((data) => {
           if (cancelled) return;
           setSteps(data.steps || []);
+          trajFetchedRef.current = true;
           setTrajNote(data.note || null);
         })
         .catch((e: Error) => {
@@ -127,22 +133,25 @@ export function useTrialDetail(jobId: string, taskId: string, runId: string) {
     }
 
     if (activeTab === "verifier") {
-      setObsLoading(true);
-      fetchTrialObservation(jobId, taskId, runId)
-        .then((data) => {
-          if (cancelled) return;
-          setObservationSteps(data.steps || []);
-          setObsNote(data.note || null);
-        })
-        .catch((e: Error) => {
-          if (!cancelled) {
-            setObservationSteps([]);
-            setObsNote(e.message);
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setObsLoading(false);
-        });
+      if (!obsFetchedRef.current) {
+        setObsLoading(true);
+        fetchTrialObservation(jobId, taskId, runId)
+          .then((data) => {
+            if (cancelled) return;
+            setObservationSteps(data.steps || []);
+            obsFetchedRef.current = true;
+            setObsNote(data.note || null);
+          })
+          .catch((e: Error) => {
+            if (!cancelled) {
+              setObservationSteps([]);
+              setObsNote(e.message);
+            }
+          })
+          .finally(() => {
+            if (!cancelled) setObsLoading(false);
+          });
+      }
     }
 
     const scope = TREE_SCOPES[activeTab];

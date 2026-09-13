@@ -1,5 +1,8 @@
+import { useLayoutEffect, useRef, useState } from "react";
+
 import { UnderlineTabs } from "@/components/underline-tabs";
 import type { TrajectoryStep, TreeEntry, Trial } from "@/lib/api";
+import { revealTallPanel } from "@/lib/scroll-port";
 
 import { FileSplitPanel } from "./file-split-panel";
 import { TAB_LABELS, type TabId } from "./tabs";
@@ -53,6 +56,30 @@ export function EvidenceTabs({
   const verifierSteps = observationSteps || [];
   const showVerifierTrajectory =
     activeTab === "verifier" && (obsLoading || verifierSteps.length > 0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [revealGen, setRevealGen] = useState(0);
+
+  useLayoutEffect(() => {
+    if (revealGen === 0) return;
+    const pending =
+      (activeTab === "trajectory" && trajLoading) ||
+      (activeTab === "verifier" && !!obsLoading) ||
+      (activeTab != null &&
+        activeTab !== "trajectory" &&
+        !showVerifierTrajectory &&
+        treeLoading);
+    if (pending) return;
+    const panel = rootRef.current?.querySelector("[data-evidence-panel]");
+    if (!(panel instanceof HTMLElement)) return;
+    revealTallPanel(panel);
+  }, [
+    revealGen,
+    activeTab,
+    trajLoading,
+    obsLoading,
+    treeLoading,
+    showVerifierTrajectory,
+  ]);
 
   if (availableTabs.length === 0) {
     return (
@@ -63,12 +90,15 @@ export function EvidenceTabs({
   }
 
   return (
-    <div className="space-y-3">
+    <div ref={rootRef} className="space-y-3">
       {activeTab ? (
         <UnderlineTabs
           ariaLabel="Evidence tabs"
           value={activeTab}
-          onChange={onTabChange}
+          onChange={(tab) => {
+            onTabChange(tab);
+            setRevealGen((n) => n + 1);
+          }}
           items={availableTabs.map((tab) => ({
             id: tab,
             label: TAB_LABELS[tab],
