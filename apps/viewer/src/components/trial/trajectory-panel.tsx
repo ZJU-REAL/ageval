@@ -7,6 +7,7 @@ import {
   type ComponentType,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import {
   BotMessageSquare,
@@ -30,7 +31,7 @@ import { HoverTip } from "@/components/hover-tip";
 import { MarkdownBody } from "@/components/markdown";
 import type { TrajectoryStep } from "@/lib/api";
 import { CodeHighlight } from "@/lib/code-highlight";
-import { findScrollParent } from "@/lib/scroll-port";
+import { findScrollParent } from "@ageval/shared/scroll-port";
 import { cn } from "@/lib/utils";
 
 import { actorLabel, type ActorRow } from "./types";
@@ -531,12 +532,14 @@ export function TrajectoryPanel({
   note,
   result,
   actors,
+  panelRef,
 }: {
   loading: boolean;
   steps: TrajectoryStep[];
   note: string | null;
   result: Record<string, unknown> | null;
   actors: ActorRow[];
+  panelRef?: RefObject<HTMLDivElement | null>;
 }) {
   const visibleSteps = useMemo(
     () => steps.filter((s) => !isBatchAutoApprovePermission(s)),
@@ -606,8 +609,10 @@ export function TrajectoryPanel({
 
   const scroller = (children: ReactNode) => (
     <div
-      ref={trajScrollRef}
-      data-evidence-panel=""
+      ref={(el) => {
+        trajScrollRef.current = el;
+        if (panelRef) panelRef.current = el;
+      }}
       className={cn(TRAJ_PORT_CLASS, showInvokeHeaders && "space-y-4")}
     >
       {children}

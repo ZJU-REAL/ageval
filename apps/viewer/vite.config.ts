@@ -12,6 +12,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(rootDir, "./src"),
+      "@ageval/shared": path.resolve(rootDir, "../shared"),
     },
   },
   server: {

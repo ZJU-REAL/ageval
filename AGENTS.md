@@ -237,8 +237,8 @@ Agent 在协助 push、PR、发版前：**不得**假设「本地能 import」�
 | --- | --- | --- |
 | `python-core` | `src/` `sdk/` `tests/` `examples/` `services/` `docker/` `scripts/` `pyproject.toml` `uv.lock` `VERSION` … | 见下方 Python core |
 | `python-registry` | 同上（与 core 并行；仅 `tests/registry`） | `uv sync --frozen --extra registry` + `pytest tests/registry` |
-| `viewer-app` | `apps/viewer/**` | `pnpm --dir apps/viewer install --frozen-lockfile && pnpm --dir apps/viewer lint && pnpm --dir apps/viewer build` |
-| `hub-app` | `apps/hub/**` | `pnpm --dir apps/hub install --frozen-lockfile && pnpm --dir apps/hub lint && pnpm --dir apps/hub build` |
+| `viewer-app` | `apps/viewer/**` `apps/shared/**` | `pnpm --dir apps/viewer install --frozen-lockfile && pnpm --dir apps/viewer lint && pnpm --dir apps/viewer build` |
+| `hub-app` | `apps/hub/**` `apps/shared/**` | `pnpm --dir apps/hub install --frozen-lockfile && pnpm --dir apps/hub lint && pnpm --dir apps/hub build` |
 | `website` | `website/**` | `pnpm --dir website install --frozen-lockfile && pnpm --dir website build` |
 | `design-tokens` | `docs/design/13*` / token 脚本 / 三端 CSS | `python3 scripts/check_design_tokens.py` |
 

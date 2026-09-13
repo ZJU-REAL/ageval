@@ -166,6 +166,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │       └── reserved.py              # short ids: overlay, not Hub upload
 ├── src/ageval_sdk/                  # RunContext / RunTerminal / AgentSession (same distribution as ageval)
 ├── apps/
+│   ├── shared/                      # Hub + Viewer chrome (scroll-port)
 │   ├── viewer/                      # `ageval view` SPA
 │   └── hub/                         # Registry Dataset / Plugin / Agent / Leaderboard
 ├── services/registry/               # standalone HTTP: Route.access + *Service

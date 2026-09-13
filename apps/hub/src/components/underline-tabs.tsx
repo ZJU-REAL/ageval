@@ -5,6 +5,10 @@ import type { LucideIcon } from "lucide-react";
 import type { NavGlyph } from "@/components/empty-state";
 import { LiquidThumb, useTrackedRect } from "@/components/liquid-thumb";
 import { liquidGroup } from "@/lib/liquid";
+import {
+  focusWithoutScroll,
+  preventTabFocusScroll,
+} from "@ageval/shared/scroll-port";
 import { cn } from "@/lib/utils";
 
 type Item<T extends string> = {
@@ -64,12 +68,9 @@ export function UnderlineTabs<T extends string>({
             role="tab"
             data-tab-id={item.id}
             aria-selected={selected}
-            onMouseDown={(e) => {
-              // Keep focus without UA CenterIfNeeded scroll of #main.
-              if (e.button === 0) e.preventDefault();
-            }}
+            onMouseDown={preventTabFocusScroll}
             onClick={(e) => {
-              e.currentTarget.focus({ preventScroll: true });
+              focusWithoutScroll(e.currentTarget);
               onChange(item.id);
             }}
             className={cn(

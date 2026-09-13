@@ -43,3 +43,15 @@ export function revealTallPanel(el: HTMLElement): void {
   const tall = el.getBoundingClientRect().height >= scroller.clientHeight * 0.55;
   alignInScrollParent(el, tall ? "end" : "nearest");
 }
+
+/** Primary click: skip UA CenterIfNeeded; pair with `focusWithoutScroll`. */
+export function preventTabFocusScroll(event: {
+  button: number;
+  preventDefault: () => void;
+}): void {
+  if (event.button === 0) event.preventDefault();
+}
+
+export function focusWithoutScroll(el: HTMLElement): void {
+  el.focus({ preventScroll: true });
+}

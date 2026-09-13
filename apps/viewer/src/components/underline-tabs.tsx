@@ -3,6 +3,10 @@ import { Liquid } from "liquid-gooey";
 
 import { LiquidThumb, useTrackedRect } from "@/components/liquid-thumb";
 import { liquidGroup } from "@/lib/liquid";
+import {
+  focusWithoutScroll,
+  preventTabFocusScroll,
+} from "@ageval/shared/scroll-port";
 import { cn } from "@/lib/utils";
 
 type Item<T extends string> = { id: T; label: string };
@@ -50,11 +54,9 @@ export function UnderlineTabs<T extends string>({
           role="tab"
           data-tab-id={item.id}
           aria-selected={value === item.id}
-          onMouseDown={(e) => {
-            if (e.button === 0) e.preventDefault();
-          }}
+          onMouseDown={preventTabFocusScroll}
           onClick={(e) => {
-            e.currentTarget.focus({ preventScroll: true });
+            focusWithoutScroll(e.currentTarget);
             onChange(item.id);
           }}
           className={cn(

@@ -56,8 +56,10 @@ jobs:
               - '.python-version'
             viewer_app:
               - 'apps/viewer/**'
+              - 'apps/shared/**'
             hub_app:
               - 'apps/hub/**'
+              - 'apps/shared/**'
             website:
               - 'website/**'
             design_tokens:

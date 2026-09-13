@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { UnderlineTabs } from "@/components/underline-tabs";
-import { revealTallPanel } from "@/lib/scroll-port";
+import { revealTallPanel } from "@ageval/shared/scroll-port";
 import type { TrajectoryStep, TreeEntry, Trial } from "@/lib/trial-types";
 
 import { FileSplitPanel } from "./file-split-panel";
@@ -56,7 +56,7 @@ export function EvidenceTabs({
   const verifierSteps = observationSteps || [];
   const showVerifierTrajectory =
     activeTab === "verifier" && (obsLoading || verifierSteps.length > 0);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const [revealGen, setRevealGen] = useState(0);
 
   useLayoutEffect(() => {
@@ -69,8 +69,8 @@ export function EvidenceTabs({
         !showVerifierTrajectory &&
         treeLoading);
     if (pending) return;
-    const panel = rootRef.current?.querySelector("[data-evidence-panel]");
-    if (!(panel instanceof HTMLElement)) return;
+    const panel = panelRef.current;
+    if (!panel) return;
     revealTallPanel(panel);
   }, [
     revealGen,
@@ -90,7 +90,7 @@ export function EvidenceTabs({
   }
 
   return (
-    <div ref={rootRef} className="space-y-3">
+    <div className="space-y-3">
       {activeTab ? (
         <UnderlineTabs
           ariaLabel="Evidence tabs"
@@ -113,6 +113,7 @@ export function EvidenceTabs({
           note={trajNote}
           result={result}
           actors={actors}
+          panelRef={panelRef}
         />
       )}
 
@@ -123,6 +124,7 @@ export function EvidenceTabs({
           note={obsNote ?? null}
           result={result}
           actors={[]}
+          panelRef={panelRef}
         />
       )}
 
@@ -138,6 +140,7 @@ export function EvidenceTabs({
           groupByProfile={activeTab === "agent"}
           actors={actors}
           apiGroups={treeGroups}
+          panelRef={panelRef}
         />
       )}
     </div>

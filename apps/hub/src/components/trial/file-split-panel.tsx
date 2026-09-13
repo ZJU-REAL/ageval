@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type RefObject,
   type UIEvent,
 } from "react";
 
@@ -127,6 +128,7 @@ export function FileSplitPanel({
   groupByProfile = false,
   actors = [],
   apiGroups = null,
+  panelRef,
 }: {
   tree: TreeEntry[];
   treeLoading: boolean;
@@ -142,6 +144,7 @@ export function FileSplitPanel({
     profile_id?: string | null;
     label?: string;
   }> | null;
+  panelRef?: RefObject<HTMLDivElement | null>;
 }) {
   const nestedRoots = useMemo((): TreeNode[] => {
     const files = tree.filter((e) => e.type !== "dir");
@@ -285,7 +288,7 @@ export function FileSplitPanel({
 
   return (
     <div
-      data-evidence-panel=""
+      ref={panelRef}
       className={cn(
         "grid grid-cols-1 md:grid-cols-[280px_1fr] gap-0",
         "blob-panel overflow-hidden",
