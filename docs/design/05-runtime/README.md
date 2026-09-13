@@ -7,8 +7,8 @@ Runtime 在这里指：**环境、ACP、evaluate、evidence、campaign**。结�
 | [lifecycle.md](lifecycle.md) | Run / Trial / Attempt 身份与五个阶段状态机 |
 | [environment.md](environment.md) | Protocol 与四 kind |
 | [agent-service.md](agent-service.md) | parent ACP client + `attach_stdio`；executor 按 profile 绑；openai-http / anthropic-http 原生 `tools=` |
-| [evaluation.md](evaluation.md) | 停 solver writer、upload gold、可选 judge SDK invoke、绑定 PASS |
-| [evidence.md](evidence.md) | `.ageval/runs/`；`evaluation/observation.jsonl` |
+| [evaluation.md](evaluation.md) | 停 solver writer、upload gold、可选 judge SDK invoke、可选 `checks`、绑定 PASS |
+| [evidence.md](evidence.md) | `.ageval/runs/`；`evaluation/observation.jsonl`；`evaluation/checks.json` |
 | [campaign-suite.md](campaign-suite.md) | campaign 与 suite |
 
 Core 保留：身份、deadline、limits、cleanup、PASS 入口。题包保留 loop。插件填槽。

@@ -29,9 +29,9 @@ cleanup（finally）
   stop run 环境
 ```
 
-PASS 只经 `bind_evaluation` 进入 Result。`RunTerminal.completed`、轨迹完整、ACP 正常结束、judge 输出、`evaluation/observation.jsonl` 是否写全、harvest 快照在不在、打分 Host 起没起、`exec` 退出码，都不是 PASS。缺轨迹不得发明 PASS。
+PASS 只经 `bind_evaluation` 进入 Result。`RunTerminal.completed`、轨迹完整、ACP 正常结束、judge 输出、`evaluation/observation.jsonl` 是否写全、`evaluation/checks.json` 是否写全、单条 check 的 `status` / `score` / `exit_code` / stdout、harvest 快照在不在、打分 Host 起没起、`exec` 退出码，都不是 PASS。缺轨迹不得发明 PASS。
 
-`evaluation_runtime` 默认是 parent 子进程里的 `evaluator.py`（`src/ageval/runtime/eval_worker.py`），与 `run.py` 共用 Agent Service socket。缺省路径：evaluator **不**调 `Agent.session` → 无 `evaluation/observation.jsonl`，Verifier 仍是 `result.json` + 产物文件树。这是 opt-in，不是新槽、不是新 profile 文件。
+`evaluation_runtime` 默认是 parent 子进程里的 `evaluator.py`（`src/ageval/runtime/eval_worker.py`），与 `run.py` 共用 Agent Service socket。缺省路径：evaluator **不**调 `Agent.session` → 无 `evaluation/observation.jsonl`；**不**返回 `checks` → 无 `evaluation/checks.json`。Verifier 仍是 `result.json` + 产物文件树。两条都是 opt-in，不是新槽、不是新 profile 文件、不是新 yaml 键。
 
 ## 可选：evaluate 相位 SDK invoke（LLM-as-judge）
 
@@ -44,9 +44,42 @@ PASS 只经 `bind_evaluation` 进入 Result。`RunTerminal.completed`、轨迹�
 - gold 进环境之后，**solver（run 相位已用过的 profile）不得再 invoke**。
 - evaluate 相位的 invoke scratch 不得进 `agent/invocations/`，以免 Agent 页 / 根 `trajectory.jsonl` 吞掉。布局字符串只在 `src/ageval/evidence/`。
 - 轨迹行写入 `evaluation/observation.jsonl`（轨迹文件，与 Agent 轨迹同一行形）。**省略 `user` 行**（judge 提示常含 hidden reference）。不是 bind 的输入，不拷进 `result.json` / `metrics` / `summary.extra` / `evaluation/evaluator_raw.json`。
-- `evaluator.py` 仍返回 `{status, score, metrics}`；`bind_evaluation` 只读这份。
+- `evaluator.py` 仍返回 `{status, score, metrics}`；`bind_evaluation` 只读这份。可选额外键 `checks` 见下：parent 写入 `evaluation/checks.json`，**不是** bind 的输入。
 
 低分是有效 FAIL。cleanup 失败只 warning。evaluator 缺产物应 FAIL，不要把 KeyError 变成引擎崩溃。
+
+## 可选：evaluator 返回 `checks`（确定性检查项）
+
+脚本 / 检查点 / `scoring.exec` 的阶梯仍在 `evaluator.py`。Core **不得**从 `evaluate_exec` 事实或 `evaluator.py` AST 合成检查项列表。
+
+`evaluator.py` 返回对象可以多一个键 `checks`（list）。`bind_evaluation` **忽略**它：Attempt `result.json` 的 `status` / `score` / `metrics` 仍只来自顶层那三个字段。一条 check 标 FAIL、顶层标 PASS（或反过来）是合法观察，不得改写 bind。
+
+parent 在拿到 verdict 之后：`checks` 缺席、不是 list、或规范化后没有带 `id` 的行 → **不写文件**（今日文件树）。well-formed 时写入 `evaluation/checks.json`（`ageval.evaluation.checks/1`）。SDK 可提供组 list 形状的 helper；SDK 仍不得 bind PASS。
+
+```json
+{
+  "schema": "ageval.evaluation.checks/1",
+  "checks": [
+    {
+      "id": "audit",
+      "title": "schema audit",
+      "status": "PASS",
+      "score": 1.0,
+      "script": "evaluation/audit.py",
+      "environment": "audit",
+      "exit_code": 0,
+      "stdout": "…",
+      "stderr": ""
+    }
+  ]
+}
+```
+
+- 每条 `status` / `score` 是观察，不是 Attempt 裁决。
+- `script` 是 dataset 内路径：成员相对（`evaluation/audit.py`）或 package-relative（`tasks/<id>/…`）。Hub 用既有 package file API 打开；Viewer 读本地 dataset 文件。不要把脚本或 gold 正文拷进 Attempt archive。
+- `environment` 是可选的 `scoring.exec` 名。记下来不是 PASS。
+- stdout / stderr 可能夹带 gold；parent 截断后写入。作者不要把 expected 正文打进 checks（与 observation 省略 `user` 行同一谨慎）。
+- `slim_sealed_attempt` **保留** `evaluation/checks.json`，仍丢掉 `evaluator_raw.json`。Hub Attempt archive 同一套 keep/drop。
 
 ## gold：时间切开（默认）；isolated 再加空间切开
 
