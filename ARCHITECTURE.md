@@ -327,14 +327,14 @@ evaluate phase
                                #            ACP must name the host; omit / run-phase target fails
                                # optional Agent.session(<judge>).invoke via parent socket
                                # isolated: ACP attach_stdio hits the (named) scoring host
-  bind_evaluation              # PASS enters Result only here
+                               # opt-in: parent writes evaluation/checks.json from verdict
+  bind_evaluation              # PASS enters Result only here; checks are not an input
   after_evaluate               # must not change status
 
 record phase
   trajectory_collect → enrich  # later steps still run if this hook fails
   trajectory_seal              # exclusive-slot winner writes run-phase trajectory.jsonl
   evaluation/observation.jsonl # evaluate-phase trajectory.jsonl when SDK invoked (omit user)
-  evaluation/checks.json       # optional evaluator checks; not an input to bind
   summary_enrich               # later steps still run if this hook fails; Attempt summary.extra (omit when empty)
 
 cleanup (finally)

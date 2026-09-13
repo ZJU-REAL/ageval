@@ -161,6 +161,7 @@ def test_slim_and_archive_keep_checks_drop_raw(tmp_path: Path) -> None:
     prefix = f".ageval/runs/{run_dir.name}"
     assert f"{prefix}/evaluation/checks.json" in names
     assert f"{prefix}/evaluation/evaluator_raw.json" not in names
+    assert not any("/tasks/" in name or name.endswith("audit.py") for name in names)
 
 
 def test_compose_checks_and_observation(tmp_path: Path) -> None:

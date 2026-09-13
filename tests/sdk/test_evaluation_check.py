@@ -50,3 +50,11 @@ def test_evaluation_check_from_exec_result() -> None:
     assert row["stdout"] == "ok\n"
     assert row["stderr"] == ""
     assert row["environment"] == "audit"
+
+
+def test_evaluation_check_decodes_bytes_and_drops_nan_score() -> None:
+    result = SimpleNamespace(exit_code=0, stdout=b"ok\n", stderr=b"")
+    row = evaluation_check("audit", score=float("nan"), exec_result=result)
+    assert row["stdout"] == "ok\n"
+    assert row["stderr"] == ""
+    assert "score" not in row

@@ -333,6 +333,7 @@ def test_evaluation_checks_and_package_script(tmp_path: Path) -> None:
                         "score": 0.0,
                         "script": "evaluator.py",
                         "stdout": "mismatch",
+                        "gold": "must-not-leak",
                     },
                     {"id": "files", "status": "PASS", "score": 1.0},
                 ],
@@ -347,6 +348,7 @@ def test_evaluation_checks_and_package_script(tmp_path: Path) -> None:
     assert "evaluation/checks.json" in paths
     doc = trials.trial_evaluation_checks(db, job_id, "alpha", "run_alpha_1")
     assert [row["id"] for row in doc["checks"]] == ["audit", "files"]
+    assert "gold" not in doc["checks"][0]
     script = trials.trial_package_file(db, job_id, "alpha", "run_alpha_1", relpath="evaluator.py")
     assert script["path"] == "tasks/alpha/evaluator.py"
     assert "evaluate" in (script.get("content") or "")
@@ -355,6 +357,12 @@ def test_evaluation_checks_and_package_script(tmp_path: Path) -> None:
     assert gone["checks"] == []
     with pytest.raises(ConfigError, match="script path rejected"):
         trials.trial_package_file(db, job_id, "alpha", "run_alpha_1", relpath="../ageval.yaml")
+    with pytest.raises(ConfigError, match="script path rejected"):
+        trials.trial_package_file(
+            db, job_id, "alpha", "run_alpha_1", relpath="tasks/alpha/.ageval/runs/x"
+        )
+    with pytest.raises(ConfigError, match="script path rejected"):
+        trials.trial_package_file(db, job_id, "alpha", "run_alpha_1", relpath="/etc/passwd")
 
 
 def test_trajectory_tool_call_and_observation_steps(tmp_path: Path) -> None:

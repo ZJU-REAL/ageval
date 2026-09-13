@@ -373,9 +373,7 @@ def make_handler(
                         _json(
                             self,
                             200,
-                            trials.trial_package_file(
-                                root, job_id, task_id, run_id, relpath=rel
-                            ),
+                            trials.trial_package_file(root, job_id, task_id, run_id, relpath=rel),
                         )
                         return
             except ConfigError as exc:

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ageval.config.errors import ConfigError
-from ageval.evidence.checks import CHECKS_REL, package_script_rel
+from ageval.evidence.checks import CHECKS_REL, normalize_check_row, package_script_rel
 from ageval.evidence.locators import safe_id_segment
 from ageval.viewer.jobs import get_job
 from ageval.viewer.trials.constants import MAX_FILE_BYTES, TEXT_SUFFIXES
@@ -57,7 +57,12 @@ def trial_evaluation_checks(
             "note": "checks.json is not an object",
         }
     raw = data.get("checks")
-    checks = [row for row in raw if isinstance(row, dict)] if isinstance(raw, list) else []
+    checks = []
+    if isinstance(raw, list):
+        for item in raw:
+            row = normalize_check_row(item)
+            if row is not None:
+                checks.append(row)
     schema = data.get("schema")
     return {
         "ok": True,

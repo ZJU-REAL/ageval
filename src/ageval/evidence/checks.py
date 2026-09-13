@@ -6,27 +6,14 @@ this list from ``evaluate_exec`` facts or from ``evaluator.py``.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
 
 CHECKS_SCHEMA = "ageval.evaluation.checks/1"
-CHECKS_FILENAME = "checks.json"
 CHECKS_REL = "evaluation/checks.json"
 _STREAM_LIMIT = 65_536
 _TRUNCATION_MARK = "\n…[truncated]"
-
-_CHECK_FIELDS = (
-    "id",
-    "title",
-    "status",
-    "score",
-    "script",
-    "environment",
-    "exit_code",
-    "stdout",
-    "stderr",
-)
 
 
 def _as_text(value: Any) -> str | None:
@@ -52,7 +39,10 @@ def _clip_stream(value: Any) -> str | None:
 def _as_score(value: Any) -> float | None:
     if isinstance(value, bool) or not isinstance(value, int | float):
         return None
-    return float(value)
+    number = float(value)
+    if not math.isfinite(number):
+        return None
+    return number
 
 
 def _as_exit_code(value: Any) -> int | None:
@@ -111,8 +101,10 @@ def package_script_rel(script: str, task_id: str) -> str | None:
     if not isinstance(script, str) or not script.strip():
         return None
     clean = script.strip().replace("\\", "/")
-    parts = Path(clean).parts
-    if clean.startswith("/") or ".." in parts:
+    if clean.startswith("/") or clean.startswith("~"):
+        return None
+    segments = clean.split("/")
+    if any(part in {"", ".", "..", ".ageval"} for part in segments):
         return None
     if clean.startswith("tasks/"):
         return clean

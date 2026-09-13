@@ -18,8 +18,12 @@ export type EvaluationCheck = {
 };
 
 function packageScriptPath(script: string, taskId: string): string {
-  const clean = script.trim().replace(/\\/g, "/").replace(/^\/+/, "");
-  if (!clean || clean.split("/").includes("..")) return "";
+  const clean = script.trim().replace(/\\/g, "/");
+  if (!clean || clean.startsWith("/") || clean.startsWith("~")) return "";
+  const parts = clean.split("/");
+  if (parts.some((part) => part === "" || part === "." || part === ".." || part === ".ageval")) {
+    return "";
+  }
   if (clean.startsWith("tasks/")) return clean;
   if (!taskId.trim()) return "";
   return `tasks/${taskId.trim()}/${clean}`;
@@ -55,10 +59,15 @@ export function ChecksPanel({
   const [scriptLoading, setScriptLoading] = useState(false);
 
   async function viewScript(script: string) {
-    const path = packageScriptPath(script, taskId) || script;
-    setScriptPath(path);
+    const path = packageScriptPath(script, taskId);
+    const shown = path || script.trim();
+    setScriptPath(shown);
     setScriptContent(null);
     setScriptNote(null);
+    if (!path) {
+      setScriptNote(shown || "script path rejected");
+      return;
+    }
     if (!loadScript) {
       setScriptNote(path);
       return;

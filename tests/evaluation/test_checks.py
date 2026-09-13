@@ -62,6 +62,13 @@ def test_checks_document_truncates_streams() -> None:
     assert row["stderr"].endswith("…[truncated]")
 
 
+def test_checks_document_drops_non_finite_score() -> None:
+    doc = checks_document([{"id": "audit", "score": float("nan"), "status": "FAIL"}])
+    assert doc is not None
+    assert "score" not in doc["checks"][0]
+    json.dumps(doc, allow_nan=False)
+
+
 def test_persist_writes_only_when_well_formed(tmp_path: Path) -> None:
     store = AttemptEvidenceStore(root=tmp_path / "run", attempt_id="a", run_id="r")
     persist_evaluation_checks(store, {"status": "PASS", "score": 1.0})
@@ -104,6 +111,9 @@ def test_package_script_rel_prefixes_task() -> None:
     )
     assert package_script_rel("../secrets", "script-score") is None
     assert package_script_rel("", "script-score") is None
+    assert package_script_rel("/etc/passwd", "script-score") is None
+    assert package_script_rel("tasks/foo/../../secrets", "script-score") is None
+    assert package_script_rel("tasks/alpha/.ageval/runs/x", "script-score") is None
 
 
 def test_bind_result_ignores_checks_and_mismatch_is_allowed() -> None:
