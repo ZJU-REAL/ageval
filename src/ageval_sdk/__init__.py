@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ageval_sdk.agent import Agent, AgentSession
 from ageval_sdk.context import RunContext, RunParameterView, RunScope
+from ageval_sdk.evaluation import evaluation_check
 from ageval_sdk.terminal import RunTerminal
 from ageval_sdk.tool import AllowList, CallLimit, Tool, ToolSet
 from ageval_sdk.workflow import bounded_gather, collect_results, first_success
@@ -42,6 +43,7 @@ __all__ = [
     "bounded_gather",
     "collect_results",
     "first_success",
+    "evaluation_check",
 ]
 
 __version__ = _load_version()
