@@ -42,6 +42,6 @@ Timing comes from Attempt `phase_timing` (`prepare` / `run` / `evaluate` / `clea
 Trajectory steps follow the sealed file order: a thought, then the tools that thought invoked, then the next thought. When a sealed step (thought, `tool_call`, or final assistant) carries `elapsed_ms`, the step header shows that duration. Missing timing is omitted — Viewer does not invent it from file mtimes or the page clock.  
 Time, tokens, and step duration are **hints**, not PASS. Trajectory is not how scoring is decided. Each **tool-call** row (and other long rows) can collapse; the observational PASS note has expand-all / collapse-all, same as the Hub Attempt page.
 
-**Verifier:** default is `result.json` plus the `evaluation/` tree. When `evaluation/observation.jsonl` exists (evaluate-phase SDK invoke, LLM-as-judge), that tab reuses the Trajectory step cards. The Agent Trajectory tab still reads only root `trajectory.jsonl`. Observation is not PASS.
+**Verifier:** `result.json` plus the `evaluation/` tree stay on the tab. Optional `evaluation/checks.json` (deterministic `checks` on the evaluator return) lists each check with stdout/stderr and a package script link. Optional `evaluation/observation.jsonl` (evaluate-phase SDK invoke, LLM-as-judge) reuses the Trajectory step cards. Those panels compose; observation does not hide the file tree. The Agent Trajectory tab still reads only root `trajectory.jsonl`. Checks and observation are not PASS.
 
 Viewer does **not** talk to Registry; remote directories live on the Hub. SPA details: `apps/viewer/README.md`.

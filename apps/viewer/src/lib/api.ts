@@ -418,3 +418,34 @@ export function fetchTrialObservation(jobId: string, taskId: string, runId: stri
     note?: string;
   }>(`${trialBase(jobId, taskId, runId)}/observation`);
 }
+
+export function fetchTrialChecks(jobId: string, taskId: string, runId: string) {
+  return getJson<{
+    ok: boolean;
+    run_id: string;
+    task_id: string;
+    schema: string | null;
+    checks: Array<Record<string, unknown>>;
+    note?: string;
+  }>(`${trialBase(jobId, taskId, runId)}/checks`);
+}
+
+export function fetchTrialPackageFile(
+  jobId: string,
+  taskId: string,
+  runId: string,
+  path: string,
+) {
+  const q = new URLSearchParams({ path });
+  return getJson<{
+    ok: boolean;
+    run_id: string;
+    path: string;
+    name: string;
+    size: number;
+    encoding: string;
+    truncated?: boolean;
+    content?: string | null;
+    note?: string;
+  }>(`${trialBase(jobId, taskId, runId)}/package-file?${q}`);
+}

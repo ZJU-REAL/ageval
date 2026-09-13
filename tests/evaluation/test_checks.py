@@ -10,6 +10,7 @@ from ageval.evidence.checks import (
     CHECKS_REL,
     CHECKS_SCHEMA,
     checks_document,
+    package_script_rel,
     persist_evaluation_checks,
 )
 from ageval.evidence.store import AttemptEvidenceStore
@@ -91,6 +92,18 @@ def test_persist_does_not_invent_from_facts(tmp_path: Path) -> None:
         },
     )
     assert not (tmp_path / "run" / CHECKS_REL).exists()
+
+
+def test_package_script_rel_prefixes_task() -> None:
+    assert package_script_rel("evaluation/audit.py", "script-score") == (
+        "tasks/script-score/evaluation/audit.py"
+    )
+    assert (
+        package_script_rel("tasks/script-score/evaluation/audit.py", "other")
+        == "tasks/script-score/evaluation/audit.py"
+    )
+    assert package_script_rel("../secrets", "script-score") is None
+    assert package_script_rel("", "script-score") is None
 
 
 def test_bind_result_ignores_checks_and_mismatch_is_allowed() -> None:

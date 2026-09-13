@@ -7,10 +7,13 @@ import {
   TREE_SCOPES,
   type TabId,
 } from "@/components/trial/tabs";
+import type { EvaluationCheck } from "@/components/trial/checks-panel";
 import {
   fetchTrial,
+  fetchTrialChecks,
   fetchTrialFile,
   fetchTrialObservation,
+  fetchTrialPackageFile,
   fetchTrialTrajectory,
   fetchTrialTree,
   type Job,
@@ -49,6 +52,10 @@ export function useTrialDetail(jobId: string, taskId: string, runId: string) {
   const [observationSteps, setObservationSteps] = useState<TrajectoryStep[]>([]);
   const [obsNote, setObsNote] = useState<string | null>(null);
   const [obsLoading, setObsLoading] = useState(false);
+  const [checks, setChecks] = useState<EvaluationCheck[]>([]);
+  const [checksNote, setChecksNote] = useState<string | null>(null);
+  const [checksLoading, setChecksLoading] = useState(false);
+  const checksFetchedRef = useRef(false);
 
   const [tree, setTree] = useState<TreeEntry[]>([]);
   const [treeGroups, setTreeGroups] = useState<
@@ -75,6 +82,9 @@ export function useTrialDetail(jobId: string, taskId: string, runId: string) {
     setSteps([]);
     trajFetchedRef.current = false;
     obsFetchedRef.current = false;
+    checksFetchedRef.current = false;
+    setChecks([]);
+    setChecksNote(null);
     setTree([]);
     setSelectedPath(null);
     setFileContent(null);
@@ -150,6 +160,29 @@ export function useTrialDetail(jobId: string, taskId: string, runId: string) {
           })
           .finally(() => {
             if (!cancelled) setObsLoading(false);
+          });
+      }
+      if (!checksFetchedRef.current) {
+        setChecksLoading(true);
+        fetchTrialChecks(jobId, taskId, runId)
+          .then((data) => {
+            if (cancelled) return;
+            const rows = (data.checks || []).filter(
+              (row): row is EvaluationCheck =>
+                !!row && typeof row.id === "string" && row.id.length > 0,
+            );
+            setChecks(rows);
+            checksFetchedRef.current = true;
+            setChecksNote(data.note || null);
+          })
+          .catch((e: Error) => {
+            if (!cancelled) {
+              setChecks([]);
+              setChecksNote(e.message);
+            }
+          })
+          .finally(() => {
+            if (!cancelled) setChecksLoading(false);
           });
       }
     }
@@ -234,6 +267,14 @@ export function useTrialDetail(jobId: string, taskId: string, runId: string) {
     observationSteps,
     obsNote,
     obsLoading,
+    checks,
+    checksNote,
+    checksLoading,
+    loadScript: (packagePath: string) =>
+      fetchTrialPackageFile(jobId, taskId, runId, packagePath).then((data) => ({
+        content: data.content ?? null,
+        note: data.note || (data.truncated ? "truncated preview" : null),
+      })),
     tree,
     treeGroups,
     treeLoading,

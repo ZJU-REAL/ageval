@@ -7,6 +7,7 @@ this list from ``evaluate_exec`` facts or from ``evaluator.py``.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 CHECKS_SCHEMA = "ageval.evaluation.checks/1"
@@ -103,6 +104,21 @@ def checks_document(raw_checks: Any) -> dict[str, Any] | None:
     if not rows:
         return None
     return {"schema": CHECKS_SCHEMA, "checks": rows}
+
+
+def package_script_rel(script: str, task_id: str) -> str | None:
+    """Resolve a check ``script`` to a dataset-relative path. Reject traversal."""
+    if not isinstance(script, str) or not script.strip():
+        return None
+    clean = script.strip().replace("\\", "/")
+    parts = Path(clean).parts
+    if clean.startswith("/") or ".." in parts:
+        return None
+    if clean.startswith("tasks/"):
+        return clean
+    if not isinstance(task_id, str) or not task_id.strip():
+        return None
+    return f"tasks/{task_id.strip()}/{clean}"
 
 
 def persist_evaluation_checks(store: Any, verdict: Mapping[str, Any] | None) -> None:

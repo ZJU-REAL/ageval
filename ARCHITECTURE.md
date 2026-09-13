@@ -334,6 +334,7 @@ record phase
   trajectory_collect → enrich  # later steps still run if this hook fails
   trajectory_seal              # exclusive-slot winner writes run-phase trajectory.jsonl
   evaluation/observation.jsonl # evaluate-phase trajectory.jsonl when SDK invoked (omit user)
+  evaluation/checks.json       # optional evaluator checks; not an input to bind
   summary_enrich               # later steps still run if this hook fails; Attempt summary.extra (omit when empty)
 
 cleanup (finally)

@@ -34,7 +34,7 @@ TTY prints a short recap (no digest / sha256). A pipe keeps JSON. `ageval run --
 
 Exit: 0 PASS / probe ready; 1 FAIL / probe not ready; 2 ERROR.
 
-Single Attempt evidence: `<dataset>/.ageval/runs/<id>/` (`lock.json`, `result.json`, `trajectory.jsonl`; optional `evaluation/observation.jsonl` for evaluate-phase SDK invoke). Trajectory ≠ PASS.
+Single Attempt evidence: `<dataset>/.ageval/runs/<id>/` (`lock.json`, `result.json`, `trajectory.jsonl`; optional `evaluation/observation.jsonl` for evaluate-phase SDK invoke; optional `evaluation/checks.json` for evaluator `checks`). Trajectory / checks ≠ PASS.
 
 `--probe` missing `E2B_API_KEY` or ssh locator → ready false, started false.
 

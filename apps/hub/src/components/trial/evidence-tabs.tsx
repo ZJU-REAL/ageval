@@ -4,6 +4,7 @@ import { UnderlineTabs } from "@/components/underline-tabs";
 import { revealTallPanel } from "@ageval/shared/scroll-port";
 import type { TrajectoryStep, TreeEntry, Trial } from "@/lib/trial-types";
 
+import { ChecksPanel, type EvaluationCheck } from "./checks-panel";
 import { FileSplitPanel } from "./file-split-panel";
 import { TAB_LABELS, type TabId } from "./tabs";
 import { TrajectoryPanel } from "./trajectory-panel";
@@ -18,6 +19,11 @@ export function EvidenceTabs({
   observationSteps,
   obsLoading,
   obsNote,
+  checks,
+  checksLoading,
+  checksNote,
+  taskId,
+  loadScript,
   result,
   actors,
   tree,
@@ -38,6 +44,13 @@ export function EvidenceTabs({
   observationSteps?: TrajectoryStep[];
   obsLoading?: boolean;
   obsNote?: string | null;
+  checks?: EvaluationCheck[];
+  checksLoading?: boolean;
+  checksNote?: string | null;
+  taskId?: string;
+  loadScript?: (
+    packagePath: string,
+  ) => Promise<{ content: string | null; note?: string | null }>;
   result: Record<string, unknown> | null;
   actors: NonNullable<Trial["actors"]>;
   tree: TreeEntry[];
@@ -54,8 +67,11 @@ export function EvidenceTabs({
   }> | null;
 }) {
   const verifierSteps = observationSteps || [];
-  const showVerifierTrajectory =
-    activeTab === "verifier" && (obsLoading || verifierSteps.length > 0);
+  const verifierChecks = checks || [];
+  const verifierTab = activeTab === "verifier";
+  const showVerifierTrajectory = verifierTab && (obsLoading || verifierSteps.length > 0);
+  const showVerifierChecks =
+    verifierTab && (checksLoading || verifierChecks.length > 0);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [revealGen, setRevealGen] = useState(0);
 
@@ -63,11 +79,7 @@ export function EvidenceTabs({
     if (revealGen === 0) return;
     const pending =
       (activeTab === "trajectory" && trajLoading) ||
-      (activeTab === "verifier" && !!obsLoading) ||
-      (activeTab != null &&
-        activeTab !== "trajectory" &&
-        !showVerifierTrajectory &&
-        treeLoading);
+      (verifierTab && (!!obsLoading || !!checksLoading || treeLoading));
     if (pending) return;
     const panel = panelRef.current;
     if (!panel) return;
@@ -77,8 +89,9 @@ export function EvidenceTabs({
     activeTab,
     trajLoading,
     obsLoading,
+    checksLoading,
     treeLoading,
-    showVerifierTrajectory,
+    verifierTab,
   ]);
 
   if (availableTabs.length === 0) {
@@ -117,18 +130,43 @@ export function EvidenceTabs({
         />
       )}
 
-      {showVerifierTrajectory && (
-        <TrajectoryPanel
-          loading={!!obsLoading}
-          steps={verifierSteps}
-          note={obsNote ?? null}
-          result={result}
-          actors={[]}
-          panelRef={panelRef}
-        />
+      {verifierTab && (
+        <div className="space-y-3">
+          {showVerifierChecks && (
+            <ChecksPanel
+              loading={!!checksLoading}
+              checks={verifierChecks}
+              note={checksNote ?? null}
+              taskId={taskId || ""}
+              loadScript={loadScript}
+            />
+          )}
+          {showVerifierTrajectory && (
+            <TrajectoryPanel
+              loading={!!obsLoading}
+              steps={verifierSteps}
+              note={obsNote ?? null}
+              result={result}
+              actors={[]}
+            />
+          )}
+          <FileSplitPanel
+            tree={tree}
+            treeLoading={treeLoading}
+            selectedPath={selectedPath}
+            onSelect={onSelectPath}
+            fileContent={fileContent}
+            fileLoading={fileLoading}
+            fileNote={fileNote}
+            groupByProfile={false}
+            actors={actors}
+            apiGroups={treeGroups}
+            panelRef={panelRef}
+          />
+        </div>
       )}
 
-      {activeTab && activeTab !== "trajectory" && !showVerifierTrajectory && (
+      {activeTab && activeTab !== "trajectory" && activeTab !== "verifier" && (
         <FileSplitPanel
           tree={tree}
           treeLoading={treeLoading}

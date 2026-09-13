@@ -131,7 +131,7 @@ async def run(ctx) -> None:
 - Agent / `run.py` / `environment_setup` **禁止**看到 `evaluation/`（不 upload、不 mount、不 COPY 进 Agent 用镜像层）。isolated 时这条红线变成 **空间切开 + 时间切开**：gold 根本不进 Agent 环境。
 - 这不是 `path_views`。evidence 记 `gold_materialized`（at evaluate）；isolated 另记打分 Host 的 start/stop（含 `name`），那些事实 **不是** PASS。`exec` 退出码也不是。
 - gold 进打分环境之后 solver 不得再 invoke。evaluate 相位可以按 **另一** profile（例 `judge`）走同一 Parent Agent Service；isolated 时 attach 目标是当时的打分 Host；有名表时 ACP 必须 `environment=` 选那一只（run 相位点名失败）。
-- 省略开关 = 今日 Attempt。judge 观察不是 PASS。`observation.jsonl` 缺席 = 今日脚本评测路径。
+- 省略开关 = 今日 Attempt。judge 观察不是 PASS。`observation.jsonl` 缺席 = 今日脚本评测路径。可选 `checks` 不是 PASS；缺席 = 不写 `evaluation/checks.json`。
 - 阶梯（顺序、短路、分数混合）在 `evaluator.py`，不在 Core。
 
 ### 其他 slot
