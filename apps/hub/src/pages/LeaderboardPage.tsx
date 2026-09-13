@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { BoardChartControls } from "@/components/board-chart-controls";
 import { CatalogScopeBar } from "@/components/catalog-scope-bar";
-import { CatalogEmpty, CatalogLoading } from "@/components/empty-state";
+import { CatalogEmpty, CatalogLoading } from "@/components/catalog-empty";
 import { PageHead } from "@/components/page-head";
 import { WaffleLegend } from "@/components/leaderboard-waffle";
 import {
@@ -15,7 +15,7 @@ import {
   PlazaModelTables,
   plazaModelRowCount,
 } from "@/components/plaza-tables";
-import { UnderlineTabs } from "@/components/underline-tabs";
+import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
 import {
   latestPackageByDataset,
   listOrgs,

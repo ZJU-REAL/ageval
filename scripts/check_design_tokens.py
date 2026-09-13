@@ -108,8 +108,6 @@ HEX_ALLOWLIST = {
     "apps/shared/css/tokens.css",
     "website/src/components/owl-flat.tsx",
     "apps/shared/components/owl-icon.tsx",
-    "apps/hub/src/components/owl-icon.tsx",
-    "apps/viewer/src/components/owl-icon.tsx",
 }
 
 HEX_RE = re.compile(r"#[0-9a-fA-F]{6}\b")

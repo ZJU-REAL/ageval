@@ -51,9 +51,9 @@ Motion is the same CSS budget as the rest of Hub (`200ms` / `--ease-smooth`). Do
 
 Before drawing a control:
 
-1. Find the same job already shipped (`src/components/` or `src/components/ui/`).
+1. Find the same job already shipped (`apps/shared` or Hub `src/components/`).
 2. Copy that instance — including the classes that encode focus, radius, and type.
-3. If nothing exists, add a primitive under `src/components/ui/` (share with Viewer when the control is chrome). Do not one-off a native `<input>` / `<select>` / `border-b-2` tab.
+3. If nothing exists, add a primitive under `apps/shared/components/ui/` when the control is overlap chrome. Do not one-off a native `<input>` / `<select>` / `border-b-2` tab.
 
 `Input`'s default `focus-visible:border-link` is the **edit-field** language in docs/13. Search, filter, and other scan chrome keep `border-hairline` on focus. Copy `CatalogScopeBar`, not the primitive default.
 
@@ -93,4 +93,4 @@ Token values, type stacks, radii, and motion curves: the YAML in Viewer `DESIGN.
 | Dialog / confirm | `FrameModal` / `ConfirmDialog` (portal via `OverlayRoot` / `document.body`) |
 | Loading / empty | `ThinkingLogo` loading vs centered empty stack (docs/13) |
 
-New chrome that both Hub and Viewer need starts as a `src/components/ui/` primitive, used on both sides.
+New chrome that both Hub and Viewer need starts as an `apps/shared/components/ui/` primitive.

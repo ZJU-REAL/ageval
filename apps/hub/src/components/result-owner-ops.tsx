@@ -2,23 +2,23 @@ import { CircleMinus, Settings, Share2, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { AgentSearchModal, attachSpecFromPackage } from "@/components/agent-search-modal";
-import { DisabledTip } from "@/components/hover-tip";
+import { DisabledTip } from "@ageval/shared/components/hover-tip";
 import { FieldLabel } from "@/components/field-label";
-import { LabMark } from "@/components/lab-mark";
+import { LabMark } from "@ageval/shared/components/lab-mark";
 import { ModelSearchModal } from "@/components/model-search-modal";
-import { BrandMark } from "@/components/brand-mark";
-import { Button } from "@/components/ui/button";
+import { BrandMark } from "@ageval/shared/components/brand-mark";
+import { Button } from "@ageval/shared/components/ui/button";
 import { DashButton, DashMenuItem } from "@/components/ui/dash-button";
-import { ConfirmDialog, Modal } from "@/components/ui/confirm-dialog";
+import { ConfirmDialog, Modal } from "@ageval/shared/components/ui/confirm-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { toast } from "@/components/ui/toast";
+} from "@ageval/shared/components/ui/dropdown-menu";
+import { Input } from "@ageval/shared/components/ui/input";
+import { toast } from "@ageval/shared/components/ui/toast";
 import { toastError } from "@/lib/toast-error";
 import {
   Select,
@@ -26,7 +26,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ageval/shared/components/ui/select";
 import {
   addResultShare,
   applyRequest,
@@ -55,9 +55,9 @@ import {
   overlayModelsForAttach,
   overlayRoles,
 } from "@/lib/agent-attach";
-import { markFromPackage } from "@/lib/brand-marks";
-import { joinOverlay, loadModelPin, pinnedModel } from "@/lib/model-pin";
-import { overlayHarnessIds } from "@/lib/utils";
+import { markFromPackage } from "@ageval/shared/lib/brand-marks";
+import { joinOverlay, loadModelPin, pinnedModel } from "@ageval/shared/lib/model-pin";
+import { overlayHarnessIds } from "@ageval/shared/lib/utils";
 
 function SentenceBlank({
   value,

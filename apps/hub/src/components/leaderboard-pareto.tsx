@@ -1,15 +1,15 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { HoverTip } from "@/components/hover-tip";
-import { resolveLabMarkAsset } from "@/lib/lab-mark-asset";
+import { HoverTip } from "@ageval/shared/components/hover-tip";
+import { resolveLabMarkAsset } from "@ageval/shared/lib/lab-mark-asset";
 import {
   joinOverlay,
   loadModelPin,
   overlayLab,
   pinnedModel,
   type ModelPin,
-} from "@/lib/model-pin";
-import type { BrandMarkTone } from "@/lib/brand-marks";
+} from "@ageval/shared/lib/model-pin";
+import type { BrandMarkTone } from "@ageval/shared/lib/brand-marks";
 import type { SuiteRow } from "@/lib/api";
 import {
   axisValue,
@@ -22,7 +22,7 @@ import {
 } from "@/lib/leaderboard-charts";
 import { useScatterMorph, type ScatterPose } from "@/lib/chart-morph";
 import { markScaleForWidth, placeScatterLabels } from "@/lib/scatter-label-layout";
-import { cn, displayLabelsFromOverlay } from "@/lib/utils";
+import { cn, displayLabelsFromOverlay } from "@ageval/shared/lib/utils";
 
 const DOT_FILL = [
   "fill-ink",

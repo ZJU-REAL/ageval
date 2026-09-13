@@ -20,13 +20,14 @@ Taste: [DESIGN.md](./DESIGN.md) plus Viewer DESIGN.md **Taste**. Not a landing.
 
 ## UI reuse (mandatory)
 
-Stack is Vite + React + Tailwind + **shadcn/ui** under `src/components/ui/`.
-Same family as Viewer. Role → component map: [DESIGN.md](./DESIGN.md).
+Stack is Vite + React + Tailwind + **shadcn/ui**. Overlap primitives live in
+`apps/shared/components/ui/`; Hub-only controls stay under `src/components/ui/`
+(chip, dash-button). Same family as Viewer. Role → component map: [DESIGN.md](./DESIGN.md).
 
 1. **Reuse a shipped control.** Copy an existing instance, including its
    focus classes. Version / filter / menu lists use
-   `@/components/ui/select` (see `VersionSwitcher`) or
-   `@/components/ui/dropdown-menu`. Catalog search uses `CatalogScopeBar`.
+   `@ageval/shared/components/ui/select` (see `VersionSwitcher`) or
+   `@ageval/shared/components/ui/dropdown-menu`. Catalog search uses `CatalogScopeBar`.
 2. **No native chrome.** Product UI must not use raw `<select>`, `<option>`,
    or unstyled `<button>` as the visible control. Radix/shadcn owns focus,
    trigger, and list.
@@ -53,5 +54,5 @@ Same family as Viewer. Role → component map: [DESIGN.md](./DESIGN.md).
    labels use body-sm. How a primitive is drawn: [DESIGN.md](./DESIGN.md)
    plus Viewer Taste **Composition**.
 
-New chrome requires a new `src/components/ui/` primitive first, used by both
+New overlap chrome requires a new `apps/shared/components/ui/` primitive first, used by both
 Hub and Viewer. Do not one-off style a native element.

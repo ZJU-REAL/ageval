@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { LoadingState } from "@/components/empty-state";
+import { LoadingState } from "@ageval/shared/components/empty-state";
 import { CatalogHead } from "@/components/page-head";
 import { BuiltinMark } from "@/components/builtin-mark";
-import { CommandStrip } from "@/components/command-strip";
+import { CommandStrip } from "@ageval/shared/components/command-strip";
 import { DisplayNameEditor } from "@/components/display-name-editor";
 import { EntityMarkControl } from "@/components/entity-mark-control";
-import { BrandMark } from "@/components/brand-mark";
-import { entityHintFromPackage, markFromPackage } from "@/lib/brand-marks";
-import { INTERNAL_LINK_CLASS } from "@/lib/links";
+import { BrandMark } from "@ageval/shared/components/brand-mark";
+import { entityHintFromPackage, markFromPackage } from "@ageval/shared/lib/brand-marks";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 import { alignInScrollParent } from "@ageval/shared/lib/scroll-port";
 import { OfficialMark } from "@/components/official-mark";
 import { FileSplitPanel } from "@/components/file-split-panel";
@@ -17,7 +17,7 @@ import { FieldLabel } from "@/components/field-label";
 import { MarketplaceCounts } from "@/components/marketplace-counts";
 import { PackageOwnerOps } from "@/components/package-owner-ops";
 import { PackageStarButton } from "@/components/star-toggle";
-import { InlineMarkdown } from "@/components/markdown";
+import { InlineMarkdown } from "@ageval/shared/components/markdown";
 import { Chip } from "@/components/ui/chip";
 import {
   declaredSlotsFromPreview,
@@ -42,7 +42,7 @@ import {
   RegistryHttpError,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import { buildNestedTree, type TreeNode } from "@/lib/file-tree";
+import { buildNestedTree, type TreeNode } from "@ageval/shared/lib/file-tree";
 
 export function PluginDetailPage() {
   const { pluginId: rawId } = useParams();

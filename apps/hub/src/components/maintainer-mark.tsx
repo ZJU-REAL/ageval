@@ -1,6 +1,6 @@
 import { ShieldUser } from "lucide-react";
 
-import { HoverTip } from "@/components/hover-tip";
+import { HoverTip } from "@ageval/shared/components/hover-tip";
 
 const TIP = "Platform maintainer";
 

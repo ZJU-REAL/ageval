@@ -71,9 +71,9 @@ A new control joins the chrome already on the page. It does not start a new band
 
 Before drawing a control:
 
-1. Find the same job already shipped here or in Hub (`src/components/` / `src/components/ui/`).
+1. Find the same job already shipped in `apps/shared` or this SPA.
 2. Copy that instance — including focus, radius, and type classes.
-3. If the primitive is missing a slot, extend `src/components/ui/` so Hub and Viewer stay aligned. Do not one-off a native `<select>` / `<input>` / `border-b-2` tab.
+3. If the primitive is missing a slot, extend `apps/shared/components/ui/` so Hub and Viewer stay aligned. Do not one-off a native `<select>` / `<input>` / `border-b-2` tab.
 
 `Input`'s default `focus-visible:border-link` is the **edit-field** language in docs/13. Jobs search and other scan chrome keep `border-hairline` on focus (same as Hub `CatalogScopeBar`). Do not accept the primitive default for a new search.
 

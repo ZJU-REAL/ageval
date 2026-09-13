@@ -19,8 +19,8 @@ from datetime import date
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-PIN_DIR = REPO / "apps/hub/src/lib/model-pin"
-LOGO_DIR = REPO / "apps/hub/public/model-pin/logos"
+PIN_DIR = REPO / "apps/shared/lib/model-pin"
+LOGO_DIR = REPO / "apps/shared/lib/model-pin/logos"
 
 MODELS_URL = "https://models.dev/models.json"
 API_URL = "https://models.dev/api.json"
@@ -30,7 +30,7 @@ LOBE_SVG_URL = "https://unpkg.com/@lobehub/icons-static-svg@latest/icons/{slug}.
 INK_FILL = "#14161F"
 PLACEHOLDER_NEEDLE = "9.8132 15.9038"
 
-# Keep in lockstep with apps/hub/src/lib/model-pin/lab-marks.ts.
+# Keep in lockstep with apps/shared/lib/model-pin/lab-marks.ts.
 # These labs reuse Hub brand-marks at render; do not vendor a pin SVG.
 LAB_BRAND_MARK = {
     "alibaba": "qwen",

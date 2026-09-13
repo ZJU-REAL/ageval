@@ -1,4 +1,4 @@
-import { HoverTip } from "@/components/hover-tip";
+import { HoverTip } from "@ageval/shared/components/hover-tip";
 import type { DeclaredSlot, PluginPreview } from "@/lib/api";
 
 /** Host slot vocabulary from src/ageval/plugins/slots.py — exclusive + chain only. */

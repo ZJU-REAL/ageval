@@ -12,7 +12,7 @@ import {
 import {
   CatalogEmpty,
   CatalogLoading,
-} from "@/components/empty-state";
+} from "@/components/catalog-empty";
 import { PageHead } from "@/components/page-head";
 import { useCatalogList } from "@/hooks/use-catalog-list";
 import { encodeDatasetId, latestPackageByDataset } from "@/lib/api";

@@ -255,6 +255,7 @@ ageval/
 │   │   ├── minimal-demo/            # terminal-jsonl-agg · tau2-dialog-min · multiagent-env-min
 │   │   └── tau3-airline-5/            # airline-00 … airline-04
 │   └── agents/                      # ageval.agent/1
+├── apps/shared                      # Hub + Viewer 共用 chrome
 ├── apps/viewer                      # ageval view SPA
 ├── apps/hub                         # Hub SPA
 ├── services/registry/               # 包与结果 HTTP

@@ -4,7 +4,7 @@ import {
   listPackageVersionsWithPerformances,
   type AgentPerformance,
 } from "@/lib/api";
-import { joinOverlay, loadModelPin } from "@/lib/model-pin";
+import { joinOverlay, loadModelPin } from "@ageval/shared/lib/model-pin";
 
 export type ModelAppearance = {
   canonical: string | null;

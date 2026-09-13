@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 
 import { CatalogCardGrid } from "@/components/catalog-card";
-import { LoadingState } from "@/components/empty-state";
+import { LoadingState } from "@ageval/shared/components/empty-state";
 import { MaintainerMark } from "@/components/maintainer-mark";
 import { OfficialMark } from "@/components/official-mark";
 import { usePublicUser } from "@/hooks/use-public-user";
@@ -26,7 +26,7 @@ import {
 } from "@/lib/api";
 import { getGithubUser, getToken } from "@/lib/auth";
 import { rememberReturnPath } from "@/lib/return-path";
-import { datasetRef, formatDate } from "@/lib/utils";
+import { datasetRef, formatDate } from "@ageval/shared/lib/utils";
 
 type TaskRow = { datasetId: string; taskId: string };
 

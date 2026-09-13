@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-_PIN_REL = Path("apps/hub/src/lib/model-pin/pin.json")
+_PIN_REL = Path("apps/shared/lib/model-pin/pin.json")
 
 
 def _repo_root() -> Path:

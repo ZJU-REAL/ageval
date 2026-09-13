@@ -6,7 +6,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ageval/shared/components/ui/select";
 import {
   BOARD_CHARTS,
   PARETO_AXES,

@@ -1,4 +1,4 @@
-"""Hub overlay → canonical join. Keep in lockstep with apps/hub/src/lib/model-pin/join.ts."""
+"""Hub overlay → canonical join. Keep in lockstep with apps/shared/lib/model-pin/join.ts."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
-PIN_PATH = REPO / "apps/hub/src/lib/model-pin/pin.json"
+PIN_PATH = REPO / "apps/shared/lib/model-pin/pin.json"
 
 
 def load_pin() -> dict[str, Any]:

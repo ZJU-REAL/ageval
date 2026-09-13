@@ -59,9 +59,8 @@ If the port is already in use, stop the other `ageval view` process or pass `--p
 ## Production build (required for `ageval view`)
 
 ```bash
-cd apps/viewer
-pnpm install
-pnpm build   # writes dist/
+pnpm --dir apps/viewer install
+pnpm --dir apps/viewer build   # writes dist/ (inlines apps/shared)
 uv run ageval view <dataset>
 ```
 

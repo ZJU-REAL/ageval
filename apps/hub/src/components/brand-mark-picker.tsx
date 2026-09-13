@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { BrandMark } from "@/components/brand-mark";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Input } from "@/components/ui/input";
-import { buttonVariants } from "@/components/ui/button";
+import { BrandMark } from "@ageval/shared/components/brand-mark";
+import { ConfirmDialog } from "@ageval/shared/components/ui/confirm-dialog";
+import { Input } from "@ageval/shared/components/ui/input";
+import { buttonVariants } from "@ageval/shared/components/ui/button";
 import {
   BRAND_MARKS,
   FIRST_PARTY_MARK_ID,
   githubAvatarUrl,
   parseGithubLogin,
-} from "@/lib/brand-marks";
-import { cn } from "@/lib/utils";
+} from "@ageval/shared/lib/brand-marks";
+import { cn } from "@ageval/shared/lib/utils";
 
 export type MarkDraft =
   | { mode: "default" }

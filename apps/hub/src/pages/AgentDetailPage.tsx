@@ -4,36 +4,37 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { Settings } from "lucide-react";
 
 import { BindingPreview } from "@/components/binding-preview";
-import { LoadingState } from "@/components/empty-state";
-import { BrandMark } from "@/components/brand-mark";
+import { LoadingState } from "@ageval/shared/components/empty-state";
+import { BrandMark } from "@ageval/shared/components/brand-mark";
 import { BuiltinMark } from "@/components/builtin-mark";
 import { MarketplaceCounts } from "@/components/marketplace-counts";
 import { CatalogHead } from "@/components/page-head";
 import { PackageStarButton } from "@/components/star-toggle";
-import { CommandStrip } from "@/components/command-strip";
+import { CommandStrip } from "@ageval/shared/components/command-strip";
 import { DisplayNameEditor } from "@/components/display-name-editor";
 import { EntityMarkControl } from "@/components/entity-mark-control";
-import { entityHintFromPackage, markFromPackage } from "@/lib/brand-marks";
-import { INTERNAL_LINK_CLASS, modelCatalogHref } from "@/lib/links";
+import { entityHintFromPackage, markFromPackage } from "@ageval/shared/lib/brand-marks";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
+import { modelCatalogHref } from "@/lib/links";
 import { OfficialMark } from "@/components/official-mark";
 import { FileSplitPanel } from "@/components/file-split-panel";
 import { PackageOwnerOps } from "@/components/package-owner-ops";
 import { suiteDetailPath } from "@/components/suite-inspector";
-import { InlineMarkdown } from "@/components/markdown";
+import { InlineMarkdown } from "@ageval/shared/components/markdown";
 import { Chip } from "@/components/ui/chip";
 import { ModelDirectory } from "@/components/model-directory";
-import { ModelLabel } from "@/components/model-label";
-import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/confirm-dialog";
-import { UnderlineTabs } from "@/components/underline-tabs";
-import { Input } from "@/components/ui/input";
+import { ModelLabel } from "@ageval/shared/components/model-label";
+import { Button } from "@ageval/shared/components/ui/button";
+import { Modal } from "@ageval/shared/components/ui/confirm-dialog";
+import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
+import { Input } from "@ageval/shared/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ageval/shared/components/ui/select";
 import {
   Table,
   TableBody,
@@ -41,7 +42,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@ageval/shared/components/ui/table";
 import {
   decodeDatasetId,
   decodeFileContent,
@@ -71,8 +72,8 @@ import {
   groupAgentPerformances,
   performanceColumnValue,
 } from "@/lib/agent-performances";
-import { sortRows, useTableSort } from "@/components/sortable-head";
-import { toast } from "@/components/ui/toast";
+import { sortRows, useTableSort } from "@ageval/shared/components/sortable-head";
+import { toast } from "@ageval/shared/components/ui/toast";
 import { toastError } from "@/lib/toast-error";
 import {
   bindingModel,
@@ -80,11 +81,11 @@ import {
   registeredModels,
 } from "@/lib/agent-models";
 import { performanceCanonical } from "@/lib/model-appearances";
-import { joinOverlay, loadModelPin } from "@/lib/model-pin";
+import { joinOverlay, loadModelPin } from "@ageval/shared/lib/model-pin";
 import { getToken } from "@/lib/auth";
-import { buildNestedTree, type TreeNode } from "@/lib/file-tree";
+import { buildNestedTree, type TreeNode } from "@ageval/shared/lib/file-tree";
 import { ScoreRing } from "@/components/score-ring";
-import { formatScore } from "@/lib/utils";
+import { formatScore } from "@ageval/shared/lib/utils";
 
 type AgentTab = "overview" | "performance" | "files";
 

@@ -6,8 +6,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+} from "@ageval/shared/components/ui/table";
+import { cn } from "@ageval/shared/lib/utils";
 
 /** Bounded, sticky-header list used on Home and Leaderboard expand. */
 export function ScrollTable({

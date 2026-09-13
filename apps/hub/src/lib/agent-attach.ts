@@ -1,5 +1,5 @@
 import type { JobOverlay } from "./api";
-import { resolveHarnessId } from "./utils";
+import { resolveHarnessId } from "@ageval/shared/lib/utils";
 
 export const ATTACH_ROLE_ALL = "all";
 

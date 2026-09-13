@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { CatalogCardGrid } from "@/components/catalog-card";
-import { LoadingState } from "@/components/empty-state";
+import { LoadingState } from "@ageval/shared/components/empty-state";
 import { DescriptionEditor } from "@/components/description-editor";
 import { GitHubIcon } from "@/components/github-icon";
 import { PageHead } from "@/components/page-head";
 import { MaintainerMark } from "@/components/maintainer-mark";
 import { OfficialMark } from "@/components/official-mark";
-import { INTERNAL_LINK_CLASS } from "@/lib/links";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 import {
   Table,
   TableBody,
@@ -16,7 +16,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@ageval/shared/components/ui/table";
 import {
   encodeDatasetId,
   getUser,

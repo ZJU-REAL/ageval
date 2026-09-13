@@ -90,7 +90,7 @@ If they disagree, fix the copies to match docs/13 + the script.
 - Icons: product brand uses owl; function icons use lucide; plugin/agent entity
   marks default to the uploader GitHub avatar, or a closed color catalog /
   GitHub login override. Do not add a third-party logo component library as a
-  runtime dependency. Catalog hex lives only in `brand-marks/assets/`.
+  runtime dependency. Catalog hex lives only in `apps/shared/lib/brand-marks/assets/`.
 - SPA anti-slop lives in that SPA's `DESIGN.md` **Taste**. Do not copy it here.
 
 ## Machine check

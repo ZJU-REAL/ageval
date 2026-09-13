@@ -2,20 +2,20 @@ import { Inbox, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 
-import { EmptyState, LoadingState } from "@/components/empty-state";
-import { DisabledTip } from "@/components/hover-tip";
+import { EmptyState, LoadingState } from "@ageval/shared/components/empty-state";
+import { DisabledTip } from "@ageval/shared/components/hover-tip";
 import { PageHead } from "@/components/page-head";
-import { INTERNAL_LINK_CLASS } from "@/lib/links";
-import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Input } from "@/components/ui/input";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
+import { Button } from "@ageval/shared/components/ui/button";
+import { ConfirmDialog } from "@ageval/shared/components/ui/confirm-dialog";
+import { Input } from "@ageval/shared/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ageval/shared/components/ui/select";
 import {
   Table,
   TableBody,
@@ -23,8 +23,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { toast } from "@/components/ui/toast";
+} from "@ageval/shared/components/ui/table";
+import { toast } from "@ageval/shared/components/ui/toast";
 import { toastError } from "@/lib/toast-error";
 import {
   decideRequests,
@@ -34,8 +34,8 @@ import {
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { rememberReturnPath } from "@/lib/return-path";
-import { sortRows, useTableSort } from "@/components/sortable-head";
-import { formatDate } from "@/lib/utils";
+import { sortRows, useTableSort } from "@ageval/shared/components/sortable-head";
+import { formatDate } from "@ageval/shared/lib/utils";
 import { CanonicalSelect } from "@/components/canonical-select";
 import { PeekHost, type PeekTarget } from "@/peek-host";
 

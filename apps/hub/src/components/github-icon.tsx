@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@ageval/shared/lib/utils";
 
 /**
  * GitHub mark (Octocat) — path from developer-icons ``github-dark``

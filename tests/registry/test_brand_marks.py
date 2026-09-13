@@ -21,7 +21,7 @@ from ageval.registry.digest import compute_package_digest
 
 REPO = Path(__file__).resolve().parents[2]
 FIXTURE = REPO / "tests" / "fixtures" / "datasets" / "publish-min"
-ASSETS = REPO / "apps/hub/src/lib/brand-marks/assets"
+ASSETS = REPO / "apps/shared/lib/brand-marks/assets"
 
 
 def _service(tmp_path: Path) -> PackageService:
@@ -58,7 +58,7 @@ def _meta_archive(tmp_path: Path) -> tuple[dict[str, object], Path]:
 def test_hub_harness_marks_match_registry() -> None:
     from services.registry.builtin_agents import HARNESS_ICON_KEY
 
-    ts = (REPO / "apps/hub/src/lib/brand-marks/harness.ts").read_text(encoding="utf-8")
+    ts = (REPO / "apps/shared/lib/brand-marks/harness.ts").read_text(encoding="utf-8")
     block = re.search(
         r"export const HARNESS_BRAND_MARK[^{]+\{([^}]+)\}",
         ts,
@@ -79,7 +79,7 @@ def test_hub_catalog_keys_match_assets() -> None:
     allow = json.loads(
         (REPO / "services/registry/brand_marks.json").read_text(encoding="utf-8"),
     )
-    ts = (REPO / "apps/hub/src/lib/brand-marks/catalog.ts").read_text(encoding="utf-8")
+    ts = (REPO / "apps/shared/lib/brand-marks/catalog.ts").read_text(encoding="utf-8")
     ids = re.findall(r'id: "([a-z0-9-]+)"', ts)
     files = re.findall(r'file: "([^"]+)"', ts)
     assert sorted(allow) == sorted(ids)

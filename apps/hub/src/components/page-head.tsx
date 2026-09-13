@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { BreadcrumbNav, type Crumb } from "@/components/breadcrumb";
+import { BreadcrumbNav, type Crumb } from "@ageval/shared/components/breadcrumb";
 
 type PageHeadProps = {
   title: ReactNode;

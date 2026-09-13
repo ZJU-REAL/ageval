@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { BrandMark } from "@/components/brand-mark";
+import { BrandMark } from "@ageval/shared/components/brand-mark";
 import {
   GroupedTables,
   type GroupedTableGroup,
@@ -12,22 +12,22 @@ import {
   nextSort,
   sortRows,
   type SortDir,
-} from "@/components/sortable-head";
+} from "@ageval/shared/components/sortable-head";
 import {
   TableBody,
   TableCell,
   TableHead,
   TableRow,
-} from "@/components/ui/table";
-import { resolveEntityMark } from "@/lib/brand-marks";
+} from "@ageval/shared/components/ui/table";
+import { resolveEntityMark } from "@ageval/shared/lib/brand-marks";
 import {
   encodeDatasetId,
   splitPackageId,
   type OrgRow,
   type PackageRelease,
 } from "@/lib/api";
-import { INTERNAL_LINK_CLASS } from "@/lib/links";
-import { formatDay } from "@/lib/utils";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
+import { formatDay } from "@ageval/shared/lib/utils";
 
 const CELL_MUTE = "whitespace-nowrap text-sm text-mute tabular-nums";
 const CELL_INK = "whitespace-nowrap text-sm text-ink tabular-nums";
