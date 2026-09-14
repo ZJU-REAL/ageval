@@ -51,4 +51,4 @@ ageval lock examples/datasets/minimal-demo --task hello
 ageval run  examples/datasets/minimal-demo --task hello
 ```
 
-Scoring defaults to a script against gold. For LLM-as-judge, add a role on the same `profiles.yaml` and `Agent.session` after gold lands. For several scoring images with different closures scored in sequence, declare `evaluation.environments` on the task; the evaluator names the host for each stage.
+Scoring defaults to a script against gold. For LLM-as-judge, add a role on the same `profiles.yaml` and `Agent.session` after gold lands. For several scoring images with different closures scored in sequence, declare `evaluation.environments` on the task; the evaluator names the host for each stage. Optional `checks` on the evaluator return (helper `evaluation_check`) become `evaluation/checks.json` for Verifier.

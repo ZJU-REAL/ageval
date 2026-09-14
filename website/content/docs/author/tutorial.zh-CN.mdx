@@ -66,4 +66,4 @@ ageval run  examples/datasets/minimal-demo --task hello
 
 ACP 报缺 entry：`profiles.yaml` 里该角色没写 `- plugin: acp` / `options.entry`。先 `ageval executors -v` 看本机装了哪些 agent 与入口，再补上配置。
 
-评测默认是脚本比对参考答案。若要用 LLM-as-judge，在同一份 `profiles.yaml` 加角色，参考答案进入环境后再 `Agent.session`；要多个安装内容不同的打分镜像按顺序打分，在 `task.yaml` 写 `evaluation.environments`，evaluator 按名字指定用哪个。
+评测默认是脚本比对参考答案。若要用 LLM-as-judge，在同一份 `profiles.yaml` 加角色，参考答案进入环境后再 `Agent.session`；要多个安装内容不同的打分镜像按顺序打分，在 `task.yaml` 写 `evaluation.environments`，evaluator 按名字指定用哪个。evaluator 返回里可选 `checks`（helper `evaluation_check`）会写成 `evaluation/checks.json` 给 Verifier。
