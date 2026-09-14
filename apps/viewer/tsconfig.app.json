@@ -11,7 +11,25 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@ageval/shared/*": ["../shared/*"]
+      "@ageval/shared/*": ["../shared/*"],
+      "react": ["./node_modules/@types/react/index.d.ts"],
+      "react-dom": ["./node_modules/@types/react-dom/index.d.ts"],
+      "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime.d.ts"],
+      "react/jsx-dev-runtime": ["./node_modules/@types/react/jsx-dev-runtime.d.ts"],
+      "react-router-dom": ["./node_modules/react-router-dom"],
+      "lucide-react": ["./node_modules/lucide-react"],
+      "clsx": ["./node_modules/clsx"],
+      "tailwind-merge": ["./node_modules/tailwind-merge"],
+      "class-variance-authority": ["./node_modules/class-variance-authority"],
+      "liquid-gooey": ["./node_modules/liquid-gooey"],
+      "react-markdown": ["./node_modules/react-markdown"],
+      "remark-gfm": ["./node_modules/remark-gfm"],
+      "shiki": ["./node_modules/shiki"],
+      "material-icon-theme": ["./node_modules/material-icon-theme"],
+      "@radix-ui/react-dropdown-menu": ["./node_modules/@radix-ui/react-dropdown-menu"],
+      "@radix-ui/react-select": ["./node_modules/@radix-ui/react-select"],
+      "@radix-ui/react-slot": ["./node_modules/@radix-ui/react-slot"],
+      "@radix-ui/react-tooltip": ["./node_modules/@radix-ui/react-tooltip"]
     },
 
     /* Bundler mode */
@@ -28,5 +46,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "../shared/**/*.ts"]
+  "include": ["src", "../shared"]
 }

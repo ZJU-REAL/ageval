@@ -7,7 +7,7 @@ import { DSH_WHALE_PATH } from "./dsh-whale";
  * environments (the two things a plugin can swap).
  *
  * `src` entries render brand SVGs from the shared set with the Hub
- * brand-marks catalog (`apps/hub/src/lib/brand-marks/assets/`), all
+ * brand-marks catalog (`apps/shared/lib/brand-marks/assets/`), all
  * pinned to their bare display fill (white or brand color) because
  * `<img>` cannot inherit page color. DSH has no catalog asset yet, so
  * it inlines the landing whale path as currentColor. e2b is the e

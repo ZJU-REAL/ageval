@@ -1,14 +1,14 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { BreadcrumbNav } from "@/components/breadcrumb";
-import { CommandStrip } from "@/components/command-strip";
-import { LoadingState } from "@/components/empty-state";
+import { BreadcrumbNav } from "@ageval/shared/components/breadcrumb";
+import { CommandStrip } from "@ageval/shared/components/command-strip";
+import { LoadingState } from "@ageval/shared/components/empty-state";
 import { Shell } from "@/components/layout";
-import { ActorsTable } from "@/components/trial/actors-table";
-import { EvidenceTabs } from "@/components/trial/evidence-tabs";
-import { OutcomeStrip } from "@/components/trial/outcome-strip";
-import { PhaseTimingBar } from "@/components/trial/phase-timing-bar";
-import { TrialHeader } from "@/components/trial/trial-header";
+import { ActorsTable } from "@ageval/shared/components/trial/actors-table";
+import { EvidenceTabs } from "@ageval/shared/components/trial/evidence-tabs";
+import { OutcomeStrip } from "@ageval/shared/components/trial/outcome-strip";
+import { PhaseTimingBar } from "@ageval/shared/components/trial/phase-timing-bar";
+import { TrialHeader } from "@ageval/shared/components/trial/trial-header";
 import { useTrialDetail } from "@/hooks/use-trial-detail";
 import { jobPath, taskPath, trialPath } from "@/lib/routes";
 
@@ -84,6 +84,7 @@ export function TrialDetailPage() {
           prevId={prevId}
           nextId={nextId}
           onSibling={goSibling}
+          documentTitle
           slotCurrentRunId={slotCurrentRunId}
           slotCurrentStartedAt={slotCurrentStartedAt}
           slotPrevious={slotPrevious}

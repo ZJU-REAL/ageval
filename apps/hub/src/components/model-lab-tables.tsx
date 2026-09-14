@@ -12,15 +12,15 @@ import {
   compareValues,
   nextSort,
   type SortDir,
-} from "@/components/sortable-head";
+} from "@ageval/shared/components/sortable-head";
 import {
   TableBody,
   TableCell,
   TableHead,
   TableRow,
-} from "@/components/ui/table";
+} from "@ageval/shared/components/ui/table";
 import { encodeDatasetId } from "@/lib/api";
-import { INTERNAL_LINK_CLASS } from "@/lib/links";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 import {
   compactTokens,
   directoryPrice,
@@ -28,7 +28,7 @@ import {
   loadModelPin,
   modalityBadges,
   modelModalities,
-} from "@/lib/model-pin";
+} from "@ageval/shared/lib/model-pin";
 
 export type ModelLabRow = {
   overlay: string;

@@ -6,11 +6,11 @@ import {
   type KeyboardEvent,
 } from "react";
 
-import { BrandMark } from "@/components/brand-mark";
+import { BrandMark } from "@ageval/shared/components/brand-mark";
 import { BuiltinMark } from "@/components/builtin-mark";
 import { MarketplaceCounts } from "@/components/marketplace-counts";
 import { OfficialMark } from "@/components/official-mark";
-import { markFromPackage } from "@/lib/brand-marks";
+import { markFromPackage } from "@ageval/shared/lib/brand-marks";
 import {
   catalogPreviewKey,
   hydrateCatalogRow,
@@ -24,7 +24,7 @@ import {
   type PackageRelease,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import { cn, formatDay } from "@/lib/utils";
+import { cn, formatDay } from "@ageval/shared/lib/utils";
 
 type CatalogKind = "plugin" | "agent";
 

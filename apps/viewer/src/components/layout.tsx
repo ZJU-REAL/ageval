@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
-import { ThemeToggle } from "@/components/theme-toggle";
-import { OwlIcon } from "@/components/owl-icon";
-import { Toaster } from "@/components/ui/toaster";
+import { ThemeToggle } from "@ageval/shared/components/theme-toggle";
+import { OwlIcon } from "@ageval/shared/components/owl-icon";
+import { Toaster } from "@ageval/shared/components/ui/toaster";
 
 export function Shell({
   children,

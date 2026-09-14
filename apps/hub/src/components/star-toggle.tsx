@@ -5,7 +5,7 @@ import { Star } from "lucide-react";
 import { setPackageFavorite, type PackageRelease } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { rememberReturnPath } from "@/lib/return-path";
-import { cn } from "@/lib/utils";
+import { cn } from "@ageval/shared/lib/utils";
 
 function starBurst() {
   if (

@@ -19,7 +19,7 @@ from ageval.agents.reserved import (
     reserved_harness_leaf,
 )
 
-# Keep in lockstep with apps/hub/src/lib/brand-marks/harness.ts HARNESS_BRAND_MARK.
+# Keep in lockstep with apps/shared/lib/brand-marks/harness.ts HARNESS_BRAND_MARK.
 HARNESS_ICON_KEY = {
     "pi": "pi",
     "opencode": "opencode",

@@ -5,7 +5,7 @@ import {
   Table,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@ageval/shared/components/ui/table";
 
 export type GroupedTableGroup = {
   id: string;

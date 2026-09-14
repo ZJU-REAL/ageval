@@ -25,20 +25,20 @@ import {
   X,
 } from "lucide-react";
 
-import type { NavGlyph } from "@/components/empty-state";
+import type { NavGlyph } from "@ageval/shared/components/empty-state";
 import { GitHubIcon } from "@/components/github-icon";
-import { HoverTip } from "@/components/hover-tip";
-import { LiquidThumb, useTrackedRect } from "@/components/liquid-thumb";
+import { HoverTip } from "@ageval/shared/components/hover-tip";
+import { LiquidThumb, useTrackedRect } from "@ageval/shared/components/liquid-thumb";
 import { MaintainerMark } from "@/components/maintainer-mark";
 import { OfficialMark } from "@/components/official-mark";
-import { OwlIcon } from "@/components/owl-icon";
+import { OwlIcon } from "@ageval/shared/components/owl-icon";
 import { PageHeadSlotProvider } from "@/components/page-head";
 import { SignInButton } from "@/components/sign-in-button";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Toaster } from "@/components/ui/toaster";
+import { ThemeToggle } from "@ageval/shared/components/theme-toggle";
+import { Button, buttonVariants } from "@ageval/shared/components/ui/button";
+import { Toaster } from "@ageval/shared/components/ui/toaster";
 import { usePublicUser } from "@/hooks/use-public-user";
-import { liquidGroup } from "@/lib/liquid";
+import { liquidGroup } from "@ageval/shared/lib/liquid";
 import {
   clearToken,
   getGithubAvatar,
@@ -47,7 +47,7 @@ import {
   getToken,
 } from "@/lib/auth";
 import { docsSiteUrl, githubRepoUrl } from "@/lib/public-links";
-import { cn } from "@/lib/utils";
+import { cn } from "@ageval/shared/lib/utils";
 
 const SIDEBAR_COLLAPSED_KEY = "ageval-hub-sidebar-collapsed";
 

@@ -1,0 +1,404 @@
+/* Hub + Viewer semantic tokens and shared chrome utilities.
+ * Constitution: docs/design/13-web-ui-tokens.md
+ * Listing: apps/shared/DESIGN.md YAML
+ *
+ * Vite roots are apps/hub and apps/viewer. Scan this tree so class
+ * names in shared chrome are not dropped (disabled buttons, TruncateTip).
+ */
+@source "..";
+
+/* Semantic color aliases → CSS variables (swapped by theme) */
+@theme {
+  --font-sans: "Geist", "Inter", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Monaco, monospace;
+
+  --color-ink: var(--viewer-ink);
+  --color-body: var(--viewer-body);
+  --color-mute: var(--viewer-mute);
+  --color-hairline: var(--viewer-hairline);
+  --color-hairline-strong: var(--viewer-hairline-strong);
+  --color-canvas: var(--viewer-canvas);
+  --color-canvas-soft: var(--viewer-canvas-soft);
+  --color-canvas-soft-2: var(--viewer-canvas-soft-2);
+  --color-link: var(--viewer-link);
+  --color-link-deep: var(--viewer-link-deep);
+  --color-error: var(--viewer-error);
+  --color-error-soft: var(--viewer-error-soft);
+  --color-warning: var(--viewer-warning);
+  --color-warning-soft: var(--viewer-warning-soft);
+  --color-link-soft: var(--viewer-link-soft);
+  --color-star: var(--viewer-star);
+  --color-nav-home: var(--viewer-nav-home);
+  --color-nav-datasets: var(--viewer-nav-datasets);
+  --color-nav-leaderboard: var(--viewer-nav-leaderboard);
+  --color-nav-plugins: var(--viewer-nav-plugins);
+  --color-nav-agents: var(--viewer-nav-agents);
+  --color-nav-models: var(--viewer-nav-models);
+  --color-nav-inbox: var(--viewer-nav-inbox);
+  --color-nav-orgs: var(--viewer-nav-orgs);
+  --color-mod-text: var(--viewer-nav-models);
+  --color-mod-text-soft: color-mix(in oklab, var(--viewer-nav-models) 10%, var(--viewer-canvas));
+  --color-mod-image: var(--viewer-nav-agents);
+  --color-mod-image-soft: color-mix(in oklab, var(--viewer-nav-agents) 10%, var(--viewer-canvas));
+  --color-mod-video: var(--viewer-nav-inbox);
+  --color-mod-video-soft: color-mix(in oklab, var(--viewer-nav-inbox) 10%, var(--viewer-canvas));
+  --color-mod-transcription: var(--viewer-nav-datasets);
+  --color-mod-transcription-soft: color-mix(in oklab, var(--viewer-nav-datasets) 10%, var(--viewer-canvas));
+  --color-mod-speech: var(--viewer-nav-plugins);
+  --color-mod-speech-soft: color-mix(in oklab, var(--viewer-nav-plugins) 10%, var(--viewer-canvas));
+  --color-mod-pdf: var(--viewer-nav-orgs);
+  --color-mod-pdf-soft: color-mix(in oklab, var(--viewer-nav-orgs) 10%, var(--viewer-canvas));
+  --color-row-hover: var(--viewer-row-hover);
+  --color-code-bg: var(--viewer-code-bg);
+  --color-shell-cmd: var(--viewer-shell-cmd);
+  --color-shell-flag: var(--viewer-shell-flag);
+  --color-shell-string: var(--viewer-shell-string);
+  --color-shell-path: var(--viewer-shell-path);
+  --color-shell-punct: var(--viewer-shell-punct);
+  --color-shell-plain: var(--viewer-shell-plain);
+
+  --color-liquid-hover: var(--viewer-canvas-soft);
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-glide: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --color-on-accent: #ffffff;
+}
+
+/* Light tokens: cool paper + Klein Blue (shared with website / viewer) */
+:root,
+[data-theme="light"] {
+  --viewer-ink: #14161f;
+  --viewer-body: #4a4e5c;
+  --viewer-mute: #5e6376;
+  --viewer-hairline: #d2d6df;
+  --viewer-hairline-strong: #979eb1;
+  --viewer-canvas: #f1f3f5;
+  --viewer-canvas-soft: #e9ebed;
+  --viewer-canvas-soft-2: #e1e5ed;
+  --viewer-link: #1b54e8;
+  --viewer-link-deep: #001f73;
+  --viewer-error: #d40000;
+  --viewer-error-soft: #f7d4d6;
+  --viewer-warning: #f5a623;
+  --viewer-warning-soft: #f4ecde;
+  --viewer-link-soft: #dae2f6;
+  --viewer-star: #e3b341;
+  --viewer-nav-home: #2f6e4a;
+  --viewer-nav-datasets: #187a8c;
+  --viewer-nav-leaderboard: #7a3d62;
+  --viewer-nav-plugins: #9a5c16;
+  --viewer-nav-agents: #5a4aa8;
+  --viewer-nav-models: #5a6b38;
+  --viewer-nav-inbox: #b34a3c;
+  --viewer-nav-orgs: #3e5f7a;
+  --viewer-row-hover: #e9ebed;
+  --viewer-code-bg: #f1f3f5;
+  --viewer-shell-cmd: #1b54e8;
+  --viewer-shell-flag: #6b4fbb;
+  --viewer-shell-string: #0b6e4f;
+  --viewer-shell-path: #0d7a4f;
+  --viewer-shell-punct: #5e6376;
+  --viewer-shell-plain: #14161f;
+
+  --viewer-shadow-pop: 0 1px 1px rgb(0 0 0 / 3%), 0 4px 8px -2px rgb(0 0 0 / 8%);
+}
+
+[data-theme="dark"] {
+  --viewer-ink: #eef0f6;
+  --viewer-body: #9aa0b4;
+  --viewer-mute: #8a90a4;
+  --viewer-hairline: #343948;
+  --viewer-hairline-strong: #5c6274;
+  --viewer-canvas: #1b1e26;
+  --viewer-canvas-soft: #20242d;
+  --viewer-canvas-soft-2: #2b3041;
+  --viewer-link: #5b7bff;
+  --viewer-link-deep: #8aa0ff;
+  --viewer-error: #ff5c5c;
+  --viewer-error-soft: #3b1414;
+  --viewer-warning: #f5a623;
+  --viewer-warning-soft: #3a2e1d;
+  --viewer-link-soft: #1e2645;
+  --viewer-star: #f5c84c;
+  --viewer-nav-home: #6fbf93;
+  --viewer-nav-datasets: #5ec4d4;
+  --viewer-nav-leaderboard: #c88aa8;
+  --viewer-nav-plugins: #d4924a;
+  --viewer-nav-agents: #a898e8;
+  --viewer-nav-models: #b4c47a;
+  --viewer-nav-inbox: #e08a7a;
+  --viewer-nav-orgs: #8aa8c0;
+  --viewer-row-hover: #20242d;
+  --viewer-code-bg: #16181e;
+  --viewer-shell-cmd: #5b7bff;
+  --viewer-shell-flag: #d2a8ff;
+  --viewer-shell-string: #a5d6ff;
+  --viewer-shell-path: #7ee787;
+  --viewer-shell-punct: #8b949e;
+  --viewer-shell-plain: #eef0f6;
+
+  --viewer-shadow-pop: 0 1px 1px rgb(0 0 0 / 40%), 0 4px 8px -2px rgb(0 0 0 / 50%);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    --viewer-ink: #eef0f6;
+    --viewer-body: #9aa0b4;
+    --viewer-mute: #8a90a4;
+    --viewer-hairline: #343948;
+    --viewer-hairline-strong: #5c6274;
+    --viewer-canvas: #1b1e26;
+    --viewer-canvas-soft: #20242d;
+    --viewer-canvas-soft-2: #2b3041;
+    --viewer-link: #5b7bff;
+    --viewer-link-deep: #8aa0ff;
+    --viewer-error: #ff5c5c;
+    --viewer-error-soft: #3b1414;
+    --viewer-warning: #f5a623;
+    --viewer-warning-soft: #3a2e1d;
+    --viewer-link-soft: #1e2645;
+    --viewer-star: #f5c84c;
+  --viewer-nav-home: #6fbf93;
+  --viewer-nav-datasets: #5ec4d4;
+  --viewer-nav-leaderboard: #c88aa8;
+  --viewer-nav-plugins: #d4924a;
+  --viewer-nav-agents: #a898e8;
+  --viewer-nav-models: #b4c47a;
+  --viewer-nav-inbox: #e08a7a;
+  --viewer-nav-orgs: #8aa8c0;
+    --viewer-row-hover: #20242d;
+    --viewer-code-bg: #16181e;
+    --viewer-shell-cmd: #5b7bff;
+    --viewer-shell-flag: #d2a8ff;
+    --viewer-shell-string: #a5d6ff;
+    --viewer-shell-path: #7ee787;
+    --viewer-shell-punct: #8b949e;
+    --viewer-shell-plain: #eef0f6;
+
+    --viewer-shadow-pop: 0 1px 1px rgb(0 0 0 / 40%), 0 4px 8px -2px rgb(0 0 0 / 50%);
+    }
+}
+
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] {
+    --viewer-ink: #14161f;
+    --viewer-body: #4a4e5c;
+    --viewer-mute: #5e6376;
+    --viewer-hairline: #d2d6df;
+    --viewer-hairline-strong: #979eb1;
+    --viewer-canvas: #f1f3f5;
+    --viewer-canvas-soft: #e9ebed;
+    --viewer-canvas-soft-2: #e1e5ed;
+    --viewer-link: #1b54e8;
+    --viewer-link-deep: #001f73;
+    --viewer-error: #d40000;
+    --viewer-error-soft: #f7d4d6;
+    --viewer-warning: #f5a623;
+    --viewer-warning-soft: #f4ecde;
+    --viewer-link-soft: #dae2f6;
+    --viewer-star: #e3b341;
+  --viewer-nav-home: #2f6e4a;
+  --viewer-nav-datasets: #187a8c;
+  --viewer-nav-leaderboard: #7a3d62;
+  --viewer-nav-plugins: #9a5c16;
+  --viewer-nav-agents: #5a4aa8;
+  --viewer-nav-models: #5a6b38;
+  --viewer-nav-inbox: #b34a3c;
+  --viewer-nav-orgs: #3e5f7a;
+    --viewer-row-hover: #e9ebed;
+    --viewer-code-bg: #f1f3f5;
+    --viewer-shell-cmd: #1b54e8;
+    --viewer-shell-flag: #6b4fbb;
+    --viewer-shell-string: #0b6e4f;
+    --viewer-shell-path: #0d7a4f;
+    --viewer-shell-punct: #5e6376;
+    --viewer-shell-plain: #14161f;
+    --viewer-shadow-pop: 0 1px 1px rgb(0 0 0 / 3%), 0 4px 8px -2px rgb(0 0 0 / 8%);
+    }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-hairline);
+  }
+
+  :root {
+    /* Phase/token ramp: cool ink grayscale (docs/design/13). IKB is links/CTA only. */
+    --viewer-phase-1: color-mix(in srgb, var(--viewer-ink) 55%, var(--viewer-mute));
+    --viewer-phase-2: var(--viewer-body);
+    --viewer-phase-3: var(--viewer-mute);
+    --viewer-phase-4: var(--viewer-hairline-strong);
+    --viewer-phase-5: var(--viewer-hairline);
+    --viewer-phase-6: var(--viewer-canvas-soft-2);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  a:not([class]) {
+    color: var(--color-link);
+  }
+
+  a:not([class]):hover {
+    color: var(--color-link-deep);
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-link) 28%, transparent);
+    color: var(--color-ink);
+  }
+}
+
+@keyframes ageval-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ageval-scrim {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ageval-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(72px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ageval-toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+}
+
+@keyframes ageval-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ageval-menu-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ageval-burst-fly {
+  from {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-ageval-pop] {
+    animation: ageval-pop 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  [data-ageval-scrim] {
+    animation: ageval-scrim 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  [data-ageval-toast] {
+    animation: ageval-toast-in 420ms var(--ease-spring) both;
+  }
+
+  [data-ageval-toast][data-leaving] {
+    animation: ageval-toast-out 160ms var(--ease-smooth) both;
+  }
+
+  [data-ageval-burst] {
+    animation: ageval-burst-fly 380ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  [data-ageval-menu] {
+    animation: ageval-menu-in 220ms var(--ease-smooth) both;
+    transform-origin: top center;
+  }
+
+  [data-ageval-menu][data-side="top"] {
+    animation-name: ageval-menu-in-up;
+    transform-origin: bottom center;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+@utility blob-panel {
+  border-radius: var(--radius-lg);
+  background-color: var(--viewer-canvas);
+  box-shadow: var(--viewer-shadow-pop);
+  border: 1px solid var(--viewer-hairline);
+}
+
+@utility squish {
+  transition-property: color, background-color, border-color, transform;
+  transition-duration: 200ms, 200ms, 200ms, 500ms;
+  transition-timing-function: var(--ease-smooth), var(--ease-smooth),
+    var(--ease-smooth), var(--ease-spring);
+  &:active {
+    transform: scale(0.96);
+    transition-duration: 200ms, 200ms, 200ms, 80ms;
+    transition-timing-function: var(--ease-smooth), var(--ease-smooth),
+      var(--ease-smooth), ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .squish,
+  .squish:active {
+    transition: none;
+    transform: none;
+  }
+}

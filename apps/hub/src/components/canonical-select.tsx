@@ -10,8 +10,8 @@ import { createPortal } from "react-dom";
 import { Check, ChevronDown, Search } from "lucide-react";
 
 import { ModelItem } from "@/components/model-item";
-import { loadModelPin } from "@/lib/model-pin";
-import { cn } from "@/lib/utils";
+import { loadModelPin } from "@ageval/shared/lib/model-pin";
+import { cn } from "@ageval/shared/lib/utils";
 
 const NONE = "";
 const MAX_RESULTS = 50;

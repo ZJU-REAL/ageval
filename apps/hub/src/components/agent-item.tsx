@@ -1,13 +1,13 @@
-import { BrandMark } from "@/components/brand-mark";
+import { BrandMark } from "@ageval/shared/components/brand-mark";
 import { BuiltinMark } from "@/components/builtin-mark";
 import { OfficialMark } from "@/components/official-mark";
-import { markFromPackage } from "@/lib/brand-marks";
+import { markFromPackage } from "@ageval/shared/lib/brand-marks";
 import {
   isBuiltinPackage,
   packageDisplayTitle,
   type PackageRelease,
 } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn } from "@ageval/shared/lib/utils";
 
 /** One harness / agent row in the attach search palette (ModelItem layout). */
 export function AgentItem({

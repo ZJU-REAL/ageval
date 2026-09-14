@@ -1,12 +1,12 @@
 import { Check, Pencil, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { HoverTip } from "@/components/hover-tip";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { toast } from "@/components/ui/toast";
+import { HoverTip } from "@ageval/shared/components/hover-tip";
+import { Button } from "@ageval/shared/components/ui/button";
+import { Input } from "@ageval/shared/components/ui/input";
+import { toast } from "@ageval/shared/components/ui/toast";
 import { toastError } from "@/lib/toast-error";
-import { cn } from "@/lib/utils";
+import { cn } from "@ageval/shared/lib/utils";
 
 export function DisplayNameEditor({
   value,

@@ -21,7 +21,8 @@ artifacts were uploaded.
 
 Vite + React + TypeScript · Tailwind + shadcn/ui · pnpm only  
 Visual tokens: [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md).
-SPA constants listing: YAML in [`apps/viewer/DESIGN.md`](../viewer/DESIGN.md).
+SPA constants listing: YAML in [`apps/shared/DESIGN.md`](../shared/DESIGN.md).
+Overlap chrome (trial, labels, tokens) lives in [`apps/shared`](../shared). Build from a repo-root checkout that contains `apps/shared`. The Hub image copies `apps/shared` next to `apps/hub` (`apps/hub/Dockerfile`; compose context is the repository root).
 Reuse map: [DESIGN.md](./DESIGN.md).
 
 ## Dev
@@ -31,10 +32,9 @@ Reuse map: [DESIGN.md](./DESIGN.md).
 export VITE_REGISTRY_PROXY_TARGET=http://127.0.0.1:8700
 uv run --extra registry python -m services.registry.app --host 127.0.0.1 --port 8700
 
-# Terminal B
-cd apps/hub
-pnpm install
-pnpm dev   # http://127.0.0.1:5174  — proxies /v1 → registry
+# Terminal B — from repo root (apps/shared must sit next to apps/hub)
+pnpm --dir apps/hub install
+pnpm --dir apps/hub dev   # http://127.0.0.1:5174  — proxies /v1 → registry
 ```
 
 Production-shaped stack (Postgres, object store, Registry, Hub) is

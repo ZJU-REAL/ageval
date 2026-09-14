@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
-import { HoverTip } from "@/components/hover-tip";
+import { HoverTip } from "@ageval/shared/components/hover-tip";
 import { Chip } from "@/components/ui/chip";
-import { cn } from "@/lib/utils";
+import { cn } from "@ageval/shared/lib/utils";
 
 type ExtensionRow = {
   plugin: string;

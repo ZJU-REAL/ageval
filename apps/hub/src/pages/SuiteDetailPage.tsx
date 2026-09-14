@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import { LoadingState } from "@/components/empty-state";
+import { LoadingState } from "@ageval/shared/components/empty-state";
 import { CatalogHead } from "@/components/page-head";
-import { CommandStrip } from "@/components/command-strip";
+import { CommandStrip } from "@ageval/shared/components/command-strip";
 import {
   SuiteInspector,
   suiteDetailPath,
   type SuiteInspectorTab,
 } from "@/components/suite-inspector";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@ageval/shared/components/ui/toast";
 import { toastError } from "@/lib/toast-error";
-import { INTERNAL_LINK_CLASS } from "@/lib/links";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 import {
   decodeDatasetId,
   detachPerformance,

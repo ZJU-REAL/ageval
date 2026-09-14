@@ -2,15 +2,15 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, Boxes, Info } from "lucide-react";
 
-import { EmptyState } from "@/components/empty-state";
-import { HoverTip } from "@/components/hover-tip";
+import { EmptyState } from "@ageval/shared/components/empty-state";
+import { HoverTip } from "@ageval/shared/components/hover-tip";
 import { HuggingFaceMark } from "@/components/huggingface-mark";
-import { LabMark } from "@/components/lab-mark";
+import { LabMark } from "@ageval/shared/components/lab-mark";
 import { ModalityMarks } from "@/components/modality-mark";
 import { CatalogHead } from "@/components/page-head";
 import { ScoreRing } from "@/components/score-ring";
-import { UnderlineTabs } from "@/components/underline-tabs";
-import { Button } from "@/components/ui/button";
+import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
+import { Button } from "@ageval/shared/components/ui/button";
 import {
   Table,
   TableBody,
@@ -18,7 +18,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@ageval/shared/components/ui/table";
 import { agentPackageHref } from "@/lib/agent-models";
 import { suiteDetailPath } from "@/components/suite-inspector";
 import { decodeDatasetId } from "@/lib/api";
@@ -36,9 +36,9 @@ import {
   loadModelPin,
   modalityBadges,
   modelModalities,
-} from "@/lib/model-pin";
-import { EXTERNAL_LINK_CLASS, INTERNAL_LINK_CLASS } from "@/lib/links";
-import { formatScore } from "@/lib/utils";
+} from "@ageval/shared/lib/model-pin";
+import { EXTERNAL_LINK_CLASS, INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
+import { formatScore } from "@ageval/shared/lib/utils";
 
 type ModelDetailTab = "overview" | "performance";
 

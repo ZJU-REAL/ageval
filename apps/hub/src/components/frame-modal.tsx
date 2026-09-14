@@ -4,10 +4,10 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 import { usePeekHistory } from "@/peek-router";
 
-import { OverlayRootProvider } from "@/components/overlay-root";
+import { OverlayRootProvider } from "@ageval/shared/components/overlay-root";
 import { PageHeadSlotProvider } from "@/components/page-head";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Button } from "@ageval/shared/components/ui/button";
+import { cn } from "@ageval/shared/lib/utils";
 
 /** Cross-module page host. Close returns to the caller without a route change. */
 export function FrameModal({

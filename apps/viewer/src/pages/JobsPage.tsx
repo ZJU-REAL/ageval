@@ -2,9 +2,9 @@ import { ListChecks, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { CommandStrip } from "@/components/command-strip";
+import { CommandStrip } from "@ageval/shared/components/command-strip";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
-import { EmptyState, LoadingState } from "@/components/empty-state";
+import { EmptyState, LoadingState } from "@ageval/shared/components/empty-state";
 import { JobCheck } from "@/components/job-check";
 import { JobNoteDialog } from "@/components/job-note-dialog";
 import { JobRowActions } from "@/components/job-row-actions";
@@ -15,18 +15,18 @@ import {
   nextSort,
   SortableHead,
   type SortDir,
-} from "@/components/sortable-head";
-import { Input } from "@/components/ui/input";
+} from "@ageval/shared/components/sortable-head";
+import { Input } from "@ageval/shared/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { TableColumnPicker } from "@/components/ui/table-column-picker";
-import { useTableColumns } from "@/hooks/use-table-columns";
+} from "@ageval/shared/components/ui/select";
+import { Button } from "@ageval/shared/components/ui/button";
+import { TableColumnPicker } from "@ageval/shared/components/ui/table-column-picker";
+import { useTableColumns } from "@ageval/shared/hooks/use-table-columns";
 import {
   Table,
   TableBody,
@@ -34,7 +34,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@ageval/shared/components/ui/table";
 import { fetchJobs, type Job } from "@/lib/api";
 import {
   emptyJobPref,
@@ -43,10 +43,10 @@ import {
   type JobPref,
 } from "@/lib/job-prefs";
 import { jobDisplayName, jobHref } from "@/lib/routes";
-import { AxisLabel } from "@/components/axis-label";
-import { TruncateTip } from "@/components/hover-tip";
-import { ModelLabel } from "@/components/model-label";
-import { formatDate, formatModelLabel, formatScore, formatTrials } from "@/lib/utils";
+import { TruncateTip } from "@ageval/shared/components/hover-tip";
+import { HarnessLabel } from "@ageval/shared/components/harness-label";
+import { ModelLabel } from "@ageval/shared/components/model-label";
+import { formatDate, formatModelLabel, formatScore, formatTrials } from "@ageval/shared/lib/utils";
 
 type SortKey =
   | "job_name"
@@ -505,7 +505,7 @@ export function JobsPage() {
                       <TruncateTip text={job.dataset_ref || ""} copyable />
                     </TableCell>
                     <TableCell className="max-w-[14rem]">
-                      <AxisLabel
+                      <HarnessLabel
                         value={job.agent_label}
                         className="block truncate"
                       />

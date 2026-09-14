@@ -1,7 +1,7 @@
 import { Slot } from "@radix-ui/react-slot";
 import * as React from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@ageval/shared/lib/utils";
 
 /** Fill-in slot: hairline dashed underline. Optional hover menu for a quick pick. */
 export const dashButtonClass = cn(

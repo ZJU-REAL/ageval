@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { LoadingState } from "@/components/empty-state";
+import { LoadingState } from "@ageval/shared/components/empty-state";
 import { CatalogHead } from "@/components/page-head";
-import { CommandStrip } from "@/components/command-strip";
-import { ActorsTable } from "@/components/trial/actors-table";
-import { EvidenceTabs } from "@/components/trial/evidence-tabs";
-import { OutcomeStrip } from "@/components/trial/outcome-strip";
-import { PhaseTimingBar } from "@/components/trial/phase-timing-bar";
-import { TrialHeader } from "@/components/trial/trial-header";
+import { CommandStrip } from "@ageval/shared/components/command-strip";
+import { ActorsTable } from "@ageval/shared/components/trial/actors-table";
+import { harnessHref, modelCatalogHref } from "@/lib/links";
+import { EvidenceTabs } from "@ageval/shared/components/trial/evidence-tabs";
+import { OutcomeStrip } from "@ageval/shared/components/trial/outcome-strip";
+import { PhaseTimingBar } from "@ageval/shared/components/trial/phase-timing-bar";
+import { TrialHeader } from "@ageval/shared/components/trial/trial-header";
 import { useAttemptEvidence } from "@/hooks/use-attempt-evidence";
 import { ResultOwnerOps } from "@/components/result-owner-ops";
 import {
@@ -21,7 +22,7 @@ import {
 } from "@/lib/api";
 import { toArchivePath } from "@/lib/attempt-evidence";
 import { getGithubUser, getToken } from "@/lib/auth";
-import { INTERNAL_LINK_CLASS } from "@/lib/links";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 
 async function readAttemptStartedAt(
   runId: string,
@@ -253,7 +254,7 @@ export function AttemptEvidencePage() {
             />
 
             {trial.actors && trial.actors.length > 0 ? (
-              <ActorsTable actors={trial.actors} />
+              <ActorsTable actors={trial.actors} harnessTo={harnessHref} modelTo={modelCatalogHref} />
             ) : null}
 
             <EvidenceTabs

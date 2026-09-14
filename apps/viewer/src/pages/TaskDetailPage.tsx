@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 
-import { BreadcrumbNav } from "@/components/breadcrumb";
-import { CommandStrip } from "@/components/command-strip";
-import { LoadingState } from "@/components/empty-state";
+import { BreadcrumbNav } from "@ageval/shared/components/breadcrumb";
+import { CommandStrip } from "@ageval/shared/components/command-strip";
+import { LoadingState } from "@ageval/shared/components/empty-state";
 import { Shell } from "@/components/layout";
 import {
   Table,
@@ -12,13 +12,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@ageval/shared/components/ui/table";
 import { fetchJobTask, type Job, type TaskRow, type Trial } from "@/lib/api";
-import { TruncateTip } from "@/components/hover-tip";
-import { ModelLabel } from "@/components/model-label";
+import { TruncateTip } from "@ageval/shared/components/hover-tip";
+import { ModelLabel } from "@ageval/shared/components/model-label";
 import { useDocumentTitle } from "@/lib/document-title";
 import { jobPath, trialPath } from "@/lib/routes";
-import { cn, formatDate, formatError, formatScore } from "@/lib/utils";
+import { cn, formatDate, formatError, formatScore } from "@ageval/shared/lib/utils";
 
 export function TaskDetailPage() {
   const { jobId = "", taskId = "" } = useParams();

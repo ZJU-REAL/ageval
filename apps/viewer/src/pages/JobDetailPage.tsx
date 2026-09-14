@@ -2,15 +2,15 @@ import type { MouseEvent as ReactMouseEvent, KeyboardEvent as ReactKeyboardEvent
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 
-import { BreadcrumbNav } from "@/components/breadcrumb";
-import { LoadingState } from "@/components/empty-state";
+import { BreadcrumbNav } from "@ageval/shared/components/breadcrumb";
+import { LoadingState } from "@ageval/shared/components/empty-state";
 import { Shell } from "@/components/layout";
 import {
   compareValues,
   nextSort,
   SortableHead,
   type SortDir,
-} from "@/components/sortable-head";
+} from "@ageval/shared/components/sortable-head";
 import {
   Table,
   TableBody,
@@ -18,8 +18,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { FileSplitPanel } from "@/components/trial/file-split-panel";
+} from "@ageval/shared/components/ui/table";
+import { FileSplitPanel } from "@ageval/shared/components/trial/file-split-panel";
 import {
   fetchJob,
   fetchJobOverlayFile,
@@ -29,11 +29,11 @@ import {
   type TreeEntry,
 } from "@/lib/api";
 import { taskHref, taskRunIds } from "@/lib/routes";
-import { AxisLabel } from "@/components/axis-label";
-import { TruncateTip } from "@/components/hover-tip";
-import { ModelLabel } from "@/components/model-label";
+import { AxisLabel } from "@ageval/shared/components/axis-label";
+import { TruncateTip } from "@ageval/shared/components/hover-tip";
+import { ModelLabel } from "@ageval/shared/components/model-label";
 import { useDocumentTitle } from "@/lib/document-title";
-import { formatError, formatScore } from "@/lib/utils";
+import { formatError, formatScore } from "@ageval/shared/lib/utils";
 
 type SortKey = "task_id" | "agent_label" | "model_label" | "score" | "status";
 

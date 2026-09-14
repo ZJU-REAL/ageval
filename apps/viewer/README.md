@@ -28,7 +28,8 @@ SPA lives under `src/`; Python serves the built `dist/` only.
 ## Design
 
 - [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md) — visual constitution
-- [DESIGN.md](./DESIGN.md) — YAML constants, Taste, reuse map
+- [`apps/shared/DESIGN.md`](../shared/DESIGN.md) — SPA token YAML
+- [DESIGN.md](./DESIGN.md) — Taste, reuse map
 - [AGENTS.md](./AGENTS.md) — scope, stack, API
 
 ## Develop
@@ -58,9 +59,8 @@ If the port is already in use, stop the other `ageval view` process or pass `--p
 ## Production build (required for `ageval view`)
 
 ```bash
-cd apps/viewer
-pnpm install
-pnpm build   # writes dist/
+pnpm --dir apps/viewer install
+pnpm --dir apps/viewer build   # writes dist/ (inlines apps/shared)
 uv run ageval view <dataset>
 ```
 

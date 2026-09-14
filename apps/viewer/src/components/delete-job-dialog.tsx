@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { toast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@ageval/shared/components/ui/confirm-dialog";
+import { toast } from "@ageval/shared/components/ui/toast";
 import {
   deleteJob,
   fetchDeletePreview,
@@ -9,7 +9,7 @@ import {
   type Job,
 } from "@/lib/api";
 import { jobDisplayName } from "@/lib/routes";
-import { formatBytes } from "@/lib/utils";
+import { formatBytes } from "@ageval/shared/lib/utils";
 
 type PreviewRow = {
   job: Job;

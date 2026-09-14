@@ -1,6 +1,6 @@
 import { Star } from "lucide-react";
 
-import { cn, formatCount } from "@/lib/utils";
+import { cn, formatCount } from "@ageval/shared/lib/utils";
 
 export function FavoriteCount({
   count,

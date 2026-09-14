@@ -8,7 +8,8 @@ Python serves the built SPA; React app lives here.
 | Doc | Role |
 | --- | --- |
 | [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md) | Visual constitution (tokens, focus, motion) |
-| [DESIGN.md](./DESIGN.md) | YAML constants + Taste (anti-slop) + which component to reuse |
+| [`apps/shared/DESIGN.md`](../shared/DESIGN.md) | SPA token YAML (Hub/Viewer share it) |
+| [DESIGN.md](./DESIGN.md) | Taste (anti-slop) + which component to reuse |
 | This file | Product scope + stack + API |
 | `src/ageval/viewer/` | HTTP API + static file serving (stdlib) |
 
@@ -56,7 +57,7 @@ anti-slop; **DESIGN.md** role table for which control. Evidence tabs use
 | Build | Vite + React + TypeScript |
 | Package manager | **pnpm** only (`packageManager` field; not npm/yarn) |
 | Styling | Tailwind CSS v4 (or v3 if tooling forces) |
-| Components | **shadcn/ui** (Radix primitives) — own the source under `src/components/ui/` |
+| Components | **shadcn/ui** (Radix primitives) — overlap under `apps/shared/components/ui/` |
 | Icons | lucide-react (shadcn default) — one family only |
 | Table | shadcn Table patterns (sortable heads in-app) |
 | Routing | react-router-dom (client routes under SPA) |
@@ -72,7 +73,7 @@ anti-slop; **DESIGN.md** role table for which control. Evidence tabs use
 ## Design discipline
 
 1. Read [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md)
-   and [DESIGN.md](./DESIGN.md) (**Taste** + YAML + role table) before changing
+   and [DESIGN.md](./DESIGN.md) (**Taste** + role table) before changing
    colors, type, or density.
 2. Do not describe or invent page layout in this file. Copy a shipped control.
 3. **Tabular nums** for scores, rates, durations, trial fractions.
@@ -83,16 +84,16 @@ anti-slop; **DESIGN.md** role table for which control. Evidence tabs use
 
 ## UI reuse (mandatory)
 
-Same stack as Hub: shadcn/ui in `src/components/ui/`. Role → component:
+Same stack as Hub: overlap primitives in `apps/shared/components/ui/`. Role → component:
 [DESIGN.md](./DESIGN.md).
 
 1. **Copy an existing instance**, including focus classes. Version / filter /
-   action lists go through `@/components/ui/select` or
-   `@/components/ui/dropdown-menu`. Match Hub `VersionSwitcher` (label +
+   action lists go through `@ageval/shared/components/ui/select` or
+   `@ageval/shared/components/ui/dropdown-menu`. Match Hub `VersionSwitcher` (label +
    trailing date on `SelectItem`).
 2. **No native `<select>` / `<option>`** and no hand-rolled dropdown for
    product chrome. If the primitive is missing a slot (e.g. `trailing`),
-   extend `src/components/ui/select.tsx` so Hub and Viewer stay aligned.
+   extend `apps/shared/components/ui/select.tsx` so Hub and Viewer stay aligned.
 3. **Scan vs edit focus** (docs/13): Jobs search keeps `hairline` on focus.
    Do not accept `Input`'s default `border-link` for a new search.
 4. Operator-facing list text is a short label plus time. Slot history:

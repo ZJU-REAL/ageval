@@ -1,18 +1,18 @@
 import { useMemo, useState } from "react";
 
-import { BrandMark } from "@/components/brand-mark";
+import { BrandMark } from "@ageval/shared/components/brand-mark";
 import {
   BrandMarkPicker,
   type MarkDraft,
 } from "@/components/brand-mark-picker";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@ageval/shared/components/ui/toast";
 import { toastError } from "@/lib/toast-error";
 import { updatePackageIcon } from "@/lib/api";
 import {
   resolveEntityMark,
   type EntityMarkHint,
-} from "@/lib/brand-marks";
-import { cn } from "@/lib/utils";
+} from "@ageval/shared/lib/brand-marks";
+import { cn } from "@ageval/shared/lib/utils";
 
 function draftFromHint(hint: EntityMarkHint): MarkDraft {
   const key = (hint.iconKey || "").trim();

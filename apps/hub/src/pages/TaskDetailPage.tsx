@@ -3,10 +3,10 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { CatalogHead } from "@/components/page-head";
 import { ListPager } from "@/components/list-pager";
-import { UnderlineTabs } from "@/components/underline-tabs";
-import { CommandStrip } from "@/components/command-strip";
+import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
+import { CommandStrip } from "@ageval/shared/components/command-strip";
 import { FileSplitPanel } from "@/components/file-split-panel";
-import { Markdown } from "@/components/markdown";
+import { Markdown } from "@ageval/shared/components/markdown";
 import {
   Table,
   TableBody,
@@ -14,15 +14,15 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@ageval/shared/components/ui/table";
 import {
   SortableHead,
   sortRows,
   useTableSort,
-} from "@/components/sortable-head";
-import { TableColumnPicker } from "@/components/ui/table-column-picker";
-import { useTableColumns } from "@/hooks/use-table-columns";
-import { PillTabs } from "@/components/ui/pill-tabs";
+} from "@ageval/shared/components/sortable-head";
+import { TableColumnPicker } from "@ageval/shared/components/ui/table-column-picker";
+import { useTableColumns } from "@ageval/shared/hooks/use-table-columns";
+import { PillTabs } from "@ageval/shared/components/ui/pill-tabs";
 import { VersionSwitcher } from "@/components/version-switcher";
 import {
   decodeDatasetId,
@@ -47,11 +47,11 @@ import {
   profileDocumentPaths,
   unionOverlayPrefixes,
   type TreeNode,
-} from "@/lib/file-tree";
-import { HarnessLabel } from "@/components/harness-label";
+} from "@ageval/shared/lib/file-tree";
+import { HarnessLabel } from "@ageval/shared/components/harness-label";
 import { harnessHref, modelCatalogHref } from "@/lib/links";
-import { TruncateTip } from "@/components/hover-tip";
-import { ModelLabel } from "@/components/model-label";
+import { TruncateTip } from "@ageval/shared/components/hover-tip";
+import { ModelLabel } from "@ageval/shared/components/model-label";
 import {
   cn,
   displayLabelsFromOverlay,
@@ -59,7 +59,7 @@ import {
   formatDate,
   formatScore,
   reasoningEffortFromOverlay,
-} from "@/lib/utils";
+} from "@ageval/shared/lib/utils";
 
 type Tab = "readme" | "files" | "jobs";
 type FilesScope = "local" | "shared" | "overlays";

@@ -5,7 +5,7 @@ import {
   nextSort,
   SortableHead,
   type SortDir,
-} from "@/components/sortable-head";
+} from "@ageval/shared/components/sortable-head";
 import {
   Table,
   TableBody,
@@ -13,7 +13,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@ageval/shared/components/ui/table";
 import {
   environmentFromOverlay,
   uniqueAgentRefs,
@@ -25,18 +25,18 @@ import {
   displayLabelsFromOverlay,
   formatScore,
   reasoningEffortFromOverlay,
-} from "@/lib/utils";
+} from "@ageval/shared/lib/utils";
 import {
   formatPassMetric,
   passAtPrimaryK,
   passPowerPrimaryK,
 } from "@/lib/suite-metrics";
-import { BrandMark } from "@/components/brand-mark";
-import { HarnessLabel } from "@/components/harness-label";
-import { HoverTip, TruncateTip } from "@/components/hover-tip";
-import { ModelLabel } from "@/components/model-label";
+import { BrandMark } from "@ageval/shared/components/brand-mark";
+import { HarnessLabel } from "@ageval/shared/components/harness-label";
+import { HoverTip, TruncateTip } from "@ageval/shared/components/hover-tip";
+import { ModelLabel } from "@ageval/shared/components/model-label";
 import { ScoreRing } from "@/components/score-ring";
-import { resolveMechanismMark } from "@/lib/brand-marks";
+import { resolveMechanismMark } from "@ageval/shared/lib/brand-marks";
 import { shortSuiteId } from "@/components/suite-inspector";
 
 const COL_TEXT = "max-w-[12rem] overflow-hidden";

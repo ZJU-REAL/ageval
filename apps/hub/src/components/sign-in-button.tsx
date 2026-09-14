@@ -1,13 +1,13 @@
 import { useState, type ReactNode } from "react";
 
 import { GitHubIcon } from "@/components/github-icon";
-import { HoverTip } from "@/components/hover-tip";
-import { Button } from "@/components/ui/button";
+import { HoverTip } from "@ageval/shared/components/hover-tip";
+import { Button } from "@ageval/shared/components/ui/button";
 import {
   formatLoginError,
   redirectToGitHubLogin,
 } from "@/lib/github-login";
-import { cn } from "@/lib/utils";
+import { cn } from "@ageval/shared/lib/utils";
 
 /** Inline or button control that starts GitHub OAuth (no Hub intermediate page). */
 export function SignInButton({

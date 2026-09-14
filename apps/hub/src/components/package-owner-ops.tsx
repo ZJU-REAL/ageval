@@ -1,10 +1,10 @@
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Button } from "@ageval/shared/components/ui/button";
+import { ConfirmDialog } from "@ageval/shared/components/ui/confirm-dialog";
 import { FieldLabel } from "@/components/field-label";
-import { Input } from "@/components/ui/input";
-import { toast } from "@/components/ui/toast";
+import { Input } from "@ageval/shared/components/ui/input";
+import { toast } from "@ageval/shared/components/ui/toast";
 import { toastError } from "@/lib/toast-error";
 import {
   Select,
@@ -12,7 +12,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ageval/shared/components/ui/select";
 import {
   deletePackageRelease,
   isDraftRelease,

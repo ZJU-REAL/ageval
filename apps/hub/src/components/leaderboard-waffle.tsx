@@ -1,8 +1,8 @@
 import { useNavigate } from "react-router-dom";
 
-import { HarnessLabel } from "@/components/harness-label";
-import { HoverTip } from "@/components/hover-tip";
-import { ModelLabel } from "@/components/model-label";
+import { HarnessLabel } from "@ageval/shared/components/harness-label";
+import { HoverTip } from "@ageval/shared/components/hover-tip";
+import { ModelLabel } from "@ageval/shared/components/model-label";
 import { encodeDatasetId, type SuiteRow } from "@/lib/api";
 import {
   trialsForRef,
@@ -10,7 +10,7 @@ import {
   type TrialKind,
   type WaffleTrial,
 } from "@/lib/leaderboard-charts";
-import { cn, displayLabelsFromOverlay } from "@/lib/utils";
+import { cn, displayLabelsFromOverlay } from "@ageval/shared/lib/utils";
 
 const KIND_CLASS: Record<TrialKind, string> = {
   pass: "bg-ink",

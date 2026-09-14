@@ -1,4 +1,4 @@
-import { toast } from "@/components/ui/toast";
+import { toast } from "@ageval/shared/components/ui/toast";
 import { RegistryHttpError } from "@/lib/api";
 
 /** Action failure: Hub toast, not a raw ``code: message`` dump in the form. */

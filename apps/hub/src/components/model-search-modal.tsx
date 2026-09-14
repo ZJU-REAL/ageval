@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ModelItem } from "@/components/model-item";
 import { SearchPalette } from "@/components/search-palette";
 import { encodeDatasetId } from "@/lib/api";
-import { loadModelPin } from "@/lib/model-pin";
+import { loadModelPin } from "@ageval/shared/lib/model-pin";
 
 const MAX_RESULTS = 50;
 

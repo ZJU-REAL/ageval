@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import { Info } from "lucide-react";
 
-import { HoverTip } from "@/components/hover-tip";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { HoverTip } from "@ageval/shared/components/hover-tip";
+import { Button } from "@ageval/shared/components/ui/button";
+import { cn } from "@ageval/shared/lib/utils";
 
 /** Section / field title: ink, sentence case. Optional info tooltip. */
 export function FieldLabel({

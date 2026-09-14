@@ -1,6 +1,6 @@
 import { BadgeCheck } from "lucide-react";
 
-import { HoverTip } from "@/components/hover-tip";
+import { HoverTip } from "@ageval/shared/components/hover-tip";
 
 const TIPS = {
   plugin: "Verified official plugin",

@@ -1,19 +1,19 @@
 import { Pin, Settings, StickyNote, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@ageval/shared/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@ageval/shared/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@ageval/shared/components/ui/tooltip";
 import type { Job } from "@/lib/api";
 import type { JobPref } from "@/lib/job-prefs";
 import { hasJobNote } from "@/lib/job-prefs";

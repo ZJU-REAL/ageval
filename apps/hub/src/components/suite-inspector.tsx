@@ -1,20 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { BrandMark } from "@/components/brand-mark";
+import { BrandMark } from "@ageval/shared/components/brand-mark";
 import { BuiltinMark } from "@/components/builtin-mark";
 import { CodeFence } from "@/components/code-fence";
-import { HarnessLabel } from "@/components/harness-label";
-import { TruncateTip } from "@/components/hover-tip";
-import { ModelLabel } from "@/components/model-label";
+import { HarnessLabel } from "@ageval/shared/components/harness-label";
+import { TruncateTip } from "@ageval/shared/components/hover-tip";
+import { ModelLabel } from "@ageval/shared/components/model-label";
 import { JobOverlayPreview } from "@/components/overlay-file-panel";
 import { ResultOwnerOps } from "@/components/result-owner-ops";
 import { ScoreRing } from "@/components/score-ring";
 import { ScrollTable } from "@/components/scroll-table";
-import { Input } from "@/components/ui/input";
-import { TableColumnPicker } from "@/components/ui/table-column-picker";
-import { UnderlineTabs } from "@/components/underline-tabs";
-import { useTableColumns } from "@/hooks/use-table-columns";
+import { Input } from "@ageval/shared/components/ui/input";
+import { TableColumnPicker } from "@ageval/shared/components/ui/table-column-picker";
+import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
+import { useTableColumns } from "@ageval/shared/hooks/use-table-columns";
 import {
   decodeFileContent,
   encodeDatasetId,
@@ -32,14 +32,15 @@ import {
 } from "@/lib/attempt-evidence";
 import { getToken } from "@/lib/auth";
 import { agentPackageHref } from "@/lib/agent-models";
-import { resolveMechanismMark } from "@/lib/brand-marks";
-import { INTERNAL_LINK_CLASS, harnessHref, modelCatalogHref } from "@/lib/links";
+import { resolveMechanismMark } from "@ageval/shared/lib/brand-marks";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
+import { harnessHref, modelCatalogHref } from "@/lib/links";
 import {
   displayLabelsFromOverlay,
   formatDay,
   formatScore,
   reasoningEffortFromOverlay,
-} from "@/lib/utils";
+} from "@ageval/shared/lib/utils";
 
 export type SuiteInspectorTab = "profiles" | "plugin" | "jobs" | "share";
 
