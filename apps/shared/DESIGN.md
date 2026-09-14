@@ -20,7 +20,7 @@ colors:
     warning: "#F5A623"
     warning-soft: "#F4ECDE"
     star: "#E3B341"
-    code-bg: "#F1F3F5"
+    code-bg: "#E9EBED"
     nav-home: "#2F6E4A"
     nav-datasets: "#187A8C"
     nav-leaderboard: "#7A3D62"

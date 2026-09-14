@@ -44,7 +44,7 @@ SPA 实现对照的**常量清单**在 `apps/shared/DESIGN.md` 文首 YAML(Hub /
 | nav-models | `#5A6B38` | `#B4C47A` | Hub Models 侧栏 lucide,**仅字形** | `nav-models` | — |
 | nav-inbox | `#B34A3C` | `#E08A7A` | Hub Inbox 侧栏 lucide,**仅字形** | `nav-inbox` | — |
 | nav-orgs | `#3E5F7A` | `#8AA8C0` | Hub Organizations 侧栏 lucide,**仅字形** | `nav-orgs` | — |
-| code-bg | `#F1F3F5` | `#16181E` | 代码底 | `code-bg` | — |
+| code-bg | `#E9EBED` | `#16181E` | 代码井（浅色与 canvas-soft 同级凹陷） | `code-bg` | — |
 | accent(landing) | `#5B7BFF`(亮)/ `#002FA7`(深) | 同左 | landing `--accent` / `--accent-deep` | — | — |
 
 landing 的 oklch 系(`oklch(15.4% 0.018 264)` 底等)是本表的 oklch 等值表达,视为同一令牌;

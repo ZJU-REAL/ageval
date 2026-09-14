@@ -241,7 +241,7 @@ function ScriptSource({
             data-check-line={n}
             className={cn(
               "flex gap-3 px-3 font-mono text-[12px] leading-5",
-              hit && flash ? "bg-link-soft" : hit ? "bg-canvas-soft" : null,
+              hit && flash ? "bg-link-soft" : hit ? "bg-canvas-soft-2" : null,
             )}
           >
             <span className="w-8 shrink-0 select-none text-right tabular-nums text-mute">
