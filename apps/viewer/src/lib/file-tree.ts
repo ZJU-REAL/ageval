@@ -76,6 +76,19 @@ export function buildNestedTree(
   return root;
 }
 
+/** Parent directory paths of a file (`evaluation/checks.json` → `evaluation`). */
+export function ancestorDirPaths(filePath: string): string[] {
+  const parts = filePath.split("/").filter(Boolean);
+  if (parts.length <= 1) return [];
+  const dirs: string[] = [];
+  let acc = "";
+  for (let i = 0; i < parts.length - 1; i++) {
+    acc = acc ? `${acc}/${parts[i]}` : parts[i];
+    dirs.push(acc);
+  }
+  return dirs;
+}
+
 /** Flatten for tests / counts. */
 export function countTreeFiles(nodes: TreeNode[]): number {
   let n = 0;

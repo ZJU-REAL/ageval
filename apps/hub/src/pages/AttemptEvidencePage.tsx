@@ -92,9 +92,6 @@ export function AttemptEvidencePage() {
     observationSteps,
     obsNote,
     obsLoading,
-    checks,
-    checksNote,
-    checksLoading,
     tree,
     treeGroups,
     treeLoading,
@@ -272,9 +269,6 @@ export function AttemptEvidencePage() {
               observationSteps={observationSteps}
               obsLoading={obsLoading}
               obsNote={obsNote}
-              checks={checks}
-              checksLoading={checksLoading}
-              checksNote={checksNote}
               taskId={taskId}
               loadScript={async (packagePath) => {
                 if (!datasetId) {

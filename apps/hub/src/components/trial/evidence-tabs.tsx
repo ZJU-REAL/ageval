@@ -1,13 +1,62 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { UnderlineTabs } from "@/components/underline-tabs";
-import { revealTallPanel } from "@ageval/shared/scroll-port";
+import { alignInScrollParent, revealTallPanel } from "@ageval/shared/scroll-port";
 import type { TrajectoryStep, TreeEntry, Trial } from "@/lib/trial-types";
+import { cn } from "@/lib/utils";
 
-import { ChecksPanel, type EvaluationCheck } from "./checks-panel";
 import { FileSplitPanel } from "./file-split-panel";
 import { TAB_LABELS, type TabId } from "./tabs";
 import { TrajectoryPanel } from "./trajectory-panel";
+
+type VerifierSurface = "trajectory" | "files";
+
+function treeHasFile(tree: TreeEntry[], name: string): boolean {
+  return tree.some((entry) => {
+    if (entry.type === "dir") return false;
+    if (entry.name === name) return true;
+    return entry.path === name || entry.path.endsWith(`/${name}`);
+  });
+}
+
+function VerifierSurfaceToggle({
+  value,
+  onChange,
+}: {
+  value: VerifierSurface;
+  onChange: (next: VerifierSurface) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Verifier surface"
+      className="inline-flex shrink-0 items-center gap-0.5 rounded-[8px] border border-hairline p-0.5"
+    >
+      {(
+        [
+          ["trajectory", "Trajectory"],
+          ["files", "Files"],
+        ] as const
+      ).map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          aria-pressed={value === id}
+          onClick={() => onChange(id)}
+          className={cn(
+            "rounded-[6px] px-2.5 py-1 text-sm transition-colors duration-200 ease-smooth",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70",
+            value === id
+              ? "bg-canvas-soft-2 text-ink"
+              : "text-body hover:bg-canvas-soft",
+          )}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function EvidenceTabs({
   availableTabs,
@@ -19,9 +68,6 @@ export function EvidenceTabs({
   observationSteps,
   obsLoading,
   obsNote,
-  checks,
-  checksLoading,
-  checksNote,
   taskId,
   loadScript,
   result,
@@ -44,9 +90,6 @@ export function EvidenceTabs({
   observationSteps?: TrajectoryStep[];
   obsLoading?: boolean;
   obsNote?: string | null;
-  checks?: EvaluationCheck[];
-  checksLoading?: boolean;
-  checksNote?: string | null;
   taskId?: string;
   loadScript?: (
     packagePath: string,
@@ -67,31 +110,44 @@ export function EvidenceTabs({
   }> | null;
 }) {
   const verifierSteps = observationSteps || [];
-  const verifierChecks = checks || [];
   const verifierTab = activeTab === "verifier";
-  const showVerifierTrajectory = verifierTab && (obsLoading || verifierSteps.length > 0);
-  const showVerifierChecks =
-    verifierTab && (checksLoading || verifierChecks.length > 0);
+  const hasJudge =
+    treeHasFile(tree, "observation.jsonl") || verifierSteps.length > 0;
+  const hasChecks = treeHasFile(tree, "checks.json");
+  const dualVerifier = hasJudge && hasChecks;
+  const [surface, setSurface] = useState<VerifierSurface>("trajectory");
+  const showVerifierTrajectory = verifierTab && (dualVerifier ? surface === "trajectory" : hasJudge);
+  const showVerifierFiles = verifierTab && (dualVerifier ? surface === "files" : !hasJudge);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [revealGen, setRevealGen] = useState(0);
+
+  useEffect(() => {
+    if (verifierTab) setSurface("trajectory");
+  }, [verifierTab]);
 
   useLayoutEffect(() => {
     if (revealGen === 0) return;
     const pending =
       (activeTab === "trajectory" && trajLoading) ||
-      (verifierTab && (!!obsLoading || !!checksLoading || treeLoading));
+      (showVerifierTrajectory && !!obsLoading) ||
+      (showVerifierFiles && treeLoading);
     if (pending) return;
     const panel = panelRef.current;
     if (!panel) return;
+    if (verifierTab) {
+      alignInScrollParent(panel, "start");
+      return;
+    }
     revealTallPanel(panel);
   }, [
     revealGen,
     activeTab,
     trajLoading,
     obsLoading,
-    checksLoading,
     treeLoading,
     verifierTab,
+    showVerifierTrajectory,
+    showVerifierFiles,
   ]);
 
   if (availableTabs.length === 0) {
@@ -102,21 +158,44 @@ export function EvidenceTabs({
     );
   }
 
+  const filesPanel = (
+    <FileSplitPanel
+      tree={tree}
+      treeLoading={treeLoading}
+      selectedPath={selectedPath}
+      onSelect={onSelectPath}
+      fileContent={fileContent}
+      fileLoading={fileLoading}
+      fileNote={fileNote}
+      groupByProfile={false}
+      actors={actors}
+      apiGroups={treeGroups}
+      panelRef={panelRef}
+      taskId={taskId}
+      loadScript={loadScript}
+    />
+  );
+
   return (
     <div className="space-y-3">
       {activeTab ? (
-        <UnderlineTabs
-          ariaLabel="Evidence tabs"
-          value={activeTab}
-          onChange={(tab) => {
-            onTabChange(tab);
-            setRevealGen((n) => n + 1);
-          }}
-          items={availableTabs.map((tab) => ({
-            id: tab,
-            label: TAB_LABELS[tab],
-          }))}
-        />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <UnderlineTabs
+            ariaLabel="Evidence tabs"
+            value={activeTab}
+            onChange={(tab) => {
+              onTabChange(tab);
+              setRevealGen((n) => n + 1);
+            }}
+            items={availableTabs.map((tab) => ({
+              id: tab,
+              label: TAB_LABELS[tab],
+            }))}
+          />
+          {verifierTab && dualVerifier ? (
+            <VerifierSurfaceToggle value={surface} onChange={setSurface} />
+          ) : null}
+        </div>
       ) : null}
 
       {activeTab === "trajectory" && (
@@ -130,41 +209,18 @@ export function EvidenceTabs({
         />
       )}
 
-      {verifierTab && (
-        <div className="space-y-3">
-          {showVerifierChecks && (
-            <ChecksPanel
-              loading={!!checksLoading}
-              checks={verifierChecks}
-              note={checksNote ?? null}
-              taskId={taskId || ""}
-              loadScript={loadScript}
-            />
-          )}
-          {showVerifierTrajectory && (
-            <TrajectoryPanel
-              loading={!!obsLoading}
-              steps={verifierSteps}
-              note={obsNote ?? null}
-              result={result}
-              actors={[]}
-            />
-          )}
-          <FileSplitPanel
-            tree={tree}
-            treeLoading={treeLoading}
-            selectedPath={selectedPath}
-            onSelect={onSelectPath}
-            fileContent={fileContent}
-            fileLoading={fileLoading}
-            fileNote={fileNote}
-            groupByProfile={false}
-            actors={actors}
-            apiGroups={treeGroups}
-            panelRef={panelRef}
-          />
-        </div>
+      {showVerifierTrajectory && (
+        <TrajectoryPanel
+          loading={!!obsLoading}
+          steps={verifierSteps}
+          note={obsNote ?? null}
+          result={result}
+          actors={[]}
+          panelRef={panelRef}
+        />
       )}
+
+      {showVerifierFiles ? filesPanel : null}
 
       {activeTab && activeTab !== "trajectory" && activeTab !== "verifier" && (
         <FileSplitPanel

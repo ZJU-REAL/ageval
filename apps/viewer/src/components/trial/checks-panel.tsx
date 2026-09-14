@@ -1,8 +1,8 @@
-import { useState, type RefObject } from "react";
-import { ChevronDown, FileCode2 } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ChevronDown, CircleAlert, CircleCheck, CircleX } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { CodeHighlight } from "@/lib/code-highlight";
+import { alignInScrollParent } from "@ageval/shared/scroll-port";
 import { cn } from "@/lib/utils";
 
 export type EvaluationCheck = {
@@ -17,6 +17,53 @@ export type EvaluationCheck = {
   stderr?: string | null;
 };
 
+export function isChecksPath(path: string | null | undefined): boolean {
+  if (!path) return false;
+  const name = path.split("/").filter(Boolean).pop() || "";
+  return name === "checks.json";
+}
+
+export function parseChecksFile(
+  path: string | null | undefined,
+  content: string | null | undefined,
+): EvaluationCheck[] | null {
+  if (!isChecksPath(path) || content == null || !content.trim()) return null;
+  try {
+    const data = JSON.parse(content) as unknown;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+    const rec = data as { schema?: unknown; checks?: unknown };
+    const schema = typeof rec.schema === "string" ? rec.schema : "";
+    if (schema && !schema.startsWith("ageval.evaluation.checks/")) return null;
+    if (!Array.isArray(rec.checks)) return null;
+    const rows: EvaluationCheck[] = [];
+    for (const item of rec.checks) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const row = item as Record<string, unknown>;
+      if (typeof row.id !== "string" || !row.id.trim()) continue;
+      rows.push({
+        id: row.id,
+        title: typeof row.title === "string" ? row.title : null,
+        status: typeof row.status === "string" ? row.status : null,
+        score:
+          typeof row.score === "number" && Number.isFinite(row.score)
+            ? row.score
+            : null,
+        script: typeof row.script === "string" ? row.script : null,
+        environment: typeof row.environment === "string" ? row.environment : null,
+        exit_code:
+          typeof row.exit_code === "number" && Number.isInteger(row.exit_code)
+            ? row.exit_code
+            : null,
+        stdout: typeof row.stdout === "string" ? row.stdout : null,
+        stderr: typeof row.stderr === "string" ? row.stderr : null,
+      });
+    }
+    return rows.length ? rows : null;
+  } catch {
+    return null;
+  }
+}
+
 function packageScriptPath(script: string, taskId: string): string {
   const clean = script.trim().replace(/\\/g, "/");
   if (!clean || clean.startsWith("/") || clean.startsWith("~")) return "";
@@ -29,212 +76,411 @@ function packageScriptPath(script: string, taskId: string): string {
   return `tasks/${taskId.trim()}/${clean}`;
 }
 
-function statusClass(status: string | null | undefined): string {
-  const value = (status || "").toUpperCase();
-  if (value === "FAIL" || value === "ERROR") return "text-error";
-  return "text-ink";
+/** First `evaluation_check(...)` whose first string argument equals `checkId`. */
+function findEvaluationCheckRange(
+  source: string,
+  checkId: string,
+): { start: number; end: number } | null {
+  const id = checkId.trim();
+  if (!id || !source) return null;
+  const needle = "evaluation_check";
+  let from = 0;
+  while (from < source.length) {
+    const idx = source.indexOf(needle, from);
+    if (idx < 0) return null;
+    let i = idx + needle.length;
+    while (i < source.length && /\s/.test(source[i])) i += 1;
+    if (source[i] !== "(") {
+      from = idx + needle.length;
+      continue;
+    }
+    const open = i;
+    i += 1;
+    while (i < source.length && /\s/.test(source[i])) i += 1;
+    if (source.startsWith("check_id", i)) {
+      i += "check_id".length;
+      while (i < source.length && /\s/.test(source[i])) i += 1;
+      if (source[i] === "=") {
+        i += 1;
+        while (i < source.length && /\s/.test(source[i])) i += 1;
+      }
+    }
+    const quote = source[i];
+    if (quote !== '"' && quote !== "'") {
+      from = idx + needle.length;
+      continue;
+    }
+    i += 1;
+    let parsed = "";
+    while (i < source.length && source[i] !== quote) {
+      if (source[i] === "\\") {
+        parsed += source[i + 1] ?? "";
+        i += 2;
+        continue;
+      }
+      parsed += source[i];
+      i += 1;
+    }
+    if (parsed !== id) {
+      from = idx + needle.length;
+      continue;
+    }
+    let depth = 0;
+    let end = open;
+    let k = open;
+    while (k < source.length) {
+      const ch = source[k];
+      if (ch === '"' || ch === "'") {
+        const q = ch;
+        k += 1;
+        while (k < source.length && source[k] !== q) {
+          if (source[k] === "\\") k += 1;
+          k += 1;
+        }
+        k += 1;
+        continue;
+      }
+      if (ch === "(") depth += 1;
+      else if (ch === ")") {
+        depth -= 1;
+        if (depth === 0) {
+          end = k;
+          break;
+        }
+      }
+      k += 1;
+    }
+    const startLine = source.slice(0, idx).split("\n").length;
+    const endLine = source.slice(0, end + 1).split("\n").length;
+    return { start: startLine, end: endLine };
+  }
+  return null;
 }
 
-export function ChecksPanel({
-  loading,
+function Count({
+  label,
+  value,
+  warn = false,
+}: {
+  label: string;
+  value: number;
+  warn?: boolean;
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5">
+      <span className="text-xs text-mute">{label}</span>
+      <span
+        className={cn(
+          "text-sm tabular-nums font-medium",
+          warn && value > 0 ? "text-error" : "text-ink",
+        )}
+      >
+        {value}
+      </span>
+    </span>
+  );
+}
+
+function StatusIcon({ status }: { status: string | null | undefined }) {
+  const value = (status || "").toUpperCase();
+  if (value === "FAIL") {
+    return <CircleX className="h-4 w-4 shrink-0 text-error" aria-label="fail" />;
+  }
+  if (value === "ERROR") {
+    return (
+      <CircleAlert className="h-4 w-4 shrink-0 text-warning" aria-label="error" />
+    );
+  }
+  if (value === "PASS") {
+    return (
+      <CircleCheck className="h-4 w-4 shrink-0 text-nav-home" aria-label="pass" />
+    );
+  }
+  return <span className="inline-block h-4 w-4 shrink-0" aria-hidden />;
+}
+
+function ScriptSource({
+  path,
+  content,
+  checkId,
+}: {
+  path: string;
+  content: string;
+  checkId: string;
+}) {
+  const range = findEvaluationCheckRange(content, checkId);
+  const lines = content.split("\n");
+  const [flash, setFlash] = useState(true);
+  const lineRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setFlash(true);
+    const timer = window.setTimeout(() => setFlash(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [checkId, content]);
+
+  useLayoutEffect(() => {
+    const el = lineRef.current;
+    if (!el) return;
+    alignInScrollParent(el, "center");
+    const frame = window.requestAnimationFrame(() => {
+      alignInScrollParent(el, "center");
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [checkId, content, range?.start]);
+
+  return (
+    <div className="overflow-x-auto overflow-y-hidden bg-code-bg py-2">
+      {lines.map((line, i) => {
+        const n = i + 1;
+        const hit = range != null && n >= range.start && n <= range.end;
+        return (
+          <div
+            key={n}
+            ref={hit && n === range.start ? lineRef : undefined}
+            data-check-line={n}
+            className={cn(
+              "flex gap-3 px-3 font-mono text-[12px] leading-5",
+              hit && flash ? "bg-link-soft" : hit ? "bg-canvas-soft" : null,
+            )}
+          >
+            <span className="w-8 shrink-0 select-none text-right tabular-nums text-mute">
+              {n}
+            </span>
+            <span className="min-w-0 flex-1 whitespace-pre">
+              <CodeHighlight path={path} content={line.length ? line : " "} />
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+type ScriptState = {
+  path: string;
+  content: string | null;
+  note: string | null;
+  loading: boolean;
+};
+
+/**
+ * Harbor-style structured preview for evaluation/checks.json inside the
+ * file-split right pane. Not a separate Verifier module.
+ */
+export function ChecksFilePreview({
   checks,
-  note,
   taskId,
   loadScript,
-  panelRef,
 }: {
-  loading: boolean;
   checks: EvaluationCheck[];
-  note: string | null;
   taskId: string;
   loadScript?: (
     packagePath: string,
   ) => Promise<{ content: string | null; note?: string | null }>;
-  panelRef?: RefObject<HTMLDivElement | null>;
 }) {
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [scriptPath, setScriptPath] = useState<string | null>(null);
-  const [scriptContent, setScriptContent] = useState<string | null>(null);
-  const [scriptNote, setScriptNote] = useState<string | null>(null);
-  const [scriptLoading, setScriptLoading] = useState(false);
+  const failIds = checks
+    .filter((c) => {
+      const s = (c.status || "").toUpperCase();
+      return s === "FAIL" || s === "ERROR";
+    })
+    .map((c) => c.id);
+  const [openId, setOpenId] = useState<string | null>(failIds[0] ?? null);
+  const [scripts, setScripts] = useState<Record<string, ScriptState>>({});
+  const scriptsRef = useRef(scripts);
+  scriptsRef.current = scripts;
+  const loadScriptRef = useRef(loadScript);
+  loadScriptRef.current = loadScript;
+  const openScript = checks.find((c) => c.id === openId)?.script ?? "";
 
-  async function viewScript(script: string) {
-    const path = packageScriptPath(script, taskId);
-    const shown = path || script.trim();
-    setScriptPath(shown);
-    setScriptContent(null);
-    setScriptNote(null);
+  const pass = checks.filter((c) => (c.status || "").toUpperCase() === "PASS").length;
+  const fail = checks.filter((c) => (c.status || "").toUpperCase() === "FAIL").length;
+  const error = checks.filter((c) => (c.status || "").toUpperCase() === "ERROR").length;
+
+  useEffect(() => {
+    if (!openId || !openScript) return;
+    const path = packageScriptPath(openScript, taskId);
+    const cacheKey = path || `${openId}:rejected`;
     if (!path) {
-      setScriptNote(shown || "script path rejected");
+      setScripts((prev) => ({
+        ...prev,
+        [cacheKey]: {
+          path: openScript,
+          content: null,
+          note: "script path rejected",
+          loading: false,
+        },
+      }));
       return;
     }
-    if (!loadScript) {
-      setScriptNote(path);
+    if (scriptsRef.current[cacheKey]?.content != null) return;
+    const loader = loadScriptRef.current;
+    if (!loader) {
+      setScripts((prev) => ({
+        ...prev,
+        [cacheKey]: { path, content: null, note: path, loading: false },
+      }));
       return;
     }
-    setScriptLoading(true);
-    try {
-      const result = await loadScript(path);
-      setScriptContent(result.content);
-      setScriptNote(result.note ?? (result.content ? null : path));
-    } catch (err) {
-      setScriptContent(null);
-      setScriptNote(err instanceof Error ? err.message : path);
-    } finally {
-      setScriptLoading(false);
-    }
-  }
-
-  if (loading) {
-    return (
-      <div ref={panelRef} className="blob-panel p-4" aria-busy>
-        <p className="text-sm text-mute">Loading checks…</p>
-      </div>
-    );
-  }
-
-  if (!checks.length) {
-    return note ? <p className="text-sm text-mute">{note}</p> : null;
-  }
+    let cancelled = false;
+    setScripts((prev) => ({
+      ...prev,
+      [cacheKey]: {
+        path,
+        content: prev[cacheKey]?.content ?? null,
+        note: null,
+        loading: true,
+      },
+    }));
+    void loader(path)
+      .then((result) => {
+        if (cancelled) return;
+        setScripts((prev) => ({
+          ...prev,
+          [cacheKey]: {
+            path,
+            content: result.content,
+            note: result.note ?? (result.content ? null : path),
+            loading: false,
+          },
+        }));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setScripts((prev) => ({
+          ...prev,
+          [cacheKey]: {
+            path,
+            content: null,
+            note: err instanceof Error ? err.message : path,
+            loading: false,
+          },
+        }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [openId, openScript, taskId]);
 
   return (
-    <div ref={panelRef} className="space-y-3">
-      <div className="blob-panel overflow-hidden">
-        <div className="border-b border-hairline bg-canvas px-3 py-2">
-          <h2 className="text-sm font-medium text-ink">Checks</h2>
-          <p className="text-xs text-mute">Observational. Not the Attempt verdict.</p>
+    <div className="flex h-full min-h-0 flex-col bg-canvas">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-hairline px-3 py-2">
+        <span className="font-mono text-sm text-body">checks/1</span>
+        <div className="flex flex-wrap items-baseline gap-3">
+          <Count label="Checks" value={checks.length} />
+          <Count label="Pass" value={pass} />
+          <Count label="Fail" value={fail} warn />
+          <Count label="Error" value={error} warn />
         </div>
-        <ul className="divide-y divide-hairline">
-          {checks.map((check) => {
-            const key = check.id;
-            const open = openId === key;
-            return (
-              <li key={key}>
-                <button
-                  type="button"
-                  onClick={() => setOpenId(open ? null : key)}
+      </div>
+      <ul className="min-h-0 flex-1 overflow-auto">
+        {checks.map((check) => {
+          const open = openId === check.id;
+          const resolved = check.script
+            ? packageScriptPath(check.script, taskId) || check.script
+            : "";
+          const cacheKey = packageScriptPath(check.script || "", taskId) || `${check.id}:rejected`;
+          const scriptState = scripts[cacheKey];
+          const stdout = check.stdout && check.stdout.length > 0 ? check.stdout : null;
+          const stderr = check.stderr && check.stderr.length > 0 ? check.stderr : null;
+          return (
+            <li key={check.id} className="border-b border-hairline">
+              <button
+                type="button"
+                onClick={() => setOpenId(open ? null : check.id)}
+                className={cn(
+                  "sticky top-0 z-10 flex w-full items-center gap-3 bg-canvas px-3 py-2.5 text-left",
+                  "hover:bg-canvas-soft transition-colors duration-200 ease-smooth",
+                  open && "border-b border-hairline",
+                )}
+              >
+                <ChevronDown
                   className={cn(
-                    "flex w-full items-center gap-3 px-3 py-2.5 text-left",
-                    "hover:bg-canvas-soft transition-colors duration-200 ease-smooth",
+                    "h-4 w-4 shrink-0 text-mute transition-transform duration-200 ease-smooth",
+                    open ? "rotate-0" : "-rotate-90",
                   )}
-                >
-                  <ChevronDown
-                    className={cn(
-                      "h-4 w-4 shrink-0 text-mute transition-transform duration-200 ease-smooth",
-                      open ? "rotate-0" : "-rotate-90",
-                    )}
-                    aria-hidden
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-mono text-[13px] text-ink">
-                      {check.id}
-                    </span>
-                    {check.title ? (
-                      <span className="block truncate text-xs text-mute">
-                        {check.title}
-                      </span>
-                    ) : null}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-mono text-sm text-ink">
+                    {check.id}
                   </span>
-                  <span
-                    className={cn(
-                      "text-sm font-medium tabular-nums",
-                      statusClass(check.status),
-                    )}
-                  >
-                    {check.status || "—"}
-                  </span>
-                  <span className="w-12 text-right text-sm tabular-nums text-body">
-                    {typeof check.score === "number" ? check.score : "—"}
-                  </span>
-                </button>
-                {open ? (
-                  <div className="space-y-2 border-t border-hairline bg-canvas-soft/40 px-3 py-3">
-                    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                  {check.title ? (
+                    <span className="block truncate text-sm text-mute">{check.title}</span>
+                  ) : null}
+                </span>
+                <StatusIcon status={check.status} />
+              </button>
+              {open ? (
+                <div className="border-t border-hairline bg-canvas">
+                  {typeof check.exit_code === "number" || check.environment ? (
+                    <div className="flex flex-wrap gap-x-6 gap-y-1 px-3 pt-3 text-sm">
                       {check.environment ? (
-                        <>
-                          <dt className="text-mute">environment</dt>
-                          <dd className="font-mono text-[13px] text-ink">
-                            {check.environment}
-                          </dd>
-                        </>
+                        <span>
+                          <span className="text-mute">environment </span>
+                          <span className="font-mono text-ink">{check.environment}</span>
+                        </span>
                       ) : null}
                       {typeof check.exit_code === "number" ? (
-                        <>
-                          <dt className="text-mute">exit_code</dt>
-                          <dd className="tabular-nums text-ink">{check.exit_code}</dd>
-                        </>
+                        <span>
+                          <span className="text-mute">exit </span>
+                          <span className="tabular-nums text-ink">{check.exit_code}</span>
+                        </span>
                       ) : null}
-                      {check.script ? (
-                        <>
-                          <dt className="text-mute">script</dt>
-                          <dd className="min-w-0">
-                            <span className="mr-2 font-mono text-[13px] text-ink break-all">
-                              {packageScriptPath(check.script, taskId) || check.script}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void viewScript(check.script || "");
-                              }}
-                            >
-                              <FileCode2 className="h-3.5 w-3.5" aria-hidden />
-                              View script
-                            </Button>
-                          </dd>
-                        </>
+                    </div>
+                  ) : null}
+                  {stdout ? (
+                    <div className="px-3 pt-3">
+                      <div className="mb-1 text-sm text-mute">Trace</div>
+                      <pre className="m-0 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-code-bg p-3 font-mono text-[12px] leading-5 text-shell-plain">
+                        <code className="font-mono">
+                          <CodeHighlight
+                            path={resolved.endsWith(".py") ? resolved : "trace.txt"}
+                            content={stdout}
+                          />
+                        </code>
+                      </pre>
+                    </div>
+                  ) : null}
+                  {stderr ? (
+                    <div className="px-3 pt-3">
+                      <div className="mb-1 text-sm text-mute">Stderr</div>
+                      <pre className="m-0 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-code-bg p-3 font-mono text-[12px] leading-5 text-shell-plain">
+                        <code className="font-mono">
+                          <CodeHighlight
+                            path={resolved.endsWith(".py") ? resolved : "trace.txt"}
+                            content={stderr}
+                          />
+                        </code>
+                      </pre>
+                    </div>
+                  ) : null}
+                  {check.script ? (
+                    <div className="pt-3">
+                      <div className="px-3 pb-1 font-mono text-sm text-mute">
+                        {resolved}
+                      </div>
+                      {scriptState?.loading ? (
+                        <p className="px-3 pb-3 text-sm text-mute">Loading script…</p>
                       ) : null}
-                    </dl>
-                    {check.stdout != null && check.stdout !== "" ? (
-                      <div>
-                        <div className="mb-1 text-xs text-mute">stdout</div>
-                        <pre className="m-0 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-code-bg p-3 font-mono text-[12px] leading-5 text-shell-plain">
-                          {check.stdout}
-                        </pre>
-                      </div>
-                    ) : null}
-                    {check.stderr != null && check.stderr !== "" ? (
-                      <div>
-                        <div className="mb-1 text-xs text-mute">stderr</div>
-                        <pre className="m-0 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-code-bg p-3 font-mono text-[12px] leading-5 text-shell-plain">
-                          {check.stderr}
-                        </pre>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-      {scriptPath ? (
-        <div className="blob-panel overflow-hidden">
-          <div className="border-b border-hairline bg-canvas px-3 py-2 text-[12px] text-mute">
-            <span className="font-mono text-ink">{scriptPath}</span>
-          </div>
-          {scriptLoading ? (
-            <p className="p-3 text-sm text-mute">Loading script…</p>
-          ) : (
-            <>
-              {scriptNote ? (
-                <p className="px-3 pt-2 text-xs text-mute">{scriptNote}</p>
+                      {scriptState && !scriptState.loading && scriptState.note ? (
+                        <p className="px-3 pb-3 text-xs text-mute">{scriptState.note}</p>
+                      ) : null}
+                      {scriptState?.content != null ? (
+                        <ScriptSource
+                          path={scriptState.path}
+                          content={scriptState.content}
+                          checkId={check.id}
+                        />
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
-              {scriptContent != null ? (
-                <pre className="m-0 max-h-[40vh] overflow-auto whitespace-pre-wrap break-words bg-code-bg p-3 font-mono text-[12px] leading-5 text-shell-plain">
-                  <code className="font-mono">
-                    <CodeHighlight path={scriptPath} content={scriptContent} />
-                  </code>
-                </pre>
-              ) : null}
-            </>
-          )}
-        </div>
-      ) : null}
-      {note ? <p className="text-sm text-mute">{note}</p> : null}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

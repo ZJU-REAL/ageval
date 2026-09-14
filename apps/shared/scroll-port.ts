@@ -18,7 +18,7 @@ function clampScrollTop(scroller: HTMLElement, next: number): void {
 /** Move `el` inside its scroll parent only (does not chain to the window). */
 export function alignInScrollParent(
   el: HTMLElement,
-  block: "start" | "end" | "nearest",
+  block: "start" | "end" | "nearest" | "center",
 ): void {
   const scroller = findScrollParent(el);
   if (scroller === el) return;
@@ -27,7 +27,9 @@ export function alignInScrollParent(
   let delta = 0;
   if (block === "start") delta = r.top - s.top;
   else if (block === "end") delta = r.bottom - s.bottom;
-  else if (r.top < s.top) delta = r.top - s.top;
+  else if (block === "center") {
+    delta = r.top - s.top - scroller.clientHeight / 2 + r.height / 2;
+  } else if (r.top < s.top) delta = r.top - s.top;
   else if (r.bottom > s.bottom) delta = r.bottom - s.bottom;
   if (delta === 0) return;
   clampScrollTop(scroller, scroller.scrollTop + delta);

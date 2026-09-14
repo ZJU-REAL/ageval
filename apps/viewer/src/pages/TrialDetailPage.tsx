@@ -44,9 +44,6 @@ export function TrialDetailPage() {
     observationSteps,
     obsNote,
     obsLoading,
-    checks,
-    checksNote,
-    checksLoading,
     loadScript,
     tree,
     treeGroups,
@@ -122,9 +119,6 @@ export function TrialDetailPage() {
               observationSteps={observationSteps}
               obsLoading={obsLoading}
               obsNote={obsNote}
-              checks={checks}
-              checksLoading={checksLoading}
-              checksNote={checksNote}
               taskId={taskId}
               loadScript={loadScript}
               result={result}

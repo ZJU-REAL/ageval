@@ -5,9 +5,7 @@ import {
   buildTrialMeta,
   firstTab,
   invDirFromTrajPath,
-  CHECKS_REL,
   OBSERVATION_REL,
-  parseChecksJson,
   parseTrajectoryJsonl,
   trajectoryRelPaths,
   scopeForTab,
@@ -76,11 +74,6 @@ export function useAttemptEvidence(
   );
   const [obsNote, setObsNote] = useState<string | null>(null);
   const [obsLoading, setObsLoading] = useState(false);
-  const [checks, setChecks] = useState<
-    ReturnType<typeof parseChecksJson>
-  >([]);
-  const [checksNote, setChecksNote] = useState<string | null>(null);
-  const [checksLoading, setChecksLoading] = useState(false);
 
   const [tree, setTree] = useState<TreeEntry[]>([]);
   const [treeGroups, setTreeGroups] = useState<Array<{
@@ -95,7 +88,6 @@ export function useAttemptEvidence(
   const [fileLoading, setFileLoading] = useState(false);
   const trajFetchedRef = useRef(false);
   const obsFetchedRef = useRef(false);
-  const checksFetchedRef = useRef(false);
 
   const availableTabs = useMemo(
     () => availableTabsFromPaths(relFiles.map((f) => f.path)),
@@ -116,9 +108,6 @@ export function useAttemptEvidence(
       setSteps([]);
       trajFetchedRef.current = false;
       obsFetchedRef.current = false;
-      checksFetchedRef.current = false;
-      setChecks([]);
-      setChecksNote(null);
       setTree([]);
       setSelectedPath(null);
       setFileContent(null);
@@ -264,37 +253,6 @@ export function useAttemptEvidence(
         setObsNote(null);
         setObsLoading(false);
       }
-      const hasChecks = relFiles.some((f) => f.path === CHECKS_REL);
-      if (hasChecks) {
-        if (!checksFetchedRef.current) {
-          setChecksLoading(true);
-          setChecksNote(null);
-          (async () => {
-            try {
-              const f = await getAttemptFile(
-                runId,
-                toArchivePath(CHECKS_REL, runId),
-                token,
-              );
-              if (cancelled) return;
-              setChecks(parseChecksJson(decodeFileContent(f) || ""));
-              checksFetchedRef.current = true;
-              setChecksNote(null);
-            } catch (e) {
-              if (!cancelled) {
-                setChecks([]);
-                setChecksNote(e instanceof Error ? e.message : String(e));
-              }
-            } finally {
-              if (!cancelled) setChecksLoading(false);
-            }
-          })();
-        }
-      } else {
-        setChecks([]);
-        setChecksNote(null);
-        setChecksLoading(false);
-      }
     }
 
     if (activeTab === "trajectory") {
@@ -364,7 +322,9 @@ export function useAttemptEvidence(
       setTree(entries);
       setTreeGroups(groups);
       const preferred =
-        entries.find((e) => e.name === "lock.json") ||
+        (activeTab === "verifier"
+          ? entries.find((e) => e.name === "checks.json")
+          : entries.find((e) => e.name === "lock.json")) ||
         entries.find((e) => e.name === "result.json") ||
         entries.find((e) => e.name.endsWith(".json")) ||
         entries[0];
@@ -434,9 +394,6 @@ export function useAttemptEvidence(
     observationSteps,
     obsNote,
     obsLoading,
-    checks,
-    checksNote,
-    checksLoading,
     tree,
     treeGroups,
     treeLoading,

@@ -16,10 +16,11 @@ import { Input } from "@/components/ui/input";
 import type { TreeEntry } from "@/lib/api";
 import { CodeHighlight } from "@/lib/code-highlight";
 import { countFiles } from "@/lib/file-icons";
-import { buildNestedTree, type TreeNode } from "@/lib/file-tree";
+import { ancestorDirPaths, buildNestedTree, type TreeNode } from "@/lib/file-tree";
 import { isMarkdownPath } from "@/lib/markdown-frontmatter";
 import { cn } from "@/lib/utils";
 
+import { ChecksFilePreview, parseChecksFile } from "./checks-panel";
 import { actorLabel, type ActorRow } from "./types";
 
 /** Fixed row height for windowed tree rendering (matches h-7). */
@@ -129,6 +130,8 @@ export function FileSplitPanel({
   actors = [],
   apiGroups = null,
   panelRef,
+  taskId = "",
+  loadScript,
 }: {
   tree: TreeEntry[];
   treeLoading: boolean;
@@ -145,6 +148,10 @@ export function FileSplitPanel({
     label?: string;
   }> | null;
   panelRef?: RefObject<HTMLDivElement | null>;
+  taskId?: string;
+  loadScript?: (
+    packagePath: string,
+  ) => Promise<{ content: string | null; note?: string | null }>;
 }) {
   const nestedRoots = useMemo((): TreeNode[] => {
     const files = tree.filter((e) => e.type !== "dir");
@@ -212,12 +219,14 @@ export function FileSplitPanel({
   const [openDirs, setOpenDirs] = useState<Set<string>>(() => new Set());
   const [query, setQuery] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const lastRevealed = useRef<string | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportH, setViewportH] = useState(420);
 
   useEffect(() => {
     setOpenDirs(new Set(dirPathsUpToDepth(nestedRoots, DEFAULT_OPEN_DEPTH)));
     setScrollTop(0);
+    lastRevealed.current = null;
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- treeKey is the intentional dep
   }, [treeKey]);
@@ -235,6 +244,23 @@ export function FileSplitPanel({
       setOpenDirs(new Set(dirPathsUpToDepth(nestedRoots, DEFAULT_OPEN_DEPTH)));
     }
   }, [query, visibleTree, nestedRoots]);
+
+  useEffect(() => {
+    if (!selectedPath || query.trim()) return;
+    const ancestors = ancestorDirPaths(selectedPath);
+    if (!ancestors.length) return;
+    setOpenDirs((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      for (const dir of ancestors) {
+        if (!next.has(dir)) {
+          next.add(dir);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [selectedPath, treeKey, query]);
 
   const flatRows = useMemo(
     () => flattenVisible(visibleTree, openDirs),
@@ -272,6 +298,27 @@ export function FileSplitPanel({
     });
   }
 
+  useEffect(() => {
+    if (!selectedPath || !scrollRef.current) return;
+    if (lastRevealed.current === selectedPath) return;
+    const idx = flatRows.findIndex(
+      (r) => r.node.type === "file" && r.node.path === selectedPath,
+    );
+    if (idx < 0) return;
+    const el = scrollRef.current;
+    const rowTop = idx * ROW_H;
+    const rowBottom = rowTop + ROW_H;
+    if (rowTop < el.scrollTop) {
+      el.scrollTop = rowTop;
+      setScrollTop(rowTop);
+    } else if (rowBottom > el.scrollTop + el.clientHeight) {
+      const next = rowBottom - el.clientHeight;
+      el.scrollTop = next;
+      setScrollTop(next);
+    }
+    lastRevealed.current = selectedPath;
+  }, [selectedPath, flatRows, treeKey]);
+
   const selectedName = selectedPath
     ? selectedPath.split("/").pop() || selectedPath
     : null;
@@ -285,6 +332,10 @@ export function FileSplitPanel({
         ? fileContent.slice(0, PLAIN_PREVIEW_MAX_CHARS) +
           `\n\n… truncated for preview (${fileContent.length.toLocaleString()} chars total)`
         : fileContent;
+  const parsedChecks =
+    !fileLoading && !previewTooLarge
+      ? parseChecksFile(selectedPath, fileContent)
+      : null;
 
   return (
     <div
@@ -407,15 +458,26 @@ export function FileSplitPanel({
           "overflow-hidden",
         )}
       >
-        {selectedPath ? (
+        {selectedPath && !parsedChecks ? (
           <div className="px-3 py-2 border-b border-hairline text-[12px] text-mute shrink-0 bg-canvas flex items-center gap-2">
             <FileTypeIcon name={selectedName || selectedPath} kind="file" />
             <TruncateTip text={selectedPath} className="text-ink" />
           </div>
         ) : null}
-        <div className="p-0 flex-1 min-h-0 overflow-auto">
+        <div
+          className={cn(
+            "p-0 flex-1 min-h-0",
+            parsedChecks ? "overflow-hidden" : "overflow-auto",
+          )}
+        >
           {fileLoading ? (
             <p className="text-sm text-mute p-3">Loading file…</p>
+          ) : parsedChecks ? (
+            <ChecksFilePreview
+              checks={parsedChecks}
+              taskId={taskId}
+              loadScript={loadScript}
+            />
           ) : (
             <>
               {fileNote ? (
@@ -423,7 +485,7 @@ export function FileSplitPanel({
               ) : null}
               {previewTooLarge && fileContent != null ? (
                 <p className="text-xs text-mute px-3 pt-2">
-                  Large file ({fileContent.length.toLocaleString()} chars) —
+                  Large file ({fileContent.length.toLocaleString()} chars) -
                   plain preview without highlighting
                   {fileContent.length > PLAIN_PREVIEW_MAX_CHARS
                     ? `, first ${PLAIN_PREVIEW_MAX_CHARS.toLocaleString()} chars`
