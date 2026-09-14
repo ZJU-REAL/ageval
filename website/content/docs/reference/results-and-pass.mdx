@@ -14,7 +14,7 @@ description: How to read Result; pass@k is a job metric, not a PASS for the whol
 
 - **Result**: status and evaluation for this run  
 - **`logs`**: evidence path under the dataset root (e.g. `.ageval/runs/<run_id>`; typical when `k=1`)  
-- Whole-dataset `pass_rate` / `mean_score`: observational only  
+- Whole-dataset `pass_rate` / `mean_score`: job summary  
 
 ## Always-k and pass@k / pass^k
 
@@ -56,8 +56,6 @@ Each key is a **stringified k** (`"1"`, `"2"`, `"5"`, …). Value shape:
 
 **`task_refs` (multi-attempt):** may include `n`, `c`, `attempt_run_ids` (plus primary `run_id`) for audit and `--with-attempts`.
 
-These are **observational aggregates**, not a PASS for the whole dataset.
-
 ## What Hub actually lists
 
 | Upload command | Artifact | Hub primary UI |
@@ -71,7 +69,7 @@ So: to show whole-dataset results on the public board, **run the whole dataset �
 ## Local view
 
 `ageval view` opens Jobs → Tasks → Attempt.  
-Attempt pages may show **Timing** (and **Tokens** when present). Trajectory steps follow file order (thought next to the tools it precedes). A step may show a duration when the row has `elapsed_ms`. Time, tokens, and step duration are **hints**, not PASS.
+Attempt pages may show **Timing** (and **Tokens** when present). Trajectory steps follow file order (thought next to the tools it precedes). A step may show a duration when the row has `elapsed_ms`. Verifier may show `evaluation/checks.json` as a structured preview in the file tree (and a Trajectory / Files toggle when `observation.jsonl` is also present).
 
 ## Failure kinds
 

@@ -34,6 +34,6 @@ async def run(ctx: RunContext) -> RunTerminal:
     return RunTerminal.completed("ok")
 ```
 
-`session.invoke` 可传 `tools` 与 `messages`。`openai-http` / `anthropic-http` 返回结构化 `tool_calls`；ACP 忽略工具目录，仍走文本 invoke。省略这两项就是 prompt-only。`tool_calls` 不是 PASS。
+`session.invoke` 可传 `tools` 与 `messages`。`openai-http` / `anthropic-http` 返回结构化 `tool_calls`；ACP 忽略工具目录，仍走文本 invoke。省略这两项就是 prompt-only。
 
 有文件就认，不必再写 `harness.entrypoint`。

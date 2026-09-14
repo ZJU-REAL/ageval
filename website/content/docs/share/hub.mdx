@@ -53,10 +53,10 @@ Ops detail: `apps/hub/README.md`, `services/registry/README.md`.
 ## Leaderboard
 
 - Catalog sidebar leads with **Leaderboard** (`/leaderboard`); `/` redirects here. It is an **index** of the three existing surfaces, not a fourth ranking. The Dataset view groups by dataset (name + description as the group head) and lists public listed suites; Agent / Model views reuse the existing Performance gates (plaza collect or Agent-org consent). The three tables may disagree on membership. Signed-out is OK. Internal, draft-bound, and unlisted suites stay on the dataset Leaderboard tab — they never appear on the plaza.
-- The plaza Dataset view switches Table / Pareto / Waffle with the same control as a dataset Leaderboard (right of the Dataset tab). Charts are per dataset group. Scores sit on each inner row; they are observational, not PASS, and not comparable across datasets. There is no rank column. Agent / Model views stay tables.
+- The plaza Dataset view switches Table / Pareto / Waffle with the same control as a dataset Leaderboard (right of the Dataset tab). Charts are per dataset group. Scores sit on each inner row and are not comparable across datasets. There is no rank column. Agent / Model views stay tables.
 - **Public** lists only suites that are complete, bound to a release, and approved for listing by the dataset org's owner; **Internal** shows caller-visible incomplete or draft-bound runs in the same table.
 - The same tab switches **Table** / **Pareto** / **Waffle**. Pareto’s x-axis is the **sum of every job** in the suite (cost, tokens, or time); left is cheaper, right is more. When the agent did not report USD, cost is tokens × catalog price — estimated, not a billed invoice. Higher pass rate at no extra cost forms the frontier.
-- Metrics are observational summaries, not a suite PASS; headers sort. Dataset / Agent Model cells prepend a lab mark when the overlay uniquely joins the catalog; the plaza Model view already marks the group head, so the inner Model column does not repeat it. Harness / Agent cells prepend the builtin product mark when the short id matches.
+- Table headers sort. Dataset / Agent Model cells prepend a lab mark when the overlay uniquely joins the catalog; the plaza Model view already marks the group head, so the inner Model column does not repeat it. Harness / Agent cells prepend the builtin product mark when the short id matches.
 - Click a row for the suite run page: **Profiles** / **Plugin** / **Jobs**, with secret-free YAML and rerun commands. On a Dataset table, Harness and Model (when they match) open the agent page and model encyclopedia; the suite detail header uses the same links. In-app text links stay ink until hover; off-site links stay blue. Uploaders get Share, Delete, and Attach — link a published model / agent for provenance.
 - Listing and Performance requests are batch-approved by org owners in the **Inbox**.
 
@@ -64,7 +64,7 @@ Ops detail: `apps/hub/README.md`, `services/registry/README.md`.
 
 - The plugin / agent marketplace uses cards: description, tags, downloads, and stars. Detail pages show the declared extension-point timeline, file preview, and the CLI install command.
 - Agent details add bindings, files, and Performance.
-- **Models** in the sidebar is a catalog grouped by lab (context, price, and more; searchable; a row opens its encyclopedia page). Prices are list prices — not bills, not PASS.
+- **Models** in the sidebar is a catalog grouped by lab (context, price, and more; searchable; a row opens its encyclopedia page). Prices are catalog list prices, not invoices.
 - Official orgs, their members, and their plugins carry a verified badge.
 
 ## Orgs and sharing
@@ -81,7 +81,7 @@ Ops detail: `apps/hub/README.md`, `services/registry/README.md`.
 | Entry | `ageval view` | Browser SPA |
 | Job artifacts | Local run dirs | Must be uploaded first |
 
-Jobs rows with uploaded run artifacts open detail; others show **Not uploaded**. Trajectories are never invented.
+Jobs rows with uploaded run artifacts open detail; others show **Not uploaded**.
 
 ## What to upload so Hub shows it
 

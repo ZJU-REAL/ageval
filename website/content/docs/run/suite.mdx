@@ -1,6 +1,6 @@
 ---
 title: Run the whole dataset
-description: Run every task; optional Always-k and pass@k; aggregates are not a PASS for the whole dataset.
+description: Run every task; optional Always-k and pass@k.
 ---
 
 Omit `--task` and `ageval run` schedules **every** member — each locks, runs, and evaluates independently:
@@ -50,12 +50,12 @@ Under `.ageval/suite-runs/<suite_run_id>/summary.json` → `metrics`:
 
 | Field | Meaning |
 | --- | --- |
-| `pass_rate` / `mean_score` | Observational skim (not suite PASS) |
+| `pass_rate` / `mean_score` | Mean over tasks in this job |
 | `pass_at_k` | **pass@k** (Harbor-style unbiased); suite score = **mean over tasks** |
 | `pass_power_k` | **pass^k** (all-k success estimate); also mean over tasks |
 | `n_attempts` | Job k budget |
 
-Tasks with too few samples are **omitted** from that k’s denominator. PASS remains **per-task evaluator** only.
+Tasks with too few samples are **omitted** from that k’s denominator.
 
 Same directory: `progress.json`. Attempt `result.json` may include `phase_timing` (`prepare` / `run` / `evaluate` / `cleanup`).
 

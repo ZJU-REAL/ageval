@@ -53,10 +53,10 @@ pnpm dev   # http://127.0.0.1:5174
 ## Leaderboard
 
 - 侧栏 Catalog 首位是 **Leaderboard**（`/leaderboard`），`/` 也落到这里。是已有三面的**索引**，不是第四套排名：Dataset 视图按 Dataset 分组（组头是名称与描述），只列公开上榜的整份运行；Agent / Model 视图走已有 Performance 门（plaza 采集或 Agent 组织同意）。三张表成员可以不一致。未登录可看。Internal、draft 绑定、未列出的 suite **不**出现在 plaza，仍只在 Dataset 详情的 Leaderboard tab。
-- plaza Dataset 视图可切 Table / Pareto / Waffle（与 Dataset 详情 Leaderboard 同一套控件，在 Dataset tab 行右侧；图按 Dataset 组分）。指标写在每一行上，是观测、不是 PASS、不可跨 Dataset 比；没有名次列。Agent / Model 只要表。
+- plaza Dataset 视图可切 Table / Pareto / Waffle（与 Dataset 详情 Leaderboard 同一套控件，在 Dataset tab 行右侧；图按 Dataset 组分）。指标写在每一行上，不可跨 Dataset 比；没有名次列。Agent / Model 只要表。
 - **Public** 只列完备、绑定 release、且经 dataset 所属组织 owner 批准上榜的整份运行；**Internal** 用同一张表列当前可见的缺题 / draft 绑定结果
 - 同一 tab 可切 **Table** / **Pareto** / **Waffle**。Pareto 横轴是整份运行里 **全部 job** 的花费、token 或时间加总（左便宜、右更贵）；没有 agent 上报 USD 时用目录价估算（不是账单）。更高 pass rate、又不更贵的点连成前沿
-- 指标是观测汇总，不是整份 dataset 的 PASS；表头可排序。Dataset / Agent 表的 Model 格在能对应到目录模型时前置 lab 标；plaza Model 视图组头已有标，行内不再重复。Harness / Agent 格在能对应到内置 harness 时前置产品标
+- 表头可排序。Dataset / Agent 表的 Model 格在能对应到目录模型时前置 lab 标；plaza Model 视图组头已有标，行内不再重复。Harness / Agent 格在能对应到内置 harness 时前置产品标
 - 点行打开详情页：**Profiles** / **Plugin** / **Jobs**，附无密钥 YAML 与再跑命令。Dataset 表里点 Harness / Model 分别进对应 Agent 页 / 模型百科（能匹配时）；suite 详情标题行同一套。站内文字链 rest 用正文色，hover 才下划线；站外链接仍是蓝色。上传者可 Share、Delete，或 Attach 一条已发布的 model / agent 溯源
 - 上榜与 Performance 申请由组织 owner 在 **Inbox** 批量处理
 
@@ -64,7 +64,7 @@ pnpm dev   # http://127.0.0.1:5174
 
 - 插件 / Agent 市场用卡片展示：说明、标签、下载量与收藏；详情页有声明接入点时间线、文件预览与 CLI 安装命令
 - Agent 详情含绑定、文件与 Performance
-- 侧栏 **Models** 是按 lab 分组的模型目录（Context / 价格等规格，可搜索，行名进百科页）；价格是目录价，不是账单，也不是 PASS
+- 侧栏 **Models** 是按 lab 分组的模型目录（Context / 价格等规格，可搜索，行名进百科页）；价格是目录价，不是账单
 - 官方组织、其成员与插件带验证标识
 
 ## 组织与协作
@@ -81,7 +81,7 @@ pnpm dev   # http://127.0.0.1:5174
 | 入口 | `ageval view` | 浏览器打开 Hub |
 | Jobs 产物 | 本地 run 目录 | 需先上传到 Registry |
 
-Jobs 列表里，已有运行产物的行可以点进去看；没上传的会显示 **Not uploaded**，不会编造轨迹。
+Jobs 列表里，已有运行产物的行可以点进去看；没上传的会显示 **Not uploaded**。
 
 ## 上传什么才能在 Hub 上看到
 

@@ -1,6 +1,6 @@
 ---
 title: 整份 dataset 一次跑完
-description: 一次跑完 dataset 里所有 task；可 Always-k 与 pass@k；汇总分不是整份 dataset 的 PASS。
+description: 一次跑完 dataset 里所有 task；可 Always-k 与 pass@k。
 ---
 
 省略 `--task` 时，`ageval run` 把 dataset 里每一个 task 都跑一遍，各自独立 lock / 执行 / 评测：
@@ -50,12 +50,12 @@ ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task t
 
 | 字段 | 含义 |
 | --- | --- |
-| `pass_rate` / `mean_score` | 只供观测，不是整份 dataset 的 PASS |
+| `pass_rate` / `mean_score` | 本 job 各题 mean |
 | `pass_at_k` | **pass@k**（Harbor 无偏估计）；整份汇总分 = **各 task 上该指标的 mean** |
 | `pass_power_k` | **pass^k**（k 次都成功的估计）；同样按 task 取 mean |
 | `n_attempts` | 本次 job 的 k 预算 |
 
-样本数不够的 task **不进**该 k 的分母。PASS 仍只来自**每题 evaluator**。
+样本数不够的 task **不进**该 k 的分母。
 
 同目录还有 `progress.json`（多 unit 进度）；一次运行的 `result.json` 可含 `phase_timing`（prepare / run / evaluate / cleanup）。
 

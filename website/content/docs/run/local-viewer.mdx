@@ -40,8 +40,8 @@ ageval view examples/datasets/minimal-demo --open /jobs/<id>
 
 Timing comes from Attempt `phase_timing` (`prepare` / `run` / `evaluate` / `cleanup`); hover bar segments for durations.  
 Trajectory steps follow the sealed file order: a thought, then the tools that thought invoked, then the next thought. When a sealed step (thought, `tool_call`, or final assistant) carries `elapsed_ms`, the step header shows that duration. Missing timing is omitted — Viewer does not invent it from file mtimes or the page clock.  
-Time, tokens, and step duration are **hints**, not PASS. Trajectory is not how scoring is decided. Each **tool-call** row (and other long rows) can collapse; the observational PASS note has expand-all / collapse-all, same as the Hub Attempt page.
+Each **tool-call** row (and other long rows) can collapse; the observational PASS note has expand-all / collapse-all, same as the Hub Attempt page.
 
-**Verifier:** When both `evaluation/observation.jsonl` and `evaluation/checks.json` are present, a Trajectory / Files toggle sits on the far right of the tab row (trajectory first). Otherwise the tab shows the one surface that exists. Selecting `checks.json` in the file tree renders the checkpoints in the preview (counts, expandable rows, stdout/stderr, package script). There is no separate Checks panel. The Agent Trajectory tab still reads only root `trajectory.jsonl`. Checks and observation are not PASS.
+**Verifier:** When both `evaluation/observation.jsonl` and `evaluation/checks.json` are present, a Trajectory / Files toggle sits on the far right of the tab row (trajectory first). Otherwise the tab shows the one surface that exists. Selecting `checks.json` in the file tree renders the checkpoints in the preview (counts, expandable rows, stdout/stderr, package script). There is no separate Checks panel. The Agent Trajectory tab still reads only root `trajectory.jsonl`.
 
-Viewer does **not** talk to Registry; remote directories live on the Hub. SPA details: `apps/viewer/README.md`.
+Viewer does **not** talk to Registry; remote directories live on the Hub.

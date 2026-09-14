@@ -14,7 +14,7 @@ description: Result 怎么读；pass@k 是 job 指标，不是整份 dataset 的
 
 - **Result**：绑定到这次运行的状态与评测结论  
 - **`logs`**：这次运行的证据路径（相对 dataset 根，如 `.ageval/runs/<run_id>`；单次 `k=1` 常见）  
-- 整份跑完时的 `pass_rate` / `mean_score`：只供观测  
+- 整份跑完时的 `pass_rate` / `mean_score`：job 汇总  
 
 ## Always-k 与 pass@k / pass^k
 
@@ -56,8 +56,6 @@ description: Result 怎么读；pass@k 是 job 指标，不是整份 dataset 的
 
 **`task_refs`（多 attempt）：** 可含 `n`、`c`、`attempt_run_ids`（及主 `run_id`），供审计与 `--with-attempts` 上传全样本。
 
-这些是 **观测汇总**，不是整份 dataset 的 PASS。
-
 ## Hub 上看得到什么
 
 | 上传命令 | 产物 | Hub 主界面 |
@@ -71,7 +69,7 @@ description: Result 怎么读；pass@k 是 job 指标，不是整份 dataset 的
 ## 本地查看
 
 `ageval view` 打开 Jobs → Tasks → Attempt。  
-Attempt 页可有 **Timing**（及有数据时的 **Tokens**）条。轨迹按文件顺序展示（thought 紧挨着它后面的工具）。轨迹行带 `elapsed_ms` 时步骤头显示单步耗时。耗时 / token / 单步耗时 **只是参考**，不是 PASS。
+Attempt 页可有 **Timing**（及有数据时的 **Tokens**）条。轨迹按文件顺序展示（thought 紧挨着它后面的工具）。轨迹行带 `elapsed_ms` 时步骤头显示单步耗时。Verifier 会把 `evaluation/checks.json` 在文件树预览里结构化渲染（同时有 `observation.jsonl` 时用 Trajectory / Files 切换）。
 
 ## 失败怎么分
 
