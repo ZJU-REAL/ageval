@@ -116,31 +116,40 @@ Environments and agent runtimes both plug in. The default path is [ACP](https://
 
 With the CLI and skills installed, a coding agent can author or convert a dataset and run the eval end to end. Afterwards, `ageval view` replays the trajectory locally: phase timing, tool calls, and a reproduce command for failed tasks. See [Getting started](#getting-started).
 
+**Two scoring styles**
+
+Only a separate `evaluator.py` can return PASS:
+
+- Default is a deterministic script: compare artifacts to gold, optionally split into `checks`
+- Open-ended tasks can add a judge role on the same `profiles.yaml` and use LLM-as-judge.
+
 **Share and reuse on Hub**
 
 Upload datasets, plugins, Agent packages, and results to [ageval Hub](https://ageval.zjureal.com). Leaderboard scores name the Agent and environment used; pull a published Agent with `--agent`; compare models side by side.
 
 ### Screenshots
 
-|                                                        Plugin marketplace                                                         |                                             Compare models on Hub                                             |
-| :-------------------------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------: |
-| <img src="docs/assets/demo/plugins-marketplace.png" alt="Plugin marketplace: environment and agent runtime plugins" width="100%"> | <img src="docs/assets/demo/agent-model-compare.png" alt="Compare models under one Agent on Hub" width="100%"> |
+<p align="center"><img src="docs/assets/demo/leaderboard.png" alt="Hub leaderboard: scores by Agent and model" width="100%"></p>
+<p align="center">Leaderboard: scores by Agent and model</p>
+
+<p align="center"><img src="docs/assets/demo/viewer-trajectory.png" alt="Local viewer: replay tool calls in a trajectory" width="100%"></p>
+<p align="center">Trajectory: replay tool calls in the local viewer</p>
 
 <details>
 <summary>More screenshots</summary>
 <br/>
 
-<p align="center">nooa plugin: NVIDIA's official agent runtime</p>
-<p align="center"><img src="docs/assets/demo/nooa-plugin.png" alt="nooa plugin detail: NVIDIA official agent runtime" width="90%"></p>
+<p align="center"><img src="docs/assets/demo/agents.png" alt="Agents: packages you can pull from Hub" width="90%"></p>
+<p align="center">Agents: packages you can pull from Hub</p>
 
-<p align="center">Leaderboard: scores bound to environment and Agent</p>
-<p align="center"><img src="docs/assets/demo/leaderboard.png" alt="Hub leaderboard: scores for environment and Agent combinations" width="90%"></p>
+<p align="center"><img src="docs/assets/demo/plugins-marketplace.png" alt="Plugin marketplace: environment and agent runtime plugins" width="90%"></p>
+<p align="center">Plugin marketplace: environment and agent runtime plugins</p>
 
-<p align="center">Models Hub: success rate and cost by model</p>
-<p align="center"><img src="docs/assets/demo/models-hub.png" alt="Models Hub: panorama of models across datasets and Agents" width="90%"></p>
+<p align="center"><img src="docs/assets/demo/leaderboard-pareto.png" alt="Pareto: pass rate vs time" width="90%"></p>
+<p align="center">Pareto: pass rate vs time</p>
 
-<p align="center">Model detail: one model across datasets and Agents</p>
-<p align="center"><img src="docs/assets/demo/model-detail.png" alt="Model detail: performance on each dataset and Agent" width="90%"></p>
+<p align="center"><img src="docs/assets/demo/viewer-checks.png" alt="Verifier: deterministic script checks" width="90%"></p>
+<p align="center">Verifier: deterministic script checks</p>
 
 </details>
 

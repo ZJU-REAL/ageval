@@ -116,31 +116,40 @@ uv run ageval view examples/datasets/minimal-demo --no-browser
 
 装上 CLI 和 skill 后，coding agent 能按规范写或转化 dataset，并端到端跑完。跑完用 `ageval view` 在本地复盘轨迹：各阶段耗时、工具调用，以及失败任务的复现命令。安装见[快速开始](#快速开始)。
 
+**两种打分方式**
+
+PASS 只由独立的 `evaluator.py` 给出:
+
+- 默认是确定性脚本：对照产物和参考答案，可拆成若干 `checks`
+- 开放题可以在同一份 `profiles.yaml` 里加 judge 角色，走 LLM-as-judge。
+
 **在 Hub 上分享与复用**
 
 把 dataset、插件、Agent 包和评测结果上传到 [ageval Hub](https://ageval.zjureal.com)。榜单上的成绩会标明用的 Agent 和环境；已发布的 Agent 可用 `--agent` 直接拉取；也可以按模型横向对比。
 
 ### 截图
 
-|                                                 插件市场                                                  |                                             Hub 上比较模型                                              |
-| :-------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------: |
-| <img src="docs/assets/demo/plugins-marketplace.png" alt="插件市场：环境与 Agent 运行时插件" width="100%"> | <img src="docs/assets/demo/agent-model-compare.png" alt="在 Agent Hub 中比较不同模型表现" width="100%"> |
+<p align="center"><img src="docs/assets/demo/leaderboard.png" alt="Hub Leaderboard：不同 Agent 与模型下的评测成绩" width="100%"></p>
+<p align="center">Leaderboard：不同 Agent 与模型下的评测成绩</p>
+
+<p align="center"><img src="docs/assets/demo/viewer-trajectory.png" alt="本地查看器：复盘轨迹中的工具调用" width="100%"></p>
+<p align="center">轨迹：本地查看器复盘工具调用</p>
 
 <details>
 <summary>更多截图</summary>
 <br/>
 
-<p align="center">nooa 插件详情：NVIDIA 官方 Agent 运行时</p>
-<p align="center"><img src="docs/assets/demo/nooa-plugin.png" alt="nooa 插件详情：NVIDIA 官方 Agent 运行时" width="90%"></p>
+<p align="center"><img src="docs/assets/demo/agents.png" alt="Agent：Hub 上可拉取的 Agent 包" width="90%"></p>
+<p align="center">Agent：Hub 上可拉取的 Agent 包</p>
 
-<p align="center">Leaderboard：不同环境与 Agent 组合下的成绩</p>
-<p align="center"><img src="docs/assets/demo/leaderboard.png" alt="Hub Leaderboard：不同环境与 Agent 组合下的评测成绩" width="90%"></p>
+<p align="center"><img src="docs/assets/demo/plugins-marketplace.png" alt="插件市场：环境与 Agent 运行时插件" width="90%"></p>
+<p align="center">插件市场：环境与 Agent 运行时插件</p>
 
-<p align="center">Models Hub：按模型看成功率和成本</p>
-<p align="center"><img src="docs/assets/demo/models-hub.png" alt="Models Hub：以模型为主维度的全景观测面板" width="90%"></p>
+<p align="center"><img src="docs/assets/demo/leaderboard-pareto.png" alt="Pareto：通过率相对耗时" width="90%"></p>
+<p align="center">Pareto：通过率相对耗时</p>
 
-<p align="center">Model 详情：同一模型在不同 dataset 和 Agent 下的表现</p>
-<p align="center"><img src="docs/assets/demo/model-detail.png" alt="Model 详情：模型在各个 dataset 和不同 Agent 下的表现明细" width="90%"></p>
+<p align="center"><img src="docs/assets/demo/viewer-checks.png" alt="Verifier：确定性脚本 checks" width="90%"></p>
+<p align="center">Verifier：确定性脚本 checks</p>
 
 </details>
 
