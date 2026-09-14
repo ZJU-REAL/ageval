@@ -100,4 +100,4 @@ async def evaluate(inputs):
 
 `exec` 的 argv 是列表；stdout / stderr / exit_code 来自**那个容器内**。第一次用到某名字才 start 并 upload 快照和参考答案。未知名、run 阶段写了名字、或表里有名字时 ACP 省略名字：一次失败，不 start。v1 只顺序 stage，不要并发 `exec` 与 `session` 打同一名字。start / `exec` 退出 / observation 文件都不是 PASS。
 
-不调 `Agent.session` = 脚本路径。Verifier 是叠在一起的：`checks.json` → Checks 面板；`observation.jsonl` → Trajectory 步骤卡片；`result.json` 仍在文件树。本地查看用 `ageval view`。
+不调 `Agent.session` = 脚本路径。Verifier 是 evaluation 文件树；选中 `checks.json` 时在预览里渲染检查点。若同时有 evaluate 相位的 `observation.jsonl`，用页签行右侧的 Trajectory / Files 切换（默认轨迹）。`result.json` 仍在文件树。本地查看用 `ageval view`。

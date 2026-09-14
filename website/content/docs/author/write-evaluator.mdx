@@ -95,4 +95,4 @@ async def evaluate(inputs):
 
 `exec` argv is a list; stdout / stderr / exit_code come from **inside that container**. The first use of a name starts that host and uploads the snapshot + gold. Unknown names, run-phase `environment=`, or omitting the name on a named map fail once and do not start. v1 is sequential stages only — do not run `exec` and `session` concurrently on the same name. Start, `exec` exit, and the observation file are not PASS.
 
-No `Agent.session` = the script path. Verifier composes: `checks.json` → Checks panel; `observation.jsonl` → Trajectory step cards; `result.json` stays in the file tree. Browse locally with `ageval view`.
+No `Agent.session` = the script path. Verifier shows the evaluation file tree; `checks.json` renders as a structured preview in that tree. With an evaluate-phase `observation.jsonl` as well, pick Trajectory or Files from the toggle (trajectory first). `result.json` stays in the file tree. Browse locally with `ageval view`.
