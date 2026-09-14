@@ -17,10 +17,10 @@ import {
 import {
   CatalogEmpty,
   CatalogLoading,
-} from "@/components/empty-state";
+} from "@/components/catalog-empty";
 import { PageHead } from "@/components/page-head";
-import { TableColumnPicker } from "@/components/ui/table-column-picker";
-import { useTableColumns } from "@/hooks/use-table-columns";
+import { TableColumnPicker } from "@ageval/shared/components/ui/table-column-picker";
+import { useTableColumns } from "@ageval/shared/hooks/use-table-columns";
 import {
   isDatasetPackage,
   latestPackageByDataset,

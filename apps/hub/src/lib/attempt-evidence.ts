@@ -8,8 +8,8 @@ import type {
   TrialActor,
   TrajectoryStep,
   TreeEntry,
-} from "@/lib/trial-types";
-import { datasetRef, displayAgentName, reasoningEffortFromBinding } from "@/lib/utils";
+} from "@ageval/shared/lib/trial-types";
+import { datasetRef, displayAgentName, reasoningEffortFromBinding } from "@ageval/shared/lib/utils";
 
 import {
   FIRST_TAB_ORDER,
@@ -17,7 +17,7 @@ import {
   TAB_ORDER,
   TREE_SCOPES,
   type TabId,
-} from "@/components/trial/tabs";
+} from "@ageval/shared/components/trial/tabs";
 import { environmentFromOverlay, type JobOverlay } from "@/lib/api";
 
 const MAX_TRAJECTORY_STEPS = 2_000;

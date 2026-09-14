@@ -3,7 +3,7 @@
 
 Checks:
   1. Doc table and the CANONICAL dict in this script agree (both directions).
-  2. apps/viewer/DESIGN.md YAML lists the same SPA tokens (Hub inherits that file).
+  2. apps/shared/DESIGN.md YAML lists the same SPA tokens (Hub/Viewer inherit it).
   3. Mapped CSS variables in the three apps only ever hold canonical values.
   4. No raw hex outside the token/theme files and owl brand assets.
 
@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 DOC = REPO / "docs/design/13-web-ui-tokens.md"
-SPA_DESIGN = REPO / "apps/viewer/DESIGN.md"
+SPA_DESIGN = REPO / "apps/shared/DESIGN.md"
 SPA_SKIP = {"accent"}  # landing-only; not in Hub/Viewer YAML
 
 # token -> (light, dark)
@@ -53,10 +53,9 @@ CANONICAL: dict[str, tuple[str, str]] = {
 
 # (file, css var, canonical token, required)
 VAR_MAP: list[tuple[str, str, str, bool]] = [
-    # hub / viewer (identical --viewer-* vocabulary, values checked per file)
+    # shared SPA tokens (--viewer-* vocabulary; Hub/Viewer @import this file)
     *(
-        (f"apps/{app}/src/index.css", f"--viewer-{var}", token, True)
-        for app in ("hub", "viewer")
+        ("apps/shared/css/tokens.css", f"--viewer-{var}", token, True)
         for var, token in [
             ("canvas", "canvas"),
             ("canvas-soft", "canvas-soft"),
@@ -106,11 +105,9 @@ VAR_MAP: list[tuple[str, str, str, bool]] = [
 HEX_ALLOWLIST = {
     "website/src/app/global.css",
     "website/src/components/landing/landing.css",
-    "apps/hub/src/index.css",
-    "apps/viewer/src/index.css",
+    "apps/shared/css/tokens.css",
     "website/src/components/owl-flat.tsx",
-    "apps/hub/src/components/owl-icon.tsx",
-    "apps/viewer/src/components/owl-icon.tsx",
+    "apps/shared/components/owl-icon.tsx",
 }
 
 HEX_RE = re.compile(r"#[0-9a-fA-F]{6}\b")
@@ -154,14 +151,14 @@ YAML_HEX_RE = re.compile(r"^\s+([a-z0-9-]+):\s*\"(#[0-9A-Fa-f]{6})\"\s*$")
 
 
 def check_spa_design(errors: list[str]) -> None:
-    """Viewer DESIGN.md YAML is the SPA-facing token listing (Hub inherits it)."""
+    """apps/shared/DESIGN.md YAML is the SPA-facing token listing."""
     if not SPA_DESIGN.is_file():
-        errors.append("apps/viewer/DESIGN.md: missing")
+        errors.append("apps/shared/DESIGN.md: missing")
         return
     text = SPA_DESIGN.read_text(encoding="utf-8")
     block = FRONTMATTER_RE.match(text)
     if not block:
-        errors.append("apps/viewer/DESIGN.md: missing YAML frontmatter token listing")
+        errors.append("apps/shared/DESIGN.md: missing YAML frontmatter token listing")
         return
     found: dict[str, set[str]] = {}
     for line in block.group(1).splitlines():
@@ -175,17 +172,17 @@ def check_spa_design(errors: list[str]) -> None:
         have = found.get(name, set())
         want = norm(list(pair))
         if name not in found:
-            errors.append(f"apps/viewer/DESIGN.md: token '{name}' missing from YAML")
+            errors.append(f"apps/shared/DESIGN.md: token '{name}' missing from YAML")
             continue
         absent = want - have
         extra = have - want
         if absent:
             errors.append(
-                f"apps/viewer/DESIGN.md: '{name}' lacks canonical value(s) {sorted(absent)}"
+                f"apps/shared/DESIGN.md: '{name}' lacks canonical value(s) {sorted(absent)}"
             )
         if extra:
             errors.append(
-                f"apps/viewer/DESIGN.md: '{name}' has non-canonical value(s) {sorted(extra)}"
+                f"apps/shared/DESIGN.md: '{name}' has non-canonical value(s) {sorted(extra)}"
             )
 
 
@@ -209,7 +206,7 @@ def check_vars(errors: list[str]) -> None:
 
 
 def check_raw_hex(errors: list[str]) -> None:
-    for root in ("website/src", "apps/hub/src", "apps/viewer/src"):
+    for root in ("website/src", "apps/shared", "apps/hub/src", "apps/viewer/src"):
         for path in (REPO / root).rglob("*"):
             if path.suffix not in {".ts", ".tsx", ".css"} or not path.is_file():
                 continue
@@ -232,7 +229,7 @@ def main() -> int:
         for e in errors:
             print(f"  - {e}")
         return 1
-    print("design-token check OK (doc + hub/viewer + website in sync)")
+    print("design-token check OK (doc + shared SPA tokens + website in sync)")
     return 0
 
 

@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@ageval/shared/lib/utils";
 
 /** Vendored Lobe static color SVG. Not a runtime @lobehub/icons import. */
 export function HuggingFaceMark({

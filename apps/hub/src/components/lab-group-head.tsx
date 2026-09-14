@@ -1,7 +1,7 @@
 import { ArrowUpRight } from "lucide-react";
 
-import { LabMark } from "@/components/lab-mark";
-import { LAB_INFO } from "@/lib/model-pin";
+import { LabMark } from "@ageval/shared/components/lab-mark";
+import { LAB_INFO } from "@ageval/shared/lib/model-pin";
 
 export function LabGroupHead({
   lab,

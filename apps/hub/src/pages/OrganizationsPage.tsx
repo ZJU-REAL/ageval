@@ -2,14 +2,14 @@ import { Building2, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { EmptyState, LoadingState } from "@/components/empty-state";
-import { DisabledTip, HoverTip } from "@/components/hover-tip";
+import { EmptyState, LoadingState } from "@ageval/shared/components/empty-state";
+import { DisabledTip, HoverTip } from "@ageval/shared/components/hover-tip";
 import { OfficialMark } from "@/components/official-mark";
 import { PageHead } from "@/components/page-head";
 import { SignInButton } from "@/components/sign-in-button";
-import { Button } from "@/components/ui/button";
-import { FloatingField } from "@/components/ui/floating-field";
-import { Input } from "@/components/ui/input";
+import { Button } from "@ageval/shared/components/ui/button";
+import { FloatingField } from "@ageval/shared/components/ui/floating-field";
+import { Input } from "@ageval/shared/components/ui/input";
 import {
   Table,
   TableBody,
@@ -17,7 +17,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@ageval/shared/components/ui/table";
 import {
   createOrg,
   joinOrgWithInvite,
@@ -29,9 +29,9 @@ import {
   RegistryHttpError,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import { sortRows, useTableSort } from "@/components/sortable-head";
-import { TableColumnPicker } from "@/components/ui/table-column-picker";
-import { useTableColumns } from "@/hooks/use-table-columns";
+import { sortRows, useTableSort } from "@ageval/shared/components/sortable-head";
+import { TableColumnPicker } from "@ageval/shared/components/ui/table-column-picker";
+import { useTableColumns } from "@ageval/shared/hooks/use-table-columns";
 import { toastError } from "@/lib/toast-error";
 
 const ORG_OPTIONAL_COLUMNS = [

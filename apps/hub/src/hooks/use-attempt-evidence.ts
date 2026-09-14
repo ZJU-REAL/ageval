@@ -25,10 +25,10 @@ import type {
   Trial,
   TrajectoryStep,
   TreeEntry,
-} from "@/lib/trial-types";
+} from "@ageval/shared/lib/trial-types";
 import {
   type TabId,
-} from "@/components/trial/tabs";
+} from "@ageval/shared/components/trial/tabs";
 
 async function readJsonFile(
   runId: string,

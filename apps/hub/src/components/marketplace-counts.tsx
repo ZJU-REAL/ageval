@@ -1,6 +1,6 @@
 import { DownloadCount } from "@/components/download-count";
 import { FavoriteCount } from "@/components/favorite-count";
-import { cn } from "@/lib/utils";
+import { cn } from "@ageval/shared/lib/utils";
 
 export function MarketplaceCounts({
   downloadCount,

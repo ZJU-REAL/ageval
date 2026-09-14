@@ -1,15 +1,15 @@
 import type { ReactNode } from "react";
 
-import { UnderlineTabs } from "@/components/underline-tabs";
-import { Input } from "@/components/ui/input";
+import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
+import { Input } from "@ageval/shared/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+} from "@ageval/shared/components/ui/select";
+import { cn } from "@ageval/shared/lib/utils";
 
 export type CatalogScope = "orgs" | "explore" | "favorites";
 

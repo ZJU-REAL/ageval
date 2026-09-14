@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { BoardChartControls } from "@/components/board-chart-controls";
-import { LoadingState } from "@/components/empty-state";
+import { LoadingState } from "@ageval/shared/components/empty-state";
 import { CatalogHead } from "@/components/page-head";
 import { ListPager } from "@/components/list-pager";
-import { UnderlineTabs } from "@/components/underline-tabs";
-import { CommandStrip } from "@/components/command-strip";
+import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
+import { CommandStrip } from "@ageval/shared/components/command-strip";
 import { DescriptionEditor } from "@/components/description-editor";
 import { DisplayNameEditor } from "@/components/display-name-editor";
 import { FileSplitPanel } from "@/components/file-split-panel";
@@ -25,16 +25,16 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { TableColumnPicker } from "@/components/ui/table-column-picker";
-import { useTableColumns } from "@/hooks/use-table-columns";
+} from "@ageval/shared/components/ui/select";
+import { TableColumnPicker } from "@ageval/shared/components/ui/table-column-picker";
+import { useTableColumns } from "@ageval/shared/hooks/use-table-columns";
 import { OfficialMark } from "@/components/official-mark";
-import { INTERNAL_LINK_CLASS } from "@/lib/links";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 import { OverlayFilePanel } from "@/components/overlay-file-panel";
-import { Markdown } from "@/components/markdown";
+import { Markdown } from "@ageval/shared/components/markdown";
 import { PackageOwnerOps } from "@/components/package-owner-ops";
 import { VersionSwitcher } from "@/components/version-switcher";
-import { Input } from "@/components/ui/input";
+import { Input } from "@ageval/shared/components/ui/input";
 import {
   Table,
   TableBody,
@@ -42,7 +42,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@ageval/shared/components/ui/table";
 import {
   decodeDatasetId,
   decodeFileContent,
@@ -69,7 +69,7 @@ import {
   RegistryHttpError,
 } from "@/lib/api";
 import { getGithubUser, getToken } from "@/lib/auth";
-import { buildNestedTree } from "@/lib/file-tree";
+import { buildNestedTree } from "@ageval/shared/lib/file-tree";
 import {
   parseBoardChart,
   parseParetoAxis,
@@ -77,7 +77,7 @@ import {
   type ParetoAxis,
 } from "@/lib/leaderboard-charts";
 import { LEADERBOARD_K_FIXTURES } from "@/lib/leaderboard-fixtures";
-import { formatDay, formatScore } from "@/lib/utils";
+import { formatDay, formatScore } from "@ageval/shared/lib/utils";
 
 type Tab = "readme" | "tasks" | "shared" | "overlays" | "leaderboard";
 type BoardView = "public" | "internal";

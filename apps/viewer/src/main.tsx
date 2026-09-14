@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import App from "./App";
-import { ThemeProvider } from "./lib/theme";
+import { ThemeProvider } from "@ageval/shared/lib/theme";
 import "./index.css";
 
 // Avoid FOUC: apply stored theme before first paint when possible
@@ -25,7 +25,7 @@ try {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider>
+    <ThemeProvider storageKey="ageval-viewer-theme">
       <App />
     </ThemeProvider>
   </StrictMode>,

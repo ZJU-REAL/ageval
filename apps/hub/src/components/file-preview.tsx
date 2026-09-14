@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { Markdown } from "@/components/markdown";
-import { codeToHtml, isMarkdownPath } from "@/lib/shiki-preview";
-import { useTheme } from "@/lib/theme";
-import { cn } from "@/lib/utils";
+import { Markdown } from "@ageval/shared/components/markdown";
+import { codeToHtml, isMarkdownPath } from "@ageval/shared/lib/shiki-preview";
+import { useTheme } from "@ageval/shared/lib/theme";
+import { cn } from "@ageval/shared/lib/utils";
 
 /** Skip Shiki (and cap plain text) when content is huge — avoids main-thread stalls. */
 const HIGHLIGHT_MAX_CHARS = 120_000;

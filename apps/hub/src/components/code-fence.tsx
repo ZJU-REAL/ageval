@@ -1,10 +1,10 @@
 import { Check, Copy } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { codeToHtml } from "@/lib/shiki-preview";
-import { useTheme } from "@/lib/theme";
-import { cn } from "@/lib/utils";
+import { Button } from "@ageval/shared/components/ui/button";
+import { codeToHtml } from "@ageval/shared/lib/shiki-preview";
+import { useTheme } from "@ageval/shared/lib/theme";
+import { cn } from "@ageval/shared/lib/utils";
 
 /**
  * Copyable fenced file (Shiki from path). Hairline + code-bg, same chrome as

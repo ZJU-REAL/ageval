@@ -6,7 +6,7 @@ import {
   TAB_ORDER,
   TREE_SCOPES,
   type TabId,
-} from "@/components/trial/tabs";
+} from "@ageval/shared/components/trial/tabs";
 import {
   fetchTrial,
   fetchTrialFile,

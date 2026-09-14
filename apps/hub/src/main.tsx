@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import App from "./App";
-import { ThemeProvider } from "./lib/theme";
+import { ThemeProvider } from "@ageval/shared/lib/theme";
 import "./index.css";
 
 try {
@@ -24,7 +24,7 @@ try {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider>
+    <ThemeProvider storageKey="ageval-hub-theme">
       <App />
     </ThemeProvider>
   </StrictMode>,

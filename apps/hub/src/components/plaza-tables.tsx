@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { BrandMark } from "@/components/brand-mark";
+import { BrandMark } from "@ageval/shared/components/brand-mark";
 import { DatasetOrgHead } from "@/components/dataset-org-tables";
 import {
   GroupedTables,
@@ -10,8 +10,8 @@ import {
 import { LabGroupHead } from "@/components/lab-group-head";
 import { LeaderboardPareto } from "@/components/leaderboard-pareto";
 import { LeaderboardWaffle } from "@/components/leaderboard-waffle";
-import { HarnessLabel } from "@/components/harness-label";
-import { ModelLabel } from "@/components/model-label";
+import { HarnessLabel } from "@ageval/shared/components/harness-label";
+import { ModelLabel } from "@ageval/shared/components/model-label";
 import { OfficialMark } from "@/components/official-mark";
 import { ScoreRing } from "@/components/score-ring";
 import {
@@ -19,16 +19,17 @@ import {
   nextSort,
   sortRows,
   type SortDir,
-} from "@/components/sortable-head";
+} from "@ageval/shared/components/sortable-head";
 import { suiteDetailPath } from "@/components/suite-inspector";
 import {
   TableBody,
   TableCell,
   TableHead,
   TableRow,
-} from "@/components/ui/table";
+} from "@ageval/shared/components/ui/table";
 import { agentPackageHref } from "@/lib/agent-models";
-import { INTERNAL_LINK_CLASS, harnessHref, modelCatalogHref } from "@/lib/links";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
+import { harnessHref, modelCatalogHref } from "@/lib/links";
 import { comparePerformances } from "@/lib/agent-performances";
 import {
   encodeDatasetId,
@@ -40,11 +41,11 @@ import {
   type PackageRelease,
   type SuiteRow,
 } from "@/lib/api";
-import { markFromPackage, resolveEntityMark } from "@/lib/brand-marks";
+import { markFromPackage, resolveEntityMark } from "@ageval/shared/lib/brand-marks";
 import type { BoardChart, ParetoAxis } from "@/lib/leaderboard-charts";
 import { performanceCanonical } from "@/lib/model-appearances";
-import { loadModelPin } from "@/lib/model-pin";
-import { displayLabelsFromOverlay, formatDate, formatScore } from "@/lib/utils";
+import { loadModelPin } from "@ageval/shared/lib/model-pin";
+import { displayLabelsFromOverlay, formatDate, formatScore } from "@ageval/shared/lib/utils";
 
 export const PLAZA_CHROME_ID = "leaderboard-chrome";
 export const PLAZA_PIN_SLOT_ID = "leaderboard-pin";

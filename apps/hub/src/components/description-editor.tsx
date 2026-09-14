@@ -1,10 +1,10 @@
 import { Check, Pencil, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { HoverTip } from "@/components/hover-tip";
-import { Button } from "@/components/ui/button";
-import { FloatingField } from "@/components/ui/floating-field";
-import { toast } from "@/components/ui/toast";
+import { HoverTip } from "@ageval/shared/components/hover-tip";
+import { Button } from "@ageval/shared/components/ui/button";
+import { FloatingField } from "@ageval/shared/components/ui/floating-field";
+import { toast } from "@ageval/shared/components/ui/toast";
 import { toastError } from "@/lib/toast-error";
 
 export function DescriptionEditor({

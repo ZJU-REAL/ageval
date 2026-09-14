@@ -10,11 +10,11 @@ import {
 } from "react";
 
 import { FilePreview } from "@/components/file-preview";
-import { FileTypeIcon } from "@/components/file-type-icon";
-import { Input } from "@/components/ui/input";
-import { countFiles } from "@/lib/file-icons";
-import { ancestorDirPaths, type TreeNode } from "@/lib/file-tree";
-import { cn } from "@/lib/utils";
+import { FileTypeIcon } from "@ageval/shared/components/file-type-icon";
+import { Input } from "@ageval/shared/components/ui/input";
+import { countFiles } from "@ageval/shared/lib/file-icons";
+import { ancestorDirPaths, type TreeNode } from "@ageval/shared/lib/file-tree";
+import { cn } from "@ageval/shared/lib/utils";
 
 /** Fixed row height for windowed tree rendering (matches h-7). */
 const ROW_H = 28;

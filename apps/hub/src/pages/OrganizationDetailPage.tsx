@@ -3,26 +3,26 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { Plus } from "lucide-react";
 
 import { CatalogCardGrid } from "@/components/catalog-card";
-import { LoadingState } from "@/components/empty-state";
+import { LoadingState } from "@ageval/shared/components/empty-state";
 import { DescriptionEditor } from "@/components/description-editor";
 import { CatalogHead } from "@/components/page-head";
-import { UnderlineTabs } from "@/components/underline-tabs";
+import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
 import { DisplayNameEditor } from "@/components/display-name-editor";
 import { EntityMarkControl } from "@/components/entity-mark-control";
-import { DisabledTip, HoverTip, TruncateTip } from "@/components/hover-tip";
+import { DisabledTip, HoverTip, TruncateTip } from "@ageval/shared/components/hover-tip";
 import { OfficialMark } from "@/components/official-mark";
-import { INTERNAL_LINK_CLASS } from "@/lib/links";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 import { SignInLink } from "@/components/sign-in-button";
-import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Input } from "@/components/ui/input";
+import { Button } from "@ageval/shared/components/ui/button";
+import { ConfirmDialog } from "@ageval/shared/components/ui/confirm-dialog";
+import { Input } from "@ageval/shared/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ageval/shared/components/ui/select";
 import {
   Table,
   TableBody,
@@ -30,7 +30,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@ageval/shared/components/ui/table";
 import {
   addOrgMember,
   createOrgInviteKey,
@@ -60,7 +60,7 @@ import {
 } from "@/lib/api";
 import { getGithubUser, getToken } from "@/lib/auth";
 import { toastError } from "@/lib/toast-error";
-import { datasetRef, formatDate } from "@/lib/utils";
+import { datasetRef, formatDate } from "@ageval/shared/lib/utils";
 
 type Tab = "overview" | "settings";
 

@@ -9,9 +9,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { HoverTip } from "@/components/hover-tip";
-import type { ModalityKind, ModalityTab } from "@/lib/model-pin/modalities";
-import { cn } from "@/lib/utils";
+import { HoverTip } from "@ageval/shared/components/hover-tip";
+import type { ModalityKind, ModalityTab } from "@ageval/shared/lib/model-pin/modalities";
+import { cn } from "@ageval/shared/lib/utils";
 
 const ICONS: Record<ModalityKind, LucideIcon> = {
   text: Type,

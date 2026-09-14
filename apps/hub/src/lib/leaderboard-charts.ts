@@ -8,7 +8,7 @@ import {
   directoryPrice,
   joinOverlay,
   type ModelPin,
-} from "@/lib/model-pin";
+} from "@ageval/shared/lib/model-pin";
 
 export type BoardChart = "table" | "waffle" | "pareto";
 export type ParetoAxis = "cost" | "tokens" | "time";

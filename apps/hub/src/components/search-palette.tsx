@@ -6,7 +6,7 @@ import {
 import { createPortal } from "react-dom";
 import { Search } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@ageval/shared/lib/utils";
 
 /** Glass search dialog shell (Models Cmd/Ctrl+F, attach pickers). */
 export function SearchPalette({

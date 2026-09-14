@@ -12,8 +12,8 @@ import {
   type SuiteRow,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import { PillTabs } from "@/components/ui/pill-tabs";
-import { buildNestedTree, pathMatchesPrefixes } from "@/lib/file-tree";
+import { PillTabs } from "@ageval/shared/components/ui/pill-tabs";
+import { buildNestedTree, pathMatchesPrefixes } from "@ageval/shared/lib/file-tree";
 
 /** Package-file preview limited to a binding's declared ``overlays:`` prefixes. */
 export function OverlayFilePanel({

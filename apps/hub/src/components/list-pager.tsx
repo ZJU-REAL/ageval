@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@ageval/shared/components/ui/button";
 
 export function ListPager({
   offset,

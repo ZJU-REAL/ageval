@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@ageval/shared/lib/utils";
 
 const SIZE = 16;
 const STROKE = 2.5;

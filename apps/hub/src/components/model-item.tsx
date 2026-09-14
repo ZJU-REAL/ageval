@@ -1,7 +1,7 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
 
-import { LabMark } from "@/components/lab-mark";
+import { LabMark } from "@ageval/shared/components/lab-mark";
 import { ModalityMarks } from "@/components/modality-mark";
 import {
   compactTokens,
@@ -10,8 +10,8 @@ import {
   loadModelPin,
   modalityBadges,
   modelModalities,
-} from "@/lib/model-pin";
-import { cn } from "@/lib/utils";
+} from "@ageval/shared/lib/model-pin";
+import { cn } from "@ageval/shared/lib/utils";
 
 const META_CHIP =
   "whitespace-nowrap rounded-[6px] border border-hairline px-1.5 py-0.5 text-xs leading-4 text-mute tabular-nums";

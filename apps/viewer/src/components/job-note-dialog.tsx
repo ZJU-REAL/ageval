@@ -1,8 +1,8 @@
 import { useEffect, useId, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { toast } from "@/components/ui/toast";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@ageval/shared/components/ui/button";
+import { toast } from "@ageval/shared/components/ui/toast";
+import { Textarea } from "@ageval/shared/components/ui/textarea";
 import type { Job } from "@/lib/api";
 import { jobDisplayName } from "@/lib/routes";
 

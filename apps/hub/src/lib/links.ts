@@ -1,18 +1,7 @@
 import { agentPackageHref } from "@/lib/agent-models";
 import { encodeDatasetId } from "@/lib/api";
-import { harnessBrandId } from "@/lib/brand-marks/harness";
-import { joinOverlay, loadModelPin } from "@/lib/model-pin";
-
-/**
- * In-app navigation (models tab Model cell): ink at rest, underline +
- * link-deep on hover. Do not paint IKB on the resting text — that floods tables.
- */
-export const INTERNAL_LINK_CLASS =
-  "text-ink hover:text-link-deep hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70";
-
-/** Off-site: IKB at rest. */
-export const EXTERNAL_LINK_CLASS =
-  "text-link hover:text-link-deep hover:underline underline-offset-2";
+import { harnessBrandId } from "@ageval/shared/lib/brand-marks/harness";
+import { joinOverlay, loadModelPin } from "@ageval/shared/lib/model-pin";
 
 function firstSegment(raw: string): string {
   return raw.split("+").map((part) => part.trim()).filter(Boolean)[0] || raw.trim();

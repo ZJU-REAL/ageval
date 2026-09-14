@@ -4,12 +4,12 @@ import { Boxes } from "lucide-react";
 
 import { CatalogScopeBar } from "@/components/catalog-scope-bar";
 import { ModKeyHint } from "@/components/mod-key-hint";
-import { EmptyState, LoadingState } from "@/components/empty-state";
+import { EmptyState, LoadingState } from "@ageval/shared/components/empty-state";
 import { MODALITY_TAB_META } from "@/components/modality-mark";
 import { ModelLabTables, type ModelLabRow } from "@/components/model-lab-tables";
 import { ModelSearchModal } from "@/components/model-search-modal";
 import { PageHead } from "@/components/page-head";
-import { UnderlineTabs } from "@/components/underline-tabs";
+import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
 import { modKeyShortcut, useModKey } from "@/hooks/use-mod-key";
 import { getToken } from "@/lib/auth";
 import {
@@ -22,7 +22,7 @@ import {
   modalityTabFromSearch,
   modelModalities,
   type ModalityTab,
-} from "@/lib/model-pin";
+} from "@ageval/shared/lib/model-pin";
 
 type ModelScope = "explore" | "performance";
 

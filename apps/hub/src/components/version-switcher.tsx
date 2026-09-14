@@ -4,9 +4,9 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ageval/shared/components/ui/select";
 import { isDraftRelease, versionLabel, type PackageRelease } from "@/lib/api";
-import { formatDay } from "@/lib/utils";
+import { formatDay } from "@ageval/shared/lib/utils";
 
 function byNewest(versions: PackageRelease[]): PackageRelease[] {
   return [...versions].sort((a, b) => {
