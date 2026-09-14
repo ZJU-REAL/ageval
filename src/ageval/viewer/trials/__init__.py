@@ -9,6 +9,7 @@ Package layout (chore #31): paths · usage · surface · meta · fs · trajector
 
 from __future__ import annotations
 
+from ageval.viewer.trials.checks import trial_evaluation_checks, trial_package_file
 from ageval.viewer.trials.constants import (
     MAX_FILE_BYTES,
     MAX_JSONL_LINE,
@@ -33,7 +34,9 @@ __all__ = [
     "parse_query",
     "resolve_evidence_root",
     "trial_file",
+    "trial_evaluation_checks",
     "trial_evaluation_observation",
+    "trial_package_file",
     "trial_trajectory",
     "trial_tree",
     "_usage_summary_for_actor",

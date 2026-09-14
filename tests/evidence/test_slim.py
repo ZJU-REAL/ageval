@@ -57,6 +57,7 @@ def test_is_vendor_raw_rel() -> None:
     assert not is_vendor_raw_rel("summary.json")
     assert not is_vendor_raw_rel("task-artifacts/out.txt")
     assert not is_vendor_raw_rel("evaluation/observation.jsonl")
+    assert not is_vendor_raw_rel("evaluation/checks.json")
     assert is_vendor_raw_rel("evaluation/events.jsonl")
     assert is_vendor_raw_rel("evaluation/invocations/001/request.json")
     assert is_vendor_raw_rel("evaluation/invocations/001/backend_raw/raw.json")
@@ -95,8 +96,13 @@ def test_slim_keeps_observation_jsonl_drops_eval_vendor_raw(tmp_path: Path) -> N
     (root / "evaluation" / "observation.jsonl").write_text(
         '{"type":"terminal","profile_id":"judge"}\n', encoding="utf-8"
     )
+    (root / "evaluation" / "checks.json").write_text(
+        '{"schema":"ageval.evaluation.checks/1","checks":[{"id":"audit"}]}\n',
+        encoding="utf-8",
+    )
     slim_sealed_attempt(root)
     assert (root / "evaluation" / "observation.jsonl").is_file()
+    assert (root / "evaluation" / "checks.json").is_file()
     assert not (root / "evaluation" / "evaluator_raw.json").exists()
     assert not (root / "evaluation" / "events.jsonl").exists()
     assert eval_inv.is_dir()
@@ -154,6 +160,7 @@ def test_archive_skips_vendor_raw_unless_flag(tmp_path: Path) -> None:
     (run_dir / "trajectory.jsonl").write_text("{}\n", encoding="utf-8")
     (run_dir / "evaluation").mkdir()
     (run_dir / "evaluation" / "observation.jsonl").write_text("{}\n", encoding="utf-8")
+    (run_dir / "evaluation" / "checks.json").write_text("{}\n", encoding="utf-8")
     (run_dir / "evaluation" / "evaluator_raw.json").write_text("{}\n", encoding="utf-8")
     eval_inv = run_dir / "evaluation" / "invocations" / "001"
     eval_inv.mkdir(parents=True)
@@ -184,6 +191,7 @@ def test_archive_skips_vendor_raw_unless_flag(tmp_path: Path) -> None:
     assert f"{prefix}/trajectory.jsonl" in slim_names
     assert f"{prefix}/lock.json" in slim_names
     assert f"{prefix}/evaluation/observation.jsonl" in slim_names
+    assert f"{prefix}/evaluation/checks.json" in slim_names
     assert f"{prefix}/evaluation/evaluator_raw.json" not in slim_names
     assert f"{prefix}/evaluation/invocations/001/request.json" not in slim_names
     assert f"{prefix}/evaluation/evaluator_raw.json" in fat_names

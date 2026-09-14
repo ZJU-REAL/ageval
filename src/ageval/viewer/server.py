@@ -237,6 +237,7 @@ def make_handler(
             # /api/jobs/{job_id}/tasks/{task_id}/trials
             # /api/jobs/{job_id}/tasks/{task_id}/trials/{run_id}
             # /api/jobs/{job_id}/tasks/{task_id}/trials/{run_id}/tree|file|trajectory
+            # …/observation|checks|package-file
             rest = path[len("/api/jobs/") :]
             parts = [p for p in rest.split("/") if p]
             if not parts:
@@ -355,6 +356,24 @@ def make_handler(
                             self,
                             200,
                             trials.trial_evaluation_observation(root, job_id, task_id, run_id),
+                        )
+                        return
+                    if len(parts) == 6 and parts[5] == "checks":
+                        _json(
+                            self,
+                            200,
+                            trials.trial_evaluation_checks(root, job_id, task_id, run_id),
+                        )
+                        return
+                    if len(parts) == 6 and parts[5] == "package-file":
+                        rel = q.get("path") or ""
+                        if not rel:
+                            _error(self, 400, "invalid_package", "path query required")
+                            return
+                        _json(
+                            self,
+                            200,
+                            trials.trial_package_file(root, job_id, task_id, run_id, relpath=rel),
                         )
                         return
             except ConfigError as exc:

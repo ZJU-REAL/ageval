@@ -88,6 +88,7 @@ Before drawing a control:
 | Kind / source / time filter | `Select` |
 | Row / theme overflow | `DropdownMenu` |
 | Evidence section switcher | `UnderlineTabs` (Liquid Move) |
+| Verifier dual surface | hairline button group on the same tab row (copy `CatalogScopeBar` `variant="group"`), far right; Trajectory / Files, trajectory first |
 | Command | `CommandStrip` (shell highlight on `code-bg`, not flat link-blue) |
 | Dialog / confirm | existing confirm / pop (`data-ageval-pop`); portal to body / overlay root |
 | Loading / empty | `ThinkingLogo` loading vs centered empty stack (docs/13) |

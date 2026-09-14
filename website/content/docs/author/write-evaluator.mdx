@@ -49,7 +49,7 @@ evaluation:
 
 ## Two scoring styles
 
-Default is a **deterministic script**: read published artifacts and gold under `evaluation/`, return `{status, score, metrics}`; `status` is PASS / FAIL / ERROR — a low score and a timeout are FAIL (score 0), a dead environment or a crashed evaluator is ERROR. No Agent call. No `evaluation/observation.jsonl`. Verifier stays `result.json` plus the file tree.
+Default is a **deterministic script**: read published artifacts and gold under `evaluation/`, return `{status, score, metrics}`; `status` is PASS / FAIL / ERROR — a low score and a timeout are FAIL (score 0), a dead environment or a crashed evaluator is ERROR. No Agent call. No `evaluation/observation.jsonl`. Optional extra key `checks` (helper `evaluation_check`) is written as `evaluation/checks.json` for Verifier; bind ignores it. Without `checks`, Verifier stays `result.json` plus the file tree.
 
 Optional **LLM-as-judge**: add another role on the same job `profiles.yaml` (e.g. `judge`) and list that id on `task.yaml` `agent_profiles`. After gold is uploaded, `evaluator.py` may `Agent.session("judge").invoke(...)`. The dataset owns the prompt. `invoke` must not override `profile_id` / executor.
 
@@ -62,7 +62,7 @@ def evaluate(inputs):
 
 | Point | Note |
 | --- | --- |
-| PASS | Still this return value only. Judge prose / `observation.jsonl` is not a score |
+| PASS | Still this return value only. Judge prose / `observation.jsonl` / `checks` rows are not a score |
 | Trace | Evaluate-phase steps go to `evaluation/observation.jsonl` (`user` rows omitted so gold stays out of evidence). Not merged into root `trajectory.jsonl` |
 | Budget | `limits.agent_invocations` must cover solver **and** judge |
 | Environment | SDK session uses the parent Unix socket. ACP `attach_stdio` targets the **scoring host** (the run environment by default; a second docker instance when `evaluate_host.isolated: true`). With `evaluation.environments`, ACP must `session(id, environment=<name>)`; `openai-http` / `anthropic-http` ignore `environment=` (egress stays on the parent). Do not bind-mount the Agent Service socket into a container |
@@ -95,4 +95,4 @@ async def evaluate(inputs):
 
 `exec` argv is a list; stdout / stderr / exit_code come from **inside that container**. The first use of a name starts that host and uploads the snapshot + gold. Unknown names, run-phase `environment=`, or omitting the name on a named map fail once and do not start. v1 is sequential stages only — do not run `exec` and `session` concurrently on the same name. Start, `exec` exit, and the observation file are not PASS.
 
-No `Agent.session` = the script path. With observation.jsonl, Verifier reuses the Trajectory step cards; without it, the file tree. Browse locally with `ageval view`.
+No `Agent.session` = the script path. Verifier shows the evaluation file tree; `checks.json` renders as a structured preview in that tree. With an evaluate-phase `observation.jsonl` as well, pick Trajectory or Files from the toggle (trajectory first). `result.json` stays in the file tree. Browse locally with `ageval view`.

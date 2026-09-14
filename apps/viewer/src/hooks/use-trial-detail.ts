@@ -11,6 +11,7 @@ import {
   fetchTrial,
   fetchTrialFile,
   fetchTrialObservation,
+  fetchTrialPackageFile,
   fetchTrialTrajectory,
   fetchTrialTree,
   type Job,
@@ -169,7 +170,9 @@ export function useTrialDetail(jobId: string, taskId: string, runId: string) {
         setTreeGroups(data.groups || null);
         // Auto-open a sensible default file
         const preferred =
-          files.find((f) => f.name === "lock.json") ||
+          (activeTab === "verifier"
+            ? files.find((f) => f.name === "checks.json")
+            : files.find((f) => f.name === "lock.json")) ||
           files.find((f) => f.name === "result.json") ||
           files.find((f) => f.name.endsWith(".json")) ||
           files[0];
@@ -234,6 +237,11 @@ export function useTrialDetail(jobId: string, taskId: string, runId: string) {
     observationSteps,
     obsNote,
     obsLoading,
+    loadScript: (packagePath: string) =>
+      fetchTrialPackageFile(jobId, taskId, runId, packagePath).then((data) => ({
+        content: data.content ?? null,
+        note: data.note || (data.truncated ? "truncated preview" : null),
+      })),
     tree,
     treeGroups,
     treeLoading,

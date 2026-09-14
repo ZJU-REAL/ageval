@@ -17,7 +17,10 @@ import {
   decodeFileContent,
   getAttempt,
   getAttemptFile,
+  getPackageFile,
+  listPackageVersions,
   listSuites,
+  pickPackageVersion,
   type AttemptMeta,
 } from "@/lib/api";
 import { toArchivePath } from "@/lib/attempt-evidence";
@@ -267,6 +270,38 @@ export function AttemptEvidencePage() {
               observationSteps={observationSteps}
               obsLoading={obsLoading}
               obsNote={obsNote}
+              taskId={taskId}
+              loadScript={async (packagePath) => {
+                if (!datasetId) {
+                  return { content: null, note: packagePath };
+                }
+                try {
+                  const versions = await listPackageVersions(datasetId, token);
+                  const release = pickPackageVersion(
+                    versions,
+                    trial?.dataset_version,
+                  );
+                  if (!release?.package_digest) {
+                    return { content: null, note: packagePath };
+                  }
+                  const file = await getPackageFile(
+                    datasetId,
+                    release.package_digest,
+                    packagePath,
+                    token,
+                  );
+                  return {
+                    content: decodeFileContent(file),
+                    note: file.truncated ? "truncated" : null,
+                  };
+                } catch (err) {
+                  return {
+                    content: null,
+                    note:
+                      err instanceof Error ? err.message : packagePath,
+                  };
+                }
+              }}
               result={result}
               actors={trial.actors || []}
               tree={tree}

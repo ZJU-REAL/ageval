@@ -99,6 +99,51 @@ export function hasAnyUnder(relPaths: string[], dir: string): boolean {
 }
 
 export const OBSERVATION_REL = "evaluation/observation.jsonl";
+export const CHECKS_REL = "evaluation/checks.json";
+
+export type AttemptCheck = {
+  id: string;
+  title?: string | null;
+  status?: string | null;
+  score?: number | null;
+  script?: string | null;
+  environment?: string | null;
+  exit_code?: number | null;
+  stdout?: string | null;
+  stderr?: string | null;
+};
+
+export function parseChecksJson(text: string): AttemptCheck[] {
+  try {
+    const data = JSON.parse(text) as unknown;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return [];
+    const raw = (data as { checks?: unknown }).checks;
+    if (!Array.isArray(raw)) return [];
+    const out: AttemptCheck[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const rec = item as Record<string, unknown>;
+      if (typeof rec.id !== "string" || !rec.id.trim()) continue;
+      out.push({
+        id: rec.id,
+        title: typeof rec.title === "string" ? rec.title : null,
+        status: typeof rec.status === "string" ? rec.status : null,
+        score: typeof rec.score === "number" && Number.isFinite(rec.score) ? rec.score : null,
+        script: typeof rec.script === "string" ? rec.script : null,
+        environment: typeof rec.environment === "string" ? rec.environment : null,
+        exit_code:
+          typeof rec.exit_code === "number" && Number.isInteger(rec.exit_code)
+            ? rec.exit_code
+            : null,
+        stdout: typeof rec.stdout === "string" ? rec.stdout : null,
+        stderr: typeof rec.stderr === "string" ? rec.stderr : null,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
 
 /** Attempt-root record-phase file, then any per-invocation copies. */
 export function trajectoryRelPaths(relFiles: string[]): string[] {

@@ -44,6 +44,6 @@ Timing 来自 Attempt `phase_timing`（prepare / run / evaluate / cleanup）；h
 轨迹按轨迹文件顺序展示：一段 thought，紧接着它调用的工具，再下一段 thought。轨迹行（thought / `tool_call` / 最终 assistant）若带 `elapsed_ms`，步骤头会显示该步耗时；没有就不画标签。Viewer 不会用文件 mtime 或页面时钟补造。  
 耗时、token、单步耗时 **只是参考**，不是 PASS。轨迹也不是评分依据。Trajectory 里每条 **tool-call**（以及过长行）可折叠；观测 PASS 条上有全部展开 / 全部收起，和 Hub 上 Attempt 页一样。
 
-**Verifier**：缺省是 `result.json` + `evaluation/` 文件树。若有 `evaluation/observation.jsonl`（evaluate 阶段 SDK invoke，LLM-as-judge），该页签复用 Trajectory 的步骤卡片；Agent 的 Trajectory 页仍只读根 `trajectory.jsonl`。观察不是 PASS。
+**Verifier**：同时有 `evaluation/observation.jsonl` 与 `evaluation/checks.json` 时，页签行最右侧是 Trajectory / Files 切换（默认轨迹）。只有一种时就只显示那一种。在文件树里选中 `checks.json`，右侧预览渲染检查点（计数、可展开行、stdout/stderr、题包脚本）。没有单独的 Checks 面板。Agent 的 Trajectory 页仍只读根 `trajectory.jsonl`。checks 与 observation 都不是 PASS。
 
 Viewer **不连** Registry；远程目录走 Hub。改 SPA 看仓库 `apps/viewer/README.md`。

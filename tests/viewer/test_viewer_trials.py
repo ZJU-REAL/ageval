@@ -317,6 +317,54 @@ def test_evaluation_observation_steps_not_on_trajectory(tmp_path: Path) -> None:
     assert gone["steps"] == []
 
 
+def test_evaluation_checks_and_package_script(tmp_path: Path) -> None:
+    db = _clean_db(tmp_path)
+    job_id = _seed_suite_run(db)
+    root = _write_evidence(db, "run_alpha_1", task_id="alpha")
+    (root / "evaluation" / "checks.json").write_text(
+        json.dumps(
+            {
+                "schema": "ageval.evaluation.checks/1",
+                "checks": [
+                    {
+                        "id": "audit",
+                        "title": "schema audit",
+                        "status": "FAIL",
+                        "score": 0.0,
+                        "script": "evaluator.py",
+                        "stdout": "mismatch",
+                        "gold": "must-not-leak",
+                    },
+                    {"id": "files", "status": "PASS", "score": 1.0},
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    tree = trials.trial_tree(db, job_id, "alpha", "run_alpha_1", scope="verifier")
+    paths = {entry["path"] for entry in tree["entries"]}
+    assert "result.json" in paths
+    assert "evaluation/checks.json" in paths
+    doc = trials.trial_evaluation_checks(db, job_id, "alpha", "run_alpha_1")
+    assert [row["id"] for row in doc["checks"]] == ["audit", "files"]
+    assert "gold" not in doc["checks"][0]
+    script = trials.trial_package_file(db, job_id, "alpha", "run_alpha_1", relpath="evaluator.py")
+    assert script["path"] == "tasks/alpha/evaluator.py"
+    assert "evaluate" in (script.get("content") or "")
+    (root / "evaluation" / "checks.json").unlink()
+    gone = trials.trial_evaluation_checks(db, job_id, "alpha", "run_alpha_1")
+    assert gone["checks"] == []
+    with pytest.raises(ConfigError, match="script path rejected"):
+        trials.trial_package_file(db, job_id, "alpha", "run_alpha_1", relpath="../ageval.yaml")
+    with pytest.raises(ConfigError, match="script path rejected"):
+        trials.trial_package_file(
+            db, job_id, "alpha", "run_alpha_1", relpath="tasks/alpha/.ageval/runs/x"
+        )
+    with pytest.raises(ConfigError, match="script path rejected"):
+        trials.trial_package_file(db, job_id, "alpha", "run_alpha_1", relpath="/etc/passwd")
+
+
 def test_trajectory_tool_call_and_observation_steps(tmp_path: Path) -> None:
     """Viewer fail-open parses tool_call / observation rows for the panel."""
     db = _clean_db(tmp_path)

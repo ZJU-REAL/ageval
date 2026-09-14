@@ -322,7 +322,9 @@ export function useAttemptEvidence(
       setTree(entries);
       setTreeGroups(groups);
       const preferred =
-        entries.find((e) => e.name === "lock.json") ||
+        (activeTab === "verifier"
+          ? entries.find((e) => e.name === "checks.json")
+          : entries.find((e) => e.name === "lock.json")) ||
         entries.find((e) => e.name === "result.json") ||
         entries.find((e) => e.name.endsWith(".json")) ||
         entries[0];

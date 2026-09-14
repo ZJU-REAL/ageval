@@ -66,6 +66,7 @@ public 只许出现「public」或「both」行的规范名。internal 词出现
 | 参考答案 | gold | both | 评分对照的标准答案，在 `tasks/*/evaluation/`；evaluate 才 upload。zh public 写「参考答案」，EN / CLI / 路径用 gold | 金标；zh public 直接写 gold |
 | evidence | evidence | both | 目录 `.ageval/runs/<id>/` | 用 evidence 指那条 jsonl；存证 |
 | 轨迹 | trajectory | both | `trajectory.jsonl`。复盘用，不能发明 PASS | 用轨迹指整个 runs 目录 |
+| checks | checks / `evaluation/checks.json` | both | 确定性 evaluator 可选返回的检查项观察；parent 写入 `evaluation/checks.json`。不是 PASS | 把 check 退出码 / stdout 当 PASS；Verifier 检查点 |
 | 投影 / Agent 能看见 | projected workspace | both | Agent 看见的文件 | 单独写「可见性」指这件事 |
 | 公开 / 私有 | public / private | both | Hub 范围。CLI 旗标仍是 `--visibility` | 单独写可见性、visibility 当正文（旗标除外） |
 | PASS / FAIL / ERROR | PASS / FAIL / ERROR | both | 见下 | completed、轨迹完整当通过 |

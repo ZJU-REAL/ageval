@@ -44,6 +44,7 @@ export function TrialDetailPage() {
     observationSteps,
     obsNote,
     obsLoading,
+    loadScript,
     tree,
     treeGroups,
     treeLoading,
@@ -119,6 +120,8 @@ export function TrialDetailPage() {
               observationSteps={observationSteps}
               obsLoading={obsLoading}
               obsNote={obsNote}
+              taskId={taskId}
+              loadScript={loadScript}
               result={result}
               actors={trial.actors || []}
               tree={tree}
@@ -129,6 +132,7 @@ export function TrialDetailPage() {
               fileLoading={fileLoading}
               fileNote={fileNote}
               treeGroups={treeGroups}
+              emptyNote="No evidence files found for this run under the Dataset root."
             />
 
             <p className="text-xs text-mute">

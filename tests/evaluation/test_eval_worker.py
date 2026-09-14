@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -131,6 +132,59 @@ async def test_evaluate_in_box_runs_parent_worker(tmp_path: Path) -> None:
     verdict = await evaluate_in_box(ctx)
     assert verdict["status"] == "PASS"
     assert verdict["metrics"]["via"] == "parent"
+    assert not (tmp_path / "run" / "evaluation" / "checks.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_evaluate_in_box_persists_opt_in_checks(tmp_path: Path) -> None:
+    task = tmp_path / "task"
+    task.mkdir()
+    (task / "evaluator.py").write_text(
+        "def evaluate(inputs):\n"
+        "    return {\n"
+        "        'status': 'PASS',\n"
+        "        'score': 1.0,\n"
+        "        'checks': [\n"
+        "            {'id': 'audit', 'status': 'FAIL', 'score': 0.0},\n"
+        "            {'id': 'files', 'status': 'PASS', 'score': 1.0},\n"
+        "        ],\n"
+        "    }\n",
+        encoding="utf-8",
+    )
+    evidence = AttemptEvidenceStore(root=tmp_path / "run", attempt_id="a", run_id="r")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    host = SimpleNamespace(host_path=lambda dest: workspace)
+
+    class Lock:
+        resolved_references = {
+            "evaluation_entrypoint": "evaluator:evaluate",
+            "evaluation_inputs": [],
+        }
+        parameters = {}
+
+    ctx = SimpleNamespace(
+        lock=Lock(),
+        task_root=task,
+        dataset_root=tmp_path,
+        attempt_id="a",
+        trial_id="t",
+        run_id="r",
+        evidence=evidence,
+        scoring_host=host,
+        host=host,
+        evaluation_src=None,
+        agent_service=None,
+        remaining_seconds=lambda: 30.0,
+        record_fact=lambda *_a, **_k: None,
+    )
+    verdict = await evaluate_in_box(ctx)
+    assert verdict["status"] == "PASS"
+    path = tmp_path / "run" / "evaluation" / "checks.json"
+    assert path.is_file()
+    body = json.loads(path.read_text(encoding="utf-8"))
+    assert [row["id"] for row in body["checks"]] == ["audit", "files"]
+    assert body["checks"][0]["status"] == "FAIL"
 
 
 class _ExecHost:
@@ -236,6 +290,7 @@ async def test_evaluate_in_box_execs_named_host(tmp_path: Path) -> None:
     assert audit.started is True
     assert unused.started is False
     assert audit.execs == [["echo", "ok"]]
+    assert not (tmp_path / "run" / "evaluation" / "checks.json").exists()
 
 
 @pytest.mark.asyncio

@@ -613,7 +613,10 @@ export function TrajectoryPanel({
         trajScrollRef.current = el;
         if (panelRef) panelRef.current = el;
       }}
-      className={cn(TRAJ_PORT_CLASS, showInvokeHeaders && "space-y-4")}
+      className={cn(
+        TRAJ_PORT_CLASS,
+        showInvokeHeaders && "space-y-4",
+      )}
     >
       {children}
     </div>

@@ -1,0 +1,19 @@
+format: ageval.task/1
+task_id: script-score
+description: Deterministic evaluator returns two observational checks.
+parameters:
+  seed: 1
+  active_profile: solver
+agent_profiles:
+  - id: solver
+limits:
+  wall_time_seconds: 60
+  agent_invocations: 1
+artifacts:
+  publishable:
+    - id: result
+      path: artifacts/result.json
+evaluation:
+  inputs:
+    - artifact: result
+      target: artifacts/result.json

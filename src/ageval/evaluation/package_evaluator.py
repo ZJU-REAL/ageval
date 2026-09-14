@@ -28,4 +28,7 @@ async def evaluate_in_box(ctx: Any) -> dict[str, Any]:
     if not isinstance(verdict, dict):
         raise RuntimeError("evaluator produced no verdict document")
     ctx.evidence.write_evaluation("evaluator_raw", verdict)
+    from ageval.evidence.checks import persist_evaluation_checks
+
+    persist_evaluation_checks(ctx.evidence, verdict)
     return verdict

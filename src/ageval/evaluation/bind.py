@@ -126,6 +126,7 @@ def bind_result(
         return AttemptResult(
             status=STATUS_ERROR, score=None, metrics={}, error_phase="evaluate", **common
         )
+    # Observational ``checks`` (if any) is not an input to the Attempt verdict.
     score = evaluator_raw.get("score")
     raw_metrics = evaluator_raw.get("metrics")
     return AttemptResult(

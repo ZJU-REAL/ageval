@@ -46,6 +46,7 @@ from ageval_sdk import (
     ToolSet,
     AllowList,
     CallLimit,
+    evaluation_check,
 )
 ```
 
@@ -55,6 +56,7 @@ from ageval_sdk import (
 | `RunTerminal` | `completed` / `failed`；不是 PASS |
 | `Agent.session(profile_id)` | 经 unix socket 调 parent Agent Service |
 | `ToolSet` / `CallLimit` | 题包软限，不替代 Runtime limits |
+| `evaluation_check` | 组 evaluator 返回的可选 `checks` 行；不是 PASS |
 
 `AgentSession.record_observation` 是补充口：域工具由 `run.py` 执行后，把 observation 挂到刚结束的 invoke。parent 写入该 invoke 的 `events.jsonl`；record 相位折进 `trajectory.jsonl`。SDK **不**自己写 trajectory.jsonl。
 
@@ -65,11 +67,26 @@ evaluate 相位同样可以用 SDK：`evaluator.py` 是 parent 子进程（与 `
 脚本阶梯用 Runtime 注入的 `inputs["scoring"]`（不是 SDK 类型、不是第二套 docker 客户端）：
 
 ```python
+from ageval_sdk import evaluation_check
+
 audit = await scoring.exec("audit", ["python", "/attempt/evaluation/audit.py"])
 # audit.exit_code / stdout / stderr 来自那只容器内 Protocol host.exec
+return {
+    "status": "PASS" if audit.exit_code == 0 else "FAIL",
+    "score": 1.0 if audit.exit_code == 0 else 0.0,
+    "checks": [
+        evaluation_check(
+            "audit",
+            status="PASS" if audit.exit_code == 0 else "FAIL",
+            script="evaluation/audit.py",
+            environment="audit",
+            exec_result=audit,
+        )
+    ],
+}
 ```
 
-`exec` 的 argv 是列表。第一次点到某名字时 Runtime 才 start 那只 Host 并 upload 快照 + gold。未知名失败且不 start。`exec` 退出码、start 事实都不是 PASS。`evaluator.py` 源码不见 `container_id`。
+`exec` 的 argv 是列表。第一次点到某名字时 Runtime 才 start 那只 Host 并 upload 快照 + gold。未知名失败且不 start。`exec` 退出码、start 事实、`evaluation_check` 行都不是 PASS。省略 `checks` = 不写 `evaluation/checks.json`。`evaluator.py` 源码不见 `container_id`。SDK **不得** bind PASS。
 
 `ctx.publish_tree(id, path)` 是可选登记：告诉 Runtime「这份 tree 已由 Agent 写在 workspace」。**拷贝与 exclude 仍归 harvest**，不在 SDK 里做。题包 yaml 已经声明 `kind: tree` 且 `path` 指向 Agent 写过的工作区时，`run.py` 不必再调。`publish_json` / `publish_file` 仍是单文件。登记成功不是 PASS。
 
