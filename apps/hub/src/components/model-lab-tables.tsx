@@ -6,6 +6,10 @@ import {
   type GroupedTableGroup,
 } from "@/components/grouped-tables";
 import { LabGroupHead } from "@/components/lab-group-head";
+import {
+  ModelLabOutline,
+  modelLabSectionId,
+} from "@/components/model-lab-outline";
 import { ModalityMarks } from "@/components/modality-mark";
 import {
   SortableHead,
@@ -55,6 +59,7 @@ export function ModelLabTables({ rows }: { rows: ModelLabRow[] }) {
   const pin = loadModelPin();
   const [sortKey, setSortKey] = useState<string | null>("released");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [pinned, setPinned] = useState<string | null>(null);
 
   function onSort(key: string) {
     const next = nextSort(sortKey, sortDir, key);
@@ -213,7 +218,29 @@ export function ModelLabTables({ rows }: { rows: ModelLabRow[] }) {
     };
   });
 
+  const outlineItems = labs.map(([lab]) => ({
+    id: lab || "unmatched",
+    lab,
+    name: pin.labs[lab]?.name || lab || "Unmatched",
+  }));
+
   return (
-    <GroupedTables chromeId="models-chrome" pinSlotId="models-lab-pin" groups={groups} />
+    <div className="relative lg:pr-10 xl:pr-0">
+      <GroupedTables
+        chromeId="models-chrome"
+        pinSlotId="models-lab-pin"
+        groups={groups}
+        sectionId={modelLabSectionId}
+        onPinned={setPinned}
+      />
+      <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-10 lg:block xl:left-full xl:right-auto xl:w-[12.5%] xl:pl-3">
+        <div
+          className="pointer-events-auto sticky z-10 flex w-full justify-end overflow-visible"
+          style={{ top: "calc(var(--models-stick-top, 0px) + 0.75rem)" }}
+        >
+          <ModelLabOutline items={outlineItems} activeId={pinned} />
+        </div>
+      </div>
+    </div>
   );
 }

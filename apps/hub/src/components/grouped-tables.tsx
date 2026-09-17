@@ -21,10 +21,14 @@ export function GroupedTables({
   chromeId,
   pinSlotId,
   groups,
+  sectionId,
+  onPinned,
 }: {
   chromeId: string;
   pinSlotId: string;
   groups: GroupedTableGroup[];
+  sectionId?: (groupId: string) => string;
+  onPinned?: (id: string | null) => void;
 }) {
   const idsKey = groups.map((g) => g.id).join("\n");
   const groupIds = useMemo(() => idsKey.split("\n"), [idsKey]);
@@ -55,6 +59,10 @@ export function GroupedTables({
     };
   }, [chromeId, groupIds]);
 
+  useEffect(() => {
+    onPinned?.(pinned);
+  }, [pinned, onPinned]);
+
   const pinnedGroup = groups.find((g) => g.id === pinned);
 
   return (
@@ -73,6 +81,7 @@ export function GroupedTables({
       {groups.map((group, i) => (
         <GroupSection
           key={group.id}
+          id={sectionId?.(group.id)}
           first={i === 0}
           pinned={pinned === group.id}
           onHead={(el) => {
@@ -149,6 +158,7 @@ function PinnedGroupSwap({
 }
 
 function GroupSection({
+  id,
   first,
   head,
   pinned,
@@ -157,6 +167,7 @@ function GroupSection({
   colgroup,
   children,
 }: {
+  id?: string;
   first: boolean;
   head: ReactNode;
   pinned: boolean;
@@ -166,7 +177,7 @@ function GroupSection({
   children: ReactNode;
 }) {
   return (
-    <section className={first ? undefined : "mt-8"}>
+    <section id={id} className={first ? undefined : "mt-8"}>
       <div ref={onHead} className={pinned ? "invisible pb-2" : "pb-2"}>
         {head}
       </div>
