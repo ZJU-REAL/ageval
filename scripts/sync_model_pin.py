@@ -76,11 +76,13 @@ EXTRA_PREFIXES = ("dashscope", "dashscope-", "litellm")
 
 # Labs omitted from pin.json. models.dev still lists them; we just do not pin.
 SKIP_LABS = frozenset({
+    "ai21",
     "aisingapore",
     "amazon",
     "arcee-ai",
     "deepreinforce",
     "inclusionai",
+    "motif-technologies",
     "openbmb",
     "poolside",
     "sakana",
