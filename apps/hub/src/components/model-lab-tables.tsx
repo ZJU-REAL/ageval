@@ -218,10 +218,11 @@ export function ModelLabTables({ rows }: { rows: ModelLabRow[] }) {
     };
   });
 
-  const outlineItems = labs.map(([lab]) => ({
+  const outlineItems = labs.map(([lab, labRows]) => ({
     id: lab || "unmatched",
     lab,
     name: pin.labs[lab]?.name || lab || "Unmatched",
+    count: labRows.length,
   }));
 
   return (
