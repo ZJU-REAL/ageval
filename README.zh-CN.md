@@ -114,7 +114,7 @@ uv run ageval view examples/datasets/minimal-demo --no-browser
 
 **让 Agent 自己跑评测**
 
-装上 CLI 和 skill 后，coding agent 能按规范写或转化 dataset，并端到端跑完。跑完用 `ageval view` 在本地复盘轨迹：各阶段耗时、工具调用，以及失败任务的复现命令。安装见[快速开始](#快速开始)。
+装上 CLI 和 skill 后，coding agent 能按规范写或转化 dataset，并端到端跑完。跑完用 `ageval view` 打开这一份，或一个放着多份 dataset 的目录，在本地复盘轨迹：各阶段耗时、工具调用，以及失败任务的复现命令。同一个窗口也列出本机上的 Agent 和 Plugin 包。安装见[快速开始](#快速开始)。
 
 **两种打分方式**
 

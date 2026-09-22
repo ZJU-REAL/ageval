@@ -7,9 +7,9 @@ Local results console for datasets on this machine, plus read-only plugins and A
 ## What you see
 
 | Layer | Content |
-| **Datasets** | One row per opened package (`dataset_id@version`). Read-only README, manifest, `profiles.yaml`, file tree. `.ageval/runs` and `.ageval/suite-runs` stay off that tree |
-| **Jobs** | Suite runs under `.ageval/suite-runs/` **and** single-task Attempts under `.ageval/runs/` for the selected package (Kind column: suite vs single) |
-| **Agents / Plugins** | Builtin packages from this CLI, plus installed rows under the ageval home. Read-only |
+| **Datasets** | One row per opened package (`dataset_id@version`), grouped by the organization in `dataset_id`. Search stays pinned. Read-only README, manifest, `profiles.yaml`, file tree. `.ageval/runs` and `.ageval/suite-runs` stay off that tree |
+| **Jobs** | Suite runs under `.ageval/suite-runs/` **and** single-task Attempts under `.ageval/runs/` for the selected package (Kind column: suite vs single). Search and filters stay pinned. A Jobs URL with no package opens the first dataset |
+| **Agents / Plugins** | Builtin packages from this CLI, plus installed rows under the ageval home. Read-only. Tables show description; source is a filter. Plugin detail includes the declared slot timeline |
 | **Tasks** | Per-task status / score / run refs from suite summary (+ local evidence when present) |
 | **Attempt** | One `run_id`: outcome strip, actors table, evidence tabs |
 
@@ -80,7 +80,7 @@ Python serves **`apps/viewer/dist/`** only (no separate `static/` tree). `dist/`
 | `GET /api/jobs/{id}/tasks/{task_id}/trials` | Trials (suite + local evidence) |
 | `GET .../trials/{run_id}` | Attempt meta: status, actors (Time/Usage), framework, docker, provenance, `available_tabs` |
 | `GET .../trials/{run_id}/tree?scope=` | Evidence file tree (`agent` / `verifier` / `artifacts` / `lock` / `runtime` / …) |
-| `GET .../trials/{run_id}/file?path=` | File preview (size-capped; secret-like names redacted) |
+| `GET .../trials/{run_id}/file?path=` | File preview (size-capped). Names containing `env` and ending in `.example` / `.sample` / `.template` / `.dist` are text. `.env` and other `.env.*` stay redacted |
 | `GET .../trials/{run_id}/trajectory` | Parsed `trajectory.jsonl` steps (observational; steps carry `profile_id` when known) |
 
 All ids are single path segments; file paths reject paths that contain `..`. No Registry required for local browse.

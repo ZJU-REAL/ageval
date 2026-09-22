@@ -23,7 +23,7 @@ Hub 侧栏 Catalog 首位是 **Leaderboard**（`/leaderboard`），其后是 Dat
 | 侧栏 | Catalog 组首位。标签 **Leaderboard**。lucide 新字形 + `nav-leaderboard`（只涂字形，不复用别的目的地 `nav-*`）。 |
 | 路由 | `/leaderboard`。Hub `/` 与未知路径 `replace` 到这里（登录回跳无 return path 同此）。视图是 query `?view=dataset\|agent\|model`。省略 `view` = dataset。页上一条 `UnderlineTabs`。 |
 | 活 | 索引已可见的 Performance。Dataset 视图复用 Dataset Leaderboard 的 Table / Pareto / Waffle Select（`?chart=` / `?axis=`；默认省略即 table），控件在 Dataset tab 行右侧。Pareto / Waffle **按 Dataset 组各画一份**，不要把不同 Dataset 的 task 混一张 waffle。Agent / Model 只要表。 |
-| Chrome | 复用 `GroupedTables` 粘组头（org pin slot / `--*-stick-top`），与 `DatasetOrgTables` / `ModelLabTables` 同一套，不要第二套粘头。搜索抄 `CatalogScopeBar` 查询框；**不是**市场，不要 Explore / orgs / Stars。 |
+| Chrome | 复用 `GroupedTables` 粘组头（org pin slot / `--*-stick-top`），与 `DatasetOrgTables` / `ModelLabTables` 同一套，不要第二套粘头。吸顶组头不在表体上方留空。图表说明留在吸顶工具条里，滚动时右侧大纲不动。搜索抄 `CatalogScopeBar` 查询框；**不是**市场，不要 Explore / orgs / Stars。长列表右侧 `GroupOutline`（`lg+`，`xl` 在栏间；少于两组隐藏）：收起短条按行数缩放，悬停或聚焦展开标记、名称和数量，点击把该组钉到吸顶栏下。指针离开后收起。当前行 `canvas-soft`。 |
 | 分 | 内行带该 suite / Performance 行上的观测指标。不要发明 per-entity 汇总（latest / best）。说明：观测，不是 PASS，不可跨 Dataset 比。不要名次列。 |
 | 默认排序 | 与 Dataset Leaderboard 相同：pass rate desc → mean score desc → `created_at` desc。`SortableHead` 跨组共享。 |
 | 鉴权 | 未登录可看。plaza 永不展示 Dataset Internal / draft-bound / 未列出的 suite。 |
@@ -34,7 +34,7 @@ Hub 侧栏 Catalog 首位是 **Leaderboard**（`/leaderboard`），其后是 Dat
 **Dataset**（省略 `?view=`）
 
 - 门 = 公开 Dataset Leaderboard：完备 + release-bound + `board_listed`。
-- 组头 = Dataset（名称 + 描述；有包标则同市场解析）。一个 Dataset 一张表，不要按 org 再拆。
+- 组头 = Dataset（名称 + 描述；有包标则同市场解析）。一个 Dataset 一张表，不要按 org 再拆。大纲按 Dataset；Table / Pareto / Waffle 仍是该组的跳转目标。
 - 内行 = 一条已列出的 suite（Harness / Model / Pass rate / Mean）。不要 Dataset 列（组头已经是该 Dataset）。suite 有 `created_at` 则加 Uploaded 列。同一 Dataset 多条已列出 suite → 多行，不是一条汇总。Table / Pareto / Waffle 切到该组的已有图表组件，不另发明跨 Dataset 汇总。
 - 组头 Dataset 名 → `/datasets/{id}?tab=leaderboard`。行点击 → 已有 suite 详情 `/datasets/{id}/suites/{suite_run_id}`。
 - Harness / Model 格行为与 Dataset Leaderboard 相同（内置短 id 可链；定制 `org/name` 仅在已同意时）。不要按 executor / overlay 文案猜包。Model 格短名（去 provider 前缀）在 unique join 到 pin 时前置 `LabMark`（brand-marks 闭包或 pin lab SVG）；无 unique hit 不加标、不加字母占位。Harness 格同理：builtin 短 id（及 `codex@acp` 这种观测短名）前置 `BrandMark`（`brand-marks/assets` 闭包；`grok-build` / `openai-http` / `anthropic-http` 复用父品牌）。定制 `org/name` 有包行才用 `icon_key` / GitHub 头像；不要猜包、不加字母占位。
@@ -43,14 +43,14 @@ Hub 侧栏 Catalog 首位是 **Leaderboard**（`/leaderboard`），其后是 Dat
 **Agent**（`?view=agent`）
 
 - 门 = 已有 Agent Performance（plaza 采集或 Agent-org 同意）。不是 `board_listed`。
-- 组头 = Agent org；**内置短 id 一组**（它们没有 `org_id`）。
+- 组头 = Agent org；**内置短 id 一组**（它们没有 `org_id`）。大纲按组织；内置组没有组织标。
 - 内行 = 已有 Performance 行（组内必有 Agent 列；Dataset / Role / Model / Pass rate / Mean）。Agent 格同 Dataset 视图 Harness：builtin 短 id 前置 `BrandMark`。Model 格同 Dataset 视图：unique join 前置 `LabMark`。
 - Agent 名 → `/agents/{id}?tab=performance`。行点击 → Agent 页已打开的同一 suite 详情。
 
 **Model**（`?view=model`）
 
 - 门 = Agent Performance 经 canonical join。评测事实仍是那些行；不要混第三方 bench。
-- 组头 = lab（`LabGroupHead`），与 `/models` 相同。组头已有 lab 标，内行 Model 列不再前置 `LabMark`。
+- 组头 = lab（`LabGroupHead`），与 `/models` 相同。组头已有 lab 标，内行 Model 列不再前置 `LabMark`。大纲与 `/models` 同一套 lab 标。
 - 内行 = 已 join 的 appearance（Model / Harness / Dataset / overlay / Pass）。未 join 的 overlay **本视图省略**（Dataset / Agent 视图仍可按 overlay 原文出现）。
 - Model 名 → `/models/{canonical}?tab=performance`。Harness → `/agents/{id}?model={overlay}`。Harness 列前置 builtin `BrandMark`（组头是 lab，不是 harness，所以行内要标）。
 
@@ -139,4 +139,4 @@ Dataset 描述来源是包根 `ageval.yaml` 的 `/description`（`ageval.dataset
 
 Owner `PATCH /v1/packages/{id}` 另认 `description` 键（与 `display_name` 同权，不进 blob，不按 version）：字符串、trim 后 ≤500 字符，空字符串清除。`description` 是 owner 覆写，与 manifest 描述分层：**覆写 > manifest**，清除后回到 manifest 值。未知键拒绝不变。
 
-CLI：`ageval registry set-description <dataset_id> --description "…"`（`--description ""` 清除覆写）。Hub 端展示：datasets 首页 Description 列在 Dataset 列右侧、最多两行截断；Dataset 详情页标题区用与 org 详情同一套 DescriptionEditor，org owner 可编辑并同步该覆写。plugin / agent 卡仍用各自 manifest 的 preview description，不走此覆写。
+CLI：`ageval registry set-description <dataset_id> --description "…"`（`--description ""` 清除覆写）。Hub 端展示：datasets 首页按组织分组，Description 列在 Dataset 列右侧、最多两行截断。右侧 `GroupOutline`（`lg+`，少于两个组织则隐藏）按包数量画短条；悬停展开组织标、名称和数量；点击把该组织的表钉到吸顶栏下。Dataset 详情页标题区用与 org 详情同一套 DescriptionEditor，org owner 可编辑并同步该覆写。plugin / agent 卡仍用各自 manifest 的 preview description，不走此覆写。

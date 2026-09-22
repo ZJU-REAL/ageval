@@ -45,14 +45,14 @@ Ops detail: `apps/hub/README.md`, `services/registry/README.md`.
 
 ## Datasets and tasks
 
-- The list is grouped by organization: the group head shows the org name and description; rows carry name, description, task count, and last update. Open one for its README and task file previews.
+- The list is grouped by organization: the group head shows the org name and description; rows carry name, description, task count, and last update. Open one for its README and task file previews. On a wide screen, a rail at the right edge jumps to an organization: collapsed bars scale with the package count, hover shows the mark and name, and a click seats that table under the sticky header. The rail hides on a narrow screen, and when fewer than two organizations remain.
 - Version switching: entitled users see **draft (current)**; everyone else switches among published releases. An org owner can publish the draft, change visibility, or delete a version.
 - When the package declares root `shared/` or `overlays:`, the task **Files** header gains **Shared** / **Overlays** scopes (Local by default).
 - **Jobs** under a task list uploaded runs; click through for trajectories (the layout is close to the local Viewer).
 
 ## Leaderboard
 
-- Catalog sidebar leads with **Leaderboard** (`/leaderboard`); `/` redirects here. It is an **index** of the three existing surfaces, not a fourth ranking. The Dataset view groups by dataset (name + description as the group head) and lists public listed suites; Agent / Model views reuse the existing Performance gates (plaza collect or Agent-org consent). The three tables may disagree on membership. Signed-out is OK. Internal, draft-bound, and unlisted suites stay on the dataset Leaderboard tab — they never appear on the plaza.
+- Catalog sidebar leads with **Leaderboard** (`/leaderboard`); `/` redirects here. It is an **index** of the three existing surfaces, not a fourth ranking. The Dataset view groups by dataset (name + description as the group head) and lists public listed suites; Agent / Model views reuse the existing Performance gates (plaza collect or Agent-org consent). The three tables may disagree on membership. Signed-out is OK. Internal, draft-bound, and unlisted suites stay on the dataset Leaderboard tab — they never appear on the plaza. On a wide screen, the same right-edge rail jumps to the current view's groups: a dataset, an Agent organization (Builtin has no org mark), or a lab. Table, Pareto, and Waffle stay on that dataset group. The rail hides on a narrow screen, and when fewer than two groups remain.
 - The plaza Dataset view switches Table / Pareto / Waffle with the same control as a dataset Leaderboard (right of the Dataset tab). Charts are per dataset group. Scores sit on each inner row and are not comparable across datasets. There is no rank column. Agent / Model views stay tables.
 - **Public** lists only suites that are complete, bound to a release, and approved for listing by the dataset org's owner; **Internal** shows caller-visible incomplete or draft-bound runs in the same table.
 - The same tab switches **Table** / **Pareto** / **Waffle**. Pareto’s x-axis is the **sum of every job** in the suite (cost, tokens, or time); left is cheaper, right is more. When the agent did not report USD, cost is tokens × catalog price — estimated, not a billed invoice. Higher pass rate at no extra cost forms the frontier.
@@ -64,7 +64,7 @@ Ops detail: `apps/hub/README.md`, `services/registry/README.md`.
 
 - The plugin / agent marketplace uses cards: description, tags, downloads, and stars. Detail pages show the declared extension-point timeline, file preview, and the CLI install command.
 - Agent details add bindings, files, and Performance.
-- **Models** in the sidebar is a catalog grouped by lab (context, price, and more; searchable; a row opens its encyclopedia page). Prices are catalog list prices, not invoices.
+- **Models** in the sidebar is a catalog grouped by lab (context, price, and more; searchable; a row opens its encyclopedia page). Prices are catalog list prices, not invoices. A lab is listed only when it has a logo; labs that would show as a letter, and their models, stay out of the catalog. On a wide screen, the right-edge rail jumps to a lab. The rail hides on a narrow screen, and when fewer than two labs remain.
 - Official orgs, their members, and their plugins carry a verified badge.
 
 ## Orgs and sharing

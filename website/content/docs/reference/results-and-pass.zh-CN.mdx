@@ -68,7 +68,7 @@ description: Result 怎么读；pass@k 是 job 指标，不是整份 dataset 的
 
 ## 本地查看
 
-`ageval view` 打开 Jobs → Tasks → Attempt。  
+`ageval view` 打开一份 dataset 根、一个放着多份 dataset 的目录，或已缓存的 registry ref。顶栏是 Datasets、Jobs、Agents、Plugins。选中的那一份走 Jobs → Tasks → Attempt。  
 Attempt 页可有 **Timing**（及有数据时的 **Tokens**）条。轨迹按文件顺序展示（thought 紧挨着它后面的工具）。轨迹行带 `elapsed_ms` 时步骤头显示单步耗时。Verifier 会把 `evaluation/checks.json` 在文件树预览里结构化渲染（同时有 `observation.jsonl` 时用 Trajectory / Files 切换）。
 
 ## 失败怎么分

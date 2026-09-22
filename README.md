@@ -114,7 +114,7 @@ Environments and agent runtimes both plug in. The default path is [ACP](https://
 
 **Let the Agent run the eval**
 
-With the CLI and skills installed, a coding agent can author or convert a dataset and run the eval end to end. Afterwards, `ageval view` replays the trajectory locally: phase timing, tool calls, and a reproduce command for failed tasks. See [Getting started](#getting-started).
+With the CLI and skills installed, a coding agent can author or convert a dataset and run the eval end to end. Afterwards, `ageval view` opens that dataset or a directory of datasets and replays the trajectory locally: phase timing, tool calls, and a reproduce command for failed tasks. The same window lists Agent and Plugin packages on this machine. See [Getting started](#getting-started).
 
 **Two scoring styles**
 

@@ -34,11 +34,12 @@ Landing: more than one dataset → Datasets. Exactly one (including
 
 **In scope:**
 
-1. **Datasets** — one row per opened package. Display `dataset_id@version`.
-   The switch key is the directory name (two siblings may share `dataset_id`).
-   Opening a row is read-only: README when present, `ageval.yaml`,
-   `profiles.yaml` when present, and a file tree with a size-capped preview.
-   `.ageval/runs` and `.ageval/suite-runs` are not on that tree.
+1. **Datasets** — one row per opened package, grouped by the organization in
+   `dataset_id`. Display `dataset_id@version`. The switch key is the directory
+   name (two siblings may share `dataset_id`). Opening a row is read-only:
+   README when present, `ageval.yaml`, `profiles.yaml` when present, and a
+   file tree with a size-capped preview. `.ageval/runs` and `.ageval/suite-runs`
+   are not on that tree.
 2. **Jobs list** — search; filter dropdowns; sortable columns; row click.
    Jobs = that package's `.ageval/suite-runs/` and `.ageval/runs/` only.
    Routes carry the directory key so two packages cannot share a `job_id`.
@@ -62,7 +63,8 @@ Landing: more than one dataset → Datasets. Exactly one (including
    Click the settings/note control to open the menu (do not open on hover).
 9. **Plugins** — rows from `$AGEVAL_HOME/plugins` `index.json` `(id, version)`
    plus first-party contrib short ids from this CLI, marked built-in.
-   Read-only: README when present, `plugin.yaml`, file tree, size-capped preview.
+   Read-only: README when present, `plugin.yaml`, declared slots, file tree,
+   size-capped preview. The table shows description; source stays a filter.
 10. **Agents** — same for `$AGEVAL_HOME/agents` and the builtin Agent catalog
     (`agent.yaml`).
 
@@ -176,7 +178,7 @@ usage). Cache hit rate uses inclusion/disjoint heuristics; never treat
 
 SPA file preview: JSON/JSONL pretty-print + lightweight syntax highlight (no extra deps).
 
-Job and evidence paths stay inside the dataset chosen by `?dataset=` (or the only opened dataset). `job_id` / `task_id` / `run_id` are single-segment; file paths reject `..`. Package preview roots are only: that dataset directory, an indexed plugin or Agent package under `$AGEVAL_HOME`, or a builtin tree shipped in the CLI. Never `credentials`. Never the whole `$AGEVAL_HOME`. Secret-like basenames stay redacted. No Registry required.  
+Job and evidence paths stay inside the dataset chosen by `?dataset=` (or the only opened dataset). `job_id` / `task_id` / `run_id` are single-segment; file paths reject `..`. Package preview roots are only: that dataset directory, an indexed plugin or Agent package under `$AGEVAL_HOME`, or a builtin tree shipped in the CLI. Never `credentials`. Never the whole `$AGEVAL_HOME`. A basename that contains `env` and ends in `.example`, `.sample`, `.template`, or `.dist` previews as text. `.env`, `.env.local`, `.env.production`, and other `.env.*` basenames stay redacted. No Registry required.  
 Evidence roots: `{dataset}/.ageval/runs/{run_id}` or task-local `.ageval/runs/`; lock `task_id` must match when present.  
 Old `/api/dataset` and `/api/tasks/...` browse routes stay absent.
 

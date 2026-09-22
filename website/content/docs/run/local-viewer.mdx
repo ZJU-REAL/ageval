@@ -31,7 +31,9 @@ ageval view examples/datasets --no-browser
 
 A dataset root or a cached registry ref opens that one package. A directory that is not itself a dataset keeps only the child folders whose `ageval.yaml` is `ageval.dataset/1`. Other children are skipped, and an empty directory still opens.
 
-The header is Datasets, Jobs, Agents, and Plugins. More than one dataset lands on Datasets. One dataset lands on Jobs. Jobs shows only the package you pick. Agents and Plugins list the packages shipped with the CLI, plus packages installed under your ageval home. Opening a row is read-only: README when the package has one, the manifest, `profiles.yaml` when present, and a file tree. Run results stay on Jobs.
+The header is Datasets, Jobs, Agents, and Plugins. More than one dataset lands on Datasets. One dataset lands on Jobs. Jobs shows only the package you pick. Agents and Plugins list the packages shipped with the CLI, plus packages installed under your ageval home. Opening a row is read-only: README when the package has one, the manifest, `profiles.yaml` when present, and a file tree. A plugin row also shows the extension points that package declares. Run results stay on Jobs.
+
+On Datasets, Jobs, Agents, and Plugins, search and filters stay at the top of the scrolling column. Dataset tables split on the organization in `dataset_id`. Plugin and Agent tables show the description; source stays a filter beside search. A file whose name contains `env` and ends in `.example`, `.sample`, `.template`, or `.dist` previews as text, including `.env.example`. `.env`, `.env.local`, `.env.production`, and other `.env.*` files stay hidden. A path segment named `credentials` is not served.
 
 `ageval view --dev` talks to the **same** local API and starts Vite when it can. If it cannot, it prints `pnpm --dir apps/viewer dev`. Two-process contract: API port (default 8765) + UI port (default 5173). Production `ageval view` serves `apps/viewer/dist/`.
 

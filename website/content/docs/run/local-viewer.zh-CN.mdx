@@ -33,7 +33,9 @@ ageval view examples/datasets --no-browser
 
 参数是一份 dataset 根，或已经缓存的 registry ref，就只打开这一份。参数是目录、自己又不是 dataset 时，只保留子目录里 `ageval.yaml` 为 `ageval.dataset/1` 的那些。其余子项跳过。空目录也能打开。
 
-顶栏是 Datasets、Jobs、Agents、Plugins。多于一份时先落到 Datasets；只有一份时落到 Jobs。Jobs 只显示你选中的那一份。Agents 和 Plugins 列出 CLI 自带的包，再加上 ageval 主目录里安装的包。点开一行是只读的：有 README 就先看 README，然后是清单，有 `profiles.yaml` 也会列出，旁边是文件树。运行结果仍在 Jobs，不进这棵文件树。
+顶栏是 Datasets、Jobs、Agents、Plugins。多于一份时先落到 Datasets；只有一份时落到 Jobs。Jobs 只显示你选中的那一份。Agents 和 Plugins 列出 CLI 自带的包，再加上 ageval 主目录里安装的包。点开一行是只读的：有 README 就先看 README，然后是清单，有 `profiles.yaml` 也会列出，旁边是文件树。插件这一行还会列出包里声明的接入点。运行结果仍在 Jobs，不进这棵文件树。
+
+Datasets、Jobs、Agents、Plugins 上，搜索和筛选停在滚动列顶部。Dataset 表按 `dataset_id` 里的组织拆开。Plugin 和 Agent 表显示描述；来源仍是搜索旁边的筛选项。文件名含 `env` 且以 `.example`、`.sample`、`.template` 或 `.dist` 结尾时按文本预览，包括 `.env.example`。`.env`、`.env.local`、`.env.production` 以及其他 `.env.*` 不显示内容。路径里有一段叫 `credentials` 的不提供。
 
 `--dev` 对着**同一套**本地 API，并尽量自己拉起 Vite。起不了会在终端打印 `pnpm --dir apps/viewer dev`。两进程：API 端口（默认 8765）+ UI 端口（默认 5173）。服务的生产包是 `apps/viewer/dist/`。端口占用就换 `--port`。
 

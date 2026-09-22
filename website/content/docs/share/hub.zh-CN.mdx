@@ -45,14 +45,14 @@ pnpm dev   # http://127.0.0.1:5174
 
 ## Dataset 与 Task
 
-- 列表按组织分组：组头是组织名与描述，行里有名称、描述、task 数与更新日期；点开读 README、预览 Task 文件
+- 列表按组织分组：组头是组织名与描述，行里有名称、描述、task 数与更新日期；点开读 README、预览 Task 文件。宽屏时右侧有一条跳转：收起的短条按包数量缩放，悬停显示组织标和名称，点击把该组织的表钉到吸顶栏下面。窄屏，或只剩一个组织时，不显示这条跳转。
 - 版本切换：有权限的人能看到 **draft (current)**，其他人切已发布的 release；org owner 可发布 draft、改公开/私有、删版本
 - 包声明了根 `shared/` 或 `overlays:` 时，Task **Files** 顶栏多出 **Shared** / **Overlays** 范围（默认 Local）
 - Task 下的 **Jobs** 列出已上传的运行结果，能点进详情看轨迹（界面和本地 Viewer 相近）
 
 ## Leaderboard
 
-- 侧栏 Catalog 首位是 **Leaderboard**（`/leaderboard`），`/` 也落到这里。是已有三面的**索引**，不是第四套排名：Dataset 视图按 Dataset 分组（组头是名称与描述），只列公开上榜的整份运行；Agent / Model 视图走已有 Performance 门（plaza 采集或 Agent 组织同意）。三张表成员可以不一致。未登录可看。Internal、draft 绑定、未列出的 suite **不**出现在 plaza，仍只在 Dataset 详情的 Leaderboard tab。
+- 侧栏 Catalog 首位是 **Leaderboard**（`/leaderboard`），`/` 也落到这里。是已有三面的**索引**，不是第四套排名：Dataset 视图按 Dataset 分组（组头是名称与描述），只列公开上榜的整份运行；Agent / Model 视图走已有 Performance 门（plaza 采集或 Agent 组织同意）。三张表成员可以不一致。未登录可看。Internal、draft 绑定、未列出的 suite **不**出现在 plaza，仍只在 Dataset 详情的 Leaderboard tab。宽屏时同一条右侧跳转对应当前视图的组：一份 Dataset、一个 Agent 组织（内置组没有组织标），或一个 lab。Table / Pareto / Waffle 仍留在该 Dataset 组上。窄屏，或只剩一组时，不显示这条跳转。
 - plaza Dataset 视图可切 Table / Pareto / Waffle（与 Dataset 详情 Leaderboard 同一套控件，在 Dataset tab 行右侧；图按 Dataset 组分）。指标写在每一行上，不可跨 Dataset 比；没有名次列。Agent / Model 只要表。
 - **Public** 只列完备、绑定 release、且经 dataset 所属组织 owner 批准上榜的整份运行；**Internal** 用同一张表列当前可见的缺题 / draft 绑定结果
 - 同一 tab 可切 **Table** / **Pareto** / **Waffle**。Pareto 横轴是整份运行里 **全部 job** 的花费、token 或时间加总（左便宜、右更贵）；没有 agent 上报 USD 时用目录价估算（不是账单）。更高 pass rate、又不更贵的点连成前沿
@@ -64,7 +64,7 @@ pnpm dev   # http://127.0.0.1:5174
 
 - 插件 / Agent 市场用卡片展示：说明、标签、下载量与收藏；详情页有声明接入点时间线、文件预览与 CLI 安装命令
 - Agent 详情含绑定、文件与 Performance
-- 侧栏 **Models** 是按 lab 分组的模型目录（Context / 价格等规格，可搜索，行名进百科页）；价格是目录价，不是账单
+- 侧栏 **Models** 是按 lab 分组的模型目录（Context / 价格等规格，可搜索，行名进百科页）；价格是目录价，不是账单。没有 logo 的实验室及其模型不进这个目录。宽屏时右侧跳转按 lab；窄屏，或只剩一个 lab 时，不显示。
 - 官方组织、其成员与插件带验证标识
 
 ## 组织与协作
