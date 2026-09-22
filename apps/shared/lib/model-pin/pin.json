@@ -1,7 +1,7 @@
 {
   "format": "ageval.model-pin/1",
   "source": "models.dev",
-  "pinned_at": "2026-09-17",
+  "pinned_at": "2026-09-22",
   "labs": {
     "alibaba": {
       "name": "Alibaba",
@@ -10,6 +10,11 @@
     "anthropic": {
       "name": "Anthropic",
       "logo": ""
+    },
+    "arcee-ai": {
+      "name": "Arcee",
+      "logo": "arcee-ai.svg",
+      "tone": "color"
     },
     "bytedance-seed": {
       "name": "ByteDance Seed",
@@ -76,6 +81,11 @@
       "logo": "perplexity.svg",
       "tone": "color"
     },
+    "poolside": {
+      "name": "Poolside",
+      "logo": "poolside.svg",
+      "tone": "color"
+    },
     "stepfun": {
       "name": "StepFun",
       "logo": "stepfun.svg",
@@ -86,9 +96,10 @@
       "logo": "tencent.svg",
       "tone": "color"
     },
-    "thinkingmachines": {
-      "name": "Thinking Machines",
-      "logo": ""
+    "upstage": {
+      "name": "Upstage",
+      "logo": "upstage.svg",
+      "tone": "color"
     },
     "vispark": {
       "name": "vispark",
@@ -1933,6 +1944,55 @@
         }
       ]
     },
+    "alibaba/qwen3.8-omni-flash": {
+      "name": "Qwen3.8 Omni Flash",
+      "description": "Qwen omni model for text, vision, audio, and multimodal agent tasks",
+      "family": "qwen",
+      "lab": "alibaba",
+      "release_date": "2026-09-17",
+      "last_updated": "2026-09-17",
+      "knowledge": "",
+      "context": 1000000,
+      "output": 131072,
+      "input_limit": null,
+      "open_weights": false,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": true,
+      "temperature": false,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": [
+        {
+          "type": "budget_tokens"
+        },
+        {
+          "type": "effort",
+          "values": [
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        {
+          "type": "toggle"
+        }
+      ]
+    },
     "alibaba/qwq-32b": {
       "name": "QwQ 32B",
       "description": "Open reasoning model from the Qwen team for math, coding, and step-by-step problem solving",
@@ -2194,6 +2254,9 @@
             "xhigh",
             "max"
           ]
+        },
+        {
+          "type": "toggle"
         }
       ]
     },
@@ -3020,6 +3083,121 @@
           "type": "toggle"
         }
       ]
+    },
+    "arcee-ai/trinity-large-preview": {
+      "name": "Trinity Large Preview",
+      "description": "Lightly post-trained 398B MoE chat model for creative work, long-context prompts, and tool-using agents",
+      "family": "trinity",
+      "lab": "arcee-ai",
+      "release_date": "2026-01-27",
+      "last_updated": "2026-05-28",
+      "knowledge": "",
+      "context": 524288,
+      "output": 262144,
+      "input_limit": null,
+      "open_weights": true,
+      "reasoning": false,
+      "tool_call": true,
+      "attachment": false,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": "https://huggingface.co/arcee-ai/Trinity-Large-Preview",
+      "reasoning_options": []
+    },
+    "arcee-ai/trinity-large-thinking": {
+      "name": "Trinity Large Thinking",
+      "description": "Reasoning-optimized 398B MoE agent model with extended thinking for long-horizon and multi-turn tool use",
+      "family": "trinity",
+      "lab": "arcee-ai",
+      "release_date": "2026-04-01",
+      "last_updated": "2026-05-28",
+      "knowledge": "",
+      "context": 524288,
+      "output": 262144,
+      "input_limit": null,
+      "open_weights": true,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": false,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": "https://huggingface.co/arcee-ai/Trinity-Large-Thinking",
+      "reasoning_options": [
+        {
+          "type": "effort",
+          "values": [
+            "high"
+          ]
+        }
+      ]
+    },
+    "arcee-ai/trinity-mini": {
+      "name": "Trinity Mini",
+      "description": "Reasoning-tuned 26B MoE model with 3B active parameters for agents, tools, and multi-step workloads",
+      "family": "trinity",
+      "lab": "arcee-ai",
+      "release_date": "2025-12-01",
+      "last_updated": "2026-05-28",
+      "knowledge": "",
+      "context": 131072,
+      "output": 131072,
+      "input_limit": null,
+      "open_weights": true,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": false,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": "https://huggingface.co/arcee-ai/Trinity-Mini",
+      "reasoning_options": []
+    },
+    "arcee-ai/trinity-nano-preview": {
+      "name": "Trinity Nano Preview",
+      "description": "Experimental chat-tuned 6B MoE model with 1B active parameters for low-resource chat and instruction following",
+      "family": "trinity",
+      "lab": "arcee-ai",
+      "release_date": "2025-12-01",
+      "last_updated": "2026-05-28",
+      "knowledge": "",
+      "context": 131072,
+      "output": 131072,
+      "input_limit": null,
+      "open_weights": true,
+      "reasoning": false,
+      "tool_call": true,
+      "attachment": false,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": "https://huggingface.co/arcee-ai/Trinity-Nano-Preview",
+      "reasoning_options": []
     },
     "bytedance-seed/seed-1-6": {
       "name": "Seed 1.6",
@@ -4277,12 +4455,12 @@
       "family": "deepseek-flash",
       "lab": "deepseek",
       "release_date": "2026-08-21",
-      "last_updated": "2026-08-21",
+      "last_updated": "2026-09-01",
       "knowledge": "",
       "context": 1000000,
       "output": 384000,
       "input_limit": null,
-      "open_weights": false,
+      "open_weights": true,
       "reasoning": true,
       "tool_call": true,
       "attachment": true,
@@ -4296,7 +4474,7 @@
           "text"
         ]
       },
-      "weights": null,
+      "weights": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
       "reasoning_options": [
         {
           "type": "effort",
@@ -4476,7 +4654,7 @@
           "text"
         ]
       },
-      "weights": null,
+      "weights": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
       "reasoning_options": [
         {
           "type": "budget_tokens"
@@ -6034,6 +6212,35 @@
       "weights": "https://huggingface.co/google/gemma-3-4b-it",
       "reasoning_options": []
     },
+    "google/gemma-4-12b-it": {
+      "name": "Gemma 4 12B IT",
+      "description": "Compact Gemma 4 instruction model for open, self-hosted chat and reasoning",
+      "family": "gemma",
+      "lab": "google",
+      "release_date": "2026-06-09",
+      "last_updated": "2026-06-09",
+      "knowledge": "",
+      "context": 262144,
+      "output": 32768,
+      "input_limit": null,
+      "open_weights": true,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": true,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": "https://huggingface.co/google/gemma-4-12B-it",
+      "reasoning_options": [],
+      "structured_output": true
+    },
     "google/gemma-4-26b-a4b-it": {
       "name": "Gemma 4 26B A4B IT",
       "description": "Open Gemma instruction model for efficient chat and self-hosted deployments",
@@ -7194,6 +7401,9 @@
       },
       "weights": "https://huggingface.co/MiniMaxAI/MiniMax-M3",
       "reasoning_options": [
+        {
+          "type": "budget_tokens"
+        },
         {
           "type": "effort",
           "values": [
@@ -8904,7 +9114,6 @@
           "type": "effort",
           "values": [
             "none",
-            "minimal",
             "low",
             "medium",
             "high",
@@ -10865,6 +11074,62 @@
       "weights": null,
       "reasoning_options": []
     },
+    "openai/gpt-image-2.5-flare": {
+      "name": "GPT Image 2.5 Flare",
+      "description": "Image model for prompt-driven generation, editing, and visual design workflows",
+      "family": "gpt-image",
+      "lab": "openai",
+      "release_date": "2026-09-08",
+      "last_updated": "2026-09-08",
+      "knowledge": "",
+      "context": 0,
+      "output": 0,
+      "input_limit": null,
+      "open_weights": false,
+      "reasoning": false,
+      "tool_call": false,
+      "attachment": true,
+      "temperature": false,
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "image"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": []
+    },
+    "openai/gpt-image-2.5-sunburst": {
+      "name": "GPT Image 2.5 Sunburst",
+      "description": "Image model for prompt-driven generation, editing, and visual design workflows",
+      "family": "gpt-image",
+      "lab": "openai",
+      "release_date": "2026-09-08",
+      "last_updated": "2026-09-08",
+      "knowledge": "",
+      "context": 0,
+      "output": 0,
+      "input_limit": null,
+      "open_weights": false,
+      "reasoning": false,
+      "tool_call": false,
+      "attachment": true,
+      "temperature": false,
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "image"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": []
+    },
     "openai/gpt-oss-120b": {
       "name": "GPT OSS 120B",
       "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
@@ -11594,6 +11859,173 @@
         }
       ]
     },
+    "poolside/laguna-m.1": {
+      "name": "Laguna M.1",
+      "description": "Poolside's open-weight model for agentic coding and long-horizon work",
+      "family": "laguna",
+      "lab": "poolside",
+      "release_date": "2026-04-28",
+      "last_updated": "2026-06-13",
+      "knowledge": "",
+      "context": 262144,
+      "output": 32768,
+      "input_limit": null,
+      "open_weights": true,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": false,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": [
+        {
+          "type": "budget_tokens"
+        },
+        {
+          "type": "effort",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        {
+          "type": "toggle"
+        }
+      ],
+      "structured_output": false
+    },
+    "poolside/laguna-s-2.1": {
+      "name": "Laguna S 2.1",
+      "description": "Agentic coding model from Poolside in the XS size class for local deployment",
+      "family": "laguna",
+      "lab": "poolside",
+      "release_date": "2026-07-21",
+      "last_updated": "2026-07-21",
+      "knowledge": "",
+      "context": 1048576,
+      "output": 32768,
+      "input_limit": null,
+      "open_weights": true,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": false,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": [
+        {
+          "type": "effort",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        {
+          "type": "toggle"
+        }
+      ],
+      "structured_output": false
+    },
+    "poolside/laguna-xs-2.1": {
+      "name": "Laguna XS 2.1",
+      "description": "Agentic coding model from Poolside in the XS size class for local deployment",
+      "family": "laguna",
+      "lab": "poolside",
+      "release_date": "2026-07-02",
+      "last_updated": "2026-07-02",
+      "knowledge": "",
+      "context": 262144,
+      "output": 32768,
+      "input_limit": null,
+      "open_weights": true,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": false,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": [
+        {
+          "type": "effort",
+          "values": [
+            "none",
+            "high"
+          ]
+        },
+        {
+          "type": "toggle"
+        }
+      ],
+      "structured_output": false
+    },
+    "poolside/laguna-xs.2": {
+      "name": "Laguna XS.2",
+      "description": "Agentic coding model from Poolside in the XS size class for local deployment",
+      "family": "laguna",
+      "lab": "poolside",
+      "release_date": "2026-04-28",
+      "last_updated": "2026-06-13",
+      "knowledge": "",
+      "context": 262144,
+      "output": 32768,
+      "input_limit": null,
+      "open_weights": true,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": false,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": [
+        {
+          "type": "budget_tokens"
+        },
+        {
+          "type": "effort",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      ],
+      "structured_output": false
+    },
     "stepfun/step-3.5-flash": {
       "name": "Step 3.5 Flash",
       "description": "StepFun flash lane for quick multimodal reasoning and coding assistance",
@@ -11711,6 +12143,45 @@
         }
       ]
     },
+    "stepfun/step-5-preview": {
+      "name": "Step 5 Preview",
+      "description": "StepFun's next-generation flagship base model for coding and professional knowledge work, with native text, image, and video input and a 1M-token context window",
+      "family": "",
+      "lab": "stepfun",
+      "release_date": "2026-09-16",
+      "last_updated": "2026-09-20",
+      "knowledge": "",
+      "context": 1000000,
+      "output": 1000000,
+      "input_limit": 1000000,
+      "open_weights": false,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": true,
+      "temperature": false,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": [
+        {
+          "type": "effort",
+          "values": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      ],
+      "structured_output": true
+    },
     "tencent/hy3": {
       "name": "Hy3",
       "description": "Tencent Hy reasoning model for coding, instruction following, and agent tasks",
@@ -11824,51 +12295,6 @@
       "weights": null,
       "reasoning_options": [
         {
-          "type": "effort",
-          "values": [
-            "none",
-            "minimal",
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ]
-        },
-        {
-          "type": "toggle"
-        }
-      ]
-    },
-    "thinkingmachines/inkling": {
-      "name": "Inkling",
-      "description": "Multimodal MoE reasoning model (975B total, 41B active) for text, image, and audio",
-      "family": "ling",
-      "lab": "thinkingmachines",
-      "release_date": "2026-07-15",
-      "last_updated": "2026-07-15",
-      "knowledge": "",
-      "context": 1048576,
-      "output": 1048576,
-      "input_limit": null,
-      "open_weights": true,
-      "reasoning": true,
-      "tool_call": true,
-      "attachment": true,
-      "temperature": true,
-      "modalities": {
-        "input": [
-          "text",
-          "image",
-          "audio"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "weights": "https://huggingface.co/thinkingmachines/Inkling",
-      "reasoning_options": [
-        {
           "type": "budget_tokens"
         },
         {
@@ -11888,33 +12314,102 @@
         }
       ]
     },
-    "thinkingmachines/inkling-small": {
-      "name": "Inkling Small",
-      "description": "Multimodal MoE reasoning model (276B total, 12B active) for text, image, and audio",
-      "family": "ling",
-      "lab": "thinkingmachines",
-      "release_date": "2026-07-30",
-      "last_updated": "2026-07-30",
-      "knowledge": "",
-      "context": 1048576,
-      "output": 1048576,
+    "upstage/solar-pro2": {
+      "name": "Solar Pro 2",
+      "description": "Flagship model for demanding analysis, coding, and production agent workflows",
+      "family": "solar-pro",
+      "lab": "upstage",
+      "release_date": "2025-05-20",
+      "last_updated": "2025-05-20",
+      "knowledge": "2025-03",
+      "context": 65536,
+      "output": 8192,
       "input_limit": null,
-      "open_weights": true,
+      "open_weights": false,
       "reasoning": true,
       "tool_call": true,
-      "attachment": true,
+      "attachment": false,
       "temperature": true,
       "modalities": {
         "input": [
-          "text",
-          "image",
-          "audio"
+          "text"
         ],
         "output": [
           "text"
         ]
       },
-      "weights": "https://huggingface.co/thinkingmachines/Inkling-Small",
+      "weights": null,
+      "reasoning_options": [
+        {
+          "type": "effort",
+          "values": [
+            "minimal",
+            "high"
+          ]
+        }
+      ]
+    },
+    "upstage/solar-pro3": {
+      "name": "Solar Pro 3",
+      "description": "Flagship model for demanding analysis, coding, and production agent workflows",
+      "family": "solar-pro",
+      "lab": "upstage",
+      "release_date": "2026-01",
+      "last_updated": "2026-01",
+      "knowledge": "2025-03",
+      "context": 131072,
+      "output": 8192,
+      "input_limit": null,
+      "open_weights": false,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": false,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": [
+        {
+          "type": "effort",
+          "values": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      ]
+    },
+    "upstage/solar-pro4": {
+      "name": "Solar Pro 4",
+      "description": "Upstage's flagship model, specialized for agentic use",
+      "family": "solar-pro",
+      "lab": "upstage",
+      "release_date": "2026-08-06",
+      "last_updated": "2026-08-06",
+      "knowledge": "2026-02",
+      "context": 524288,
+      "output": 131072,
+      "input_limit": null,
+      "open_weights": false,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": false,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": null,
       "reasoning_options": [
         {
           "type": "effort",
@@ -11928,7 +12423,8 @@
             "max"
           ]
         }
-      ]
+      ],
+      "structured_output": true
     },
     "vispark/vision-large": {
       "name": "Vision Large",
@@ -12052,11 +12548,7 @@
         ]
       },
       "weights": null,
-      "reasoning_options": [
-        {
-          "type": "toggle"
-        }
-      ],
+      "reasoning_options": [],
       "structured_output": true
     },
     "xai/grok-4.1-fast-reasoning": {
@@ -12282,6 +12774,47 @@
       ],
       "structured_output": true
     },
+    "xai/grok-4.7": {
+      "name": "Grok 4.7",
+      "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+      "family": "grok",
+      "lab": "xai",
+      "release_date": "2026-09-21",
+      "last_updated": "2026-09-21",
+      "knowledge": "2026-05",
+      "context": 500000,
+      "output": 500000,
+      "input_limit": null,
+      "open_weights": false,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": true,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": [
+        {
+          "type": "effort",
+          "values": [
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ]
+        }
+      ],
+      "structured_output": true
+    },
     "xai/grok-build-0.1": {
       "name": "Grok Build 0.1",
       "description": "Fast Grok coding model tuned for agentic engineering and iterative edits",
@@ -12349,6 +12882,34 @@
       "weights": null,
       "reasoning_options": []
     },
+    "xai/grok-imagine-image-quality": {
+      "name": "Grok Imagine Image Quality",
+      "description": "Higher-fidelity Grok Imagine image model for prompt-driven generation, editing, and visual design workflows",
+      "family": "grok",
+      "lab": "xai",
+      "release_date": "2026-04-03",
+      "last_updated": "2026-04-03",
+      "knowledge": "",
+      "context": 16000,
+      "output": 0,
+      "input_limit": null,
+      "open_weights": false,
+      "reasoning": false,
+      "tool_call": false,
+      "attachment": true,
+      "temperature": false,
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "image"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": []
+    },
     "xai/grok-imagine-video-1.5": {
       "name": "Grok Imagine Video 1.5",
       "description": "Video model for image-to-video generation, editing, and extension workflows",
@@ -12373,6 +12934,60 @@
         ],
         "output": [
           "video"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": []
+    },
+    "xai/grok-voice-stt-1.0": {
+      "name": "Grok Voice STT 1.0",
+      "description": "Grok Voice STT 1.0 is xAI's speech-to-text model. It supports transcription with word-level timestamps, optional speaker diarization, and multichannel audio.",
+      "family": "",
+      "lab": "xai",
+      "release_date": "2026-08-04",
+      "last_updated": "2026-08-04",
+      "knowledge": "",
+      "context": 15000,
+      "output": 15000,
+      "input_limit": null,
+      "open_weights": false,
+      "reasoning": false,
+      "tool_call": false,
+      "attachment": true,
+      "temperature": false,
+      "modalities": {
+        "input": [
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": []
+    },
+    "xai/grok-voice-tts-1.0": {
+      "name": "Grok Voice TTS 1.0",
+      "description": "Convert text into spoken audio with a single API call. The API supports a rich set of expressive voices, inline speech tags for fine-grained delivery control, and output formats from high-fidelity MP3 to telephony-optimized μ-law.",
+      "family": "",
+      "lab": "xai",
+      "release_date": "2026-07-31",
+      "last_updated": "2026-07-31",
+      "knowledge": "",
+      "context": 15000,
+      "output": 15000,
+      "input_limit": null,
+      "open_weights": false,
+      "reasoning": false,
+      "tool_call": false,
+      "attachment": false,
+      "temperature": false,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "audio"
         ]
       },
       "weights": null,
@@ -12596,6 +13211,146 @@
       },
       "weights": "https://huggingface.co/XiaomiMiMo/MiMo-V2.5-Pro-FP4-DFlash",
       "reasoning_options": [
+        {
+          "type": "toggle"
+        }
+      ]
+    },
+    "xiaomi/mimo-v2.6-flash": {
+      "name": "MiMo-V2.6-Flash",
+      "description": "MiMo Flash model for multimodal coding agents and long-context automation",
+      "family": "mimo",
+      "lab": "xiaomi",
+      "release_date": "2026-09-22",
+      "last_updated": "2026-09-22",
+      "knowledge": "2026-09-22",
+      "context": 1048576,
+      "output": 131072,
+      "input_limit": null,
+      "open_weights": false,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": true,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio",
+          "video",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": [
+        {
+          "type": "effort",
+          "values": [
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        {
+          "type": "toggle"
+        }
+      ]
+    },
+    "xiaomi/mimo-v2.6-pro": {
+      "name": "MiMo-V2.6-Pro",
+      "description": "Stronger MiMo Pro tier for multimodal reasoning and coding-agent execution",
+      "family": "mimo",
+      "lab": "xiaomi",
+      "release_date": "2026-09-22",
+      "last_updated": "2026-09-22",
+      "knowledge": "2026-09-22",
+      "context": 1048576,
+      "output": 131072,
+      "input_limit": null,
+      "open_weights": false,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": true,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio",
+          "video",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": [
+        {
+          "type": "effort",
+          "values": [
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        {
+          "type": "toggle"
+        }
+      ]
+    },
+    "xiaomi/mimo-v2.6-pro-ultraspeed": {
+      "name": "MiMo-V2.6-Pro-UltraSpeed",
+      "description": "MiMo pro model for strong multimodal reasoning and agent execution",
+      "family": "mimo",
+      "lab": "xiaomi",
+      "release_date": "2026-09-21",
+      "last_updated": "2026-09-21",
+      "knowledge": "",
+      "context": 1048576,
+      "output": 131072,
+      "input_limit": null,
+      "open_weights": false,
+      "reasoning": true,
+      "tool_call": true,
+      "attachment": true,
+      "temperature": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "weights": null,
+      "reasoning_options": [
+        {
+          "type": "effort",
+          "values": [
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
         {
           "type": "toggle"
         }
@@ -12855,7 +13610,11 @@
         ]
       },
       "weights": "https://huggingface.co/zai-org/GLM-4.6V-Flash",
-      "reasoning_options": []
+      "reasoning_options": [
+        {
+          "type": "toggle"
+        }
+      ]
     },
     "zhipuai/glm-4.7": {
       "name": "GLM-4.7",
@@ -12887,12 +13646,7 @@
           "type": "effort",
           "values": [
             "none",
-            "minimal",
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
+            "high"
           ]
         },
         {
@@ -12930,8 +13684,6 @@
           "type": "effort",
           "values": [
             "none",
-            "low",
-            "medium",
             "high"
           ]
         },
@@ -13244,6 +13996,9 @@
             "xhigh",
             "max"
           ]
+        },
+        {
+          "type": "toggle"
         }
       ],
       "structured_output": true
@@ -13293,6 +14048,34 @@
           "type": "toggle"
         }
       ]
+    },
+    "zhipuai/glm-image": {
+      "name": "GLM-Image",
+      "description": "GLM-Image is an image generation model adopts a hybrid autoregressive + diffusion decoder architecture. In general image generation quality, GLM‑Image aligns with mainstream latent diffusion approaches, but it shows significant advantages in text-rendering and knowledge‑intensive generation scenarios. It performs especially well in tasks requiring precise semantic understanding and complex information expression, while maintaining strong capabilities in high‑fidelity and fine‑grained detail generation. In addition to text‑to‑image generation, GLM‑Image also supports a rich set of image‑to‑image tasks including image editing, style transfer, identity‑preserving generation, and multi‑subject consistency.",
+      "family": "",
+      "lab": "zhipuai",
+      "release_date": "2026-01-19",
+      "last_updated": "2026-01-19",
+      "knowledge": "",
+      "context": 10240,
+      "output": 0,
+      "input_limit": null,
+      "open_weights": true,
+      "reasoning": false,
+      "tool_call": false,
+      "attachment": true,
+      "temperature": false,
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "image"
+        ]
+      },
+      "weights": "https://huggingface.co/zai-org/GLM-Image",
+      "reasoning_options": []
     }
   },
   "prefixes": [
@@ -13305,6 +14088,7 @@
     "alibaba-token-plan-cn",
     "cloudflare-ai-gateway",
     "cloudflare-workers-ai",
+    "kimi-code-plan-global",
     "xiaomi-token-plan-ams",
     "xiaomi-token-plan-sgp",
     "llmgateway-providers",
@@ -13318,6 +14102,7 @@
     "zhipuai-coding-plan",
     "alibaba-token-plan",
     "tencent-token-plan",
+    "kimi-code-plan-cn",
     "stepfun-step-plan",
     "perplexity-agent",
     "scnet-token-plan",
@@ -13325,7 +14110,6 @@
     "tencent-tokenhub",
     "thinkingmachines",
     "abliteration-ai",
-    "kimi-for-coding",
     "klokintegration",
     "model-oracle-ai",
     "standardcompute",
@@ -13377,6 +14161,7 @@
     "togetherai",
     "volcengine",
     "ai-router",
+    "ainetcafe",
     "anthropic",
     "claudinio",
     "dashscope",
@@ -13497,6 +14282,7 @@
     "modal",
     "morph",
     "opper",
+    "tempr",
     "vultr",
     "wandb",
     "ai21",
@@ -13620,9 +14406,6 @@
     "TEE/deepseek-v3.2": [
       "deepseek/deepseek-v3.2"
     ],
-    "TEE/deepseek-v4-flash": [
-      "deepseek/deepseek-v4-flash"
-    ],
     "TEE/deepseek-v4.1-flash": [
       "deepseek/deepseek-v4.1-flash"
     ],
@@ -13643,9 +14426,6 @@
     ],
     "TEE/gpt-oss-120b": [
       "openai/gpt-oss-120b"
-    ],
-    "TEE/gpt-oss-20b": [
-      "openai/gpt-oss-20b"
     ],
     "TEE/kimi-k2.6": [
       "moonshotai/kimi-k2.6"
@@ -13691,9 +14471,6 @@
     ],
     "accounts/fireworks/models/gpt-oss-120b": [
       "openai/gpt-oss-120b"
-    ],
-    "accounts/fireworks/models/inkling": [
-      "thinkingmachines/inkling"
     ],
     "accounts/fireworks/models/kimi-k3": [
       "moonshotai/kimi-k3"
@@ -13866,6 +14643,9 @@
     "alibaba/qwen3.8-max-preview": [
       "alibaba/qwen3.8-max-preview"
     ],
+    "alibaba/qwen3.8-omni-flash": [
+      "alibaba/qwen3.8-omni-flash"
+    ],
     "alibaba/qwq-32b": [
       "alibaba/qwq-32b"
     ],
@@ -13949,6 +14729,21 @@
     ],
     "anthropic/claude-sonnet-5:thinking": [
       "anthropic/claude-sonnet-5"
+    ],
+    "arcee-ai/trinity-large-preview": [
+      "arcee-ai/trinity-large-preview"
+    ],
+    "arcee-ai/trinity-large-thinking": [
+      "arcee-ai/trinity-large-thinking"
+    ],
+    "arcee-ai/trinity-mini": [
+      "arcee-ai/trinity-mini"
+    ],
+    "arcee-ai/trinity-nano-preview": [
+      "arcee-ai/trinity-nano-preview"
+    ],
+    "arcee_ai/AFM/models/trinity-mini": [
+      "arcee-ai/trinity-mini"
     ],
     "aws-bedrock/claude-fable-5": [
       "anthropic/claude-fable-5"
@@ -14133,6 +14928,9 @@
     "baidu/deepseek-v4-pro": [
       "deepseek/deepseek-v4-pro"
     ],
+    "baidu/deepseek-v4.1-flash": [
+      "deepseek/deepseek-v4.1-flash"
+    ],
     "baidu/glm-5": [
       "zhipuai/glm-5"
     ],
@@ -14213,6 +15011,9 @@
     ],
     "bailian/qwen3.8-27b": [
       "alibaba/qwen3.8-27b"
+    ],
+    "bailian/qwen3.8-flash": [
+      "alibaba/qwen3.8-flash"
     ],
     "bailian/qwen3.8-max": [
       "alibaba/qwen3.8-max"
@@ -14808,9 +15609,6 @@
     "fireworks_ai/accounts/fireworks/models/deepseek-v4-pro-0813": [
       "deepseek/deepseek-v4-pro-0813"
     ],
-    "fireworks_ai/accounts/fireworks/models/inkling": [
-      "thinkingmachines/inkling"
-    ],
     "fireworks_ai/accounts/fireworks/models/muse-glimmer-30b": [
       "meta/muse-glimmer-30b"
     ],
@@ -14967,6 +15765,9 @@
     "gemma-3-4b-it": [
       "google/gemma-3-4b-it"
     ],
+    "gemma-4-12b-it": [
+      "google/gemma-4-12b-it"
+    ],
     "gemma-4-26b-a4b-it": [
       "google/gemma-4-26b-a4b-it"
     ],
@@ -15030,8 +15831,14 @@
     "glm-5v-turbo": [
       "zhipuai/glm-5v-turbo"
     ],
+    "glm-image": [
+      "zhipuai/glm-image"
+    ],
     "gonka24/deepseek-v4-flash": [
       "deepseek/deepseek-v4-flash"
+    ],
+    "gonka24/glm-5.3-flash": [
+      "zhipuai/glm-5.3-flash"
     ],
     "google-ai-studio/gemini-2.5-flash": [
       "google/gemini-2.5-flash"
@@ -15219,6 +16026,9 @@
     "google/gemma-3-4b-it": [
       "google/gemma-3-4b-it"
     ],
+    "google/gemma-4-12b-it": [
+      "google/gemma-4-12b-it"
+    ],
     "google/gemma-4-26b-a4b-it": [
       "google/gemma-4-26b-a4b-it"
     ],
@@ -15390,6 +16200,12 @@
     "gpt-image-2": [
       "openai/gpt-image-2"
     ],
+    "gpt-image-2.5-flare": [
+      "openai/gpt-image-2.5-flare"
+    ],
+    "gpt-image-2.5-sunburst": [
+      "openai/gpt-image-2.5-sunburst"
+    ],
     "gpt-oss-120b": [
       "openai/gpt-oss-120b"
     ],
@@ -15435,14 +16251,26 @@
     "grok-4.6": [
       "xai/grok-4.6"
     ],
+    "grok-4.7": [
+      "xai/grok-4.7"
+    ],
     "grok-build-0.1": [
       "xai/grok-build-0.1"
     ],
     "grok-imagine-image-2.0": [
       "xai/grok-imagine-image-2.0"
     ],
+    "grok-imagine-image-quality": [
+      "xai/grok-imagine-image-quality"
+    ],
     "grok-imagine-video-1.5": [
       "xai/grok-imagine-video-1.5"
+    ],
+    "grok-voice-stt-1.0": [
+      "xai/grok-voice-stt-1.0"
+    ],
+    "grok-voice-tts-1.0": [
+      "xai/grok-voice-tts-1.0"
     ],
     "grok/grok-4.3": [
       "xai/grok-4.3"
@@ -15492,12 +16320,6 @@
     "image-01": [
       "minimax/image-01"
     ],
-    "inkling": [
-      "thinkingmachines/inkling"
-    ],
-    "inkling-small": [
-      "thinkingmachines/inkling-small"
-    ],
     "ionos/openai/gpt-oss-120b": [
       "openai/gpt-oss-120b"
     ],
@@ -15536,6 +16358,18 @@
     ],
     "kimi/kimi-k3": [
       "moonshotai/kimi-k3"
+    ],
+    "laguna-m.1": [
+      "poolside/laguna-m.1"
+    ],
+    "laguna-s-2.1": [
+      "poolside/laguna-s-2.1"
+    ],
+    "laguna-xs-2.1": [
+      "poolside/laguna-xs-2.1"
+    ],
+    "laguna-xs.2": [
+      "poolside/laguna-xs.2"
     ],
     "llama-3.1-70b-instruct": [
       "meta/llama-3.1-70b-instruct"
@@ -15686,6 +16520,15 @@
     ],
     "mimo-v2.5-pro-ultraspeed": [
       "xiaomi/mimo-v2.5-pro-ultraspeed"
+    ],
+    "mimo-v2.6-flash": [
+      "xiaomi/mimo-v2.6-flash"
+    ],
+    "mimo-v2.6-pro": [
+      "xiaomi/mimo-v2.6-pro"
+    ],
+    "mimo-v2.6-pro-ultraspeed": [
+      "xiaomi/mimo-v2.6-pro-ultraspeed"
     ],
     "mimo/mimo-v2.5": [
       "xiaomi/mimo-v2.5"
@@ -16371,6 +17214,12 @@
     "openai/gpt-image-2": [
       "openai/gpt-image-2"
     ],
+    "openai/gpt-image-2.5-flare": [
+      "openai/gpt-image-2.5-flare"
+    ],
+    "openai/gpt-image-2.5-sunburst": [
+      "openai/gpt-image-2.5-sunburst"
+    ],
     "openai/gpt-oss-120b": [
       "openai/gpt-oss-120b"
     ],
@@ -16463,6 +17312,27 @@
     ],
     "pixtral-large-latest": [
       "mistral/pixtral-large-latest"
+    ],
+    "poolside/laguna-m.1": [
+      "poolside/laguna-m.1"
+    ],
+    "poolside/laguna-s-2.1": [
+      "poolside/laguna-s-2.1"
+    ],
+    "poolside/laguna-s-2.1:free": [
+      "poolside/laguna-s-2.1"
+    ],
+    "poolside/laguna-s-2.1:thinking": [
+      "poolside/laguna-s-2.1"
+    ],
+    "poolside/laguna-xs-2.1": [
+      "poolside/laguna-xs-2.1"
+    ],
+    "poolside/laguna-xs-2.1:free": [
+      "poolside/laguna-xs-2.1"
+    ],
+    "poolside/laguna-xs.2": [
+      "poolside/laguna-xs.2"
     ],
     "public/deepseek-r1": [
       "deepseek/deepseek-r1"
@@ -16623,6 +17493,9 @@
     "qwen/qwen3.8-flash": [
       "alibaba/qwen3.8-flash"
     ],
+    "qwen/qwen3.8-flash-next": [
+      "alibaba/qwen3.8-flash-next"
+    ],
     "qwen/qwen3.8-max": [
       "alibaba/qwen3.8-max"
     ],
@@ -16631,6 +17504,9 @@
     ],
     "qwen/qwen3.8-max-preview": [
       "alibaba/qwen3.8-max-preview"
+    ],
+    "qwen/qwen3.8-omni-flash": [
+      "alibaba/qwen3.8-omni-flash"
     ],
     "qwen/qwq-plus": [
       "alibaba/qwq-plus"
@@ -16755,6 +17631,9 @@
     "qwen3.8-max-preview": [
       "alibaba/qwen3.8-max-preview"
     ],
+    "qwen3.8-omni-flash": [
+      "alibaba/qwen3.8-omni-flash"
+    ],
     "qwq-32b": [
       "alibaba/qwq-32b"
     ],
@@ -16808,6 +17687,9 @@
     ],
     "scaleway/llama-3.3-70b-instruct": [
       "meta/llama-3.3-70b-instruct"
+    ],
+    "scx-ai-gp/deepseek-v4.1-flash": [
+      "deepseek/deepseek-v4.1-flash"
     ],
     "scx-ai-gp/glm-5.2": [
       "zhipuai/glm-5.2"
@@ -16881,6 +17763,15 @@
     "siliconflow/deepseek-v3.2": [
       "deepseek/deepseek-v3.2"
     ],
+    "solar-pro2": [
+      "upstage/solar-pro2"
+    ],
+    "solar-pro3": [
+      "upstage/solar-pro3"
+    ],
+    "solar-pro4": [
+      "upstage/solar-pro4"
+    ],
     "sonar": [
       "perplexity/sonar"
     ],
@@ -16905,6 +17796,9 @@
     "spacexai/grok-4.6": [
       "xai/grok-4.6"
     ],
+    "spacexai/grok-4.7": [
+      "xai/grok-4.7"
+    ],
     "spacexai/grok-build-0.1": [
       "xai/grok-build-0.1"
     ],
@@ -16925,6 +17819,9 @@
     ],
     "step-3.7-flash": [
       "stepfun/step-3.7-flash"
+    ],
+    "step-5-preview": [
+      "stepfun/step-5-preview"
     ],
     "stepfun-ai/step-3.5-flash": [
       "stepfun/step-3.5-flash"
@@ -16949,6 +17846,9 @@
     ],
     "stepfun/step-3.7-flash:thinking": [
       "stepfun/step-3.7-flash"
+    ],
+    "stepfun/step-5-preview": [
+      "stepfun/step-5-preview"
     ],
     "subconscious/glm-5.2": [
       "zhipuai/glm-5.2"
@@ -17010,21 +17910,6 @@
     "tensorx/moonshotai/kimi-k2.5": [
       "moonshotai/kimi-k2.5"
     ],
-    "thinkingmachines/inkling": [
-      "thinkingmachines/inkling"
-    ],
-    "thinkingmachines/inkling-small": [
-      "thinkingmachines/inkling-small"
-    ],
-    "thinkingmachines/inkling-small:free": [
-      "thinkingmachines/inkling-small"
-    ],
-    "thinkingmachines/inkling:free": [
-      "thinkingmachines/inkling"
-    ],
-    "thinkingmachines/inkling:thinking": [
-      "thinkingmachines/inkling"
-    ],
     "together-ai/deepseek-v4-flash": [
       "deepseek/deepseek-v4-flash"
     ],
@@ -17046,8 +17931,17 @@
     "together_ai/openai/gpt-oss-120b": [
       "openai/gpt-oss-120b"
     ],
-    "together_ai/openai/gpt-oss-20b": [
-      "openai/gpt-oss-20b"
+    "trinity-large-preview": [
+      "arcee-ai/trinity-large-preview"
+    ],
+    "trinity-large-thinking": [
+      "arcee-ai/trinity-large-thinking"
+    ],
+    "trinity-mini": [
+      "arcee-ai/trinity-mini"
+    ],
+    "trinity-nano-preview": [
+      "arcee-ai/trinity-nano-preview"
     ],
     "unsloth/gemma-3-12b-it": [
       "google/gemma-3-12b-it"
@@ -17057,6 +17951,18 @@
     ],
     "unsloth/gemma-3-4b-it": [
       "google/gemma-3-4b-it"
+    ],
+    "upstage/solar-pro2": [
+      "upstage/solar-pro2"
+    ],
+    "upstage/solar-pro3": [
+      "upstage/solar-pro3"
+    ],
+    "upstage/solar-pro4": [
+      "upstage/solar-pro4"
+    ],
+    "upstage/solar-pro4:thinking": [
+      "upstage/solar-pro4"
     ],
     "veo-3.1-fast-generate-preview": [
       "google/veo-3.1-fast-generate-preview"
@@ -17151,15 +18057,6 @@
     "vertex/gemini-flash-latest": [
       "google/gemini-flash-latest"
     ],
-    "vertexai/gemini-3.7-flash": [
-      "google/gemini-3.7-flash"
-    ],
-    "vichar-ai/glm-5.3": [
-      "zhipuai/glm-5.3"
-    ],
-    "vichar-ai/glm-5.3-flash": [
-      "zhipuai/glm-5.3-flash"
-    ],
     "vision-large": [
       "vispark/vision-large"
     ],
@@ -17208,8 +18105,20 @@
     "x-ai/grok-4.6": [
       "xai/grok-4.6"
     ],
+    "x-ai/grok-4.7": [
+      "xai/grok-4.7"
+    ],
     "x-ai/grok-build-0.1": [
       "xai/grok-build-0.1"
+    ],
+    "x-ai/grok-imagine-image-2.0": [
+      "xai/grok-imagine-image-2.0"
+    ],
+    "x-ai/grok-voice-stt-1.0": [
+      "xai/grok-voice-stt-1.0"
+    ],
+    "x-ai/grok-voice-tts-1.0": [
+      "xai/grok-voice-tts-1.0"
     ],
     "xai/grok-4.1-fast": [
       "xai/grok-4.1-fast"
@@ -17232,14 +18141,26 @@
     "xai/grok-4.6": [
       "xai/grok-4.6"
     ],
+    "xai/grok-4.7": [
+      "xai/grok-4.7"
+    ],
     "xai/grok-build-0.1": [
       "xai/grok-build-0.1"
     ],
     "xai/grok-imagine-image-2.0": [
       "xai/grok-imagine-image-2.0"
     ],
+    "xai/grok-imagine-image-quality": [
+      "xai/grok-imagine-image-quality"
+    ],
     "xai/grok-imagine-video-1.5": [
       "xai/grok-imagine-video-1.5"
+    ],
+    "xai/grok-voice-stt-1.0": [
+      "xai/grok-voice-stt-1.0"
+    ],
+    "xai/grok-voice-tts-1.0": [
+      "xai/grok-voice-tts-1.0"
     ],
     "xiaomi/mimo-v2-flash": [
       "xiaomi/mimo-v2-flash"
@@ -17264,6 +18185,15 @@
     ],
     "xiaomi/mimo-v2.5:thinking": [
       "xiaomi/mimo-v2.5"
+    ],
+    "xiaomi/mimo-v2.6-flash": [
+      "xiaomi/mimo-v2.6-flash"
+    ],
+    "xiaomi/mimo-v2.6-pro": [
+      "xiaomi/mimo-v2.6-pro"
+    ],
+    "xiaomi/mimo-v2.6-pro-ultraspeed": [
+      "xiaomi/mimo-v2.6-pro-ultraspeed"
     ],
     "xiaomimimo/mimo-v2-flash": [
       "xiaomi/mimo-v2-flash"
@@ -17321,6 +18251,9 @@
     ],
     "z-ai/glm-5v-turbo": [
       "zhipuai/glm-5v-turbo"
+    ],
+    "z-ai/glm-image": [
+      "zhipuai/glm-image"
     ],
     "zai-org/glm-4.5": [
       "zhipuai/glm-4.5"
@@ -17450,6 +18383,9 @@
     ],
     "zhipuai/glm-5v-turbo": [
       "zhipuai/glm-5v-turbo"
+    ],
+    "zhipuai/glm-image": [
+      "zhipuai/glm-image"
     ],
     "~google/gemini-flash-latest": [
       "google/gemini-flash-latest"
@@ -17785,10 +18721,6 @@
         "input": 0.7,
         "output": 2.8
       },
-      "ovhcloud": {
-        "input": 0.09,
-        "output": 0.25
-      },
       "llmgateway": {
         "input": 0.36,
         "output": 0.87
@@ -17806,8 +18738,8 @@
         "output": 0.28
       },
       "cortecs": {
-        "input": 0.089,
-        "output": 0.312
+        "input": 0.179,
+        "output": 0.697
       }
     },
     "alibaba/qwen3-coder-30b-a3b-instruct": {
@@ -17846,10 +18778,6 @@
       "ovhcloud": {
         "input": 0.07,
         "output": 0.26
-      },
-      "tensorx": {
-        "input": 0.06,
-        "output": 0.25
       },
       "llmgateway": {
         "input": 0.07,
@@ -17997,6 +18925,10 @@
         "input": 0.108,
         "output": 0.675
       },
+      "opper": {
+        "input": 0.5811,
+        "output": 2.3244
+      },
       "kilo": {
         "input": 0.3,
         "output": 1.5
@@ -18110,8 +19042,8 @@
         "output": 1.434
       },
       "alibaba-cn": {
-        "input": 1.291,
-        "output": 7.749
+        "input": 0.359,
+        "output": 1.434
       },
       "novita-ai": {
         "input": 2.11,
@@ -18285,7 +19217,7 @@
     "alibaba/qwen3-vl-235b-a22b-instruct": {
       "nano-gpt": {
         "input": 0.3,
-        "output": 1.2
+        "output": 1.9
       },
       "llmgateway-providers": {
         "input": 0.2,
@@ -18306,10 +19238,6 @@
       "vercel": {
         "input": 0.4,
         "output": 1.6
-      },
-      "tensorx": {
-        "input": 0.21,
-        "output": 1.9
       },
       "llmgateway": {
         "input": 0.2,
@@ -18522,8 +19450,8 @@
         "output": 0.459
       },
       "openrouter": {
-        "input": 0.1625,
-        "output": 1.3
+        "input": 0.3125,
+        "output": 1.25
       },
       "ofox": {
         "input": 0.29,
@@ -18688,8 +19616,8 @@
         "output": 0.4
       },
       "alibaba-cn": {
-        "input": 0.172,
-        "output": 1.033
+        "input": 0.029,
+        "output": 0.287
       },
       "vercel": {
         "input": 0.1,
@@ -18722,8 +19650,8 @@
         "output": 0.0
       },
       "alibaba-cn": {
-        "input": 0.287,
-        "output": 1.722
+        "input": 0.115,
+        "output": 0.688
       },
       "llmtr": {
         "input": 0.4,
@@ -18857,17 +19785,21 @@
         "input": 0.248,
         "output": 1.485
       },
+      "opper": {
+        "input": 0.248,
+        "output": 1.485
+      },
       "kilo": {
-        "input": 0.1,
-        "output": 0.9
+        "input": 0.15,
+        "output": 1.0
       },
       "merge-gateway": {
         "input": 0.248,
         "output": 1.485
       },
       "openrouter": {
-        "input": 0.1,
-        "output": 0.9
+        "input": 0.15,
+        "output": 1.0
       },
       "302ai": {
         "input": 0.283,
@@ -19399,6 +20331,14 @@
         "input": 2.0,
         "output": 6.0
       },
+      "tensorx": {
+        "input": 2.5,
+        "output": 6.0
+      },
+      "opper": {
+        "input": 2.5,
+        "output": 6.0
+      },
       "kilo": {
         "input": 2.0,
         "output": 6.0
@@ -19461,6 +20401,14 @@
         "input": 0.5,
         "output": 3.0
       },
+      "tensorx": {
+        "input": 0.4,
+        "output": 2.4
+      },
+      "opper": {
+        "input": 0.5811,
+        "output": 3.0
+      },
       "crof": {
         "input": 0.2,
         "output": 1.5
@@ -19474,8 +20422,8 @@
         "output": 2.2
       },
       "openrouter": {
-        "input": 0.214,
-        "output": 2.55
+        "input": 0.42,
+        "output": 3.0
       },
       "iteracompute": {
         "input": 0.3,
@@ -19515,6 +20463,10 @@
         "input": 0.0,
         "output": 0.0
       },
+      "aihubmix": {
+        "input": 0.1126,
+        "output": 0.380025
+      },
       "alibaba-cn": {
         "input": 0.11875,
         "output": 0.40073
@@ -19547,13 +20499,17 @@
         "input": 0.15,
         "output": 0.47
       },
+      "opencode": {
+        "input": 0.15,
+        "output": 0.47
+      },
       "openrouter": {
         "input": 0.15,
         "output": 0.47
       },
       "ofox": {
-        "input": 0.11,
-        "output": 0.39
+        "input": 0.15,
+        "output": 0.47
       },
       "302ai": {
         "input": 0.18,
@@ -19582,6 +20538,10 @@
     },
     "alibaba/qwen3.8-flash-next": {
       "requesty": {
+        "input": 0.2,
+        "output": 0.5
+      },
+      "tensorx": {
         "input": 0.2,
         "output": 0.5
       },
@@ -19648,6 +20608,10 @@
         "output": 6.0
       },
       "cloudflare-ai-gateway": {
+        "input": 2.0,
+        "output": 6.0
+      },
+      "opper": {
         "input": 2.0,
         "output": 6.0
       },
@@ -19728,6 +20692,24 @@
         "output": 0.0
       }
     },
+    "alibaba/qwen3.8-omni-flash": {
+      "nano-gpt": {
+        "input": 0.15,
+        "output": 0.47
+      },
+      "aihubmix": {
+        "input": 0.1126,
+        "output": 0.380025
+      },
+      "crossmodel": {
+        "input": 0.13,
+        "output": 0.43
+      },
+      "vercel": {
+        "input": 0.15,
+        "output": 0.47
+      }
+    },
     "alibaba/qwq-32b": {
       "alibaba-cn": {
         "input": 0.287,
@@ -19770,6 +20752,10 @@
     },
     "anthropic/claude-fable-5": {
       "modelis": {
+        "input": 10.0,
+        "output": 50.0
+      },
+      "tempr": {
         "input": 10.0,
         "output": 50.0
       },
@@ -19899,6 +20885,10 @@
       }
     },
     "anthropic/claude-fable-5-1": {
+      "tempr": {
+        "input": 10.0,
+        "output": 50.0
+      },
       "vivgrid": {
         "input": 10.0,
         "output": 50.0
@@ -19906,6 +20896,10 @@
       "llmgateway-providers": {
         "input": 10.0,
         "output": 50.0
+      },
+      "aihubmix": {
+        "input": 11.0,
+        "output": 55.0
       },
       "azure-cognitive-services": {
         "input": 10.0,
@@ -19924,6 +20918,10 @@
         "output": 60.0
       },
       "llmgateway": {
+        "input": 10.0,
+        "output": 50.0
+      },
+      "opper": {
         "input": 10.0,
         "output": 50.0
       },
@@ -19953,6 +20951,10 @@
       }
     },
     "anthropic/claude-haiku-4-5": {
+      "tempr": {
+        "input": 1.0,
+        "output": 5.0
+      },
       "impossibl": {
         "input": 1.0,
         "output": 5.0
@@ -19998,8 +21000,8 @@
         "output": 5.0
       },
       "opper": {
-        "input": 1.0,
-        "output": 5.0
+        "input": 1.1,
+        "output": 5.5
       },
       "azure": {
         "input": 1.0,
@@ -20027,6 +21029,10 @@
       }
     },
     "anthropic/claude-haiku-4-5-20251001": {
+      "tempr": {
+        "input": 1.0,
+        "output": 5.0
+      },
       "freemodel": {
         "input": 1.0,
         "output": 5.0
@@ -20161,6 +21167,10 @@
       }
     },
     "anthropic/claude-opus-4-5": {
+      "tempr": {
+        "input": 5.0,
+        "output": 25.0
+      },
       "impossibl": {
         "input": 5.0,
         "output": 25.0
@@ -20211,6 +21221,10 @@
       }
     },
     "anthropic/claude-opus-4-5-20251101": {
+      "tempr": {
+        "input": 5.0,
+        "output": 25.0
+      },
       "llmgateway-providers": {
         "input": 5.0,
         "output": 25.0
@@ -20249,6 +21263,10 @@
       }
     },
     "anthropic/claude-opus-4-6": {
+      "tempr": {
+        "input": 5.0,
+        "output": 25.0
+      },
       "auriko": {
         "input": 5.0,
         "output": 25.0
@@ -20339,6 +21357,10 @@
       }
     },
     "anthropic/claude-opus-4-7": {
+      "tempr": {
+        "input": 5.0,
+        "output": 25.0
+      },
       "auriko": {
         "input": 5.0,
         "output": 25.0
@@ -20400,8 +21422,8 @@
         "output": 25.0
       },
       "opper": {
-        "input": 5.0,
-        "output": 25.0
+        "input": 5.5,
+        "output": 27.5
       },
       "azure": {
         "input": 5.0,
@@ -20438,6 +21460,10 @@
     },
     "anthropic/claude-opus-4-8": {
       "modelis": {
+        "input": 5.0,
+        "output": 25.0
+      },
+      "tempr": {
         "input": 5.0,
         "output": 25.0
       },
@@ -20539,7 +21565,15 @@
       }
     },
     "anthropic/claude-opus-5": {
+      "tempr": {
+        "input": 5.0,
+        "output": 25.0
+      },
       "nano-gpt": {
+        "input": 5.0,
+        "output": 25.0
+      },
+      "vivgrid": {
         "input": 5.0,
         "output": 25.0
       },
@@ -20600,8 +21634,8 @@
         "output": 25.0
       },
       "opper": {
-        "input": 5.0,
-        "output": 25.0
+        "input": 5.5,
+        "output": 27.5
       },
       "kilo": {
         "input": 5.0,
@@ -20663,6 +21697,10 @@
       }
     },
     "anthropic/claude-sonnet-4-5": {
+      "tempr": {
+        "input": 3.0,
+        "output": 15.0
+      },
       "impossibl": {
         "input": 3.0,
         "output": 15.0
@@ -20700,8 +21738,8 @@
         "output": 15.0
       },
       "opper": {
-        "input": 3.0,
-        "output": 15.0
+        "input": 3.3,
+        "output": 16.5
       },
       "azure": {
         "input": 3.0,
@@ -20721,6 +21759,10 @@
       }
     },
     "anthropic/claude-sonnet-4-5-20250929": {
+      "tempr": {
+        "input": 3.0,
+        "output": 15.0
+      },
       "llmgateway-providers": {
         "input": 3.0,
         "output": 15.0
@@ -20760,6 +21802,10 @@
     },
     "anthropic/claude-sonnet-4-6": {
       "modelis": {
+        "input": 3.0,
+        "output": 15.0
+      },
+      "tempr": {
         "input": 3.0,
         "output": 15.0
       },
@@ -20836,8 +21882,8 @@
         "output": 15.0
       },
       "opper": {
-        "input": 3.0,
-        "output": 15.0
+        "input": 3.3,
+        "output": 16.5
       },
       "azure": {
         "input": 3.0,
@@ -20873,7 +21919,15 @@
       }
     },
     "anthropic/claude-sonnet-5": {
+      "tempr": {
+        "input": 2.0,
+        "output": 10.0
+      },
       "nano-gpt": {
+        "input": 2.0,
+        "output": 10.0
+      },
+      "vivgrid": {
         "input": 2.0,
         "output": 10.0
       },
@@ -20942,8 +21996,8 @@
         "output": 10.0
       },
       "opper": {
-        "input": 2.0,
-        "output": 10.0
+        "input": 2.2,
+        "output": 11.0
       },
       "kilo": {
         "input": 2.0,
@@ -20992,6 +22046,34 @@
       "edenai": {
         "input": 2.0,
         "output": 10.0
+      }
+    },
+    "arcee-ai/trinity-large-thinking": {
+      "nano-gpt": {
+        "input": 0.25,
+        "output": 0.9
+      },
+      "vercel": {
+        "input": 0.25,
+        "output": 0.8999999999999999
+      },
+      "kilo": {
+        "input": 0.25,
+        "output": 0.8
+      },
+      "openrouter": {
+        "input": 0.25,
+        "output": 0.8
+      },
+      "arcee": {
+        "input": 0.25,
+        "output": 0.8
+      }
+    },
+    "arcee-ai/trinity-mini": {
+      "clarifai": {
+        "input": 0.045,
+        "output": 0.15
       }
     },
     "bytedance-seed/seed-2.0-code": {
@@ -21186,12 +22268,12 @@
         "output": 0.295
       },
       "kilo": {
-        "input": 0.2574,
-        "output": 1.0287
+        "input": 0.32,
+        "output": 0.89
       },
       "openrouter": {
-        "input": 0.2574,
-        "output": 1.0287
+        "input": 0.32,
+        "output": 0.89
       },
       "zenmux": {
         "input": 0.28,
@@ -21559,10 +22641,6 @@
         "input": 0.13,
         "output": 0.26
       },
-      "tensorx": {
-        "input": 0.15,
-        "output": 0.3
-      },
       "venice": {
         "input": 0.138,
         "output": 0.275
@@ -21570,6 +22648,10 @@
       "llmgateway": {
         "input": 0.05,
         "output": 0.1
+      },
+      "opper": {
+        "input": 0.25,
+        "output": 0.66
       },
       "crof": {
         "input": 0.12,
@@ -21604,8 +22686,8 @@
         "output": 0.28
       },
       "openrouter": {
-        "input": 0.07,
-        "output": 0.14
+        "input": 0.088606,
+        "output": 0.177212
       },
       "cline-pass": {
         "input": 0.14,
@@ -21676,8 +22758,8 @@
         "output": 0.16
       },
       "digitalocean": {
-        "input": 0.08,
-        "output": 0.252
+        "input": 0.14,
+        "output": 0.28
       },
       "alibaba-token-plan": {
         "input": 0.0,
@@ -21752,16 +22834,16 @@
         "output": 0.07
       },
       "openrouter": {
-        "input": 0.06,
-        "output": 0.12
+        "input": 0.04,
+        "output": 0.64
       },
       "iteracompute": {
         "input": 0.34,
         "output": 1.05
       },
       "ofox": {
-        "input": 0.44,
-        "output": 1.32
+        "input": 0.308,
+        "output": 0.924
       },
       "melious": {
         "input": 0.11592,
@@ -21786,8 +22868,12 @@
     },
     "deepseek/deepseek-v4-flash-vision-exp": {
       "nano-gpt": {
-        "input": 0.22,
-        "output": 0.66
+        "input": 0.44,
+        "output": 1.32
+      },
+      "aihubmix": {
+        "input": 0.155,
+        "output": 0.62
       },
       "orcarouter": {
         "input": 0.147,
@@ -21856,8 +22942,8 @@
         "output": 2.2
       },
       "digitalocean": {
-        "input": 0.87,
-        "output": 1.74
+        "input": 1.74,
+        "output": 3.48
       },
       "vivgrid": {
         "input": 0.435,
@@ -21967,6 +23053,10 @@
         "input": 1.2,
         "output": 1.2
       },
+      "opper": {
+        "input": 1.78812,
+        "output": 3.57624
+      },
       "crof": {
         "input": 0.35,
         "output": 0.8
@@ -21996,8 +23086,8 @@
         "output": 3.84
       },
       "openrouter": {
-        "input": 1.6,
-        "output": 3.2
+        "input": 0.95526,
+        "output": 1.91052
       },
       "cline-pass": {
         "input": 1.74,
@@ -22103,6 +23193,10 @@
         "input": 0.66,
         "output": 1.98
       },
+      "tensorx": {
+        "input": 2.0,
+        "output": 4.0
+      },
       "venice": {
         "input": 1.65,
         "output": 4.95
@@ -22128,16 +23222,16 @@
         "output": 3.48
       },
       "openrouter": {
-        "input": 0.65868,
-        "output": 1.97604
+        "input": 0.624,
+        "output": 2.88
       },
       "iteracompute": {
         "input": 1.1,
         "output": 3.3
       },
       "ofox": {
-        "input": 1.32,
-        "output": 3.96
+        "input": 0.924,
+        "output": 2.772
       },
       "arcee": {
         "input": 1.32,
@@ -22170,12 +23264,16 @@
         "output": 1.27776
       },
       "nano-gpt": {
-        "input": 0.1,
-        "output": 0.4
+        "input": 0.13,
+        "output": 0.52
       },
       "digitalocean": {
         "input": 0.3,
         "output": 1.2
+      },
+      "vivgrid": {
+        "input": 0.31,
+        "output": 1.23
       },
       "ollama-cloud": {
         "input": 0.15,
@@ -22189,9 +23287,17 @@
         "input": 0.0,
         "output": 0.0
       },
+      "neuralwatt": {
+        "input": 0.15,
+        "output": 0.6
+      },
       "aihubmix": {
         "input": 0.155,
         "output": 0.62
+      },
+      "alibaba-cn": {
+        "input": 0.29754,
+        "output": 1.19015
       },
       "hyper": {
         "input": 0.3,
@@ -22225,17 +23331,21 @@
         "input": 0.15,
         "output": 0.6
       },
+      "opencode": {
+        "input": 0.3,
+        "output": 1.2
+      },
       "openrouter": {
-        "input": 0.15,
-        "output": 0.6
+        "input": 0.3,
+        "output": 1.2
       },
       "cline-pass": {
         "input": 0.15,
         "output": 0.6
       },
       "ofox": {
-        "input": 0.3,
-        "output": 1.2
+        "input": 0.21,
+        "output": 0.84
       },
       "melious": {
         "input": 0.23184,
@@ -22665,6 +23775,10 @@
       }
     },
     "google/gemini-3-flash-preview": {
+      "tempr": {
+        "input": 0.5,
+        "output": 3.0
+      },
       "nano-gpt": {
         "input": 0.5,
         "output": 3.0
@@ -22849,6 +23963,10 @@
       }
     },
     "google/gemini-3.1-flash-image": {
+      "aihubmix": {
+        "input": 0.5,
+        "output": 3.0
+      },
       "google-vertex": {
         "input": 0.5,
         "output": 60.0
@@ -22921,6 +24039,10 @@
       }
     },
     "google/gemini-3.1-flash-lite": {
+      "tempr": {
+        "input": 0.25,
+        "output": 1.5
+      },
       "nano-gpt": {
         "input": 0.25,
         "output": 1.5
@@ -23015,6 +24137,10 @@
       }
     },
     "google/gemini-3.1-flash-lite-image": {
+      "aihubmix": {
+        "input": 0.25,
+        "output": 1.5
+      },
       "google": {
         "input": 0.25,
         "output": 30.0
@@ -23095,6 +24221,10 @@
       }
     },
     "google/gemini-3.1-pro-preview": {
+      "tempr": {
+        "input": 2.0,
+        "output": 12.0
+      },
       "nano-gpt": {
         "input": 2.0,
         "output": 12.0
@@ -23197,6 +24327,10 @@
       }
     },
     "google/gemini-3.1-pro-preview-customtools": {
+      "tempr": {
+        "input": 2.0,
+        "output": 12.0
+      },
       "nano-gpt": {
         "input": 2.0,
         "output": 12.0
@@ -23235,6 +24369,10 @@
       }
     },
     "google/gemini-3.5-flash": {
+      "tempr": {
+        "input": 1.5,
+        "output": 9.0
+      },
       "nano-gpt": {
         "input": 1.5,
         "output": 9.0
@@ -23357,6 +24495,10 @@
       }
     },
     "google/gemini-3.5-flash-lite": {
+      "tempr": {
+        "input": 0.3,
+        "output": 2.5
+      },
       "nano-gpt": {
         "input": 0.3,
         "output": 2.5
@@ -23368,6 +24510,10 @@
       "llmgateway-providers": {
         "input": 0.3,
         "output": 2.5
+      },
+      "aihubmix": {
+        "input": 0.3,
+        "output": 2.499999
       },
       "orcarouter": {
         "input": 0.3,
@@ -23449,6 +24595,10 @@
       }
     },
     "google/gemini-3.6-flash": {
+      "tempr": {
+        "input": 0.75,
+        "output": 3.75
+      },
       "nano-gpt": {
         "input": 0.75,
         "output": 3.75
@@ -23460,6 +24610,10 @@
       "llmgateway-providers": {
         "input": 0.75,
         "output": 3.75
+      },
+      "aihubmix": {
+        "input": 1.5,
+        "output": 7.5
       },
       "orcarouter": {
         "input": 1.5,
@@ -23535,6 +24689,10 @@
       }
     },
     "google/gemini-3.7-flash": {
+      "tempr": {
+        "input": 0.75,
+        "output": 3.75
+      },
       "nano-gpt": {
         "input": 0.75,
         "output": 3.75
@@ -23621,6 +24779,10 @@
       }
     },
     "google/gemini-3.8-flash": {
+      "tempr": {
+        "input": 0.75,
+        "output": 3.75
+      },
       "nano-gpt": {
         "input": 0.75,
         "output": 3.75
@@ -23630,6 +24792,10 @@
         "output": 3.75
       },
       "llmgateway-providers": {
+        "input": 0.75,
+        "output": 3.75
+      },
+      "aihubmix": {
         "input": 0.75,
         "output": 3.75
       },
@@ -23660,6 +24826,10 @@
       "github-copilot": {
         "input": 0.75,
         "output": 3.75
+      },
+      "opper": {
+        "input": 0.825,
+        "output": 4.125
       },
       "kilo": {
         "input": 0.75,
@@ -23695,6 +24865,10 @@
       }
     },
     "google/gemini-embedding-001": {
+      "tempr": {
+        "input": 0.15,
+        "output": 0.0
+      },
       "google-vertex": {
         "input": 0.15,
         "output": 0.0
@@ -23709,12 +24883,20 @@
       }
     },
     "google/gemini-embedding-2": {
+      "tempr": {
+        "input": 0.2,
+        "output": 0.0
+      },
       "google": {
         "input": 0.2,
         "output": 0.0
       }
     },
     "google/gemini-flash-latest": {
+      "tempr": {
+        "input": 0.75,
+        "output": 3.75
+      },
       "nano-gpt": {
         "input": 0.75,
         "output": 3.75
@@ -23749,6 +24931,10 @@
       }
     },
     "google/gemini-flash-lite-latest": {
+      "tempr": {
+        "input": 0.3,
+        "output": 2.5
+      },
       "nano-gpt": {
         "input": 0.3,
         "output": 2.5
@@ -23912,6 +25098,12 @@
         "output": 0.1
       }
     },
+    "google/gemma-4-12b-it": {
+      "nano-gpt": {
+        "input": 0.05,
+        "output": 0.25
+      }
+    },
     "google/gemma-4-26b-a4b-it": {
       "nano-gpt": {
         "input": 0.13,
@@ -24015,6 +25207,10 @@
         "input": 0.13,
         "output": 0.38
       },
+      "opper": {
+        "input": 0.46488,
+        "output": 2.44062
+      },
       "crof": {
         "input": 0.1,
         "output": 0.3
@@ -24106,6 +25302,10 @@
       "nano-gpt": {
         "input": 0.75,
         "output": 3.0
+      },
+      "aihubmix": {
+        "input": 0.7746,
+        "output": 3.0984
       },
       "kilo": {
         "input": 0.75,
@@ -24270,8 +25470,8 @@
         "output": 0.724
       },
       "edenai": {
-        "input": 1.038331,
-        "output": 1.038331
+        "input": 1.0341,
+        "output": 1.0341
       }
     },
     "meta/llama-4-maverick-17b-instruct": {
@@ -24335,7 +25535,7 @@
       },
       "openrouter": {
         "input": 0.3,
-        "output": 1.1
+        "output": 1.2
       },
       "edenai": {
         "input": 0.35,
@@ -24350,6 +25550,10 @@
       "llmgateway-providers": {
         "input": 1.25,
         "output": 4.25
+      },
+      "aihubmix": {
+        "input": 1.375,
+        "output": 4.675
       },
       "orcarouter": {
         "input": 1.25,
@@ -24396,6 +25600,10 @@
       "llmgateway-providers": {
         "input": 1.25,
         "output": 4.25
+      },
+      "aihubmix": {
+        "input": 1.375,
+        "output": 4.675
       },
       "orcarouter": {
         "input": 1.25,
@@ -24447,6 +25655,10 @@
         "input": 1.25,
         "output": 4.25
       },
+      "aihubmix": {
+        "input": 1.375,
+        "output": 4.675
+      },
       "vercel": {
         "input": 1.25,
         "output": 4.25
@@ -24456,6 +25668,10 @@
         "output": 4.25
       },
       "llmgateway": {
+        "input": 1.25,
+        "output": 4.25
+      },
+      "opper": {
         "input": 1.25,
         "output": 4.25
       },
@@ -24797,6 +26013,10 @@
         "input": 0.0,
         "output": 0.0
       },
+      "siliconflow": {
+        "input": 0.3,
+        "output": 1.2
+      },
       "302ai": {
         "input": 0.72,
         "output": 2.88
@@ -24989,15 +26209,7 @@
         "input": 0.5,
         "output": 1.5
       },
-      "kilo": {
-        "input": 0.5,
-        "output": 1.5
-      },
       "merge-gateway": {
-        "input": 0.5,
-        "output": 1.5
-      },
-      "openrouter": {
         "input": 0.5,
         "output": 1.5
       },
@@ -25135,13 +26347,9 @@
         "input": 0.165,
         "output": 0.66
       },
-      "venice": {
-        "input": 0.1875,
-        "output": 0.75
-      },
       "opper": {
-        "input": 0.15,
-        "output": 0.6
+        "input": 0.5811,
+        "output": 2.44062
       },
       "kilo": {
         "input": 0.15,
@@ -25844,8 +27052,8 @@
         "output": 10.0
       },
       "digitalocean": {
-        "input": 2.55,
-        "output": 12.95
+        "input": 3.0,
+        "output": 15.0
       },
       "vivgrid": {
         "input": 3.0,
@@ -25888,10 +27096,6 @@
         "output": 14.133
       },
       "novita-ai": {
-        "input": 3.0,
-        "output": 15.0
-      },
-      "coralbricks": {
         "input": 3.0,
         "output": 15.0
       },
@@ -26118,8 +27322,8 @@
         "output": 0.2
       },
       "openrouter": {
-        "input": 0.06,
-        "output": 0.24
+        "input": 0.05,
+        "output": 0.2
       }
     },
     "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": {
@@ -26165,10 +27369,6 @@
         "input": 0.15,
         "output": 0.65
       },
-      "tensorx": {
-        "input": 0.3,
-        "output": 0.9
-      },
       "perplexity-agent": {
         "input": 0.25,
         "output": 2.5
@@ -26212,8 +27412,8 @@
         "output": 2.2
       },
       "openrouter": {
-        "input": 0.625,
-        "output": 3.125
+        "input": 0.6,
+        "output": 2.4
       },
       "togetherai": {
         "input": 0.6,
@@ -26225,6 +27425,10 @@
       }
     },
     "nvidia/nemotron-3.5-content-safety": {
+      "nano-gpt": {
+        "input": 0.05,
+        "output": 0.15
+      },
       "requesty": {
         "input": 0.0,
         "output": 0.0
@@ -26252,7 +27456,7 @@
         "output": 0.18
       },
       "openrouter": {
-        "input": 0.08,
+        "input": 0.07,
         "output": 0.2
       }
     },
@@ -26518,8 +27722,8 @@
         "output": 8.0
       },
       "ofox": {
-        "input": 2.0,
-        "output": 8.0
+        "input": 1.6,
+        "output": 6.4
       },
       "openai": {
         "input": 2.0,
@@ -26616,8 +27820,8 @@
         "output": 1.6
       },
       "ofox": {
-        "input": 0.4,
-        "output": 1.6
+        "input": 0.32,
+        "output": 1.28
       },
       "openai": {
         "input": 0.4,
@@ -26792,8 +27996,8 @@
         "output": 10.0
       },
       "ofox": {
-        "input": 2.5,
-        "output": 10.0
+        "input": 2.0,
+        "output": 8.0
       },
       "openai": {
         "input": 2.5,
@@ -26968,8 +28172,8 @@
         "output": 0.6
       },
       "ofox": {
-        "input": 0.15,
-        "output": 0.6
+        "input": 0.12,
+        "output": 0.48
       },
       "openai": {
         "input": 0.15,
@@ -27062,8 +28266,8 @@
         "output": 10.0
       },
       "ofox": {
-        "input": 1.25,
-        "output": 10.0
+        "input": 1.0,
+        "output": 8.0
       },
       "neon": {
         "input": 1.25,
@@ -27244,8 +28448,8 @@
         "output": 2.0
       },
       "ofox": {
-        "input": 0.25,
-        "output": 2.0
+        "input": 0.2,
+        "output": 1.6
       },
       "neon": {
         "input": 0.25,
@@ -27358,8 +28562,8 @@
         "output": 0.4
       },
       "ofox": {
-        "input": 0.05,
-        "output": 0.4
+        "input": 0.04,
+        "output": 0.32
       },
       "neon": {
         "input": 0.05,
@@ -27526,8 +28730,8 @@
         "output": 10.0
       },
       "ofox": {
-        "input": 1.25,
-        "output": 10.0
+        "input": 1.0,
+        "output": 8.0
       },
       "openai": {
         "input": 1.25,
@@ -27692,8 +28896,8 @@
         "output": 10.0
       },
       "ofox": {
-        "input": 1.25,
-        "output": 10.0
+        "input": 1.0,
+        "output": 8.0
       },
       "edenai": {
         "input": 1.25,
@@ -27762,8 +28966,8 @@
         "output": 2.0
       },
       "ofox": {
-        "input": 0.25,
-        "output": 2.0
+        "input": 0.2,
+        "output": 1.6
       },
       "zenmux": {
         "input": 0.25,
@@ -27856,8 +29060,8 @@
         "output": 14.0
       },
       "ofox": {
-        "input": 1.75,
-        "output": 14.0
+        "input": 1.4,
+        "output": 11.2
       },
       "qihang-ai": {
         "input": 0.25,
@@ -27968,8 +29172,8 @@
         "output": 14.0
       },
       "ofox": {
-        "input": 1.75,
-        "output": 14.0
+        "input": 1.4,
+        "output": 11.2
       },
       "qihang-ai": {
         "input": 0.14,
@@ -28138,8 +29342,8 @@
         "output": 14.0
       },
       "ofox": {
-        "input": 1.75,
-        "output": 14.0
+        "input": 1.4,
+        "output": 11.2
       },
       "openai": {
         "input": 1.75,
@@ -28286,8 +29490,8 @@
         "output": 15.0
       },
       "ofox": {
-        "input": 2.5,
-        "output": 15.0
+        "input": 2.0,
+        "output": 12.0
       },
       "openai": {
         "input": 2.5,
@@ -28420,8 +29624,8 @@
         "output": 4.5
       },
       "ofox": {
-        "input": 0.75,
-        "output": 4.5
+        "input": 0.6,
+        "output": 3.6
       },
       "openai": {
         "input": 0.75,
@@ -28534,8 +29738,8 @@
         "output": 1.25
       },
       "ofox": {
-        "input": 0.2,
-        "output": 1.25
+        "input": 0.16,
+        "output": 1.0
       },
       "openai": {
         "input": 0.2,
@@ -28612,8 +29816,8 @@
         "output": 180.0
       },
       "ofox": {
-        "input": 30.0,
-        "output": 180.0
+        "input": 24.0,
+        "output": 144.0
       },
       "openai": {
         "input": 30.0,
@@ -28754,8 +29958,8 @@
         "output": 30.0
       },
       "ofox": {
-        "input": 5.0,
-        "output": 30.0
+        "input": 4.0,
+        "output": 24.0
       },
       "openai": {
         "input": 5.0,
@@ -29002,8 +30206,8 @@
         "output": 30.0
       },
       "llmgateway-providers": {
-        "input": 5.0,
-        "output": 30.0
+        "input": 4.0,
+        "output": 20.0
       },
       "aihubmix": {
         "input": 5.0,
@@ -29042,12 +30246,12 @@
         "output": 12.0
       },
       "vercel": {
-        "input": 2.0,
-        "output": 10.0
+        "input": 4.0,
+        "output": 20.0
       },
       "llmgateway": {
-        "input": 5.0,
-        "output": 30.0
+        "input": 4.0,
+        "output": 20.0
       },
       "cloudflare-ai-gateway": {
         "input": 2.0,
@@ -29078,8 +30282,8 @@
         "output": 30.0
       },
       "opencode": {
-        "input": 2.0,
-        "output": 10.0
+        "input": 4.0,
+        "output": 20.0
       },
       "openrouter": {
         "input": 2.0,
@@ -29253,6 +30457,10 @@
         "input": 10.0,
         "output": 50.0
       },
+      "aihubmix": {
+        "input": 10.0,
+        "output": 50.0
+      },
       "requesty": {
         "input": 10.0,
         "output": 50.0
@@ -29269,7 +30477,15 @@
         "input": 10.0,
         "output": 50.0
       },
+      "cloudflare-ai-gateway": {
+        "input": 10.0,
+        "output": 50.0
+      },
       "github-copilot": {
+        "input": 10.0,
+        "output": 50.0
+      },
+      "opper": {
         "input": 10.0,
         "output": 50.0
       },
@@ -29294,8 +30510,8 @@
         "output": 50.0
       },
       "ofox": {
-        "input": 10.0,
-        "output": 50.0
+        "input": 8.0,
+        "output": 40.0
       },
       "neon": {
         "input": 10.0,
@@ -29358,6 +30574,26 @@
         "output": 30.0
       },
       "openai": {
+        "input": 5.0,
+        "output": 30.0
+      }
+    },
+    "openai/gpt-image-2.5-flare": {
+      "vercel": {
+        "input": 5.0,
+        "output": 30.0
+      },
+      "azure": {
+        "input": 5.0,
+        "output": 30.0
+      }
+    },
+    "openai/gpt-image-2.5-sunburst": {
+      "vercel": {
+        "input": 5.0,
+        "output": 30.0
+      },
+      "azure": {
         "input": 5.0,
         "output": 30.0
       }
@@ -29479,10 +30715,6 @@
         "input": 0.03,
         "output": 0.17
       },
-      "tensorx": {
-        "input": 0.04,
-        "output": 0.2
-      },
       "io-net": {
         "input": 0.04,
         "output": 0.4
@@ -29498,6 +30730,10 @@
       "fireworks-ai": {
         "input": 0.15,
         "output": 0.6
+      },
+      "opper": {
+        "input": 1.1622,
+        "output": 4.88124
       },
       "stackit": {
         "input": 0.53,
@@ -29536,8 +30772,8 @@
         "output": 0.44
       },
       "openrouter": {
-        "input": 0.037,
-        "output": 0.17
+        "input": 0.15,
+        "output": 0.6
       },
       "neon": {
         "input": 0.15,
@@ -29576,8 +30812,8 @@
         "output": 0.6
       },
       "edenai": {
-        "input": 0.173055,
-        "output": 0.749905
+        "input": 0.17235,
+        "output": 0.74685
       }
     },
     "openai/gpt-oss-20b": {
@@ -29661,6 +30897,10 @@
         "input": 0.05,
         "output": 0.2
       },
+      "opper": {
+        "input": 0.11622,
+        "output": 0.488124
+      },
       "stackit": {
         "input": 0.18,
         "output": 0.29
@@ -29670,8 +30910,8 @@
         "output": 0.14
       },
       "kilo": {
-        "input": 0.02,
-        "output": 0.1
+        "input": 0.018,
+        "output": 0.09
       },
       "merge-gateway": {
         "input": 0.04,
@@ -29702,8 +30942,8 @@
         "output": 0.167
       },
       "edenai": {
-        "input": 0.05,
-        "output": 0.2
+        "input": 0.03,
+        "output": 0.14
       },
       "lmstudio": {
         "input": 0.0,
@@ -30300,6 +31540,70 @@
         "output": 8.0
       }
     },
+    "poolside/laguna-m.1": {
+      "poolside": {
+        "input": 0.0,
+        "output": 0.0
+      },
+      "requesty": {
+        "input": 0.0,
+        "output": 0.0
+      }
+    },
+    "poolside/laguna-s-2.1": {
+      "nano-gpt": {
+        "input": 0.1,
+        "output": 0.2
+      },
+      "poolside": {
+        "input": 0.0,
+        "output": 0.0
+      },
+      "pioneer": {
+        "input": 0.1,
+        "output": 0.2
+      },
+      "vercel": {
+        "input": 0.1,
+        "output": 0.2
+      },
+      "kilo": {
+        "input": 0.1,
+        "output": 0.2
+      },
+      "openrouter": {
+        "input": 0.09,
+        "output": 0.18
+      }
+    },
+    "poolside/laguna-xs-2.1": {
+      "poolside": {
+        "input": 0.0,
+        "output": 0.0
+      },
+      "llmtr": {
+        "input": 0.0,
+        "output": 0.0
+      },
+      "nvidia": {
+        "input": 0.0,
+        "output": 0.0
+      },
+      "kilo": {
+        "input": 0.0,
+        "output": 0.0
+      },
+      "openrouter": {
+        "input": 0.0,
+        "output": 0.0
+      }
+    },
+    "poolside/laguna-xs.2": {
+      "requesty": {
+        "input": 0.0,
+        "output": 0.0
+      }
+    },
     "stepfun/step-3.5-flash": {
       "nano-gpt": {
         "input": 0.1,
@@ -30357,6 +31661,10 @@
         "input": 0.2,
         "output": 1.15
       },
+      "aihubmix": {
+        "input": 0.22,
+        "output": 1.32
+      },
       "stepfun-ai": {
         "input": 0.185,
         "output": 1.11
@@ -30390,6 +31698,24 @@
         "output": 1.15
       }
     },
+    "stepfun/step-5-preview": {
+      "nano-gpt": {
+        "input": 1.0,
+        "output": 2.7
+      },
+      "stepfun-ai": {
+        "input": 1.0,
+        "output": 2.7
+      },
+      "vercel": {
+        "input": 1.0,
+        "output": 2.7
+      },
+      "empiriolabs": {
+        "input": 1.0,
+        "output": 2.7
+      }
+    },
     "tencent/hy3": {
       "nano-gpt": {
         "input": 0.066,
@@ -30398,6 +31724,10 @@
       "llmgateway-providers": {
         "input": 0.132,
         "output": 0.528
+      },
+      "aihubmix": {
+        "input": 0.1562,
+        "output": 0.6248
       },
       "orcarouter": {
         "input": 0.18,
@@ -30424,8 +31754,8 @@
         "output": 0.528
       },
       "kilo": {
-        "input": 0.14,
-        "output": 0.58
+        "input": 0.13,
+        "output": 0.53
       },
       "openrouter": {
         "input": 0.132,
@@ -30475,6 +31805,10 @@
         "input": 0.834,
         "output": 2.501
       },
+      "aihubmix": {
+        "input": 0.845,
+        "output": 2.535
+      },
       "crossmodel": {
         "input": 0.96,
         "output": 2.88
@@ -30512,95 +31846,45 @@
         "output": 2.501
       }
     },
-    "thinkingmachines/inkling": {
-      "nano-gpt": {
-        "input": 1.0,
-        "output": 4.05
-      },
-      "impossibl": {
-        "input": 1.87,
-        "output": 4.68
-      },
-      "hyper": {
-        "input": 1.0888,
-        "output": 4.40964
-      },
-      "requesty": {
-        "input": 1.87,
-        "output": 4.68
-      },
+    "upstage/solar-pro2": {
       "llmtr": {
-        "input": 1.87,
-        "output": 4.68
+        "input": 0.15,
+        "output": 0.6
       },
-      "nvidia": {
-        "input": 0.0,
-        "output": 0.0
-      },
-      "baseten": {
-        "input": 1.0,
-        "output": 4.05
-      },
-      "vercel": {
-        "input": 1.0,
-        "output": 4.05
-      },
-      "venice": {
-        "input": 1.25,
-        "output": 5.0625
-      },
-      "fireworks-ai": {
-        "input": 1.0,
-        "output": 4.05
-      },
-      "kilo": {
-        "input": 0.95,
-        "output": 4.05
-      },
-      "merge-gateway": {
-        "input": 1.0,
-        "output": 4.05
-      },
-      "openrouter": {
-        "input": 1.0,
-        "output": 4.05
-      },
-      "neon": {
-        "input": 1.0,
-        "output": 4.05
-      },
-      "edenai": {
-        "input": 1.0,
-        "output": 4.05
+      "upstage": {
+        "input": 0.25,
+        "output": 0.25
       }
     },
-    "thinkingmachines/inkling-small": {
-      "pioneer": {
-        "input": 0.5,
-        "output": 1.2
+    "upstage/solar-pro3": {
+      "llmtr": {
+        "input": 0.15,
+        "output": 0.6
+      },
+      "upstage": {
+        "input": 0.25,
+        "output": 0.25
+      }
+    },
+    "upstage/solar-pro4": {
+      "nano-gpt": {
+        "input": 0.03,
+        "output": 0.12
       },
       "llmtr": {
-        "input": 0.58,
-        "output": 1.44
-      },
-      "baseten": {
-        "input": 0.5,
-        "output": 1.2
-      },
-      "vercel": {
-        "input": 0.5,
-        "output": 1.2
+        "input": 0.03,
+        "output": 0.12
       },
       "kilo": {
-        "input": 0.0,
-        "output": 0.0
+        "input": 0.3,
+        "output": 1.2
       },
       "openrouter": {
-        "input": 0.0,
-        "output": 0.0
+        "input": 0.09,
+        "output": 0.36
       },
-      "arcee": {
-        "input": 0.5,
+      "upstage": {
+        "input": 0.3,
         "output": 1.2
       }
     },
@@ -30624,10 +31908,6 @@
     },
     "xai/grok-4.1-fast": {
       "ofox": {
-        "input": 0.2,
-        "output": 0.5
-      },
-      "zenmux": {
         "input": 0.2,
         "output": 0.5
       }
@@ -30947,6 +32227,48 @@
         "input": 2.0,
         "output": 6.0
       },
+      "zenmux": {
+        "input": 2.0,
+        "output": 6.0
+      },
+      "opencode-go": {
+        "input": 2.0,
+        "output": 6.0
+      },
+      "edenai": {
+        "input": 2.0,
+        "output": 6.0
+      }
+    },
+    "xai/grok-4.7": {
+      "nano-gpt": {
+        "input": 1.6,
+        "output": 4.8
+      },
+      "vercel": {
+        "input": 1.2,
+        "output": 3.6
+      },
+      "github-copilot": {
+        "input": 2.0,
+        "output": 6.0
+      },
+      "kilo": {
+        "input": 1.6,
+        "output": 4.8
+      },
+      "merge-gateway": {
+        "input": 2.0,
+        "output": 6.0
+      },
+      "openrouter": {
+        "input": 1.6,
+        "output": 4.8
+      },
+      "xai": {
+        "input": 2.0,
+        "output": 6.0
+      },
       "opencode-go": {
         "input": 2.0,
         "output": 6.0
@@ -31176,8 +32498,8 @@
         "output": 0.87
       },
       "digitalocean": {
-        "input": 0.4,
-        "output": 1.5
+        "input": 0.8,
+        "output": 3.0
       },
       "llmgateway-providers": {
         "input": 0.435,
@@ -31254,6 +32576,120 @@
         "output": 2.61
       }
     },
+    "xiaomi/mimo-v2.6-flash": {
+      "xiaomi-token-plan-cn": {
+        "input": 0.0,
+        "output": 0.0
+      },
+      "nano-gpt": {
+        "input": 0.14,
+        "output": 0.28
+      },
+      "llmgateway-providers": {
+        "input": 0.14,
+        "output": 0.28
+      },
+      "xiaomi-token-plan-ams": {
+        "input": 0.0,
+        "output": 0.0
+      },
+      "xiaomi": {
+        "input": 0.14,
+        "output": 0.28
+      },
+      "vercel": {
+        "input": 0.14,
+        "output": 0.28
+      },
+      "llmgateway": {
+        "input": 0.14,
+        "output": 0.28
+      },
+      "kilo": {
+        "input": 0.14,
+        "output": 0.28
+      },
+      "openrouter": {
+        "input": 0.14,
+        "output": 0.28
+      },
+      "xiaomi-token-plan-sgp": {
+        "input": 0.0,
+        "output": 0.0
+      },
+      "opencode-go": {
+        "input": 0.14,
+        "output": 0.28
+      }
+    },
+    "xiaomi/mimo-v2.6-pro": {
+      "xiaomi-token-plan-cn": {
+        "input": 0.0,
+        "output": 0.0
+      },
+      "nano-gpt": {
+        "input": 0.435,
+        "output": 0.87
+      },
+      "llmgateway-providers": {
+        "input": 0.435,
+        "output": 0.87
+      },
+      "xiaomi-token-plan-ams": {
+        "input": 0.0,
+        "output": 0.0
+      },
+      "xiaomi": {
+        "input": 0.435,
+        "output": 0.87
+      },
+      "vercel": {
+        "input": 0.435,
+        "output": 0.87
+      },
+      "llmgateway": {
+        "input": 0.435,
+        "output": 0.87
+      },
+      "kilo": {
+        "input": 0.435,
+        "output": 0.87
+      },
+      "openrouter": {
+        "input": 0.435,
+        "output": 0.87
+      },
+      "xiaomi-token-plan-sgp": {
+        "input": 0.0,
+        "output": 0.0
+      },
+      "opencode-go": {
+        "input": 0.435,
+        "output": 0.87
+      }
+    },
+    "xiaomi/mimo-v2.6-pro-ultraspeed": {
+      "nano-gpt": {
+        "input": 4.35,
+        "output": 8.7
+      },
+      "xiaomi": {
+        "input": 4.35,
+        "output": 8.7
+      },
+      "vercel": {
+        "input": 4.35,
+        "output": 8.7
+      },
+      "kilo": {
+        "input": 4.35,
+        "output": 8.7
+      },
+      "openrouter": {
+        "input": 4.35,
+        "output": 8.7
+      }
+    },
     "zhipuai/glm-4.5": {
       "nano-gpt": {
         "input": 0.3,
@@ -31312,8 +32748,8 @@
         "output": 2.2
       },
       "zenmux": {
-        "input": 0.35,
-        "output": 1.54
+        "input": 0.2911,
+        "output": 1.1645
       }
     },
     "zhipuai/glm-4.5-air": {
@@ -31362,8 +32798,8 @@
         "output": 1.1
       },
       "zenmux": {
-        "input": 0.11,
-        "output": 0.56
+        "input": 0.1165,
+        "output": 0.2911
       }
     },
     "zhipuai/glm-4.5-flash": {
@@ -31496,8 +32932,8 @@
         "output": 2.2
       },
       "zenmux": {
-        "input": 0.35,
-        "output": 1.54
+        "input": 0.2911,
+        "output": 1.1645
       },
       "edenai": {
         "input": 0.6,
@@ -31546,8 +32982,8 @@
         "output": 0.9
       },
       "zenmux": {
-        "input": 0.14,
-        "output": 0.42
+        "input": 0.1456,
+        "output": 0.4367
       },
       "edenai": {
         "input": 0.3,
@@ -31555,9 +32991,17 @@
       }
     },
     "zhipuai/glm-4.6v-flash": {
+      "zhipuai": {
+        "input": 0.0,
+        "output": 0.0
+      },
+      "zai": {
+        "input": 0.0,
+        "output": 0.0
+      },
       "zenmux": {
-        "input": 0.02,
-        "output": 0.21
+        "input": 0.0218,
+        "output": 0.2184
       }
     },
     "zhipuai/glm-4.7": {
@@ -31593,10 +33037,6 @@
         "input": 0.45,
         "output": 1.65
       },
-      "zhipuai-coding-plan": {
-        "input": 0.0,
-        "output": 0.0
-      },
       "crossmodel": {
         "input": 0.47,
         "output": 2.16
@@ -31606,10 +33046,6 @@
         "output": 2.2
       },
       "vercel": {
-        "input": 0.6,
-        "output": 2.2
-      },
-      "tensorx": {
         "input": 0.6,
         "output": 2.2
       },
@@ -31654,8 +33090,8 @@
         "output": 2.2
       },
       "zenmux": {
-        "input": 0.28,
-        "output": 1.14
+        "input": 0.2911,
+        "output": 1.1645
       },
       "edenai": {
         "input": 0.6,
@@ -31754,8 +33190,8 @@
         "output": 0.4
       },
       "zenmux": {
-        "input": 0.07,
-        "output": 0.42
+        "input": 0.0728,
+        "output": 0.4367
       }
     },
     "zhipuai/glm-5": {
@@ -31909,10 +33345,6 @@
         "input": 0.0,
         "output": 0.0
       },
-      "zhipuai-coding-plan": {
-        "input": 0.0,
-        "output": 0.0
-      },
       "crossmodel": {
         "input": 0.9,
         "output": 3.7
@@ -31954,8 +33386,8 @@
         "output": 4.0
       },
       "zenmux": {
-        "input": 0.88,
-        "output": 3.48
+        "input": 0.73,
+        "output": 3.19
       },
       "cortecs": {
         "input": 1.186,
@@ -32022,10 +33454,6 @@
       "requesty": {
         "input": 1.4,
         "output": 4.4
-      },
-      "zhipuai-coding-plan": {
-        "input": 0.0,
-        "output": 0.0
       },
       "crossmodel": {
         "input": 1.0,
@@ -32134,8 +33562,8 @@
         "output": 1.32
       },
       "digitalocean": {
-        "input": 0.7,
-        "output": 2.2
+        "input": 1.4,
+        "output": 4.4
       },
       "vivgrid": {
         "input": 1.2,
@@ -32213,10 +33641,6 @@
         "input": 0.8,
         "output": 2.55
       },
-      "zhipuai-coding-plan": {
-        "input": 0.0,
-        "output": 0.0
-      },
       "crossmodel": {
         "input": 1.2,
         "output": 4.4
@@ -32249,6 +33673,10 @@
         "input": 1.4,
         "output": 4.4
       },
+      "opper": {
+        "input": 1.62708,
+        "output": 5.811
+      },
       "crof": {
         "input": 0.3,
         "output": 1.05
@@ -32266,8 +33694,8 @@
         "output": 4.4
       },
       "openrouter": {
-        "input": 1.4,
-        "output": 4.4
+        "input": 0.6496,
+        "output": 2.0416
       },
       "cline-pass": {
         "input": 1.4,
@@ -32302,8 +33730,8 @@
         "output": 4.4
       },
       "zenmux": {
-        "input": 1.4,
-        "output": 4.5
+        "input": 0.98,
+        "output": 3.08
       },
       "cortecs": {
         "input": 1.1,
@@ -32344,8 +33772,8 @@
         "output": 3.2
       },
       "digitalocean": {
-        "input": 0.95,
-        "output": 3.4
+        "input": 1.4,
+        "output": 4.4
       },
       "vivgrid": {
         "input": 1.2,
@@ -32358,6 +33786,10 @@
       "llmgateway-providers": {
         "input": 1.2,
         "output": 4.0
+      },
+      "alibaba-token-plan": {
+        "input": 0.0,
+        "output": 0.0
       },
       "neuralwatt": {
         "input": 1.45,
@@ -32403,6 +33835,10 @@
         "input": 1.4,
         "output": 4.4
       },
+      "tensorx": {
+        "input": 1.75,
+        "output": 4.5
+      },
       "llmgateway": {
         "input": 1.2,
         "output": 4.0
@@ -32410,6 +33846,10 @@
       "zhipuai": {
         "input": 1.4,
         "output": 4.4
+      },
+      "opper": {
+        "input": 1.75,
+        "output": 4.6488
       },
       "crof": {
         "input": 0.4,
@@ -32432,8 +33872,8 @@
         "output": 4.4
       },
       "openrouter": {
-        "input": 1.4,
-        "output": 4.4
+        "input": 0.84,
+        "output": 2.64
       },
       "cline-pass": {
         "input": 1.4,
@@ -32475,6 +33915,10 @@
         "input": 1.4,
         "output": 4.4
       },
+      "zenmux": {
+        "input": 1.4,
+        "output": 4.4
+      },
       "vancine": {
         "input": 1.12,
         "output": 3.52
@@ -32482,6 +33926,10 @@
       "cortecs": {
         "input": 1.114,
         "output": 3.899
+      },
+      "alibaba-token-plan-cn": {
+        "input": 0.0,
+        "output": 0.0
       },
       "opencode-go": {
         "input": 1.4,
@@ -32525,6 +33973,10 @@
         "input": 0.15,
         "output": 0.5
       },
+      "neuralwatt": {
+        "input": 0.15,
+        "output": 0.5
+      },
       "aihubmix": {
         "input": 0.11268,
         "output": 0.39438
@@ -32565,13 +34017,21 @@
         "input": 0.15,
         "output": 0.5
       },
+      "tensorx": {
+        "input": 0.2,
+        "output": 0.5
+      },
       "llmgateway": {
-        "input": 0.088,
-        "output": 0.25
+        "input": 0.07,
+        "output": 0.19
       },
       "zhipuai": {
-        "input": 0.075,
-        "output": 0.25
+        "input": 0.15,
+        "output": 0.5
+      },
+      "opper": {
+        "input": 0.2,
+        "output": 0.5
       },
       "crof": {
         "input": 0.07,
@@ -32594,8 +34054,8 @@
         "output": 0.5
       },
       "openrouter": {
-        "input": 0.09,
-        "output": 0.3
+        "input": 0.15,
+        "output": 0.5
       },
       "cline-pass": {
         "input": 0.15,
@@ -32622,10 +34082,14 @@
         "output": 0.25
       },
       "zai": {
-        "input": 0.075,
-        "output": 0.25
+        "input": 0.15,
+        "output": 0.5
       },
       "cloudflare-workers-ai": {
+        "input": 0.15,
+        "output": 0.5
+      },
+      "zenmux": {
         "input": 0.15,
         "output": 0.5
       },
@@ -32658,10 +34122,6 @@
       "aihubmix": {
         "input": 0.7042,
         "output": 3.09848
-      },
-      "zhipuai-coding-plan": {
-        "input": 0.0,
-        "output": 0.0
       },
       "vercel": {
         "input": 1.2,

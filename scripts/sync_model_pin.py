@@ -4,6 +4,10 @@
 Maintainer/script only. Hub / Registry / CI request paths must not curl these
 hosts. Run: python3 scripts/sync_model_pin.py
 
+A lab is pinned only when it has a logo: a Hub brand mark, or a non-placeholder
+SVG from Lobe or models.dev. Labs that would render as a letter are omitted
+with their models.
+
 Slim rows keep models.dev modalities, knowledge, temperature, structured
 output, and unioned api.json reasoning_options. Logos: --logos-only.
 """
@@ -67,32 +71,11 @@ LOBE_INK_SLUG = {
 }
 
 LITELLM_URL = (
-    "https://raw.githubusercontent.com/BerriAI/litellm/main/"
-    "model_prices_and_context_window.json"
+    "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
 )
 
 # Gateways used in ageval overlays that are not models.dev provider ids.
 EXTRA_PREFIXES = ("dashscope", "dashscope-", "litellm")
-
-# Labs omitted from pin.json. models.dev still lists them; we just do not pin.
-SKIP_LABS = frozenset({
-    "ai21",
-    "aisingapore",
-    "amazon",
-    "arcee-ai",
-    "deepreinforce",
-    "inclusionai",
-    "motif-technologies",
-    "openbmb",
-    "poolside",
-    "sakana",
-    "sarvam",
-    "sdaia",
-    "swiss-ai",
-    "trendyol",
-    "upstage",
-    "writer",
-})
 
 LAB_NAMES = {
     "aisingapore": "AI Singapore",
@@ -187,6 +170,7 @@ def _finalize_reasoning_options(acc: dict[str, set[str]]) -> list[dict]:
         row: dict = {"type": typ}
         values = acc[typ]
         if values:
+
             def sort_key(value: str) -> tuple[int, str]:
                 try:
                     return (0, f"{EFFORT_ORDER.index(value):02d}")
@@ -260,13 +244,11 @@ def _litellm_price(row: object) -> dict[str, float] | None:
     return {"input": round(float(inp) * 1_000_000, 6), "output": round(float(out) * 1_000_000, 6)}
 
 
-def build_pin(models: dict, api: dict, litellm: dict | None) -> dict:
+def build_pin(models: dict, api: dict, litellm: dict | None, allowed_labs: set[str]) -> dict:
     canonicals = {
         cid
         for cid in models
-        if isinstance(cid, str)
-        and "/" in cid
-        and cid.split("/", 1)[0] not in SKIP_LABS
+        if isinstance(cid, str) and "/" in cid and cid.split("/", 1)[0] in allowed_labs
     }
     leaves: dict[str, list[str]] = {}
     for cid in sorted(canonicals):
@@ -337,7 +319,9 @@ def build_pin(models: dict, api: dict, litellm: dict | None) -> dict:
                 bucket = prices.setdefault(canonical, {})
                 bucket[provider_id] = {
                     "input": float(cost["input"]),
-                    "output": float(cost["output"]) if isinstance(cost.get("output"), (int, float)) else 0.0,
+                    "output": float(cost["output"])
+                    if isinstance(cost.get("output"), (int, float))
+                    else 0.0,
                 }
 
     for cid, acc in reasoning_acc.items():
@@ -403,8 +387,11 @@ def _has_hex_paint(svg: str) -> bool:
     return bool(re.search(r"#[0-9A-Fa-f]{3,8}\b", svg))
 
 
-def resolve_lab_logo(lab: str) -> tuple[str, str, bytes | None]:
-    """Return (logo filename or '', tone, svg bytes or None)."""
+def resolve_lab_logo(lab: str) -> tuple[str, str, bytes | None] | None:
+    """Return (filename, tone, svg bytes), or None when the lab has no logo.
+
+    Brand-mark labs return ("", "", None). Their SVG lives in the Hub catalog.
+    """
     if lab in LAB_BRAND_MARK:
         return "", "", None
     slug = LOBE_COLOR_SLUG.get(lab)
@@ -428,15 +415,67 @@ def resolve_lab_logo(lab: str) -> tuple[str, str, bytes | None]:
             if _has_hex_paint(text) and "currentColor" not in text:
                 return f"{lab}.svg", "color", raw
             return f"{lab}.svg", "ink", _bake_ink(text).encode("utf-8")
-    return "", "", None
+    return None
 
 
-def write_logos(labs: dict[str, dict]) -> dict[str, int]:
+def _candidate_labs(models: dict) -> list[str]:
+    labs: set[str] = set()
+    for cid in models:
+        if isinstance(cid, str) and "/" in cid:
+            labs.add(cid.split("/", 1)[0])
+    return sorted(labs)
+
+
+def resolve_logos(
+    labs: list[str],
+) -> tuple[dict[str, tuple[str, str, bytes | None]], list[str]]:
+    kept: dict[str, tuple[str, str, bytes | None]] = {}
+    omitted: list[str] = []
+    for lab in labs:
+        logo = resolve_lab_logo(lab)
+        if logo is None:
+            omitted.append(lab)
+        else:
+            kept[lab] = logo
+    return kept, omitted
+
+
+def retain_labs(pin: dict, allowed: set[str]) -> None:
+    """Drop labs without a logo, and the models, lookup keys, and prices that follow them."""
+    models = pin.get("models") if isinstance(pin.get("models"), dict) else {}
+    keep_ids = {
+        cid
+        for cid, row in models.items()
+        if isinstance(cid, str) and isinstance(row, dict) and row.get("lab") in allowed
+    }
+    pin["models"] = {cid: models[cid] for cid in sorted(keep_ids)}
+    labs = pin.get("labs") if isinstance(pin.get("labs"), dict) else {}
+    pin["labs"] = {lab: labs[lab] for lab in sorted(allowed) if lab in labs}
+    lookup: dict[str, list[str]] = {}
+    raw_lookup = pin.get("lookup") if isinstance(pin.get("lookup"), dict) else {}
+    for key, hits in raw_lookup.items():
+        if not isinstance(key, str) or not isinstance(hits, list):
+            continue
+        kept_hits = [hit for hit in hits if hit in keep_ids]
+        if kept_hits:
+            lookup[key] = kept_hits
+    pin["lookup"] = {key: lookup[key] for key in sorted(lookup)}
+    prices = pin.get("prices") if isinstance(pin.get("prices"), dict) else {}
+    pin["prices"] = {cid: prices[cid] for cid in sorted(prices) if cid in keep_ids}
+
+
+def write_logos(
+    labs: dict[str, dict],
+    resolved: dict[str, tuple[str, str, bytes | None]],
+) -> dict[str, int]:
     LOGO_DIR.mkdir(parents=True, exist_ok=True)
-    counts = {"brand": 0, "color": 0, "ink": 0, "letter": 0}
+    counts = {"brand": 0, "color": 0, "ink": 0}
     wanted: set[str] = set()
     for lab, row in labs.items():
-        filename, tone, data = resolve_lab_logo(lab)
+        logo = resolved.get(lab)
+        if logo is None:
+            raise SystemExit(f"lab {lab} has no resolved logo")
+        filename, tone, data = logo
         row["logo"] = filename
         if tone:
             row["tone"] = tone
@@ -450,10 +489,7 @@ def write_logos(labs: dict[str, dict]) -> dict[str, int]:
         else:
             if dest.exists():
                 dest.unlink()
-            if lab in LAB_BRAND_MARK:
-                counts["brand"] += 1
-            else:
-                counts["letter"] += 1
+            counts["brand"] += 1
     for leftover in LOGO_DIR.glob("*.svg"):
         if leftover.name not in wanted:
             leftover.unlink()
@@ -468,6 +504,21 @@ def _write_pin(pin: dict) -> None:
     )
 
 
+def _prepare_lab_rows(pin: dict) -> None:
+    labs = pin.get("labs")
+    if not isinstance(labs, dict):
+        return
+    for lab, row in labs.items():
+        if isinstance(row, dict) and "name" not in row:
+            row["name"] = LAB_NAMES.get(lab, lab)
+
+
+def _print_logos(prefix: str, counts: dict[str, int], omitted: list[str]) -> None:
+    print(f"{prefix}brand={counts['brand']} color={counts['color']} ink={counts['ink']}")
+    if omitted:
+        print("omitted (no logo): " + ", ".join(omitted))
+
+
 def main() -> int:
     logos_only = "--logos-only" in sys.argv
     if logos_only:
@@ -475,16 +526,13 @@ def main() -> int:
         pin = json.loads(pin_path.read_text(encoding="utf-8"))
         if not isinstance(pin, dict) or not isinstance(pin.get("labs"), dict):
             raise SystemExit("pin.json missing labs")
-        for lab, row in pin["labs"].items():
-            if isinstance(row, dict) and "name" not in row:
-                row["name"] = LAB_NAMES.get(lab, lab)
-        counts = write_logos(pin["labs"])
+        _prepare_lab_rows(pin)
+        resolved, omitted = resolve_logos(sorted(pin["labs"]))
+        retain_labs(pin, set(resolved))
+        counts = write_logos(pin["labs"], resolved)
         _write_pin(pin)
-        print(
-            "logos-only "
-            f"brand={counts['brand']} color={counts['color']} "
-            f"ink={counts['ink']} letter={counts['letter']}"
-        )
+        print(f"logos-only {len(pin['models'])} models, {len(pin['labs'])} labs")
+        _print_logos("", counts, omitted)
         return 0
 
     models = json.loads(_get(MODELS_URL).decode("utf-8"))
@@ -496,20 +544,15 @@ def main() -> int:
         litellm = json.loads(_get(LITELLM_URL).decode("utf-8"))
     except Exception:
         litellm = None
-    pin = build_pin(models, api, litellm)
-    counts = write_logos(pin["labs"])
+    resolved, omitted = resolve_logos(_candidate_labs(models))
+    pin = build_pin(models, api, litellm, set(resolved))
+    counts = write_logos(pin["labs"], resolved)
     _write_pin(pin)
     print(
         f"pinned {len(pin['models'])} models, {len(pin['labs'])} labs, "
         f"{len(pin['lookup'])} lookup keys → {PIN_DIR / 'pin.json'}"
     )
-    if SKIP_LABS:
-        print("skipped labs: " + ", ".join(sorted(SKIP_LABS)))
-    print(
-        "logos "
-        f"brand={counts['brand']} color={counts['color']} "
-        f"ink={counts['ink']} letter={counts['letter']}"
-    )
+    _print_logos("logos ", counts, omitted)
     return 0
 
 
