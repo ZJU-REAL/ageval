@@ -1,7 +1,8 @@
 """Dataset open helpers and copyable CLI strings for the local viewer.
 
-Jobs UI is the product surface; this module does not expose package file trees.
-All access stays under the opened Dataset root.
+One dataset root is `open_dataset`. A directory of datasets is `ageval.viewer.session`.
+Package file preview lives in `ageval.viewer.catalog`. Job evidence stays under the
+selected dataset root.
 """
 
 from __future__ import annotations

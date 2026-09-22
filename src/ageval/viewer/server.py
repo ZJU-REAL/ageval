@@ -14,7 +14,8 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 from ageval.config.errors import ConfigError
-from ageval.viewer import browse, jobs, trials
+from ageval.viewer import catalog, jobs, trials
+from ageval.viewer.session import ViewSession, open_view
 
 # Default bind: loopback only.
 DEFAULT_HOST = "127.0.0.1"
@@ -93,6 +94,42 @@ def _error(handler: BaseHTTPRequestHandler, status: int, code: str, message: str
     _json(handler, status, {"error": code, "message": message})
 
 
+def _dataset_query(url: str) -> str | None:
+    raw = (parse_qs(urlparse(url).query).get("dataset") or [""])[0].strip()
+    return raw or None
+
+
+def _dataset_query_value(url: str, name: str) -> str:
+    return (parse_qs(urlparse(url).query).get(name) or [""])[0].strip()
+
+
+def _config_status(exc: ConfigError) -> int:
+    if "unknown" in exc.error_code:
+        return 404
+    return 400
+
+
+def _retag_breadcrumbs(payload: dict[str, Any], dataset_key: str) -> None:
+    crumbs = payload.get("breadcrumb")
+    if not isinstance(crumbs, list):
+        return
+    home = f"/jobs/{dataset_key}"
+    prefix = "/jobs/"
+    for crumb in crumbs:
+        if not isinstance(crumb, dict):
+            continue
+        href = crumb.get("href")
+        if href == "/":
+            crumb["href"] = home
+            continue
+        if not isinstance(href, str) or not href.startswith(prefix):
+            continue
+        rest = href[len(prefix) :]
+        if rest == dataset_key or rest.startswith(dataset_key + "/"):
+            continue
+        crumb["href"] = f"{home}/{rest}"
+
+
 def normalize_open_path(raw: str | None) -> str:
     """Client route to open after start. Must be a same-origin path."""
     text = (raw or "/").strip() or "/"
@@ -111,9 +148,10 @@ def make_handler(
     dataset_root: Path,
     assets: Path | None,
     *,
+    session: ViewSession | None = None,
     cors_origin: str | None = None,
 ) -> type[BaseHTTPRequestHandler]:
-    root = dataset_root.resolve(strict=False)
+    bound = session if session is not None else open_view(dataset_root)
     assets_dir = assets.resolve(strict=False) if assets is not None else None
 
     class ViewerHandler(BaseHTTPRequestHandler):
@@ -136,6 +174,39 @@ def make_handler(
 
             if path == "/api/health":
                 _json(self, 200, {"ok": True, "service": "ageval-viewer"})
+                return
+            if path == "/api/session":
+                _json(self, 200, bound.as_dict())
+                return
+            if path == "/api/datasets":
+                _json(self, 200, {"ok": True, "items": [item.as_dict() for item in bound.datasets]})
+                return
+            if path.startswith("/api/datasets/"):
+                self._api_dataset(path)
+                return
+            if path == "/api/plugins":
+                _json(self, 200, catalog.list_plugins())
+                return
+            if path == "/api/plugins/package":
+                self._api_plugin_package()
+                return
+            if path == "/api/plugins/tree":
+                self._api_plugin_tree()
+                return
+            if path == "/api/plugins/file":
+                self._api_plugin_file()
+                return
+            if path == "/api/agents":
+                _json(self, 200, catalog.list_agents())
+                return
+            if path == "/api/agents/package":
+                self._api_agent_package()
+                return
+            if path == "/api/agents/tree":
+                self._api_agent_tree()
+                return
+            if path == "/api/agents/file":
+                self._api_agent_file()
                 return
             if path == "/api/jobs":
                 self._api_jobs_list()
@@ -191,12 +262,100 @@ def make_handler(
             confirm = (qs.get("confirm") or [""])[0]
             self._api_job_delete(parts[0], confirm)
 
+        def _opened(self):
+            return bound.by_key(_dataset_query(self.path))
+
+        def _api_dataset(self, path: str) -> None:
+            rest = [part for part in path[len("/api/datasets/") :].split("/") if part]
+            if not rest:
+                _error(self, 404, "not_found", "dataset key required")
+                return
+            key, tail = rest[0], rest[1:]
+            try:
+                opened = bound.by_key(key)
+                if not tail:
+                    _json(self, 200, catalog.dataset_package(opened))
+                    return
+                if tail == ["tree"]:
+                    _json(self, 200, catalog.dataset_tree(opened))
+                    return
+                if tail == ["file"]:
+                    rel = _dataset_query_value(self.path, "path")
+                    if not rel:
+                        _error(self, 400, "invalid_package", "path query required")
+                        return
+                    _json(self, 200, catalog.dataset_file(opened, rel))
+                    return
+            except ConfigError as exc:
+                _error(self, _config_status(exc), exc.error_code, str(exc))
+                return
+            _error(self, 404, "not_found", "unknown dataset API path")
+
+        def _api_plugin_package(self) -> None:
+            self._catalog_call("plugin", "package")
+
+        def _api_plugin_tree(self) -> None:
+            self._catalog_call("plugin", "tree")
+
+        def _api_plugin_file(self) -> None:
+            self._catalog_call("plugin", "file")
+
+        def _api_agent_package(self) -> None:
+            self._catalog_call("agent", "package")
+
+        def _api_agent_tree(self) -> None:
+            self._catalog_call("agent", "tree")
+
+        def _api_agent_file(self) -> None:
+            self._catalog_call("agent", "file")
+
+        def _catalog_call(self, kind: str, action: str) -> None:
+            source = _dataset_query_value(self.path, "source")
+            package_id = _dataset_query_value(self.path, "id")
+            version = _dataset_query_value(self.path, "version")
+            if not source or not package_id or not version:
+                _error(self, 400, "invalid_package", "source, id, and version are required")
+                return
+            try:
+                if kind == "plugin" and action == "package":
+                    payload = catalog.plugin_package(source, package_id, version)
+                elif kind == "plugin" and action == "tree":
+                    payload = catalog.plugin_tree(source, package_id, version)
+                elif kind == "plugin" and action == "file":
+                    rel = _dataset_query_value(self.path, "path")
+                    if not rel:
+                        _error(self, 400, "invalid_package", "path query required")
+                        return
+                    payload = catalog.plugin_file(source, package_id, version, rel)
+                elif kind == "agent" and action == "package":
+                    payload = catalog.agent_package(source, package_id, version)
+                elif kind == "agent" and action == "tree":
+                    payload = catalog.agent_tree(source, package_id, version)
+                elif kind == "agent" and action == "file":
+                    rel = _dataset_query_value(self.path, "path")
+                    if not rel:
+                        _error(self, 400, "invalid_package", "path query required")
+                        return
+                    payload = catalog.agent_file(source, package_id, version, rel)
+                else:
+                    _error(self, 404, "not_found", "unknown catalog API path")
+                    return
+            except ConfigError as exc:
+                _error(self, _config_status(exc), exc.error_code, str(exc))
+                return
+            _json(self, 200, payload)
+
         def _api_job_delete(self, job_id: str, confirm: str) -> None:
             from ageval.application.composition import build_local_jobs_commands
 
             try:
+                opened = self._opened()
+            except ConfigError as exc:
+                _error(self, _config_status(exc), exc.error_code, str(exc))
+                return
+            try:
                 payload = build_local_jobs_commands().delete_job(
-                    root,
+                    opened.root,
                     job_id=job_id,
                     confirm_token=confirm or None,
                 )
@@ -227,9 +386,15 @@ def make_handler(
 
         def _api_jobs_list(self) -> None:
             try:
-                _json(self, 200, jobs.list_jobs(root))
+                if _dataset_query(self.path) is None and not bound.datasets:
+                    _json(self, 200, {"ok": True, "items": [], "count": 0, "commands": {}})
+                    return
+                opened = self._opened()
+                payload = jobs.list_jobs(opened.root)
+                payload["dataset_key"] = opened.key
+                _json(self, 200, payload)
             except ConfigError as exc:
-                _error(self, 400, exc.error_code, str(exc))
+                _error(self, _config_status(exc), exc.error_code, str(exc))
 
         def _api_jobs(self, path: str) -> None:
             # /api/jobs/{job_id}
@@ -247,6 +412,9 @@ def make_handler(
             query = urlparse(self.path).query
             q = trials.parse_query(query)
             try:
+                opened = self._opened()
+                root = opened.root
+                dataset_key = opened.key
                 if len(parts) == 2 and parts[1] == "delete-preview":
                     from ageval.application.composition import build_local_jobs_commands
 
@@ -303,8 +471,8 @@ def make_handler(
                             "commands": payload.get("commands"),
                             "run_command": payload.get("run_command"),
                             "breadcrumb": [
-                                {"label": "Jobs", "href": "/"},
-                                {"label": job_id, "href": f"/jobs/{job_id}"},
+                                {"label": "Jobs", "href": f"/jobs/{dataset_key}"},
+                                {"label": job_id, "href": f"/jobs/{dataset_key}/{job_id}"},
                                 {"label": task_id, "href": None},
                             ],
                             "note": payload.get("note"),
@@ -314,11 +482,15 @@ def make_handler(
                 if len(parts) >= 4 and parts[1] == "tasks" and parts[3] == "trials":
                     task_id = parts[2]
                     if len(parts) == 4:
-                        _json(self, 200, trials.list_task_trials(root, job_id, task_id))
+                        payload = trials.list_task_trials(root, job_id, task_id)
+                        _retag_breadcrumbs(payload, dataset_key)
+                        _json(self, 200, payload)
                         return
                     run_id = parts[4]
                     if len(parts) == 5:
-                        _json(self, 200, trials.get_trial(root, job_id, task_id, run_id))
+                        payload = trials.get_trial(root, job_id, task_id, run_id)
+                        _retag_breadcrumbs(payload, dataset_key)
+                        _json(self, 200, payload)
                         return
                     if len(parts) == 6 and parts[5] == "tree":
                         _json(
@@ -410,15 +582,25 @@ def serve_viewer(
         try_start_dev_ui,
     )
 
-    root = browse.open_dataset(dataset_ref)
-    # Validate package early; reuse for startup metadata.
-    overview = browse.dataset_overview(root)
+    session = open_view(dataset_ref)
+    if len(session.datasets) == 1:
+        only = session.datasets[0]
+        dataset_id: str | None = only.dataset_id
+        shown_root = str(only.root)
+    else:
+        dataset_id = None
+        shown_root = str(session.parent) if session.parent is not None else ""
     route = normalize_open_path(open_path)
     ui_port_n = int(ui_port) if ui_port else DEFAULT_UI_PORT
     ui_origin = f"http://127.0.0.1:{ui_port_n}"
     assets = None if dev else static_dir()
     cors_origin = ui_origin if dev else None
-    handler = make_handler(root, assets, cors_origin=cors_origin)
+    handler = make_handler(
+        Path(shown_root or "."),
+        assets,
+        session=session,
+        cors_origin=cors_origin,
+    )
     try:
         server = ThreadingHTTPServer((host, port), handler)
     except OSError as exc:
@@ -451,8 +633,10 @@ def serve_viewer(
         "ui_started": ui.started,
         "ui_reason": ui.reason,
         "open_path": route,
-        "dataset_id": overview["dataset_id"],
-        "root": str(root),
+        "dataset_id": dataset_id,
+        "dataset_count": len(session.datasets),
+        "landing": session.landing,
+        "root": shown_root,
     }
 
     if open_browser and (not dev or ui.started):
