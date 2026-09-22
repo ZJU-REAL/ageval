@@ -9,6 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, NoReturn
 
+import yaml
+
 from ageval.agents.manifest import AgentManifest, load_agent_manifest
 from ageval.agents.paths import agents_root
 from ageval.agents.reserved import builtin_harness_root, builtin_harness_rows
@@ -109,7 +111,7 @@ def list_agents() -> dict[str, Any]:
                 "id": harness_id,
                 "version": manifest.version,
                 "label": row["label"] or harness_id,
-                "description": row["description"] or manifest.description,
+                "description": manifest.description or row["description"],
                 "read_only": True,
             }
         )
@@ -123,7 +125,7 @@ def list_agents() -> dict[str, Any]:
                 "id": entry.agent_id,
                 "version": entry.version,
                 "label": entry.label or entry.agent_id,
-                "description": None,
+                "description": _agent_description(root),
                 "read_only": True,
             }
         )
@@ -135,7 +137,7 @@ def plugin_package(source: str, plugin_id: str, version: str) -> dict[str, Any]:
     description = manifest.description if manifest is not None else _plugin_description(root)
     resolved_id = manifest.plugin_id if manifest is not None else plugin_id
     resolved_version = manifest.version if manifest is not None else version
-    return _package(
+    payload = _package(
         kind="plugin",
         source=source,
         package_id=resolved_id,
@@ -144,6 +146,8 @@ def plugin_package(source: str, plugin_id: str, version: str) -> dict[str, Any]:
         root=root,
         manifest_name="plugin.yaml",
     )
+    payload["declared"] = _declared_slots(manifest)
+    return payload
 
 
 def agent_package(source: str, agent_id: str, version: str) -> dict[str, Any]:
@@ -213,6 +217,23 @@ def _package(
         "profiles": _file_name(root, "profiles.yaml"),
         "read_only": True,
     }
+
+
+def _declared_slots(manifest: PluginManifest | None) -> list[dict[str, Any]]:
+    if manifest is None:
+        return []
+    rows: list[dict[str, Any]] = []
+    for kind, entries in (("exclusive", manifest.exclusive), ("chain", manifest.chain)):
+        for slot in entries:
+            rows.append(
+                {
+                    "id": slot.id,
+                    "kind": kind,
+                    "entry": slot.entry,
+                    "priority": slot.priority,
+                }
+            )
+    return rows
 
 
 def _plugin_row(
@@ -306,7 +327,30 @@ def _plugin_description(root: Path) -> str | None:
     try:
         return load_manifest(root).description
     except PluginManifestError:
+        return _yaml_description(root / "plugin.yaml")
+
+
+def _agent_description(root: Path) -> str | None:
+    try:
+        return load_agent_manifest(root).description
+    except ConfigError:
+        return _yaml_description(root / "agent.yaml")
+
+
+def _yaml_description(path: Path) -> str | None:
+    if not path.is_file():
         return None
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    text = raw.get("description")
+    if not isinstance(text, str):
+        return None
+    stripped = text.strip()
+    return stripped or None
 
 
 def _file_name(root: Path, name: str) -> str | None:

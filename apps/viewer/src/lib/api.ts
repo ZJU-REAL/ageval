@@ -505,6 +505,12 @@ export type PackageDetail = {
   manifest?: string | null;
   profiles?: string | null;
   read_only?: boolean;
+  declared?: {
+    id: string;
+    kind: "exclusive" | "chain";
+    entry?: string;
+    priority?: number;
+  }[];
 };
 
 export type PackageFile = {

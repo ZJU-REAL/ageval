@@ -2,10 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { EmptyState, LoadingState } from "@ageval/shared/components/empty-state";
+import { InlineMarkdown } from "@ageval/shared/components/markdown";
+import {
+  declaredSlotsFromPreview,
+  PluginSlotTimeline,
+} from "@ageval/shared/components/plugin-slot-timeline";
 import { FileSplitPanel } from "@ageval/shared/components/trial/file-split-panel";
 import { FileText } from "lucide-react";
 import { Shell } from "@/components/layout";
-import { PageHead } from "@/components/page-head";
+import { useDocumentTitle } from "@/lib/document-title";
 import {
   fetchAgent,
   fetchAgentFile,
@@ -102,33 +107,58 @@ function PackageBrowser({ loader }: { loader: Loader }) {
     };
   }, [loader, selected]);
 
-  const sub =
+  const title = detail?.label || "Package";
+  useDocumentTitle(detail ? title : null);
+  const sourceLabel =
     detail?.source === "builtin"
       ? "Built in"
       : detail?.source === "installed"
         ? "Installed"
-        : detail?.description || undefined;
+        : null;
+  const filePaths = tree.filter((entry) => entry.type !== "dir").map((entry) => entry.path);
+  const declared =
+    detail?.kind === "plugin" ? declaredSlotsFromPreview({ declared: detail.declared }) : [];
 
   return (
     <Shell>
       <div className="flex flex-1 flex-col gap-4">
-        <PageHead title={detail?.label || "Package"} sub={sub} />
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">{title}</h1>
+          {sourceLabel ? <p className="mt-1 text-sm text-mute">{sourceLabel}</p> : null}
+          {detail?.description ? (
+            <div className="mt-2">
+              <InlineMarkdown source={detail.description} />
+            </div>
+          ) : null}
+        </div>
         {loading ? (
           <LoadingState label="Loading package" />
         ) : error ? (
           <EmptyState icon={FileText} title="Could not open package" caption={error} />
         ) : (
-          <div className="blob-panel overflow-hidden">
-            <FileSplitPanel
-              tree={tree}
-              treeLoading={treeLoading}
-              selectedPath={selected}
-              onSelect={setSelected}
-              fileContent={content}
-              fileLoading={fileLoading}
-              fileNote={note}
-            />
-          </div>
+          <>
+            {detail?.kind === "plugin" ? (
+              <section className="space-y-2">
+                <h2 className="text-sm font-medium text-ink">Declared slots</h2>
+                <PluginSlotTimeline
+                  declared={declared}
+                  files={filePaths}
+                  onOpenPath={setSelected}
+                />
+              </section>
+            ) : null}
+            <div className="blob-panel overflow-hidden">
+              <FileSplitPanel
+                tree={tree}
+                treeLoading={treeLoading}
+                selectedPath={selected}
+                onSelect={setSelected}
+                fileContent={content}
+                fileLoading={fileLoading}
+                fileNote={note}
+              />
+            </div>
+          </>
         )}
       </div>
     </Shell>
