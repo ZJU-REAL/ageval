@@ -166,7 +166,7 @@ Dev: `ageval view --dev` starts the API and tries to spawn Vite. If that cannot 
 
 - Prefer phase commits: design docs → API → scaffold → pages → polish.
 - Do not claim #22 Leaderboard done.
-- Keep tests green: `uv run pytest tests/viewer/ -q` and `pnpm build`.
+- `tests/viewer/` is the Python HTTP API. Keep `uv run pytest tests/viewer/ -q` and `pnpm build` green. Website, Hub, and Viewer UI is checked by a person on the rendered page. Do not add a component, snapshot, or browser test file under `apps/` or `website/`. Do not add a pytest that asserts visible copy, class names, DOM ids, or markup the test itself wrote.
 - Column labels map ageval fields for operators, e.g. `Result` ≈ `mean_score` / `pass_rate`, `Trials` ≈ task counts.
 
 ## Anti-patterns (reject in review)

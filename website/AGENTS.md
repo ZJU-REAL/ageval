@@ -66,3 +66,5 @@ python3 scripts/check_public_terms.py
 pnpm --dir website lint
 pnpm --dir website build
 ```
+
+Website, Hub, and Viewer UI is checked by a person on the rendered page. Do not add a component, snapshot, or browser test file under `apps/` or `website/`. Do not add a pytest that asserts visible copy, class names, DOM ids, or markup the test itself wrote. The three commands above stay.

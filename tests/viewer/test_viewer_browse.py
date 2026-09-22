@@ -103,11 +103,6 @@ def test_http_health_jobs_and_spa(viewer_server: str) -> None:
     assert jobs_payload["count"] >= 0
     assert "commands" in jobs_payload
 
-    with urlopen(f"{base}/", timeout=5) as resp:  # noqa: S310
-        html = resp.read().decode("utf-8")
-    assert "ageval Viewer" in html
-    assert 'id="root"' in html
-
 
 def test_serve_viewer_dev_skips_spa_bundle(tmp_path: Path) -> None:
     from ageval.viewer.server import serve_viewer

@@ -56,3 +56,7 @@ Stack is Vite + React + Tailwind + **shadcn/ui**. Overlap primitives live in
 
 New overlap chrome requires a new `apps/shared/components/ui/` primitive first, used by both
 Hub and Viewer. Do not one-off style a native element.
+
+## Checks
+
+Website, Hub, and Viewer UI is checked by a person on the rendered page. Do not add a component, snapshot, or browser test file under `apps/` or `website/`. Do not add a pytest that asserts visible copy, class names, DOM ids, or markup the test itself wrote. Hub CI stays `pnpm lint` and `pnpm build`.

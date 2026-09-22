@@ -104,3 +104,5 @@ variables stay inside the canonical set; no raw hex in app code (outside the
 allowlist).
 CI job `design-tokens` runs the same command. Run it locally after token or
 style edits.
+
+Website, Hub, and Viewer UI is checked by a person on the rendered page. Do not add a component, snapshot, or browser test file under `apps/` or `website/`. Do not add a pytest that asserts visible copy, class names, DOM ids, or markup the test itself wrote. `scripts/check_design_tokens.py` stays the machine check for tokens.
