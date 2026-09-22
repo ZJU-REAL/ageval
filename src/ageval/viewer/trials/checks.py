@@ -10,7 +10,12 @@ from ageval.config.errors import ConfigError
 from ageval.evidence.checks import CHECKS_REL, normalize_check_row, package_script_rel
 from ageval.evidence.locators import safe_id_segment
 from ageval.viewer.jobs import get_job
-from ageval.viewer.trials.constants import MAX_FILE_BYTES, TEXT_SUFFIXES
+from ageval.viewer.trials.constants import (
+    MAX_FILE_BYTES,
+    TEXT_SUFFIXES,
+    is_env_example,
+    is_secret_basename,
+)
 from ageval.viewer.trials.paths import _safe_run_id, resolve_evidence_root, safe_under
 
 
@@ -110,7 +115,7 @@ def trial_package_file(
         )
     size = path.stat().st_size
     suffix = path.suffix.lower()
-    if path.name in {".env", ".env.local", ".env.production"} or path.name.startswith(".env."):
+    if is_secret_basename(path.name):
         return {
             "ok": True,
             "run_id": rid,
@@ -122,7 +127,7 @@ def trial_package_file(
             "content": None,
             "note": "secret-like filename; content not shown",
         }
-    is_text = suffix in TEXT_SUFFIXES or suffix in {".py"}
+    is_text = is_env_example(path.name) or suffix in TEXT_SUFFIXES or suffix in {".py"}
     if not is_text:
         return {
             "ok": True,

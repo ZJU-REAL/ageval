@@ -32,3 +32,28 @@ TEXT_SUFFIXES = {
     ".cfg",
     ".conf",
 }
+
+# Templates are not secrets. Real env files stay redacted.
+_ENV_EXAMPLE_SUFFIXES = (".example", ".sample", ".template", ".dist")
+
+
+def is_env_example(name: str) -> bool:
+    lowered = name.lower()
+    return "env" in lowered and lowered.endswith(_ENV_EXAMPLE_SUFFIXES)
+
+
+def is_secret_basename(name: str) -> bool:
+    lowered = name.lower()
+    if is_env_example(lowered):
+        return False
+    return lowered in {".env", ".env.local", ".env.production"} or lowered.startswith(".env.")
+
+
+def is_preview_text(name: str, suffix: str, mime: str) -> bool:
+    if is_env_example(name):
+        return True
+    return (
+        suffix in TEXT_SUFFIXES
+        or mime.startswith("text/")
+        or mime in {"application/json", "application/xml", "application/x-yaml"}
+    )

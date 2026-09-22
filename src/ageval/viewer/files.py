@@ -13,7 +13,12 @@ from pathlib import Path
 from typing import Any
 
 from ageval.config.errors import ConfigError
-from ageval.viewer.trials.constants import MAX_FILE_BYTES, MAX_TREE_ENTRIES, TEXT_SUFFIXES
+from ageval.viewer.trials.constants import (
+    MAX_FILE_BYTES,
+    MAX_TREE_ENTRIES,
+    is_preview_text,
+    is_secret_basename,
+)
 from ageval.viewer.trials.paths import safe_under
 
 _JOB_DIR_NAMES = frozenset({"runs", "suite-runs"})
@@ -89,7 +94,7 @@ def read_preview(root: Path, relative: str, *, omit_job_dirs: bool) -> dict[str,
     size = path.stat().st_size
     mime, _ = mimetypes.guess_type(str(path))
     mime = mime or "application/octet-stream"
-    if _secret_basename(path.name):
+    if is_secret_basename(path.name):
         return {
             "ok": True,
             "path": relative,
@@ -101,12 +106,7 @@ def read_preview(root: Path, relative: str, *, omit_job_dirs: bool) -> dict[str,
             "content": None,
             "note": "secret-like filename; content not shown",
         }
-    suffix = path.suffix.lower()
-    is_text = (
-        suffix in TEXT_SUFFIXES
-        or mime.startswith("text/")
-        or mime in {"application/json", "application/xml", "application/x-yaml"}
-    )
+    is_text = is_preview_text(path.name, path.suffix.lower(), mime)
     if not is_text:
         return {
             "ok": True,
@@ -194,5 +194,4 @@ def _reject_credentials(relative: str) -> None:
         )
 
 
-def _secret_basename(name: str) -> bool:
-    return name in {".env", ".env.local", ".env.production"} or name.startswith(".env.")
+
