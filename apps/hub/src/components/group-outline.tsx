@@ -53,20 +53,44 @@ export function GroupOutline({
     const chrome = document.getElementById(chromeId);
     const el = document.getElementById(sectionId(id));
     if (!main || !el) return;
-    const line =
-      chrome?.getBoundingClientRect().bottom ?? main.getBoundingClientRect().top;
-    const table = el.querySelector(".blob-panel");
-    const target = table instanceof HTMLElement ? table : el;
-    const top = Math.max(
-      0,
-      target.getBoundingClientRect().top - line + main.scrollTop,
-    );
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const near = Math.abs(top - main.scrollTop) < 1600;
-    main.scrollTo({
-      top,
-      behavior: !reduced && near ? "smooth" : "auto",
-    });
+    const align = () => {
+      const line =
+        chrome?.getBoundingClientRect().bottom ?? main.getBoundingClientRect().top;
+      const table = el.querySelector(".blob-panel");
+      const target = table instanceof HTMLElement ? table : el;
+      return Math.max(0, target.getBoundingClientRect().top - line + main.scrollTop);
+    };
+    const top = align();
+    const smooth = !reduced && Math.abs(top - main.scrollTop) < 1600;
+    let follow = !smooth;
+    const correct = () => {
+      if (!follow) return;
+      const next = align();
+      if (Math.abs(next - main.scrollTop) > 1) {
+        main.scrollTo({ top: next, behavior: "auto" });
+      }
+    };
+    main.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
+    // Opening the pin slot grows the sticky chrome after the jump is aimed.
+    if (chrome) {
+      const ro = new ResizeObserver(() => correct());
+      ro.observe(chrome);
+      window.setTimeout(() => ro.disconnect(), 700);
+    }
+    if (smooth) {
+      main.addEventListener(
+        "scrollend",
+        () => {
+          follow = true;
+          correct();
+          requestAnimationFrame(correct);
+        },
+        { once: true },
+      );
+    } else {
+      requestAnimationFrame(() => requestAnimationFrame(correct));
+    }
   }
 
   return (

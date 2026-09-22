@@ -66,8 +66,11 @@ export function GroupedTables({
     };
     main.addEventListener("scroll", apply, { passive: true });
     window.addEventListener("resize", apply);
+    const ro = new ResizeObserver(apply);
+    ro.observe(chrome);
     apply();
     return () => {
+      ro.disconnect();
       main.removeEventListener("scroll", apply);
       window.removeEventListener("resize", apply);
     };
