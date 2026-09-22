@@ -54,6 +54,8 @@ import { displayLabelsFromOverlay, formatDate, formatScore } from "@ageval/share
 
 export const PLAZA_CHROME_ID = "leaderboard-chrome";
 export const PLAZA_PIN_SLOT_ID = "leaderboard-pin";
+const plazaDatasetSectionId = groupSectionId("plaza-dataset");
+const plazaAgentSectionId = groupSectionId("plaza-agent");
 
 const STICKY_TH =
   "sticky z-10 bg-canvas-soft top-[var(--leaderboard-stick-top,0px)]";
@@ -147,6 +149,18 @@ function sortDatasetIds(
   });
 }
 
+function plazaDatasetName(datasetId: string, pack?: PackageRelease): string {
+  return datasetId
+    ? pack?.display_name?.trim() || splitPackageId(datasetId).name || datasetId
+    : "Unmatched";
+}
+
+function plazaDatasetMark(datasetId: string, pack: PackageRelease | undefined, name: string) {
+  return pack
+    ? markFromPackage(pack)
+    : resolveEntityMark({ displayName: name, packageId: datasetId || undefined });
+}
+
 function PlazaDatasetHead({
   datasetId,
   pack,
@@ -156,13 +170,9 @@ function PlazaDatasetHead({
   pack?: PackageRelease;
   count: number;
 }) {
-  const name = datasetId
-    ? pack?.display_name?.trim() || splitPackageId(datasetId).name || datasetId
-    : "Unmatched";
+  const name = plazaDatasetName(datasetId, pack);
   const description = pack?.description?.trim() || "";
-  const mark = pack
-    ? markFromPackage(pack)
-    : resolveEntityMark({ displayName: name, packageId: datasetId || undefined });
+  const mark = plazaDatasetMark(datasetId, pack, name);
   return (
     <div className="flex items-center gap-2">
       <BrandMark mark={mark} size={22} title={name} />
@@ -263,6 +273,7 @@ export function PlazaDatasetTables({
 }) {
   const navigate = useNavigate();
   const { sortKey, sortDir, head } = usePlazaSort();
+  const [pinned, setPinned] = useState<string | null>(null);
   const packs = useMemo(() => {
     const map = new Map<string, PackageRelease>();
     for (const row of latestPackageByDataset(datasets)) {
@@ -384,12 +395,41 @@ export function PlazaDatasetTables({
     };
   });
 
+  const outlineItems = datasetIds.map((datasetId) => {
+    const pack = packs.get(datasetId);
+    const name = plazaDatasetName(datasetId, pack);
+    return {
+      id: datasetId || "unmatched",
+      name,
+      count: (byDataset.get(datasetId) || []).length,
+      mark: (
+        <BrandMark
+          mark={plazaDatasetMark(datasetId, pack, name)}
+          size={16}
+          className="shrink-0"
+          title={name}
+        />
+      ),
+    };
+  });
+
   return (
-    <GroupedTables
+    <GroupOutlineRail
+      items={outlineItems}
+      activeId={pinned}
+      label="Datasets"
       chromeId={PLAZA_CHROME_ID}
-      pinSlotId={PLAZA_PIN_SLOT_ID}
-      groups={groups}
-    />
+      sectionId={plazaDatasetSectionId}
+      stickVar="--leaderboard-stick-top"
+    >
+      <GroupedTables
+        chromeId={PLAZA_CHROME_ID}
+        pinSlotId={PLAZA_PIN_SLOT_ID}
+        groups={groups}
+        sectionId={plazaDatasetSectionId}
+        onPinned={setPinned}
+      />
+    </GroupOutlineRail>
   );
 }
 
@@ -412,6 +452,7 @@ export function PlazaAgentTables({
 }) {
   const navigate = useNavigate();
   const { sortKey, sortDir, head } = usePlazaSort();
+  const [pinned, setPinned] = useState<string | null>(null);
   const packs = useMemo(() => {
     const map = new Map<string, PackageRelease>();
     for (const row of latestPackageByDataset(agents)) {
@@ -539,12 +580,44 @@ export function PlazaAgentTables({
     };
   });
 
+  const outlineItems = orgIds.map((orgId) => {
+    const builtin = orgId === "_builtin";
+    const name = builtin ? "Builtin" : orgId ? orgNameOf(orgId, orgs) : "Unmatched";
+    const info = !builtin && orgId ? orgs.get(orgId) : undefined;
+    const mark = builtin
+      ? null
+      : resolveEntityMark({
+          iconKey: info?.icon_key,
+          iconGithub: info?.icon_github,
+          displayName: name,
+        });
+    return {
+      id: orgId || "unmatched",
+      name,
+      count: (byOrg.get(orgId) || []).length,
+      mark: mark ? (
+        <BrandMark mark={mark} size={16} className="shrink-0" title={name} />
+      ) : null,
+    };
+  });
+
   return (
-    <GroupedTables
+    <GroupOutlineRail
+      items={outlineItems}
+      activeId={pinned}
+      label="Organizations"
       chromeId={PLAZA_CHROME_ID}
-      pinSlotId={PLAZA_PIN_SLOT_ID}
-      groups={groups}
-    />
+      sectionId={plazaAgentSectionId}
+      stickVar="--leaderboard-stick-top"
+    >
+      <GroupedTables
+        chromeId={PLAZA_CHROME_ID}
+        pinSlotId={PLAZA_PIN_SLOT_ID}
+        groups={groups}
+        sectionId={plazaAgentSectionId}
+        onPinned={setPinned}
+      />
+    </GroupOutlineRail>
   );
 }
 
