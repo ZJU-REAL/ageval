@@ -359,6 +359,54 @@ def test_messages_map_to_layer_b() -> None:
     assert "a.py" in str(update.get("content") or "")
 
 
+def test_reasoning_content_folds_to_thought_not_agent() -> None:
+    from ageval.evidence.trajectory import turn_rows
+
+    mapped = to_ageval_trajectory_events(
+        (
+            {
+                "role": "assistant",
+                "content": "",
+                "reasoning_content": "The user wants me to list files. I'll run ls.",
+                "tool_calls": [
+                    {
+                        "id": "call_ls",
+                        "function": {"name": "bash", "arguments": '{"command": "ls -la"}'},
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call_ls",
+                "content": "ok",
+                "extra": {"returncode": 0, "raw_output": "ok"},
+            },
+        ),
+        session_id="ageval-solver-x",
+    )
+    assert [e.get("channel") for e in mapped if e.get("kind") == "text"] == ["thought"]
+    lines = turn_rows(
+        prompt="list files",
+        events=mapped,
+        final_text="",
+        structured=None,
+        usage=None,
+        ok=True,
+        error=None,
+        metadata={"plugin": "miniswe", "profile_id": "solver"},
+    )
+    thoughts = [x for x in lines if x.get("part") == "thought"]
+    agents = [
+        x
+        for x in lines
+        if x.get("type") == "turn" and x.get("role") == "assistant" and x.get("part") != "thought"
+    ]
+    assert len(thoughts) == 1
+    assert "list files" in thoughts[0]["content"]
+    assert agents == []
+    assert any(x["type"] == "tool_call" for x in lines)
+
+
 def test_mapped_events_fold_to_viewer_tool_call() -> None:
     from ageval.evidence.trajectory import turn_rows
 

@@ -53,6 +53,15 @@ def _actions_from_message(raw: dict[str, Any], extra: dict[str, Any]) -> list[di
     return parsed
 
 
+def _thought_text(raw: dict[str, Any]) -> str:
+    """OpenAI-compatible thinking text. Not provider-specific."""
+    for key in ("reasoning_content", "reasoning"):
+        value = raw.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[-8000:]
+    return ""
+
+
 def _call_id(action: dict[str, Any], *, seq: int, index: int) -> str:
     for key in ("tool_call_id", "id", "call_id"):
         raw = action.get(key)
@@ -90,18 +99,35 @@ def to_ageval_trajectory_events(
             )
             continue
         if role == "assistant":
-            seq += 1
-            out.append(
-                {
-                    "schema": SCHEMA,
-                    "seq": seq,
-                    "session_id": session_id,
-                    "source": _SOURCE,
-                    "kind": "text",
-                    "channel": "assistant",
-                    "text": str(raw.get("content") or "")[:8000],
-                }
-            )
+            thought = _thought_text(raw)
+            if thought:
+                seq += 1
+                out.append(
+                    {
+                        "schema": SCHEMA,
+                        "seq": seq,
+                        "session_id": session_id,
+                        "source": _SOURCE,
+                        "kind": "text",
+                        "channel": "thought",
+                        "text": thought,
+                    }
+                )
+            spoken = raw.get("content")
+            spoken_text = spoken.strip() if isinstance(spoken, str) else ""
+            if spoken_text:
+                seq += 1
+                out.append(
+                    {
+                        "schema": SCHEMA,
+                        "seq": seq,
+                        "session_id": session_id,
+                        "source": _SOURCE,
+                        "kind": "text",
+                        "channel": "assistant",
+                        "text": spoken_text[:8000],
+                    }
+                )
             pending.clear()
             for i, action in enumerate(_actions_from_message(raw, extra)):
                 seq += 1
