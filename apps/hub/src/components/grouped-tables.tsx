@@ -49,6 +49,20 @@ export function GroupedTables({
         if (el && el.getBoundingClientRect().top <= line + 0.5) next = id;
       }
       setPinned(next);
+      // The in-flow head stays in the document so later groups do not jump.
+      // While it still hangs below the chrome, pull the body up over that
+      // band and park the same height after the body.
+      for (const id of groupIds) {
+        const el = headEls.current.get(id);
+        if (!el) continue;
+        const spacer = el.parentElement?.querySelector("[data-group-spacer]");
+        const pull =
+          id === next ? Math.max(0, el.getBoundingClientRect().bottom - line) : 0;
+        el.style.marginBottom = pull ? `-${pull}px` : "";
+        if (spacer instanceof HTMLElement) {
+          spacer.style.height = pull ? `${pull}px` : "";
+        }
+      }
     };
     main.addEventListener("scroll", apply, { passive: true });
     window.addEventListener("resize", apply);
@@ -178,7 +192,11 @@ function GroupSection({
 }) {
   return (
     <section id={id} className={first ? undefined : "mt-8"}>
-      <div ref={onHead} className={pinned ? "invisible pb-2" : "pb-2"}>
+      <div
+        ref={onHead}
+        inert={pinned ? true : undefined}
+        className={pinned ? "invisible pb-2" : "pb-2"}
+      >
         {head}
       </div>
       {columns ? (
@@ -197,6 +215,7 @@ function GroupSection({
       ) : (
         children
       )}
+      <div data-group-spacer="" aria-hidden="true" />
     </section>
   );
 }
