@@ -24,16 +24,16 @@ export function Shell({
 }) {
   const { pathname } = useLocation();
   const { session } = useSession();
-  const only = session?.datasets.length === 1 ? session.datasets[0] : null;
+  const firstDataset = session?.datasets[0];
   const hrefFor = (id: (typeof DESTINATIONS)[number]["id"]) => {
-    if (id === "jobs") return only ? jobsHome(only.key) : "/jobs";
+    if (id === "jobs") return firstDataset ? jobsHome(firstDataset.key) : "/jobs";
     if (id === "datasets") return "/datasets";
     if (id === "agents") return "/agents";
     return "/plugins";
   };
 
   return (
-    <div className="min-h-full flex flex-col bg-canvas">
+    <div className="flex h-dvh min-h-0 flex-col bg-canvas">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-[80] focus:rounded-[8px] focus:bg-link focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-on-accent"
@@ -74,7 +74,7 @@ export function Shell({
       <main
         id="main"
         tabIndex={-1}
-        className="flex flex-1 w-full flex-col px-6 py-5"
+        className="flex min-h-0 w-full flex-1 flex-col overflow-auto bg-canvas px-4 pb-5 pt-5 sm:px-6"
       >
         <div className="flex min-w-0 w-full flex-1 flex-col xl:mx-auto xl:w-[80%]">
           {children}

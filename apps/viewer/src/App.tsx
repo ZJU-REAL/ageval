@@ -43,7 +43,7 @@ function HomeRedirect() {
 
 function JobsIndex() {
   const session = useReadySession();
-  if (session.datasets.length === 1) {
+  if (session.datasets.length >= 1) {
     return <Navigate to={jobsHome(session.datasets[0].key)} replace />;
   }
   return <JobsPage />;
