@@ -1,251 +1,251 @@
-# ageval Agent 指令
+# ageval agent instructions
 
-本文件是仓库级 **Agent / 贡献者路由**：说明读什么、谁说了算、当前事实、不可违反的边界，以及如何交付与校验。  
-机制设计正文在 [`docs/design/`](docs/design/)；结构地图在 [`ARCHITECTURE.md`](ARCHITECTURE.md)；增量交付在 **GitHub Issues**。
+Repo-level routing for agents and contributors: what to read, what wins, the current facts, the boundaries, and how to deliver and check the work.
+Mechanism design lives in [`docs/design/`](docs/design/). The structure map is [`ARCHITECTURE.md`](ARCHITECTURE.md). Incremental delivery is **GitHub Issues**.
 
-## 产品名
+## Product name
 
-| 项 | 值 |
+| Item | Value |
 | --- | --- |
-| 全称 / 发版名 | **ageval**（agent eval） |
-| 交付单位 | **dataset**（`ageval.dataset/1`），不是 SQL |
-| CLI / 包 | `ageval` / import `ageval` |
-| 家目录 / 环境变量 | `~/.ageval`、`AGEVAL_*` |
-| GitHub 路径 | [`ZJU-REAL/ageval`](https://github.com/ZJU-REAL/ageval) |
-| 代际 | greenfield；不兼容归档 v1；未知 format 为 `invalid_format` |
-| v1 只读参考 | 本机归档 v1（勿 import、勿假设 API 兼容） |
+| Release name | **ageval** (agent eval) |
+| Delivery unit | **dataset** (`ageval.dataset/1`). A SQL database is a different thing. |
+| CLI / package | `ageval` / import `ageval` |
+| Home / env | `~/.ageval`, `AGEVAL_*` |
+| GitHub | [`ZJU-REAL/ageval`](https://github.com/ZJU-REAL/ageval) |
+| Generation | greenfield; incompatible with archived v1; unknown format is `invalid_format` |
+| v1 reference | Local archived v1 is read-only. Do not import it. Do not assume API compatibility. |
 
-## 必读顺序
+## Read order
 
-修改代码、契约或公开行为前，**按序**阅读：
+Before changing code, a contract, or public behavior, read in this order:
 
-1. [ARCHITECTURE.md](ARCHITECTURE.md) — 当前/目标结构、模块所有权、依赖方向、生命周期与数据流
-2. [docs/README.md](docs/README.md) 与本次相关的 [docs/design/](docs/design/) — **设计权威（自包含）**；用词先读 [docs/glossary.md](docs/glossary.md)（规范名 + Avoid + 表面）
-3. [docs/PRD.md](docs/PRD.md) — 产品规格与非目标
-4. 相关 **GitHub Issue**（Acceptance / 非目标 / 证据要求）
-5. 代码、测试、`examples/`、公开 smoke
+1. [ARCHITECTURE.md](ARCHITECTURE.md) — current vs target structure, module ownership, dependency direction, lifecycle, data flow
+2. [docs/README.md](docs/README.md) and the relevant [docs/design/](docs/design/) pages — **design authority (self-contained)**; for words, read [docs/glossary.md](docs/glossary.md) first (canonical name + Avoid + surface)
+3. [docs/PRD.md](docs/PRD.md) — product spec and non-goals
+4. The relevant **GitHub Issue** (Acceptance / non-goals / evidence required)
+5. Code, tests, `examples/`, public smoke
 
-读者向产品文档在 [`website/`](website/)（可选阅读）；**不**拥有设计真理。
+Reader-facing product docs live in [`website/`](website/) (optional). They do not own design truth.
 
-## 权威顺序
+## Authority order
 
 ```text
-docs/（PRD + design/*）     ← 产品与机制设计权威；自包含
-  → ARCHITECTURE.md         ← 实现结构权威（当前 vs 目标、所有权、依赖）
-  → GitHub Issues           ← 增量交付、讨论与验收跟踪（主轨道）
-  → 公开 smoke / 代码 / 测试 / evidence
+docs/ (PRD + design/*)      ← product and mechanism authority; self-contained
+  → ARCHITECTURE.md         ← implementation structure (current vs target, ownership, dependencies)
+  → GitHub Issues           ← incremental delivery, discussion, acceptance (main track)
+  → public smoke / code / tests / evidence
 
-website/                    ← 读者向产品文档（重写）；不拥有设计真理
-apps/* / services/* README  ← SPA / 服务开发细节；非产品教程权威
+website/                    ← reader-facing product docs (rewrite); does not own design truth
+apps/* / services/* README  ← SPA / service development detail; not the product-tutorial authority
 ```
 
-### 冲突处理
+### Conflicts
 
-1. 停止冲突实现。
-2. 判断是设计变更、结构变更、范围变更还是实现偏差。
-3. **先改最高权威 artifact**（设计 → `docs/`；结构 → Architecture；交付跟踪 → Issue；实现 → 代码）。
-4. 同一变更内同步下游（README、skills、website 相关页、测试、证据声明）。
+1. Stop the conflicting implementation.
+2. Decide whether this is a design change, a structure change, a scope change, or an implementation drift.
+3. **Change the highest authority artifact first** (design → `docs/`; structure → Architecture; delivery tracking → Issue; implementation → code).
+4. In the same change, update the downstream copies (README, skills, the relevant website pages, tests, evidence claims).
 
-### 与历史 SDD 脚手架的关系
+### Historical SDD scaffold
 
-仓库**已移除**仓内 `specs/`（Active Spec / ROADMAP / constitution / BLOCKED）。  
-历史 Git 中仍可查阅；日常**禁止**再新建 Spec 工作区或勾选机。  
-设计已定稿在 `docs/`（自包含）；交付跟踪在 Issues。
+The in-repo `specs/` tree (Active Spec / ROADMAP / constitution / BLOCKED) **has been removed**.
+History is still in Git. Day to day, **do not** create a new Spec workspace or a checkbox tracker.
+Settled design lives in `docs/` (self-contained). Delivery tracking lives in Issues.
 
-曾有仓外 BRIEF 作为一次性施工 brief。**产品模型已吸收进本仓 `docs/`。** 不要再读 vault / BRIEF 当权威，不要两套设计。
+An out-of-repo BRIEF was a one-time construction brief. **The product model now lives in this repo's `docs/`.** Do not read a vault or a BRIEF as authority. Do not keep two designs.
 
-## 当前事实
+## Current facts
 
-| 项 | 状态 |
+| Item | Status |
 | --- | --- |
-| 设计 | `docs/`（PRD + design 00–14 + glossary）**自包含**；不要读仓外 BRIEF |
-| production 源码 | Config → `attempt.run_attempt` 五个阶段 → 环境 kind → ACP `attach_stdio` → 环境内 evaluate → evidence；`src/ageval/plugins/` 注册表 + contrib；外置 `plugins/` |
-| 公开 entrypoint | `ageval lock` / `run` / `campaign` / `view` / `evidence` / `plugin` / `jobs` / `results` 等（以 `ageval --help` 为准；`ageval run` 输出 `logs` locator） |
-| 环境 | `local` / `docker` 有公开真 run；`e2b` / `ssh` / `daytona` 代码在，缺钥则 `--probe` 过不了，不能进入运行，**不得**标完成 |
-| 证据等级 | **限定 `runnable-mvp`**（core local/docker ACP、`minimal-demo` 明确列出的示例）；见 [examples/README.md](examples/README.md)；**不得**扩写全 suite `isolated` |
-| 交付跟踪 | **GitHub Issues** |
-| 文档站 | [`website/`](website/) 读者向 Fumadocs；机制权威仍在 `docs/` |
-| ACP | `executor: acp` + `options.entry`；parent 唯一 JSON-RPC client |
-| Agent Hub | [docs/design/14](docs/design/14-agent-hub.md)：`ageval.agent/1` harness；`--agent` 与 `--profiles` 互斥；`--model` 是 run 参数 |
+| Design | `docs/` (PRD + design 00–14 + glossary) is **self-contained**. Do not read an out-of-repo BRIEF. |
+| Production source | Config → five phases of `attempt.run_attempt` → environment kind → ACP `attach_stdio` → in-environment evaluate → evidence; registry + contrib under `src/ageval/plugins/`; external `plugins/` |
+| Public entrypoints | `ageval lock` / `run` / `campaign` / `view` / `evidence` / `plugin` / `jobs` / `results` and the rest of `ageval --help`. `ageval run` prints a `logs` locator. |
+| Environments | `local` / `docker` have a public real run. `e2b` / `ssh` / `daytona` code exists; without credentials `--probe` fails and the run must not start. **Do not** mark those done. |
+| Evidence grade | **Limited to `runnable-mvp`** (core local/docker ACP, and the examples `minimal-demo` names). See [examples/README.md](examples/README.md). **Do not** widen that to a full-suite `isolated` claim. |
+| Delivery tracking | **GitHub Issues** |
+| Docs site | [`website/`](website/) is reader-facing Fumadocs. Mechanism authority stays in `docs/`. |
+| ACP | `executor: acp` + `options.entry`. The parent is the only JSON-RPC client. |
+| Agent Hub | [docs/design/14](docs/design/14-agent-hub.md): `ageval.agent/1` harness. `--agent` and `--profiles` are mutually exclusive. `--model` is a run parameter. |
 
-**禁止**从文档存在、Issue 存在、`ageval lock` 成功或设计示意推导 `runnable-mvp` / `isolated` / `real-benchmark-verified`。
+**Do not** infer `runnable-mvp` / `isolated` / `real-benchmark-verified` from a doc existing, an Issue existing, a successful `ageval lock`, or a design sketch.
 
-## 四条硬规则（施工）
+## Four hard rules (construction)
 
-### 1. 不向后兼容
+### 1. No backward compatibility
 
-不兼容旧名。没有迁移层、没有双读、没有旧名别名。
+Old names are not supported. No migration layer, no dual read, no alias for an old name.
 
-- format 只认 `ageval.dataset/1`、`ageval.task/1`、`ageval.plugin/1`、`ageval.profiles/1`。
-- 未知 format：**一个**错误（`invalid_format` 于 `/format`），停。不要在报错里教映射。
-- 环境变量 / 家目录 / CLI 只有 `AGEVAL_*`、`ageval`、`~/.ageval`。
-- `provider.kind`、`assurance`：拒绝或删除，不翻译。
+- Formats are only `ageval.dataset/1`, `ageval.task/1`, `ageval.plugin/1`, `ageval.profiles/1`.
+- Unknown format: **one** error (`invalid_format` at `/format`), then stop. Do not teach a mapping in the error.
+- Env vars, home directory, and CLI are only `AGEVAL_*`, `ageval`, `~/.ageval`.
+- `provider.kind` and `assurance`: reject or delete. Do not translate them.
 
-### 2. 删除优先于缝补
+### 2. Delete rather than patch over
 
-旧路径和新路径不能并存。新路径能跑的同一刀里删旧文件。
+An old path and a new path do not coexist. When the new path runs, delete the old files in the same change.
 
-- 禁止：`compose_from_*` 别名、空壳转发、`NotImplemented` 占位、两套 Agent Service 并存。
-- 禁止：为了「先绿」包一层 try/except 把旧模块藏起来。
-- 碰到 `EnvironmentManager`、`wrap_docker_exec`：删。逻辑进 design 指定的新位置，或不做。
+- Forbidden: a `compose_from_*` alias, an empty forwarder, a `NotImplemented` placeholder, two Agent Services side by side.
+- Forbidden: a `try/except` wrapper that hides an old module so the suite stays green.
+- On `EnvironmentManager` or `wrap_docker_exec`: delete them. Move the logic to the place design names, or do not do it.
 
-### 3. 禁止 mock / fake
+### 3. No mock / fake
 
-没有产品级 `executor: mock`。没有 `FakeHost` / 空 `AgentService` 充当完成证据。
+There is no product `executor: mock`. A `FakeHost` or an empty `AgentService` is not completion evidence.
 
-| 允许 | 禁止 |
+| Allowed | Forbidden |
 | --- | --- |
-| `environment: local`（真文件系统） | `FakeHost`、内存环境当验收 |
-| `environment: docker`（真容器） | mock docker SDK 当该面完成 |
-| 真 ACP CLI + `attach_stdio` | stub Agent Service、进程内假 worker |
-| 凭证没有时 **跳过** 该 job | 用假 agent 把测试标绿再标完成 |
-| 测试打真实 `ageval lock` / `ageval run` | 只测内部函数当公开 smoke |
+| `environment: local` (real filesystem) | `FakeHost`, or an in-memory environment, as acceptance |
+| `environment: docker` (real container) | A mock docker SDK as completion of that surface |
+| A real ACP CLI + `attach_stdio` | A stub Agent Service, an in-process fake worker |
+| **Skip** the job when credentials are missing | A fake agent that turns the test green and then marks the work done |
+| Tests that call real `ageval lock` / `ageval run` | An internal-function test standing in for a public smoke |
 
-`AGEVAL_SKIP_REAL_ACP=1` 只表示 **CI 没跑这条**。没跑 ≠ 通过。
+`AGEVAL_SKIP_REAL_ACP=1` means **CI did not run that check**. Not run is not a pass.
 
-### 4. 禁止防御性编程
+### 4. No defensive programming
 
-写直路。失败就失败。
+Write the straight path. A failure fails.
 
-- 不要为每个旧字段写友好错误码表。未知键：拒绝，一条消息。
-- 不要 `try/except Exception` 收成 `{"status":"ERROR"}` 再继续（evaluate 边界按相位记失败除外）。
-- 不要未证实的探针、重试、兼容层。
-- 配额、缺 cap、缺凭证、缺 `attach_stdio`：lock 或 invoke **一次**失败。
+- Do not build a friendly error-code table for every old field. An unknown key is rejected, with one message.
+- Do not catch `Exception` and continue as `{"status":"ERROR"}` (the evaluate boundary records a phase failure; that case is the exception).
+- Do not add an unproven probe, retry, or compatibility layer.
+- Missing quota, capability, credentials, or `attach_stdio`: lock or invoke fails **once**.
 
-## 项目边界（Agent 不可违反）
+## Project boundaries (agents must not cross)
 
-### 架构与所有权
+### Architecture and ownership
 
-- **Core：** Config `load_and_lock`；Attempt 五个阶段；环境 Protocol；Capability；停写后再打分 与结果绑定。
-- **Agent 只能看见允许的文件**是能力；gold 靠 **不 mount + 评测前 upload**，禁止只靠「配置里删字段」。
-- **题包 `run.py`** 拥有 Attempt 内业务 workflow（loop、角色、本地 Tool、handoff）。
-- **SDK** 可选；可被 upstream Framework 替代；**不**拥有 Run identity、环境控制、credential、final PASS。
-- Control Plane **不** import/execute 题包 `run.py` 或 evaluator **模块**；经进程/适配器边界调用。
-- 具体平台对象只在 **production composition root**（`application/composition.py` 的 `build_*`）连接。
-- 第三方 Agent/workflow SDK 不得成为 Core identity / effect / verdict authority。
-- **禁止 marker 生命周期：** `cleanup` / `evaluate` / `bind` 不得只返回空 `_fact` 而生产另有一份真逻辑。
-- 一次 Attempt 只允许一次 `IdentityFactory.new_run`（测试 double 除外）。
-- CLI 只 import `ageval.application.composition`。
-- `.ageval/runs` 布局字符串只在 `evidence/`。
-- 新的 `application` 公开用例必须有 `build_*`。
-- Registry Handler 不得直接 `state.meta` / 再 `_bearer`；业务在 `*Service`。
+- **Core:** Config `load_and_lock`; the five Attempt phases; the environment Protocol; Capability; stop writing, then score, and bind the result.
+- **The agent sees only the files it is allowed to see.** That is a capability. Gold stays unmounted and is uploaded before evaluate. Deleting a field in config is not isolation.
+- **Dataset `run.py`** owns the in-Attempt business workflow (loop, roles, local Tools, handoff).
+- The **SDK** is optional. An upstream framework may replace it. It does **not** own Run identity, environment control, credentials, or final PASS.
+- The control plane does **not** import or execute a dataset `run.py` or an evaluator **module**. It calls across a process or adapter boundary.
+- Concrete platform objects are wired only in the **production composition root** (`build_*` in `application/composition.py`).
+- A third-party agent or workflow SDK is not the authority for Core identity, effects, or the verdict.
+- **No marker lifecycle:** `cleanup` / `evaluate` / `bind` must not return an empty `_fact` while production has a separate real implementation.
+- One Attempt allows one `IdentityFactory.new_run` (test doubles excepted).
+- The CLI imports only `ageval.application.composition`.
+- `.ageval/runs` layout strings live only in `evidence/`.
+- A new public `application` use case has a `build_*`.
+- A Registry handler does not touch `state.meta` or call `_bearer` again. The work lives in a `*Service`.
 
-### 结构红线（design §4.10）
+### Structure red lines (design §4.10)
 
-1. `attempt/` 打开 `attempt/__init__.py` 就能说出阶段。禁止再摊成按隔离档分叉的生命周期文件。
-2. 测试面 = **真实 kind + 公开 CLI**。docker / e2b 的 seam 成立条件是两个真实赢家，不是 FakeHost。
-3. **禁止文案 grep 测试，禁止为界面写组件测试。** website、Hub、Viewer 的界面由人看着渲染结果验收。不要 `read_text` 落地页 / `website/` snippet / README，再 `assert "某字符串" in/not in text`。改一句宣传就假红。不要在 `apps/` 或 `website/` 下新增组件测试、快照测试或浏览器测试文件。不要写 pytest 断言可见文案、class、DOM id，或测试自己写下的 HTML（自造 `index.html` 再断言标题或 `id="root"` 即属此类）。读者向对了就改文档。页面背后的行为测 Python HTTP / CLI（`ageval lock` / `run` / 环境方法）。令牌与术语仍走 `scripts/check_design_tokens.py` 与 `scripts/check_public_terms.py`。架构测试只钉运行时红线（import、slot、composition root）。
-4. locality：`docker exec` 只在 docker contrib。ACP / `attempt` / `run.py` 不见 `container_id`、不见 `if kind == e2b`。
-5. 一条路径：选环境 / executor 只经独占槽。禁止第二套 resolve。
-6. 平台对象只在 `application/composition.py` 的 `build_*` 接线。
-7. 控制面不 import 题包模块。
-8. PASS / 身份 / cleanup 不是插件服务。cleanup 在 `try/finally`。
-9. 适配器按机制命名。禁止按 bench / task 名分支。
-10. 布局字符串只在 `evidence/`。lock / evidence 不写 host token。
-11. inject 在 lock 完成。缺 `attach_stdio` 就 lock 失败。
+1. Opening `attempt/__init__.py` names the phases. Do not split the lifecycle into files by isolation tier.
+2. The test surface is **a real kind + the public CLI**. A docker / e2b seam holds when two real winners exist. A FakeHost does not establish it.
+3. **No copy-grep tests, and no UI component tests.** A person accepts website, Hub, and Viewer UI by looking at the rendered page. Do not `read_text` a landing page, a `website/` snippet, or a README and then `assert "some string" in/not in text`. Changing a slogan would go false-red. Do not add a component, snapshot, or browser test file under `apps/` or `website/`. Do not add a pytest that asserts visible copy, a class, a DOM id, or HTML the test itself wrote (a hand-written `index.html` asserted for its title or `id="root"` is this case). When the reader-facing copy is right, edit the doc. Behavior behind the page is a Python HTTP / CLI test (`ageval lock` / `run` / an environment method). Tokens and glossary terms stay on `scripts/check_design_tokens.py` and `scripts/check_public_terms.py`. Architecture tests pin runtime red lines only (imports, slots, the composition root).
+4. Locality: `docker exec` lives only in the docker contrib. ACP / `attempt` / `run.py` do not see `container_id` and do not branch on `if kind == e2b`.
+5. One path. Choosing an environment or an executor goes through the exclusive slot only. No second resolve.
+6. Platform objects are wired only in `build_*` inside `application/composition.py`.
+7. The control plane does not import dataset modules.
+8. PASS, identity, and cleanup are not plugin services. Cleanup runs in `try/finally`.
+9. Adapters are named by mechanism. Do not branch on a benchmark or task name.
+10. Layout strings live only in `evidence/`. Lock and evidence do not store a host token.
+11. Inject finishes during lock. Missing `attach_stdio` fails the lock.
 
-### 安全与评测
+### Safety and evaluation
 
-- `RunTerminal.completed` **≠** PASS；PASS 只能来自独立 evaluator。
-- Runtime outcome、Agent 结果、evaluator raw、最终 evaluation 保持为**独立事实**。
-- 不复制、序列化或把 host credential / token 写入 lock、evidence 或题包默认环境；仅 scoped projection 给获准进程。
-- `limits` 由 Runtime **执行前**强制；`run.py` 不可自提。事后 token/cost 默认只作观测。
-- Adapter / 插件按**协议、资源类型或执行机制**命名；**禁止**按 Benchmark / task / domain 名分支。
-- 插件模型 = entry point + 包安装；**不是**开放应用商店。Agent Service 留主仓。
+- `RunTerminal.completed` **≠** PASS. PASS comes only from an independent evaluator.
+- Runtime outcome, the agent result, evaluator raw, and the final evaluation stay **independent facts**.
+- Do not copy, serialize, or write a host credential or token into lock, evidence, or a dataset's default environment. A scoped projection goes only to a process that is allowed to have it.
+- Runtime enforces `limits` **before** execution. `run.py` cannot raise its own. Token and cost after the fact are observational by default.
+- Adapters and plugins are named by **protocol, resource type, or execution mechanism**. **Do not** branch on a benchmark, task, or domain name.
+- The plugin model is an entry point plus a package install. It is **not** an open app store. Agent Service stays in this repo.
 
-### Agent 后端 / ACP
+### Agent backend / ACP
 
-- Coding-agent **Target inlet**：`executor: acp` + `- plugin: acp` / `options.entry`；parent **唯一** ACP JSON-RPC client → evidence。
-- Vendor 私有格式翻译在 **进程外** ACP entry（Mode 1 shim / Mode 2 原生 / Mode 3 厂商包）；**禁止**在 ageval 内再写第二套 vendor stdout scrape。
-- **官方 Attempt 镜像** `src/ageval/plugins/contrib/docker/attempt/` 在 **build 期** 写入镜像 最低 entry 的 engine + ACP 入口（Mode 1 **同时装 engine 和 adapter**：codex/claude/**pi** + 各自 adapter）。配方打进 wheel。`ageval run` 先 pull `ghcr.io/zju-real/ageval-attempt:<cli-ver>` 成本地 `ageval-attempt:base`，没有再从包内 Dockerfile 构建；不依赖 cwd checkout。题包配方再叠 ACP `image_layers`，只 bake 绑定的 `options.entry`；禁止 invoke 时 `npm i` / floating `npx`。Python ACP SDK **只在 parent**，不进 Attempt 镜像。
-- Pi：官方 registry **`pi-acp`**（npm `pi-acp`，桥 `pi --mode rpc`）；勿与反向桥 `pi-shell-acp` 混淆。
-- **可见性**：mount + `docker exec -u/-w` + UID/GID（只在 docker contrib）。**Permission**：batch 默认 ACP auto-approve，**不**提权、**不**突破未投影路径；evidence 记录 decision。
-- 权威：[docs/design/05-runtime/agent-service.md](docs/design/05-runtime/agent-service.md)。
+- Coding-agent **target inlet**: `executor: acp` plus `- plugin: acp` / `options.entry`. The parent is the **only** ACP JSON-RPC client, and that client writes evidence.
+- Vendor-private format translation lives **outside the process**, in the ACP entry (Mode 1 shim / Mode 2 native / Mode 3 vendor package). **Do not** add a second vendor stdout scrape inside ageval.
+- The **official Attempt image** under `src/ageval/plugins/contrib/docker/attempt/` bakes, **at build time**, the engine and ACP entry for the minimum entry set (Mode 1 installs **both** the engine and the adapter: codex / claude / **pi**, each with its adapter). The recipe ships in the wheel. `ageval run` pulls `ghcr.io/zju-real/ageval-attempt:<cli-ver>` to the local tag `ageval-attempt:base`, and builds from the packaged Dockerfile only when that pull misses. It does not depend on a cwd checkout. A dataset recipe then stacks ACP `image_layers` and bakes only the bound `options.entry`. Do not `npm i` or float `npx` at invoke time. The Python ACP SDK stays **on the parent only**. It does not enter the Attempt image.
+- Pi: the official registry id is **`pi-acp`** (npm `pi-acp`, bridging `pi --mode rpc`). Do not confuse it with the reverse bridge `pi-shell-acp`.
+- **Visibility:** mount + `docker exec -u/-w` + UID/GID (docker contrib only). **Permission:** batch ACP auto-approves by default. It does not raise privileges and does not cross a path that was not projected. Evidence records the decision.
+- Authority: [docs/design/05-runtime/agent-service.md](docs/design/05-runtime/agent-service.md).
 
-### 多 Agent 调度
+### Multi-agent scheduling
 
-- docker 上多 actor 必须与 local 相同 SDK 表面：`Agent.session(...).invoke`；**禁止**悄悄改回宿主机。
-- YAML 只声明逻辑 isolation（`shared-container` / `container-per-group`、groups、actors、`shared_write`）；container id / UID 由 Runtime 拥有。
-- 详见 [`docs/design/05-runtime/`](docs/design/05-runtime/) 与 ARCHITECTURE Current。本轮 **不**承诺多 group 真调度 run（lock 有 topology 即可）。
+- On docker, multiple actors use the same SDK surface as local: `Agent.session(...).invoke`. Do not silently move that back onto the host.
+- YAML declares logical isolation only (`shared-container` / `container-per-group`, groups, actors, `shared_write`). The Runtime owns the container id and the UID.
+- See [`docs/design/05-runtime/`](docs/design/05-runtime/) and ARCHITECTURE Current. This round does **not** promise a real multi-group scheduling run (a lock that carries topology is enough).
 
-### Package 与配置
+### Package and config
 
-- 规范交付单位为 **dataset**（根 `ageval.yaml` / `ageval.dataset/1`）；每 task 为成员 `task.yaml`；Config Core 是唯一规范读取者。
-- `parameters` 给 `run.py`（`ctx.params`）；envelope / profiles / limits 给 Runtime；禁止 `run.py` 再读第二份「真配置」覆盖 lock。
-- 环境变量只作 locator，不能代替生产机制来源。
-- job 选环境：`profiles.yaml` 的 `environment:`，不是 `provider.kind`。
+- The canonical delivery unit is a **dataset** (root `ageval.yaml` / `ageval.dataset/1`). Each task is a member `task.yaml`. Config Core is the only canonical reader.
+- `parameters` go to `run.py` (`ctx.params`). Envelope, profiles, and limits go to the Runtime. `run.py` must not read a second "real config" that overrides the lock.
+- Environment variables are locators. They do not replace a production mechanism.
+- A job picks its environment from `environment:` in `profiles.yaml`, not from `provider.kind`.
 
-### 交付与证据
+### Delivery and evidence
 
-- **新工作默认开 GitHub Issue**（写清 Acceptance / 非目标 / 证据）；**不**新建仓内 Active Spec / ROADMAP。
-- Fixture/mock 只能作自动化回归，**不能**单独充当公开 smoke 或升级证据等级。
-- 不要为落地页 / README / website snippet 写「文件里有没有某句」的 pytest。website、Hub、Viewer 不新增组件 / 快照 / 浏览器测试，也不要 pytest 断言可见文案、class、DOM id，或测试自己写下的 HTML。见结构红线第 3 条。
-- 实现期安全可逆选择可自行推进；需新权限/不可逆/改产品安全语义时先问用户或写在 Issue。
-- `docs/reference/` 是归档，**不是**权威，也不是 vault 入口。
-- **有 `website/` ≠** 证据等级升级。
+- **New work opens a GitHub Issue by default** (Acceptance / non-goals / evidence). **Do not** create an in-repo Active Spec or ROADMAP.
+- A fixture or mock may back an automated regression. It **cannot** by itself be a public smoke or a reason to raise the evidence grade.
+- Do not write a pytest that checks whether a landing page, README, or website snippet contains a sentence. Do not add a component, snapshot, or browser test for website, Hub, or Viewer, and do not add a pytest that asserts visible copy, a class, a DOM id, or HTML the test itself wrote. See structure red line 3.
+- A safe, reversible choice during implementation can proceed. Ask the user, or write it in the Issue, when the change needs a new permission, is hard to reverse, or changes a product safety meaning.
+- `docs/reference/` is an archive. It is **not** authority, and it is not a vault entrance.
+- **Having `website/` does not** raise the evidence grade.
 
-## 交付规则（操作）
+## Delivery rules (operations)
 
-| 情况 | 做什么 |
+| Situation | What to do |
 | --- | --- |
-| 改产品/机制设计 | 先改 `docs/design/*`（及必要时 PRD/glossary），再改 Architecture / 代码 / website 相关页 |
-| 改模块树/依赖/composition root | 先改 [ARCHITECTURE.md](ARCHITECTURE.md) |
-| 增量功能 / 验收跟踪 | 开或更新 **GitHub Issue**；实现与 PR 链 Issue |
-| 教人怎么用（CLI / Viewer / Hub） | 更新 [`website/`](website/)；开发细节留在 `apps/*` / `services/*` README |
-| 未授权实现 | **不**创建无依据的 production 行为变更 / 不跑「假装完成」的 smoke 声明 |
+| Product or mechanism design changes | Edit `docs/design/*` first (and PRD / glossary when needed), then Architecture / code / the relevant website pages |
+| Module tree, dependencies, or the composition root changes | Edit [ARCHITECTURE.md](ARCHITECTURE.md) first |
+| Incremental feature / acceptance tracking | Open or update a **GitHub Issue**. Implementation and the PR link the Issue |
+| Teaching use (CLI / Viewer / Hub) | Update [`website/`](website/). Development detail stays in `apps/*` / `services/*` READMEs |
+| Unauthorized implementation | **Do not** invent a production behavior change with no basis, and do not run a smoke that pretends the work is done |
 
-跟踪 Markdown 使用**仓库相对链接**。不要在 AGENTS/Architecture 里写死仅本机可用的绝对路径作为权威链接（归档路径可用文字说明）。
+Tracking Markdown uses **repo-relative links**. Do not put a machine-only absolute path in AGENTS or Architecture as an authority link (an archive path may be named in prose).
 
-### 对外文档禁止 Issue 编号痕迹（硬规则）
+### No Issue numbers on outward docs (hard rule)
 
-**读者向 / 对外文档不得出现 GitHub Issue 编号**（如 `#66`、`#59`、`Issue #60`、`Closes #xx` 文案）。
+**Reader-facing / outward docs must not contain a GitHub Issue number** (`#66`, `#59`, `Issue #60`, `Closes #xx` wording).
 
-| 适用 | 不适用（可保留 Issue 引用） |
+| Applies | Does not apply (Issue references may stay) |
 | --- | --- |
-| 根 `README.md` / `README.zh-CN.md` | `AGENTS.md`、`ARCHITECTURE.md`（贡献者路由） |
-| [`website/`](website/) 全部读者向正文（中/英） | `docs/design/*`、内部 PR/Issue 讨论 |
-| `examples/**/README*` 及包内读者向说明 | 实现与 PR 描述里的 `Closes #N` |
-| 产品站、教程、公开 smoke 叙述 | 测试名 / 代码注释若仅开发者可见（仍宜少写） |
+| Root `README.md` / `README.zh-CN.md` | `AGENTS.md`, `ARCHITECTURE.md` (contributor routing) |
+| All reader-facing body in [`website/`](website/) (Chinese and English) | `docs/design/*`, internal PR / Issue discussion |
+| `examples/**/README*` and in-package reader notes | `Closes #N` in an implementation or PR description |
+| Product site, tutorials, public smoke narrative | A test name or a code comment that only developers see (still keep those scarce) |
 
-**写法：** 用产品语义写边界（例：「monorepo 只收缩略版 tau3-airline-5；更大 bench 只走 Hub」），**不要**用「#66 交付边界」这类交付跟踪编号当章节标题或正文标记。  
-改文档时若发现对外文面有 `#数字` Issue 痕迹，**先删再合**；中英文同步。
+**How to write it:** state the boundary in product terms (example: "the monorepo ships only the reduced tau3-airline-5; a larger bench goes through Hub"). Do not use a delivery-tracking number such as "the #66 delivery boundary" as a heading or a body marker.
+If an outward surface already has a `#digits` Issue trace, **delete it before merging**. Keep Chinese and English in sync.
 
-## 证据等级
+## Evidence grades
 
-| 等级 | 含义 | 何时可声称 |
+| Grade | Meaning | When it may be claimed |
 | --- | --- | --- |
-| `design-only` | 仅文档 | 未被公开 smoke 覆盖的路径 |
-| `runnable-mvp` | 真实 public entrypoint + 真实 Agent 路径 | 有对应公开 journey 证据时 |
-| `isolated` | 隔离 Attempt + 隔离红线 | 有对应隔离验收证据时 |
-| `real-benchmark-verified` | 固定 upstream + 限定范围公开 journey | 有对应验收证据时；不得扩写成全 suite |
+| `design-only` | Docs only | A path public smoke does not cover |
+| `runnable-mvp` | A real public entrypoint plus a real Agent path | When the matching public journey evidence exists |
+| `isolated` | An isolated Attempt plus the isolation red lines | When the matching isolation acceptance evidence exists |
+| `real-benchmark-verified` | A fixed upstream plus a scoped public journey | When the matching acceptance evidence exists. Do not widen it to the full suite. |
 
-## 校验
+## Checks
 
-### 何时跑 CI 门禁（必须强调）
+### When to run the CI gate
 
-| 操作 | 是否本地先跑通 CI |
+| Action | Run the equivalent CI locally first? |
 | --- | --- |
-| **日常本地 commit** | **不需要**每次全量 CI；按改动路径跑对应门禁即可 |
-| **`git push`**（尤其推到将合入 `main` 的分支） | **需要**：先本地跑通与 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 等价的相关 job |
-| **开 / 更新 PR**、**发版 / 打 tag / 发布** | **必须**先本地确认会触发的 CI job 会过，再 push / 开 PR / 发版 |
+| **Ordinary local commit** | **No** full CI every time. Run the gate that matches the paths you changed. |
+| **`git push`** (especially a branch that will merge to `main`) | **Yes.** The relevant jobs in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) pass locally first. |
+| **Opening or updating a PR, cutting a release, tagging, publishing** | **Required.** Confirm the CI jobs that will fire will pass, then push / open the PR / release. |
 
-Agent 在协助 push、PR、发版前：**不得**假设「本地能 import」或「只改了文档」就跳过；应按路径跑下面 **CI 等价命令**（或明确说明已跑且通过）。失败则先修再推。
+Before helping with a push, a PR, or a release, an agent **must not** skip the gate because "it imports locally" or "only docs changed". Run the **CI-equivalent commands** for the paths below, or say which ones already passed. Fix failures before pushing.
 
-### CI 门禁（path-filtered 并行 job）
+### CI gates (path-filtered parallel jobs)
 
-| Job | 触发路径（摘要） | 本地等价 |
+| Job | Trigger paths (summary) | Local equivalent |
 | --- | --- | --- |
-| `python-core` | `src/` `sdk/` `tests/` `examples/` `services/` `docker/` `scripts/` `pyproject.toml` `uv.lock` `VERSION` … | 见下方 Python core |
-| `python-registry` | 同上（与 core 并行；仅 `tests/registry`） | `uv sync --frozen --extra registry` + `pytest tests/registry` |
+| `python-core` | `src/` `sdk/` `tests/` `examples/` `services/` `docker/` `scripts/` `pyproject.toml` `uv.lock` `VERSION` … | Python core, below |
+| `python-registry` | Same as core (parallel; `tests/registry` only) | `uv sync --frozen --extra registry` + `pytest tests/registry` |
 | `viewer-app` | `apps/viewer/**` `apps/shared/**` | `pnpm --dir apps/viewer install --frozen-lockfile && pnpm --dir apps/viewer lint && pnpm --dir apps/viewer build` |
 | `hub-app` | `apps/hub/**` `apps/shared/**` | `pnpm --dir apps/hub install --frozen-lockfile && pnpm --dir apps/hub lint && pnpm --dir apps/hub build` |
 | `website` | `website/**` | `pnpm --dir website install --frozen-lockfile && pnpm --dir website build` |
-| `design-tokens` | `docs/design/13*` / token 脚本 / 三端 CSS | `python3 scripts/check_design_tokens.py` |
+| `design-tokens` | `docs/design/13*` / token script / CSS on the three web surfaces | `python3 scripts/check_design_tokens.py` |
 
-`.github/workflows/ci.yml` 变更会重跑全部 job。纯 SPA / 纯 website 变更**不**跑全量 Python。  
-默认 CI **无**真 Docker e2e、**无**真 Agent/API e2e、**无**真 E2B/SSH。那些 skip **不是** Acceptance 通过。
+A change to `.github/workflows/ci.yml` reruns every job. A SPA-only or website-only change does **not** run the full Python suite.
+Default CI has **no** real Docker e2e, **no** real Agent/API e2e, and **no** real E2B/SSH. A skip is **not** an Acceptance pass.
 
-#### Python core（`python-core`）
+#### Python core (`python-core`)
 
 ```bash
 uv sync --frozen
@@ -255,11 +255,11 @@ uv run pyright
 export AGEVAL_OFFLINE_AGENT=1 AGEVAL_SKIP_DOCKER=1
 export AGEVAL_SKIP_REAL_CODEX=1 AGEVAL_SKIP_REAL_PI=1
 export AGEVAL_SKIP_REAL_OPENCODE=1 AGEVAL_SKIP_REAL_ACP=1
-# pytest 的 --ignore 列表必须与 .github/workflows/ci.yml job python-core 完全一致
+# The pytest --ignore list must match job python-core in .github/workflows/ci.yml
 uv run pytest --ignore=tests/registry -q
 ```
 
-#### Python registry（`python-registry`）
+#### Python registry (`python-registry`)
 
 ```bash
 uv sync --frozen --extra registry
@@ -267,18 +267,18 @@ export AGEVAL_OFFLINE_AGENT=1 AGEVAL_SKIP_DOCKER=1
 uv run pytest tests/registry -q
 ```
 
-若改动触及 docker / 真 Agent / e2b / ssh 路径，须按 Issue 或相关测试补跑（那些**不**在默认 CI 内）。  
-分支保护 required checks 须包含上述 job 名。
+If the change touches docker, a real Agent, e2b, or ssh, run the extra checks the Issue or the related tests name. Those are **not** in default CI.
+Branch protection required checks must include the job names above.
 
-## 相关入口
+## Related entry points
 
-| 文档 | 用途 |
+| Doc | Use |
 | --- | --- |
-| [`.agents/skills/`](.agents/skills/) → [`skills/`](skills/) | clone 后可发现的 skills（ageval-platform / cli / config-package / sdk-harness / plugin） |
-| [README.md](README.md) | 人类入口与状态 |
-| [website/](website/) | 读者向产品文档（中/英） |
-| [docs/design/00-overview-and-product.md](docs/design/00-overview-and-product.md) | 产品模型、US1–US12、命名 |
-| [docs/design/01-ageval-core.md](docs/design/01-ageval-core.md) | Core：lock + 五个阶段 + 环境 |
-| [docs/design/09-owner-matrix-and-structure.md](docs/design/09-owner-matrix-and-structure.md) | Owner 矩阵 |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | 源码树、依赖、生命周期图 |
-| [GitHub Issues](https://github.com/ZJU-REAL/ageval/issues) | 增量交付与验收跟踪 |
+| [`.agents/skills/`](.agents/skills/) → [`skills/`](skills/) | Skills discoverable after clone (ageval-platform / cli / config-package / sdk-harness / plugin) |
+| [README.md](README.md) | Human entry and status |
+| [website/](website/) | Reader-facing product docs (Chinese / English) |
+| [docs/design/00-overview-and-product.md](docs/design/00-overview-and-product.md) | Product model, US1–US12, naming |
+| [docs/design/01-ageval-core.md](docs/design/01-ageval-core.md) | Core: lock + five phases + environment |
+| [docs/design/09-owner-matrix-and-structure.md](docs/design/09-owner-matrix-and-structure.md) | Owner matrix |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Source tree, dependencies, lifecycle diagram |
+| [GitHub Issues](https://github.com/ZJU-REAL/ageval/issues) | Incremental delivery and acceptance tracking |
