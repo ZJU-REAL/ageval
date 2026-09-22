@@ -35,6 +35,7 @@ const DEFAULT_OPEN_DEPTH = 0;
 /** Skip heavy token highlight for huge bodies. */
 const HIGHLIGHT_MAX_CHARS = 120_000;
 const PLAIN_PREVIEW_MAX_CHARS = 400_000;
+const EMPTY_ACTORS: ActorRow[] = [];
 
 type FlatRow = {
   key: string;
@@ -131,7 +132,7 @@ export function FileSplitPanel({
   fileLoading,
   fileNote,
   groupByProfile = false,
-  actors = [],
+  actors = EMPTY_ACTORS,
   apiGroups = null,
   panelRef,
   taskId = "",
@@ -244,10 +245,13 @@ export function FileSplitPanel({
   useEffect(() => {
     if (query.trim()) {
       setOpenDirs(new Set(allDirPaths(visibleTree)));
-    } else {
-      setOpenDirs(new Set(dirPathsUpToDepth(nestedRoots, DEFAULT_OPEN_DEPTH)));
+      return;
     }
-  }, [query, visibleTree, nestedRoots]);
+    setOpenDirs(new Set(dirPathsUpToDepth(nestedRoots, DEFAULT_OPEN_DEPTH)));
+    // treeKey is the content key. Depending on visibleTree/nestedRoots resets
+    // every open folder when a caller passes a fresh actors array each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, treeKey]);
 
   useEffect(() => {
     if (!selectedPath || query.trim()) return;
