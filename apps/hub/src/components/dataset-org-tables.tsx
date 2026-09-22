@@ -6,6 +6,10 @@ import {
   GroupedTables,
   type GroupedTableGroup,
 } from "@/components/grouped-tables";
+import {
+  GroupOutlineRail,
+  groupSectionId,
+} from "@/components/group-outline";
 import { OfficialMark } from "@/components/official-mark";
 import {
   SortableHead,
@@ -38,6 +42,7 @@ function datasetLeaf(row: PackageRelease): string {
 
 export const DATASET_ORG_CHROME_ID = "datasets-chrome";
 export const DATASET_ORG_PIN_SLOT_ID = "datasets-org-pin";
+const datasetOrgSectionId = groupSectionId("dataset-org");
 
 const COLS_3 = (
   <colgroup>
@@ -126,6 +131,7 @@ export function DatasetOrgTables({
 }) {
   const [sortKey, setSortKey] = useState<string | null>("dataset");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [pinned, setPinned] = useState<string | null>(null);
 
   function onSort(key: string) {
     const next = nextSort(sortKey, sortDir, key);
@@ -252,11 +258,38 @@ export function DatasetOrgTables({
     };
   });
 
+  const outlineItems = orgIds.map((orgId) => {
+    const name = orgId ? orgName(orgId) : "Unmatched";
+    const info = orgId ? orgs.get(orgId) : undefined;
+    const mark = resolveEntityMark({
+      iconKey: info?.icon_key,
+      iconGithub: info?.icon_github,
+      displayName: name,
+    });
+    return {
+      id: orgId || "unmatched",
+      name,
+      count: (byOrg.get(orgId) || []).length,
+      mark: <BrandMark mark={mark} size={16} className="shrink-0" title={name} />,
+    };
+  });
+
   return (
-    <GroupedTables
+    <GroupOutlineRail
+      items={outlineItems}
+      activeId={pinned}
+      label="Organizations"
       chromeId={DATASET_ORG_CHROME_ID}
-      pinSlotId={DATASET_ORG_PIN_SLOT_ID}
-      groups={groups}
-    />
+      sectionId={datasetOrgSectionId}
+      stickVar="--datasets-stick-top"
+    >
+      <GroupedTables
+        chromeId={DATASET_ORG_CHROME_ID}
+        pinSlotId={DATASET_ORG_PIN_SLOT_ID}
+        groups={groups}
+        sectionId={datasetOrgSectionId}
+        onPinned={setPinned}
+      />
+    </GroupOutlineRail>
   );
 }
