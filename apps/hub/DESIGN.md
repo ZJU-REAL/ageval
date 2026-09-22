@@ -67,6 +67,7 @@ Token values, type stacks, radii, and motion curves: the YAML in [`apps/shared/D
 | Section switcher | `UnderlineTabs` (Liquid Move) |
 | Verifier dual surface | hairline button group on the same tab row (copy `CatalogScopeBar` `variant="group"`), far right; Trajectory / Files, trajectory first |
 | Trajectory step filter | Trajectory tab row, far right. `Select` (copy `BoardChartControls`). Default All. One major present in the trace (User, Agent, Thought, Tools, Observation, Terminal, Permission, Message). Trigger and menu reuse that major's step icon and tone. Hidden when fewer than two majors are present. |
+| Trajectory step outline | Right of the trajectory port (`lg+`, `xl` gutter). Collapsed hairline bars, length by preview. Hover expands the step icon and one truncated line. Click scrolls that step to the top of the port. Hidden below two steps. |
 | In-page exclusive choice | `Select` |
 | Compact in-panel segment | `PillTabs` |
 | Wrapping label | `Chip` (overlay paths, plugin names in a preview — **not** model browse) |

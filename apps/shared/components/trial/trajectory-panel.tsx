@@ -43,6 +43,7 @@ import { CodeHighlight } from "@ageval/shared/lib/code-highlight";
 import { findScrollParent } from "@ageval/shared/lib/scroll-port";
 import { cn } from "@ageval/shared/lib/utils";
 
+import { TrajectoryOutline } from "./trajectory-outline";
 import { actorLabel, type ActorRow } from "./types";
 
 type IconComp = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
@@ -361,6 +362,15 @@ function stepBodyContent(body: string, kind: BodyKind) {
   );
 }
 
+function outlineText(s: TrajectoryStep): string {
+  const { label, isToolCall } = classifyStep(s);
+  if (isToolCall) {
+    return (s.function_name || s.kind || s.title || label).toString().trim() || label;
+  }
+  const content = (s.content || "").replace(/\s+/g, " ").trim();
+  return content || label;
+}
+
 function stepIcon(opts: {
   isUser: boolean;
   isAsst: boolean;
@@ -391,11 +401,13 @@ function stepIcon(opts: {
 
 function StepItem({
   s,
+  stepId,
   hideTurnIndex,
   allExpanded,
   expandGen,
 }: {
   s: TrajectoryStep;
+  stepId: string;
   hideTurnIndex: boolean;
   allExpanded: boolean;
   expandGen: number;
@@ -556,6 +568,7 @@ function StepItem({
   return (
     <li
       ref={liRef}
+      data-traj-step={stepId}
       className={cn("blob-panel overflow-clip", isObservation && "bg-canvas-soft/40")}
     >
       <div
@@ -726,8 +739,28 @@ export function TrajectoryPanel({
   const showInvokeHeaders = multiRole && invokes.length >= 2;
   const [allExpanded, setAllExpanded] = useState(true);
   const [expandGen, setExpandGen] = useState(0);
+  const [activeStepId, setActiveStepId] = useState<string | null>(null);
   const invokeHeaderRef = useRef<HTMLHeadingElement>(null);
   const trajScrollRef = useRef<HTMLDivElement>(null);
+  const outlineItems = useMemo(
+    () =>
+      shownSteps.map((s, i) => {
+        const flags = classifyStep(s);
+        const text = outlineText(s);
+        return {
+          id: `traj-step-${i}`,
+          text,
+          icon: stepIcon({
+            ...flags,
+            kind: s.kind,
+            functionName: s.function_name,
+          }),
+          tone: STEP_TONE[flags.major],
+          weight: Math.max(1, text.length),
+        };
+      }),
+    [shownSteps],
+  );
 
   // Models-page pattern: measure the sticky chrome and expose its height as
   // a CSS variable so sub-headers stick flush beneath it at any wrap width.
@@ -751,6 +784,68 @@ export function TrajectoryPanel({
     if (!el) return;
     el.scrollTop = 0;
   }, [kind]);
+
+  useEffect(() => {
+    const root = trajScrollRef.current;
+    if (!root || outlineItems.length < 2) return;
+    const nodes = [...root.querySelectorAll<HTMLElement>("[data-traj-step]")];
+    if (!nodes.length) return;
+    const visible = new Map<string, number>();
+    const pick = () => {
+      if (!visible.size) return;
+      const top = [...visible.entries()].sort((a, b) => a[1] - b[1])[0];
+      if (top) setActiveStepId(top[0]);
+    };
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = entry.target.getAttribute("data-traj-step");
+          if (!id) continue;
+          if (entry.isIntersecting) visible.set(id, entry.boundingClientRect.top);
+          else visible.delete(id);
+        }
+        pick();
+      },
+      { root, rootMargin: "0px 0px -70% 0px", threshold: [0, 0.25] },
+    );
+    for (const node of nodes) io.observe(node);
+    setActiveStepId(outlineItems[0]?.id ?? null);
+    return () => io.disconnect();
+  }, [outlineItems]);
+
+  function jumpToStep(id: string) {
+    const root = trajScrollRef.current;
+    const el = root?.querySelector<HTMLElement>(`[data-traj-step="${id}"]`);
+    if (!root || !el) return;
+    setActiveStepId(id);
+    const offset =
+      parseFloat(getComputedStyle(root).getPropertyValue("--traj-invoke-h")) || 0;
+    const top =
+      el.getBoundingClientRect().top -
+      root.getBoundingClientRect().top +
+      root.scrollTop -
+      offset;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    root.scrollTo({ top: Math.max(0, top), behavior: reduced ? "auto" : "smooth" });
+  }
+
+  function withOutline(body: ReactNode) {
+    if (outlineItems.length < 2) return body;
+    return (
+      <div className="relative lg:pr-10 xl:pr-0">
+        {body}
+        <div className="pointer-events-none absolute inset-y-0 right-0 z-30 hidden w-10 lg:block xl:left-full xl:right-auto xl:w-[12.5%] xl:pl-3">
+          <div className="flex h-full items-start justify-end overflow-visible">
+            <TrajectoryOutline
+              items={outlineItems}
+              activeId={activeStepId}
+              onJump={jumpToStep}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const scroller = (children: ReactNode) => (
     <div
@@ -798,13 +893,14 @@ export function TrajectoryPanel({
     );
   }
 
-  function renderSteps(list: TrajectoryStep[], hideTurnIndex = false) {
+  function renderSteps(list: TrajectoryStep[], hideTurnIndex = false, start = 0) {
     return (
       <ol className="space-y-2">
         {list.map((s, i) => (
           <StepItem
-            key={`${s.invocation || ""}-${s.line || i}-${i}`}
+            key={`${s.invocation || ""}-${s.line || i}-${start + i}`}
             s={s}
+            stepId={`traj-step-${start + i}`}
             hideTurnIndex={hideTurnIndex}
             allExpanded={allExpanded}
             expandGen={expandGen}
@@ -842,39 +938,46 @@ export function TrajectoryPanel({
       {shownSteps.length === 0 ? (
         <p className="text-sm text-mute">No steps in this view.</p>
       ) : showInvokeHeaders ? (
-        scroller(
-            invokes.map((block, i) => {
-              const actor = block.profileId
-                ? actorByPid.get(block.profileId)
-                : undefined;
-              const who = block.profileId
-                ? actorLabel(actor, block.profileId)
-                : null;
-              const title =
-                block.turn != null
-                  ? who
-                    ? `invoke ${block.turn} · ${who}`
-                    : `invoke ${block.turn}`
-                  : who || "invoke";
-              return (
-                <section key={`${block.turn ?? "x"}-${i}`} className="space-y-2">
-                  <h3
-                    ref={i === 0 ? invokeHeaderRef : undefined}
-                    className="relative sticky top-0 z-20 bg-canvas py-1 text-xs font-medium text-ink"
-                  >
-                    {title}
-                    <span className="text-mute font-normal ml-2">
-                      {block.steps.length} step
-                      {block.steps.length === 1 ? "" : "s"}
-                    </span>
-                  </h3>
-                  {renderSteps(block.steps, true)}
-                </section>
-              );
-            }),
-          )
+        withOutline(
+          scroller(
+            (() => {
+              let cursor = 0;
+              return invokes.map((block, i) => {
+                const start = cursor;
+                cursor += block.steps.length;
+                const actor = block.profileId
+                  ? actorByPid.get(block.profileId)
+                  : undefined;
+                const who = block.profileId
+                  ? actorLabel(actor, block.profileId)
+                  : null;
+                const title =
+                  block.turn != null
+                    ? who
+                      ? `invoke ${block.turn} · ${who}`
+                      : `invoke ${block.turn}`
+                    : who || "invoke";
+                return (
+                  <section key={`${block.turn ?? "x"}-${i}`} className="space-y-2">
+                    <h3
+                      ref={i === 0 ? invokeHeaderRef : undefined}
+                      className="relative sticky top-0 z-20 bg-canvas py-1 text-xs font-medium text-ink"
+                    >
+                      {title}
+                      <span className="text-mute font-normal ml-2">
+                        {block.steps.length} step
+                        {block.steps.length === 1 ? "" : "s"}
+                      </span>
+                    </h3>
+                    {renderSteps(block.steps, true, start)}
+                  </section>
+                );
+              });
+            })(),
+          ),
+        )
       ) : (
-        scroller(renderSteps(shownSteps))
+        withOutline(scroller(renderSteps(shownSteps)))
       )}
     </div>
   );
