@@ -5,11 +5,11 @@ import {
   GroupedTables,
   type GroupedTableGroup,
 } from "@/components/grouped-tables";
-import { LabGroupHead } from "@/components/lab-group-head";
 import {
-  ModelLabOutline,
-  modelLabSectionId,
-} from "@/components/model-lab-outline";
+  GroupOutlineRail,
+  groupSectionId,
+} from "@/components/group-outline";
+import { LabGroupHead } from "@/components/lab-group-head";
 import { ModalityMarks } from "@/components/modality-mark";
 import {
   SortableHead,
@@ -25,6 +25,7 @@ import {
 } from "@ageval/shared/components/ui/table";
 import { encodeDatasetId } from "@/lib/api";
 import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
+import { LabMark } from "@ageval/shared/components/lab-mark";
 import {
   compactTokens,
   directoryPrice,
@@ -54,6 +55,7 @@ const COLS = (
 );
 
 const STICKY_TH = "sticky z-10 bg-canvas-soft top-[var(--models-stick-top,0px)]";
+const sectionId = groupSectionId("model-lab");
 
 export function ModelLabTables({ rows }: { rows: ModelLabRow[] }) {
   const pin = loadModelPin();
@@ -220,28 +222,27 @@ export function ModelLabTables({ rows }: { rows: ModelLabRow[] }) {
 
   const outlineItems = labs.map(([lab, labRows]) => ({
     id: lab || "unmatched",
-    lab,
     name: pin.labs[lab]?.name || lab || "Unmatched",
     count: labRows.length,
+    mark: lab ? <LabMark lab={lab} size={16} className="shrink-0" /> : null,
   }));
 
   return (
-    <div className="relative lg:pr-10 xl:pr-0">
+    <GroupOutlineRail
+      items={outlineItems}
+      activeId={pinned}
+      label="Labs"
+      chromeId="models-chrome"
+      sectionId={sectionId}
+      stickVar="--models-stick-top"
+    >
       <GroupedTables
         chromeId="models-chrome"
         pinSlotId="models-lab-pin"
         groups={groups}
-        sectionId={modelLabSectionId}
+        sectionId={sectionId}
         onPinned={setPinned}
       />
-      <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-10 lg:block xl:left-full xl:right-auto xl:w-[12.5%] xl:pl-3">
-        <div
-          className="pointer-events-auto sticky z-10 flex w-full justify-end overflow-visible"
-          style={{ top: "calc(var(--models-stick-top, 0px) + 0.75rem)" }}
-        >
-          <ModelLabOutline items={outlineItems} activeId={pinned} />
-        </div>
-      </div>
-    </div>
+    </GroupOutlineRail>
   );
 }

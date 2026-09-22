@@ -7,6 +7,10 @@ import {
   GroupedTables,
   type GroupedTableGroup,
 } from "@/components/grouped-tables";
+import {
+  GroupOutlineRail,
+  groupSectionId,
+} from "@/components/group-outline";
 import { LabGroupHead } from "@/components/lab-group-head";
 import { LeaderboardPareto } from "@/components/leaderboard-pareto";
 import { LeaderboardWaffle } from "@/components/leaderboard-waffle";
@@ -44,6 +48,7 @@ import {
 import { markFromPackage, resolveEntityMark } from "@ageval/shared/lib/brand-marks";
 import type { BoardChart, ParetoAxis } from "@/lib/leaderboard-charts";
 import { performanceCanonical } from "@/lib/model-appearances";
+import { LabMark } from "@ageval/shared/components/lab-mark";
 import { loadModelPin } from "@ageval/shared/lib/model-pin";
 import { displayLabelsFromOverlay, formatDate, formatScore } from "@ageval/shared/lib/utils";
 
@@ -554,7 +559,9 @@ export function PlazaModelTables({
 }) {
   const navigate = useNavigate();
   const { sortKey, sortDir, head } = usePlazaSort();
+  const [pinned, setPinned] = useState<string | null>(null);
   const pin = loadModelPin();
+  const sectionId = groupSectionId("plaza-model");
   const packs = useMemo(() => {
     const map = new Map<string, PackageRelease>();
     for (const row of latestPackageByDataset(agents)) {
@@ -664,12 +671,30 @@ export function PlazaModelTables({
     };
   });
 
+  const outlineItems = labs.map(([lab, labRows]) => ({
+    id: lab || "unmatched",
+    name: pin.labs[lab]?.name || lab || "Unmatched",
+    count: labRows.length,
+    mark: lab ? <LabMark lab={lab} size={16} className="shrink-0" /> : null,
+  }));
+
   return (
-    <GroupedTables
+    <GroupOutlineRail
+      items={outlineItems}
+      activeId={pinned}
+      label="Labs"
       chromeId={PLAZA_CHROME_ID}
-      pinSlotId={PLAZA_PIN_SLOT_ID}
-      groups={groups}
-    />
+      sectionId={sectionId}
+      stickVar="--leaderboard-stick-top"
+    >
+      <GroupedTables
+        chromeId={PLAZA_CHROME_ID}
+        pinSlotId={PLAZA_PIN_SLOT_ID}
+        groups={groups}
+        sectionId={sectionId}
+        onPinned={setPinned}
+      />
+    </GroupOutlineRail>
   );
 }
 

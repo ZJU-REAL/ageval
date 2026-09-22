@@ -1,18 +1,17 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
-import { LabMark } from "@ageval/shared/components/lab-mark";
 import { cn } from "@ageval/shared/lib/utils";
 
-export function modelLabSectionId(id: string) {
-  return `model-lab-${id}`;
-}
-
-export type ModelLabOutlineItem = {
+export type GroupOutlineItem = {
   id: string;
-  lab: string;
   name: string;
   count: number;
+  mark?: ReactNode;
 };
+
+export function groupSectionId(prefix: string) {
+  return (id: string) => `${prefix}-${id}`;
+}
 
 const BAR_MIN = 10;
 const BAR_MAX = 24;
@@ -23,12 +22,21 @@ function barWidth(count: number, minCount: number, maxCount: number) {
   return BAR_MIN + t * (BAR_MAX - BAR_MIN);
 }
 
-export function ModelLabOutline({
+export function GroupOutline({
   items,
   activeId,
+  label,
+  chromeId,
+  sectionId,
+  stickVar,
 }: {
-  items: ModelLabOutlineItem[];
+  items: GroupOutlineItem[];
   activeId: string | null;
+  label: string;
+  chromeId: string;
+  sectionId: (id: string) => string;
+  /** Custom property name, including dashes. Example: `--models-stick-top`. */
+  stickVar: string;
 }) {
   const [pointerOpen, setPointerOpen] = useState(false);
   const [kbdOpen, setKbdOpen] = useState(false);
@@ -42,8 +50,8 @@ export function ModelLabOutline({
 
   function go(id: string) {
     const main = document.getElementById("main");
-    const chrome = document.getElementById("models-chrome");
-    const el = document.getElementById(modelLabSectionId(id));
+    const chrome = document.getElementById(chromeId);
+    const el = document.getElementById(sectionId(id));
     if (!main || !el) return;
     const line =
       chrome?.getBoundingClientRect().bottom ?? main.getBoundingClientRect().top;
@@ -63,7 +71,7 @@ export function ModelLabOutline({
 
   return (
     <nav
-      aria-label="Labs"
+      aria-label={label}
       onPointerEnter={() => setPointerOpen(true)}
       onPointerLeave={() => setPointerOpen(false)}
       onFocus={() => setKbdOpen(true)}
@@ -72,8 +80,10 @@ export function ModelLabOutline({
           setKbdOpen(false);
         }
       }}
+      style={{
+        maxHeight: `calc(100dvh - 4.5rem - var(${stickVar}, 0px) - 2.25rem)`,
+      }}
       className={cn(
-        "max-h-[calc(100dvh-4.5rem-var(--models-stick-top,0px)-2.25rem)]",
         "w-max shrink-0 overflow-y-auto overscroll-contain rounded-[10px] p-1",
         "motion-safe:transition-[background-color,box-shadow] motion-safe:duration-200 motion-safe:ease-smooth",
         open && "bg-canvas shadow-[var(--viewer-shadow-pop)]",
@@ -110,8 +120,8 @@ export function ModelLabOutline({
                   )}
                 >
                   <span className="flex w-[11rem] items-center gap-1.5">
-                    {item.lab ? (
-                      <LabMark lab={item.lab} size={16} className="shrink-0" />
+                    {item.mark ? (
+                      <span className="shrink-0">{item.mark}</span>
                     ) : null}
                     <span
                       className={cn(
@@ -144,5 +154,47 @@ export function ModelLabOutline({
         })}
       </ul>
     </nav>
+  );
+}
+
+/** Right-edge rail. `lg` reserves a hairline column; `xl` sits in the 80% gutter. */
+export function GroupOutlineRail({
+  items,
+  activeId,
+  label,
+  chromeId,
+  sectionId,
+  stickVar,
+  children,
+}: {
+  items: GroupOutlineItem[];
+  activeId: string | null;
+  label: string;
+  chromeId: string;
+  sectionId: (id: string) => string;
+  stickVar: string;
+  children: ReactNode;
+}) {
+  if (items.length < 2) return children;
+
+  return (
+    <div className="relative lg:pr-10 xl:pr-0">
+      {children}
+      <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-10 lg:block xl:left-full xl:right-auto xl:w-[12.5%] xl:pl-3">
+        <div
+          className="pointer-events-auto sticky z-10 flex w-full justify-end overflow-visible"
+          style={{ top: `calc(var(${stickVar}, 0px) + 0.75rem)` }}
+        >
+          <GroupOutline
+            items={items}
+            activeId={activeId}
+            label={label}
+            chromeId={chromeId}
+            sectionId={sectionId}
+            stickVar={stickVar}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
