@@ -267,6 +267,16 @@ export function LeaderboardPage() {
             </div>
           ) : null}
         </div>
+        {view === "dataset" && (boardChart === "waffle" || boardChart === "pareto") ? (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-mute">
+            <span>
+              {boardChart === "waffle"
+                ? "Each square is one trial. Click a square with uploaded Attempt evidence to open that job. Observational, not PASS, not comparable across datasets."
+                : "Pass rate versus suite cost, tokens, or time. Observational, not PASS, not comparable across datasets."}
+            </span>
+            {boardChart === "waffle" ? <WaffleLegend /> : null}
+          </div>
+        ) : null}
         <div
           id={PLAZA_PIN_SLOT_ID}
           className="bg-canvas pt-3 pb-3 empty:hidden"
@@ -291,16 +301,6 @@ export function LeaderboardPage() {
         />
       ) : (
         <>
-          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-mute">
-            <span>
-              {view === "dataset" && boardChart === "waffle"
-                ? "Each square is one trial. Click a square with uploaded Attempt evidence to open that job. Observational, not PASS, not comparable across datasets."
-                : view === "dataset" && boardChart === "pareto"
-                  ? "Pass rate versus suite cost, tokens, or time. Observational, not PASS, not comparable across datasets."
-                  : "Observational metrics on each row — not PASS, not comparable across datasets · click headers to sort"}
-            </span>
-            {view === "dataset" && boardChart === "waffle" ? <WaffleLegend /> : null}
-          </div>
           {view === "dataset" ? (
             <PlazaDatasetTables
               suites={visibleSuites}
