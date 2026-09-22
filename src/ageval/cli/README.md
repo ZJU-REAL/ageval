@@ -105,7 +105,7 @@ sets ``AGEVAL_REGISTRY_URL=http://127.0.0.1:8080``.
 | `ageval results export-profiles` | Export suite `job_overlay` → re-runnable `profiles.yaml` (#59) |
 | `ageval results share\|unshare` | Share / revoke private result access (owner only) |
 | `ageval results delete\|set-visibility` | Delete or flip visibility (`--kind attempt\|suite`; delete needs `--yes`) |
-| `ageval view` | Local Dataset Web UI. Path or registry ref (`id@version`); cache hit does not need Hub. `--dev` starts API and Vite when possible; `--open` deep-links a job/task/run |
+| `ageval view` | Local Web UI. Dataset root, a directory of dataset roots, or a registry ref (`id@version`); cache hit does not need Hub. Header: Datasets, Jobs, Agents, Plugins. `--dev` starts API and Vite when possible; `--open` deep-links a job/task/run |
 | `ageval jobs delete` | Delete a local Job under `--local` (suite always cascades Attempts). Requires `--yes` |
 
 Discover flags with `uv run ageval <cmd> -h`.

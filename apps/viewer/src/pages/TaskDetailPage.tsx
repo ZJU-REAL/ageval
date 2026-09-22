@@ -13,15 +13,16 @@ import {
   TableHeader,
   TableRow,
 } from "@ageval/shared/components/ui/table";
-import { fetchJobTask, type Job, type TaskRow, type Trial } from "@/lib/api";
+import { fetchJobTask, setDatasetQuery, type Job, type TaskRow, type Trial } from "@/lib/api";
 import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { ModelLabel } from "@ageval/shared/components/model-label";
 import { useDocumentTitle } from "@/lib/document-title";
-import { jobPath, trialPath } from "@/lib/routes";
+import { jobPath, jobsHome, trialPath } from "@/lib/routes";
 import { cn, formatDate, formatError, formatScore } from "@ageval/shared/lib/utils";
 
 export function TaskDetailPage() {
-  const { jobId = "", taskId = "" } = useParams();
+  const { datasetKey = "", jobId = "", taskId = "" } = useParams();
+  setDatasetQuery(datasetKey);
   const navigate = useNavigate();
   useDocumentTitle(taskId || "Task");
   const [job, setJob] = useState<Job | null>(null);
@@ -62,12 +63,12 @@ export function TaskDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [jobId, taskId]);
+  }, [datasetKey, jobId, taskId]);
 
   if (!loading && !error && trials.length === 1) {
     const rid = trials[0].run_id || trials[0].trial_id || task?.run_id || "";
     if (rid) {
-      return <Navigate to={trialPath(jobId, taskId, rid)} replace />;
+      return <Navigate to={trialPath(datasetKey, jobId, taskId, rid)} replace />;
     }
   }
 
@@ -76,8 +77,8 @@ export function TaskDetailPage() {
       <div className="space-y-5">
         <BreadcrumbNav
           items={[
-            { label: "Jobs", href: "/" },
-            { label: jobId, href: jobPath(jobId) },
+            { label: "Jobs", href: jobsHome(datasetKey) },
+            { label: jobId, href: jobPath(datasetKey, jobId) },
             { label: taskId, href: null },
           ]}
         />
@@ -145,7 +146,7 @@ export function TaskDetailPage() {
                         if (!openable) return;
                         const el = e.target as HTMLElement;
                         if (el.closest("button, [role='button']")) return;
-                        navigate(trialPath(jobId, taskId, rid));
+                        navigate(trialPath(datasetKey, jobId, taskId, rid));
                       }}
                       onKeyDown={(e) => {
                         if (!openable) return;
@@ -153,7 +154,7 @@ export function TaskDetailPage() {
                         if (el.closest("button, [role='button']")) return;
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
-                          navigate(trialPath(jobId, taskId, rid));
+                          navigate(trialPath(datasetKey, jobId, taskId, rid));
                         }
                       }}
                       tabIndex={openable ? 0 : undefined}

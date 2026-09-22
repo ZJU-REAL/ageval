@@ -19,33 +19,62 @@ anti-slop; **DESIGN.md** role table for which control. Evidence tabs use
 
 ## Product surface (scope lock)
 
-**In scope (MVP):**
+`ageval view` takes a dataset root, a registry ref, or a directory that is not
+itself a dataset. A non-dataset directory is scanned **one level**: children
+whose `ageval.yaml` is `ageval.dataset/1` are opened; everything else is
+skipped. The server still starts when that list is empty.
 
-1. **Jobs list** — search; filter dropdowns; sortable columns; row click  
-   Jobs = suite runs under `.ageval/suite-runs/` and single-task Attempts under `.ageval/runs/`
-2. **Job → tasks** — task table with scores / status / agent-model meta
-3. **Task detail** — trials/run row(s), status/error coloring, **copyable CLI**
-4. **Attempt / trial detail** — `Jobs > job > task > run_id`; Outcome + actors
+Header destinations, same chrome either way: **Datasets**, **Jobs**, **Agents**,
+**Plugins**. No sidebar. Lists are tables, not catalog cards. Dataset choice on
+Jobs is a Select.
+
+Landing: more than one dataset → Datasets. Exactly one (including
+`ageval view <dataset>`) → Jobs. The Datasets table still lists that one row.
+`--open` wins over the landing.
+
+**In scope:**
+
+1. **Datasets** — one row per opened package. Display `dataset_id@version`.
+   The switch key is the directory name (two siblings may share `dataset_id`).
+   Opening a row is read-only: README when present, `ageval.yaml`,
+   `profiles.yaml` when present, and a file tree with a size-capped preview.
+   `.ageval/runs` and `.ageval/suite-runs` are not on that tree.
+2. **Jobs list** — search; filter dropdowns; sortable columns; row click.
+   Jobs = that package's `.ageval/suite-runs/` and `.ageval/runs/` only.
+   Routes carry the directory key so two packages cannot share a `job_id`.
+3. **Job → tasks** — task table with scores / status / agent-model meta
+4. **Task detail** — trials/run row(s), status/error coloring, **copyable CLI**
+5. **Attempt / trial detail** — `Jobs > job > task > run_id`; Outcome + actors
    (Role / Harness / Model / Time / Usage) + tabs from real evidence only
    (Trajectory · Agent · Verifier · Artifacts · Lock · Runtime). Top bar may show
    framework / environment kind / `provenance.upstream.url`. Multi-role groups Trajectory
    and Agent tree by `profile_id`. Usage/trajectory are observational ≠ PASS.
-5. **Breadcrumb** — `Jobs > jobId > taskId > runId` with `>` separators; click to navigate
-6. **Delete a local Job** — Jobs row menu or bulk selection. Preview paths /
+6. **Breadcrumb** — `Jobs > jobId > taskId > runId` with `>` separators; click to navigate
+7. **Delete a local Job** — Jobs row menu or bulk selection. Preview paths /
    bytes / cascade `run_id`s, then confirm. Suite delete always removes
    referenced Attempts. No delete control on an inner trial. Does not call
-   Registry. Same Application use case as `ageval jobs delete --local … --yes`.
-7. **Pin / note (this browser)** — `localStorage` keyed by `dataset_id` +
+   Registry. Deletes only under the selected dataset root. Same Application
+   use case as `ageval jobs delete --local … --yes`.
+8. **Pin / note (this browser)** — `localStorage` keyed by `dataset_id` +
    `job_id`. Not written to evidence, lock, or Registry. Pinned rows sort
    first. Action icon (always on): note, else pin, else hover settings.
    Hover a note icon to read the note.
    Click the settings/note control to open the menu (do not open on hover).
+9. **Plugins** — rows from `$AGEVAL_HOME/plugins` `index.json` `(id, version)`
+   plus first-party contrib short ids from this CLI, marked built-in.
+   Read-only: README when present, `plugin.yaml`, file tree, size-capped preview.
+10. **Agents** — same for `$AGEVAL_HOME/agents` and the builtin Agent catalog
+    (`agent.yaml`).
 
 **Out of scope unless user asks:**
 
 - Public catalog, OAuth, Postgres, Leaderboard SPA (#22)
 - Hub / Registry write (publish, upload, release, remote delete)
-- Package file-tree / task-package browser (removed; Jobs is the product surface)
+- Viewer sidebar, catalog-card lists, install / uninstall / editing yaml
+- Scanning more than one directory level, opening `$AGEVAL_HOME` as a file tree,
+  reading `credentials`, or merging the cwd Registry cache into Datasets
+- Scanning the git checkout `plugins/` tree (builtins come from the running CLI)
+- A gold tab. `tasks/*/evaluation/` may appear as ordinary package files
 - Marketing mesh gradients, dark neon skins, custom CSS component kits
 - Fabricating Harbor-only files or empty evidence tabs
 - Soft-delete trash, live cancel, `l1-work` cleanup, deleting one Attempt inside a suite
@@ -108,7 +137,20 @@ Python API under `/api/*` (see `src/ageval/viewer/`):
 | Path | Purpose |
 | --- | --- |
 | `GET /api/health` | Liveness |
-| `GET /api/jobs` | Job list (suite-runs + single-task Attempts) |
+| `GET /api/session` | Opened datasets, landing (`jobs` when exactly one, else `datasets`) |
+| `GET /api/datasets` | Dataset rows (`key` = directory name, label `dataset_id@version`) |
+| `GET /api/datasets/{key}` | README / manifest / profiles names for that package |
+| `GET /api/datasets/{key}/tree` | Package file tree. Omits `.ageval/runs` and `.ageval/suite-runs` |
+| `GET /api/datasets/{key}/file?path=` | Size-capped preview. Refuses `..`, `credentials`, and paths outside the root |
+| `GET /api/plugins` | Builtin contrib rows plus `$AGEVAL_HOME/plugins` index rows |
+| `GET /api/plugins/package?source=&id=&version=` | Plugin package names (README, `plugin.yaml`) |
+| `GET /api/plugins/tree` | Same query. Tree confined to that package root |
+| `GET /api/plugins/file?path=` | Preview. Same refusal rules |
+| `GET /api/agents` | Builtin catalog plus `$AGEVAL_HOME/agents` index rows |
+| `GET /api/agents/package` | Agent package names (README, `agent.yaml`) |
+| `GET /api/agents/tree` | Tree confined to that package root |
+| `GET /api/agents/file?path=` | Preview. Same refusal rules |
+| `GET /api/jobs?dataset=` | Job list for that directory key. Omitted when exactly one dataset is open |
 | `GET /api/jobs/{id}` | Job detail + task rows |
 | `GET /api/jobs/{id}/delete-preview` | Paths, bytes, cascade run ids, confirm token; refuse reasons |
 | `DELETE /api/jobs/{id}?confirm=` | Hard-delete after preview token (suite cascades Attempts) |
@@ -134,9 +176,9 @@ usage). Cache hit rate uses inclusion/disjoint heuristics; never treat
 
 SPA file preview: JSON/JSONL pretty-print + lightweight syntax highlight (no extra deps).
 
-Package-file browse routes were removed with the old SPA.  
-All paths confined to the opened dataset root (`job_id` / `task_id` / `run_id` single-segment; file paths reject paths that contain `..`). No Registry required.  
-Evidence roots: `{dataset}/.ageval/runs/{run_id}` or task-local `.ageval/runs/`; lock `task_id` must match when present.
+Job and evidence paths stay inside the dataset chosen by `?dataset=` (or the only opened dataset). `job_id` / `task_id` / `run_id` are single-segment; file paths reject `..`. Package preview roots are only: that dataset directory, an indexed plugin or Agent package under `$AGEVAL_HOME`, or a builtin tree shipped in the CLI. Never `credentials`. Never the whole `$AGEVAL_HOME`. Secret-like basenames stay redacted. No Registry required.  
+Evidence roots: `{dataset}/.ageval/runs/{run_id}` or task-local `.ageval/runs/`; lock `task_id` must match when present.  
+Old `/api/dataset` and `/api/tasks/...` browse routes stay absent.
 
 ## Build & serve
 

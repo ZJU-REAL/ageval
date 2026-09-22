@@ -214,8 +214,25 @@ export type DeleteResult = {
   cascade_run_ids: string[];
 };
 
+let datasetQueryKey: string | null = null;
+
+/** Jobs requests include this directory key when more than one dataset is open. */
+export function setDatasetQuery(key: string | null) {
+  const text = (key || "").trim();
+  datasetQueryKey = text || null;
+}
+
+function withDataset(path: string): string {
+  if (!datasetQueryKey || !path.startsWith("/api/jobs")) return path;
+  const [base, query = ""] = path.split("?");
+  const params = new URLSearchParams(query);
+  if (!params.has("dataset")) params.set("dataset", datasetQueryKey);
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
 async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(path, { headers: { Accept: "application/json" } });
+  const res = await fetch(withDataset(path), { headers: { Accept: "application/json" } });
   const data = (await res.json().catch(() => ({}))) as {
     error?: string;
     message?: string;
@@ -234,7 +251,7 @@ export function fetchDeletePreview(jobId: string) {
 
 export async function deleteJob(jobId: string, confirmToken: string) {
   const q = new URLSearchParams({ confirm: confirmToken });
-  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}?${q}`, {
+  const res = await fetch(withDataset(`/api/jobs/${encodeURIComponent(jobId)}?${q}`), {
     method: "DELETE",
     headers: { Accept: "application/json" },
   });
@@ -448,4 +465,128 @@ export function fetchTrialPackageFile(
     content?: string | null;
     note?: string;
   }>(`${trialBase(jobId, taskId, runId)}/package-file?${q}`);
+}
+
+export type DatasetItem = {
+  key: string;
+  dataset_id: string;
+  version: string;
+  description?: string | null;
+  task_count: number;
+  label: string;
+};
+
+export type ViewSession = {
+  ok: boolean;
+  mode: string;
+  landing: "jobs" | "datasets" | string;
+  dataset_count: number;
+  datasets: DatasetItem[];
+};
+
+export type CatalogItem = {
+  source: "builtin" | "installed" | string;
+  id: string;
+  version: string;
+  label: string;
+  description?: string | null;
+  read_only?: boolean;
+};
+
+export type PackageDetail = {
+  ok: boolean;
+  kind: string;
+  source: string;
+  id: string;
+  version: string;
+  label: string;
+  description?: string | null;
+  readme?: string | null;
+  manifest?: string | null;
+  profiles?: string | null;
+  read_only?: boolean;
+  declared?: {
+    id: string;
+    kind: "exclusive" | "chain";
+    entry?: string;
+    priority?: number;
+  }[];
+};
+
+export type PackageFile = {
+  ok: boolean;
+  path: string;
+  name: string;
+  size: number;
+  encoding: string;
+  truncated?: boolean;
+  content?: string | null;
+  note?: string | null;
+};
+
+export function fetchSession() {
+  return getJson<ViewSession>("/api/session");
+}
+
+export function fetchDataset(key: string) {
+  return getJson<PackageDetail>(`/api/datasets/${encodeURIComponent(key)}`);
+}
+
+export function fetchDatasetTree(key: string) {
+  return getJson<{ ok: boolean; entries: TreeEntry[] }>(
+    `/api/datasets/${encodeURIComponent(key)}/tree`,
+  );
+}
+
+export function fetchDatasetFile(key: string, path: string) {
+  const q = new URLSearchParams({ path });
+  return getJson<PackageFile>(
+    `/api/datasets/${encodeURIComponent(key)}/file?${q}`,
+  );
+}
+
+function catalogQuery(source: string, id: string, version: string, path?: string) {
+  const q = new URLSearchParams({ source, id, version });
+  if (path) q.set("path", path);
+  return q.toString();
+}
+
+export function fetchPlugins() {
+  return getJson<{ ok: boolean; items: CatalogItem[] }>("/api/plugins");
+}
+
+export function fetchPlugin(source: string, id: string, version: string) {
+  return getJson<PackageDetail>(`/api/plugins/package?${catalogQuery(source, id, version)}`);
+}
+
+export function fetchPluginTree(source: string, id: string, version: string) {
+  return getJson<{ ok: boolean; entries: TreeEntry[] }>(
+    `/api/plugins/tree?${catalogQuery(source, id, version)}`,
+  );
+}
+
+export function fetchPluginFile(source: string, id: string, version: string, path: string) {
+  return getJson<PackageFile>(
+    `/api/plugins/file?${catalogQuery(source, id, version, path)}`,
+  );
+}
+
+export function fetchAgents() {
+  return getJson<{ ok: boolean; items: CatalogItem[] }>("/api/agents");
+}
+
+export function fetchAgent(source: string, id: string, version: string) {
+  return getJson<PackageDetail>(`/api/agents/package?${catalogQuery(source, id, version)}`);
+}
+
+export function fetchAgentTree(source: string, id: string, version: string) {
+  return getJson<{ ok: boolean; entries: TreeEntry[] }>(
+    `/api/agents/tree?${catalogQuery(source, id, version)}`,
+  );
+}
+
+export function fetchAgentFile(source: string, id: string, version: string, path: string) {
+  return getJson<PackageFile>(
+    `/api/agents/file?${catalogQuery(source, id, version, path)}`,
+  );
 }

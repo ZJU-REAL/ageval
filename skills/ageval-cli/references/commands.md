@@ -104,5 +104,7 @@ ageval results upload-suite <dataset> --suite-run <8-hex> --public [--with-attem
 
 ## `ageval view` / `ageval jobs delete`
 
-- Local dataset UI. Path or registry ref (`id@version` / `@sha256:…`). A unique verified cache hit does not contact Hub.
+- Local UI. A dataset root or registry ref (`id@version` / `@sha256:…`) opens that one package. A directory that is not a dataset root lists immediate children whose `ageval.yaml` is `ageval.dataset/1` and skips the rest. A unique verified cache hit does not contact Hub.
+- Header: Datasets, Jobs, Agents, Plugins. More than one dataset lands on Datasets; one lands on Jobs. Jobs are only that package's `.ageval/suite-runs/` and `.ageval/runs/`.
+- Agents and Plugins are read-only: builtin packages from this CLI, plus `$AGEVAL_HOME/agents` and `$AGEVAL_HOME/plugins` index rows. No install, uninstall, or yaml edit from the page.
 - `jobs delete --local <dataset> --job <id> --yes` is local Job delete, not Registry `results delete`.

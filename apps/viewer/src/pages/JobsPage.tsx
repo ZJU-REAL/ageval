@@ -1,6 +1,6 @@
 import { ListChecks, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 
 import { CommandStrip } from "@ageval/shared/components/command-strip";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
@@ -9,7 +9,8 @@ import { JobCheck } from "@/components/job-check";
 import { JobNoteDialog } from "@/components/job-note-dialog";
 import { JobRowActions } from "@/components/job-row-actions";
 import { Shell } from "@/components/layout";
-import { PageHead } from "@/components/page-head";
+import { STICKY_HEAD, StickyChrome } from "@/components/sticky-chrome";
+import { useDocumentTitle } from "@/lib/document-title";
 import {
   compareValues,
   nextSort,
@@ -35,14 +36,15 @@ import {
   TableHeader,
   TableRow,
 } from "@ageval/shared/components/ui/table";
-import { fetchJobs, type Job } from "@/lib/api";
+import { fetchJobs, setDatasetQuery, type Job } from "@/lib/api";
 import {
   emptyJobPref,
   loadJobPrefs,
   saveJobPrefs,
   type JobPref,
 } from "@/lib/job-prefs";
-import { jobDisplayName, jobHref } from "@/lib/routes";
+import { jobDisplayName, jobHref, jobsHome } from "@/lib/routes";
+import { useReadySession } from "@/lib/session";
 import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { HarnessLabel } from "@ageval/shared/components/harness-label";
 import { ModelLabel } from "@ageval/shared/components/model-label";
@@ -71,6 +73,11 @@ const JOB_OPTIONAL_DEFAULT: typeof JOB_OPTIONAL_IDS = [
 
 export function JobsPage() {
   const navigate = useNavigate();
+  useDocumentTitle("Jobs");
+  const { datasetKey: routeKey = "" } = useParams();
+  const session = useReadySession();
+  const datasetKey = session.datasets.some((item) => item.key === routeKey) ? routeKey : "";
+  setDatasetQuery(datasetKey || null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [datasetId, setDatasetId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +101,13 @@ export function JobsPage() {
   );
 
   useEffect(() => {
+    if (!datasetKey) {
+      setJobs([]);
+      setDatasetId("");
+      setError(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     fetchJobs()
@@ -112,7 +126,7 @@ export function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, [datasetKey, reloadToken]);
 
   useEffect(() => {
     setPrefs(loadJobPrefs(datasetId));
@@ -285,19 +299,27 @@ export function JobsPage() {
     );
   }
 
+  const duplicateLabels = useMemo(() => {
+    const seen = new Set<string>();
+    const dup = new Set<string>();
+    for (const item of session.datasets) {
+      if (seen.has(item.label)) dup.add(item.label);
+      seen.add(item.label);
+    }
+    return dup;
+  }, [session.datasets]);
+
+  if (!datasetKey && session.datasets.length > 0) {
+    return <Navigate to={jobsHome(session.datasets[0].key)} replace />;
+  }
+
   return (
-    <Shell
-      meta={
-        datasetId ? (
-          <span className="text-xs text-mute truncate max-w-[40ch]">{datasetId}</span>
-        ) : null
-      }
-    >
-      <div className="flex flex-1 flex-col gap-4">
-        <PageHead title="Jobs" />
-        <div className="flex items-center gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-mute" />
+    <Shell>
+      <div className="flex flex-1 flex-col">
+        <StickyChrome>
+        <div className="flex h-10 items-center gap-2">
+          <div className="relative h-10 min-w-0 w-full max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-mute" />
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -315,6 +337,28 @@ export function JobsPage() {
         </div>
 
         <div className="flex flex-wrap gap-2 items-center">
+          {session.datasets.length > 0 ? (
+            <Select
+              value={datasetKey || undefined}
+              onValueChange={(next) => navigate(jobsHome(next))}
+            >
+              <SelectTrigger aria-label="Dataset" className="h-10">
+                <SelectValue placeholder="Dataset" />
+              </SelectTrigger>
+              <SelectContent>
+                {session.datasets.map((item) => (
+                  <SelectItem
+                    key={item.key}
+                    value={item.key}
+                    mono={false}
+                    trailing={duplicateLabels.has(item.label) ? item.key : undefined}
+                  >
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
           <Select
             value={kind}
             onValueChange={(next) => {
@@ -322,7 +366,7 @@ export function JobsPage() {
               if (next === "suite") setSource("all");
             }}
           >
-            <SelectTrigger aria-label="Filter kind">
+            <SelectTrigger aria-label="Filter kind" className="h-10">
               <SelectValue placeholder="All kinds" />
             </SelectTrigger>
             <SelectContent>
@@ -336,7 +380,7 @@ export function JobsPage() {
           </Select>
           {showSourceFilter ? (
             <Select value={source} onValueChange={setSource}>
-              <SelectTrigger aria-label="Filter source">
+              <SelectTrigger aria-label="Filter source" className="h-10">
                 <SelectValue placeholder="All sources" />
               </SelectTrigger>
               <SelectContent>
@@ -350,7 +394,7 @@ export function JobsPage() {
             </Select>
           ) : null}
           <Select value={agent} onValueChange={setAgent}>
-            <SelectTrigger aria-label="Filter harnesses">
+            <SelectTrigger aria-label="Filter harnesses" className="h-10">
               <SelectValue placeholder="All harnesses" />
             </SelectTrigger>
             <SelectContent>
@@ -363,7 +407,7 @@ export function JobsPage() {
             </SelectContent>
           </Select>
           <Select value={model} onValueChange={setModel}>
-            <SelectTrigger aria-label="Filter models">
+            <SelectTrigger aria-label="Filter models" className="h-10">
               <SelectValue placeholder="All models" />
             </SelectTrigger>
             <SelectContent>
@@ -395,8 +439,19 @@ export function JobsPage() {
             </span>
           )}
         </div>
+        </StickyChrome>
 
-        {loading ? (
+        {!datasetKey && !loading ? (
+          <EmptyState
+            icon={ListChecks}
+            title={session.datasets.length === 0 ? "No datasets" : "Pick a dataset"}
+            caption={
+              session.datasets.length === 0
+                ? "Jobs stay on one package."
+                : "Choose a package to see its jobs."
+            }
+          />
+        ) : loading ? (
           <LoadingState label="Loading jobs" />
         ) : error ? (
           <div className="blob-panel bg-canvas-soft p-4 text-sm">
@@ -431,9 +486,9 @@ export function JobsPage() {
             }
           />
         ) : (
-          <div className="blob-panel overflow-hidden">
-          <Table>
-            <TableHeader>
+          <div className="blob-panel">
+          <Table wrapClassName="overflow-visible" className="border-separate border-spacing-0">
+            <TableHeader className={STICKY_HEAD}>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-8 pr-0">
                   <JobCheck
@@ -479,13 +534,13 @@ export function JobsPage() {
                       ) {
                         return;
                       }
-                      navigate(jobHref(job));
+                      navigate(jobHref(datasetKey, job));
                     }}
                     onKeyDown={(e) => {
                       const el = e.target as HTMLElement;
                       if (el.closest("input, button, [role='button']")) return;
                       if (e.key === "Enter") {
-                        navigate(jobHref(job));
+                        navigate(jobHref(datasetKey, job));
                       }
                     }}
                     tabIndex={0}

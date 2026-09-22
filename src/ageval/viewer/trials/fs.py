@@ -10,7 +10,12 @@ from typing import Any
 from ageval.config.errors import ConfigError
 from ageval.evidence.locators import safe_id_segment
 from ageval.viewer.jobs import get_job
-from ageval.viewer.trials.constants import MAX_FILE_BYTES, MAX_TREE_ENTRIES, TEXT_SUFFIXES
+from ageval.viewer.trials.constants import (
+    MAX_FILE_BYTES,
+    MAX_TREE_ENTRIES,
+    is_preview_text,
+    is_secret_basename,
+)
 from ageval.viewer.trials.paths import (
     _read_json_object,
     _safe_run_id,
@@ -319,9 +324,8 @@ def trial_file(
     size = path.stat().st_size
     mime, _ = mimetypes.guess_type(str(path))
     mime = mime or "application/octet-stream"
-    suffix = path.suffix.lower()
-    # Never preview env/secret-like basenames even if under evidence
-    if path.name in {".env", ".env.local", ".env.production"} or path.name.startswith(".env."):
+    # Never preview real env files. Example templates stay readable.
+    if is_secret_basename(path.name):
         return {
             "ok": True,
             "run_id": rid,
@@ -334,11 +338,7 @@ def trial_file(
             "content": None,
             "note": "secret-like filename; content not shown",
         }
-    is_text = (
-        suffix in TEXT_SUFFIXES
-        or mime.startswith("text/")
-        or mime in {"application/json", "application/xml", "application/x-yaml"}
-    )
+    is_text = is_preview_text(path.name, path.suffix.lower(), mime)
     if not is_text:
         return {
             "ok": True,

@@ -1,14 +1,15 @@
 # ageval Viewer
 
-Local results console for a dataset package:
+Local results console for datasets on this machine, plus read-only plugins and Agent packages:
 
-**Jobs → Tasks → Attempt (trial / run_id)**, with search, sortable columns, breadcrumbs, and copyable CLI.
+**Datasets · Jobs → Tasks → Attempt**, and **Agents / Plugins**. Same header either way. A dataset root opens Jobs. A directory of dataset roots opens Datasets. Jobs stay on the package you pick.
 
 ## What you see
 
 | Layer | Content |
-| --- | --- |
-| **Jobs** | Suite runs under `.ageval/suite-runs/` **and** single-task Attempts under `.ageval/runs/` (Kind column: suite vs single) |
+| **Datasets** | One row per opened package (`dataset_id@version`). Read-only README, manifest, `profiles.yaml`, file tree. `.ageval/runs` and `.ageval/suite-runs` stay off that tree |
+| **Jobs** | Suite runs under `.ageval/suite-runs/` **and** single-task Attempts under `.ageval/runs/` for the selected package (Kind column: suite vs single) |
+| **Agents / Plugins** | Builtin packages from this CLI, plus installed rows under the ageval home. Read-only |
 | **Tasks** | Per-task status / score / run refs from suite summary (+ local evidence when present) |
 | **Attempt** | One `run_id`: outcome strip, actors table, evidence tabs |
 

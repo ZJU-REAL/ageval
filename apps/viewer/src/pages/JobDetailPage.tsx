@@ -24,11 +24,12 @@ import {
   fetchJob,
   fetchJobOverlayFile,
   fetchJobOverlays,
+  setDatasetQuery,
   type Job,
   type TaskRow,
   type TreeEntry,
 } from "@/lib/api";
-import { taskHref, taskRunIds } from "@/lib/routes";
+import { jobsHome, taskHref, taskRunIds } from "@/lib/routes";
 import { AxisLabel } from "@ageval/shared/components/axis-label";
 import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { ModelLabel } from "@ageval/shared/components/model-label";
@@ -38,7 +39,8 @@ import { formatError, formatScore } from "@ageval/shared/lib/utils";
 type SortKey = "task_id" | "agent_label" | "model_label" | "score" | "status";
 
 export function JobDetailPage() {
-  const { jobId = "" } = useParams();
+  const { datasetKey = "", jobId = "" } = useParams();
+  setDatasetQuery(datasetKey);
   const navigate = useNavigate();
   useDocumentTitle(jobId || "Job");
   const [job, setJob] = useState<Job | null>(null);
@@ -73,7 +75,7 @@ export function JobDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [jobId]);
+  }, [datasetKey, jobId]);
 
   const overlayPrefixes = job?.overlays ?? [];
 
@@ -106,7 +108,7 @@ export function JobDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [jobId, overlayPrefixes.length]);
+  }, [datasetKey, jobId, overlayPrefixes.length]);
 
   useEffect(() => {
     if (!overlayPath) {
@@ -133,7 +135,7 @@ export function JobDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [jobId, overlayPath]);
+  }, [datasetKey, jobId, overlayPath]);
 
   const rows = useMemo(() => {
     if (!sortKey || !sortDir) return tasks;
@@ -159,7 +161,7 @@ export function JobDetailPage() {
   }
 
   if (!loading && !error && job?.source_kind === "single" && tasks.length === 1) {
-    return <Navigate to={taskHref(jobId, tasks[0])} replace />;
+    return <Navigate to={taskHref(datasetKey, jobId, tasks[0])} replace />;
   }
 
   return (
@@ -167,7 +169,7 @@ export function JobDetailPage() {
       <div className="space-y-4">
         <BreadcrumbNav
           items={[
-            { label: "Jobs", href: "/" },
+            { label: "Jobs", href: jobsHome(datasetKey) },
             { label: jobId, href: null },
           ]}
         />
@@ -234,7 +236,7 @@ export function JobDetailPage() {
                     statusUpper === "PENDING" || statusUpper === "RUNNING";
                   const errText = formatError(t.error);
                   const isErr = statusUpper === "ERROR" || Boolean(errText);
-                  const href = taskHref(jobId, t);
+                  const href = taskHref(datasetKey, jobId, t);
                   const trialCount = t.n ?? taskRunIds(t).length;
                   const navProps = isPlaceholder
                     ? {}

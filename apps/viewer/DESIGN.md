@@ -5,7 +5,9 @@
 
 This file does **not** inventory routes or page chrome. Product scope lives in [AGENTS.md](./AGENTS.md).
 
-This SPA is a **local results console** for one opened dataset (no Registry). It is not the Hub catalog and not a marketing site.
+This SPA is a **local results console** for datasets, plugins, and Agent packages on this machine (no Registry write). It is not the Hub catalog and not a marketing site.
+
+One dataset root and a directory of dataset roots share the same header: Datasets, Jobs, Agents, Plugins. No sidebar. On Jobs, the dataset is a Select, not a second tab strip. Package files are a read-only tree (README first), not a catalog card.
 
 Do not invent a second accent palette, a catalog-card Jobs list, or hand-rolled chrome over shadcn.
 

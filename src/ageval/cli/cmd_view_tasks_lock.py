@@ -22,7 +22,7 @@ def register(app: typer.Typer) -> None:
             str,
             typer.Argument(
                 help=(
-                    "Dataset root path or registry ref "
+                    "Dataset root, a directory of dataset roots, or a registry ref "
                     "(<dataset_id>@<version> | <dataset_id>@sha256:<digest>)."
                 ),
             ),
@@ -61,7 +61,7 @@ def register(app: typer.Typer) -> None:
             typer.Option("--ui-port", help="Vite UI port used with --dev (default 5173)."),
         ] = 5173,
     ) -> None:
-        """Start local Jobs→Tasks→Attempt results UI for a dataset path or ref."""
+        """Open local results for one dataset, or for dataset roots in a directory."""
         from ageval.config.errors import ConfigError
         from ageval.viewer.server import serve_viewer
 

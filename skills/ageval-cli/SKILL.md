@@ -14,7 +14,7 @@ uv sync --frozen --all-packages
 uv run ageval --help
 ```
 
-Public commands: `ageval lock` `ageval run` `ageval campaign` `tasks` `jobs` `view` `plugin` `evidence` `ageval status` `ageval cancel` `executors` `publish` `release` `login` `agent` `registry` `cache` `results`. No `submit`. Path arguments are **dataset** roots.
+Public commands: `ageval lock` `ageval run` `ageval campaign` `tasks` `jobs` `view` `plugin` `evidence` `ageval status` `ageval cancel` `executors` `publish` `release` `login` `agent` `registry` `cache` `results`. No `submit`. Path arguments are **dataset** roots. `ageval view` also accepts a directory of dataset roots.
 
 ```bash
 uv run ageval lock examples/core --task config-minimal
