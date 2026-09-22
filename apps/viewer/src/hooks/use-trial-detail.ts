@@ -18,9 +18,16 @@ import {
   type TrajectoryStep,
   type TreeEntry,
   type Trial,
+  setDatasetQuery,
 } from "@/lib/api";
 
-export function useTrialDetail(jobId: string, taskId: string, runId: string) {
+export function useTrialDetail(
+  datasetKey: string,
+  jobId: string,
+  taskId: string,
+  runId: string,
+) {
+  setDatasetQuery(datasetKey);
   const [trial, setTrial] = useState<Trial | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [siblingRunIds, setSiblingRunIds] = useState<string[]>([]);
@@ -106,7 +113,7 @@ export function useTrialDetail(jobId: string, taskId: string, runId: string) {
     return () => {
       cancelled = true;
     };
-  }, [jobId, taskId, runId]);
+  }, [datasetKey, jobId, taskId, runId]);
 
   useEffect(() => {
     if (!activeTab || !jobId || !taskId || !runId) return;
@@ -189,7 +196,7 @@ export function useTrialDetail(jobId: string, taskId: string, runId: string) {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, jobId, taskId, runId]);
+  }, [activeTab, datasetKey, jobId, taskId, runId]);
 
   useEffect(() => {
     if (!selectedPath || !jobId || !taskId || !runId) return;
@@ -213,7 +220,7 @@ export function useTrialDetail(jobId: string, taskId: string, runId: string) {
     return () => {
       cancelled = true;
     };
-  }, [selectedPath, jobId, taskId, runId]);
+  }, [selectedPath, datasetKey, jobId, taskId, runId]);
 
   return {
     trial,

@@ -1,6 +1,6 @@
 import { ListChecks, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { CommandStrip } from "@ageval/shared/components/command-strip";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
@@ -35,14 +35,15 @@ import {
   TableHeader,
   TableRow,
 } from "@ageval/shared/components/ui/table";
-import { fetchJobs, type Job } from "@/lib/api";
+import { fetchJobs, setDatasetQuery, type Job } from "@/lib/api";
 import {
   emptyJobPref,
   loadJobPrefs,
   saveJobPrefs,
   type JobPref,
 } from "@/lib/job-prefs";
-import { jobDisplayName, jobHref } from "@/lib/routes";
+import { jobDisplayName, jobHref, jobsHome } from "@/lib/routes";
+import { useReadySession } from "@/lib/session";
 import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { HarnessLabel } from "@ageval/shared/components/harness-label";
 import { ModelLabel } from "@ageval/shared/components/model-label";
@@ -71,6 +72,10 @@ const JOB_OPTIONAL_DEFAULT: typeof JOB_OPTIONAL_IDS = [
 
 export function JobsPage() {
   const navigate = useNavigate();
+  const { datasetKey: routeKey = "" } = useParams();
+  const session = useReadySession();
+  const datasetKey = session.datasets.some((item) => item.key === routeKey) ? routeKey : "";
+  setDatasetQuery(datasetKey || null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [datasetId, setDatasetId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +99,13 @@ export function JobsPage() {
   );
 
   useEffect(() => {
+    if (!datasetKey) {
+      setJobs([]);
+      setDatasetId("");
+      setError(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     fetchJobs()
@@ -112,7 +124,7 @@ export function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, [datasetKey, reloadToken]);
 
   useEffect(() => {
     setPrefs(loadJobPrefs(datasetId));
@@ -285,14 +297,18 @@ export function JobsPage() {
     );
   }
 
+  const duplicateLabels = useMemo(() => {
+    const seen = new Set<string>();
+    const dup = new Set<string>();
+    for (const item of session.datasets) {
+      if (seen.has(item.label)) dup.add(item.label);
+      seen.add(item.label);
+    }
+    return dup;
+  }, [session.datasets]);
+
   return (
-    <Shell
-      meta={
-        datasetId ? (
-          <span className="text-xs text-mute truncate max-w-[40ch]">{datasetId}</span>
-        ) : null
-      }
-    >
+    <Shell>
       <div className="flex flex-1 flex-col gap-4">
         <PageHead title="Jobs" />
         <div className="flex items-center gap-2">
@@ -315,6 +331,28 @@ export function JobsPage() {
         </div>
 
         <div className="flex flex-wrap gap-2 items-center">
+          {session.datasets.length > 0 ? (
+            <Select
+              value={datasetKey || undefined}
+              onValueChange={(next) => navigate(jobsHome(next))}
+            >
+              <SelectTrigger aria-label="Dataset">
+                <SelectValue placeholder="Dataset" />
+              </SelectTrigger>
+              <SelectContent>
+                {session.datasets.map((item) => (
+                  <SelectItem
+                    key={item.key}
+                    value={item.key}
+                    mono={false}
+                    trailing={duplicateLabels.has(item.label) ? item.key : undefined}
+                  >
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
           <Select
             value={kind}
             onValueChange={(next) => {
@@ -396,7 +434,17 @@ export function JobsPage() {
           )}
         </div>
 
-        {loading ? (
+        {!datasetKey && !loading ? (
+          <EmptyState
+            icon={ListChecks}
+            title={session.datasets.length === 0 ? "No datasets" : "Pick a dataset"}
+            caption={
+              session.datasets.length === 0
+                ? "Jobs stay on one package."
+                : "Choose a package to see its jobs."
+            }
+          />
+        ) : loading ? (
           <LoadingState label="Loading jobs" />
         ) : error ? (
           <div className="blob-panel bg-canvas-soft p-4 text-sm">
@@ -479,13 +527,13 @@ export function JobsPage() {
                       ) {
                         return;
                       }
-                      navigate(jobHref(job));
+                      navigate(jobHref(datasetKey, job));
                     }}
                     onKeyDown={(e) => {
                       const el = e.target as HTMLElement;
                       if (el.closest("input, button, [role='button']")) return;
                       if (e.key === "Enter") {
-                        navigate(jobHref(job));
+                        navigate(jobHref(datasetKey, job));
                       }
                     }}
                     tabIndex={0}

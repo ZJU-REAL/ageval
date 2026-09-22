@@ -10,16 +10,16 @@ import { OutcomeStrip } from "@ageval/shared/components/trial/outcome-strip";
 import { PhaseTimingBar } from "@ageval/shared/components/trial/phase-timing-bar";
 import { TrialHeader } from "@ageval/shared/components/trial/trial-header";
 import { useTrialDetail } from "@/hooks/use-trial-detail";
-import { jobPath, taskPath, trialPath } from "@/lib/routes";
+import { jobPath, jobsHome, taskPath, trialPath } from "@/lib/routes";
 
 export function TrialDetailPage() {
-  const { jobId = "", taskId = "", runId = "" } = useParams();
+  const { datasetKey = "", jobId = "", taskId = "", runId = "" } = useParams();
   const navigate = useNavigate();
-  const detail = useTrialDetail(jobId, taskId, runId);
+  const detail = useTrialDetail(datasetKey, jobId, taskId, runId);
 
   function goSibling(id: string | null) {
     if (!id) return;
-    navigate(trialPath(jobId, taskId, id));
+    navigate(trialPath(datasetKey, jobId, taskId, id));
   }
 
   const {
@@ -62,16 +62,16 @@ export function TrialDetailPage() {
           items={
             job?.source_kind === "single"
               ? [
-                  { label: "Jobs", href: "/" },
+                  { label: "Jobs", href: jobsHome(datasetKey) },
                   { label: taskId, href: null },
                   { label: runId, href: null },
                 ]
               : [
-                  { label: "Jobs", href: "/" },
-                  { label: jobId, href: jobPath(jobId) },
+                  { label: "Jobs", href: jobsHome(datasetKey) },
+                  { label: jobId, href: jobPath(datasetKey, jobId) },
                   {
                     label: taskId,
-                    href: siblingRunIds.length > 1 ? taskPath(jobId, taskId) : null,
+                    href: siblingRunIds.length > 1 ? taskPath(datasetKey, jobId, taskId) : null,
                   },
                   { label: runId, href: null },
                 ]
@@ -142,13 +142,13 @@ export function TrialDetailPage() {
                 </Link>
               ) : siblingRunIds.length > 1 ? (
                 <Link
-                  to={taskPath(jobId, taskId)}
+                  to={taskPath(datasetKey, jobId, taskId)}
                   className="text-link hover:text-link-deep"
                 >
                   ← Back to trials
                 </Link>
               ) : (
-                <Link to={jobPath(jobId)} className="text-link hover:text-link-deep">
+                <Link to={jobPath(datasetKey, jobId)} className="text-link hover:text-link-deep">
                   ← Back to job
                 </Link>
               )}

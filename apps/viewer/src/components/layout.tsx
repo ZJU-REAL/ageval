@@ -1,9 +1,19 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { ThemeToggle } from "@ageval/shared/components/theme-toggle";
 import { OwlIcon } from "@ageval/shared/components/owl-icon";
 import { Toaster } from "@ageval/shared/components/ui/toaster";
+import { useSession } from "@/lib/session";
+import { jobsHome } from "@/lib/routes";
+import { cn } from "@ageval/shared/lib/utils";
+
+const DESTINATIONS = [
+  { id: "datasets", label: "Datasets", match: "/datasets" },
+  { id: "jobs", label: "Jobs", match: "/jobs" },
+  { id: "agents", label: "Agents", match: "/agents" },
+  { id: "plugins", label: "Plugins", match: "/plugins" },
+] as const;
 
 export function Shell({
   children,
@@ -12,6 +22,16 @@ export function Shell({
   children: ReactNode;
   meta?: ReactNode;
 }) {
+  const { pathname } = useLocation();
+  const { session } = useSession();
+  const only = session?.datasets.length === 1 ? session.datasets[0] : null;
+  const hrefFor = (id: (typeof DESTINATIONS)[number]["id"]) => {
+    if (id === "jobs") return only ? jobsHome(only.key) : "/jobs";
+    if (id === "datasets") return "/datasets";
+    if (id === "agents") return "/agents";
+    return "/plugins";
+  };
+
   return (
     <div className="min-h-full flex flex-col bg-canvas">
       <a
@@ -20,15 +40,33 @@ export function Shell({
       >
         Skip to content
       </a>
-      <header className="h-14 border-b border-hairline bg-canvas-soft flex items-center px-6 gap-4 shrink-0">
+      <header className="min-h-14 border-b border-hairline bg-canvas-soft flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:px-6 shrink-0">
         <Link
           to="/"
-          className="flex items-center gap-1.5 font-semibold tracking-tight text-ink text-[15px]"
+          className="flex items-center gap-1.5 font-semibold tracking-tight text-ink text-[15px] rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70"
         >
           <OwlIcon className="h-6 w-6" />
           AGEVAL
         </Link>
-        <span className="text-mute text-sm">viewer</span>
+        <nav className="flex flex-wrap items-center gap-1" aria-label="Viewer">
+          {DESTINATIONS.map((item) => {
+            const active =
+              pathname === item.match || pathname.startsWith(`${item.match}/`);
+            return (
+              <Link
+                key={item.id}
+                to={hrefFor(item.id)}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "rounded-[8px] px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70",
+                  active ? "font-medium text-ink" : "text-mute hover:text-ink",
+                )}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
         <div className="flex-1" />
         {meta}
         <ThemeToggle />
