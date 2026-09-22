@@ -192,6 +192,3 @@ def _reject_credentials(relative: str) -> None:
             "credentials are not served",
             location=relative,
         )
-
-
-
