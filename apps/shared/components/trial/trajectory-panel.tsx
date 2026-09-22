@@ -19,16 +19,25 @@ import {
   FilePenLine,
   FileSearch,
   FoldVertical,
-  UnfoldVertical,
+  LayoutGrid,
   MessageSquare,
   Shield,
   SquareTerminal,
+  UnfoldVertical,
   User,
   Wrench,
+  type LucideIcon,
 } from "lucide-react";
 
 import { HoverTip } from "@ageval/shared/components/hover-tip";
 import { MarkdownBody } from "@ageval/shared/components/markdown";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@ageval/shared/components/ui/select";
 import type { TrajectoryStep } from "@ageval/shared/lib/trial-types";
 import { CodeHighlight } from "@ageval/shared/lib/code-highlight";
 import { findScrollParent } from "@ageval/shared/lib/scroll-port";
@@ -61,6 +70,23 @@ const STEP_TONE: Record<StepMajor, string> = {
   permission: "text-nav-inbox",
   message: "text-mute",
 };
+
+const KIND_FILTERS: {
+  id: StepMajor;
+  label: string;
+  icon: LucideIcon;
+}[] = [
+  { id: "user", label: "User", icon: User },
+  { id: "agent", label: "Agent", icon: BotMessageSquare },
+  { id: "thought", label: "Thought", icon: Brain },
+  { id: "tool_call", label: "Tools", icon: Wrench },
+  { id: "observation", label: "Observation", icon: Eye },
+  { id: "terminal", label: "Terminal", icon: SquareTerminal },
+  { id: "permission", label: "Permission", icon: Shield },
+  { id: "message", label: "Message", icon: MessageSquare },
+];
+
+export type TrajectoryKind = "all" | StepMajor;
 
 const TRAJ_PORT_CLASS =
   "h-[70vh] overflow-y-auto pr-1 [overflow-anchor:none]";
@@ -99,6 +125,144 @@ function isBatchAutoApprovePermission(step: TrajectoryStep): boolean {
   return (
     (step.type || "") === "permission_decision" &&
     step.policy === "batch_auto_approve"
+  );
+}
+
+function classifyStep(s: TrajectoryStep): {
+  major: StepMajor;
+  role: string;
+  label: string;
+  isUser: boolean;
+  isAsst: boolean;
+  isThought: boolean;
+  isToolCall: boolean;
+  isObservation: boolean;
+  isTerminal: boolean;
+  isPermission: boolean;
+} {
+  const stepType = (s.type || "").toString();
+  const isToolCall = stepType === "tool_call";
+  const isObservation = stepType === "observation";
+  const isPermission = stepType === "permission_decision";
+  const role = (
+    s.role ||
+    (isToolCall
+      ? "tool_call"
+      : isObservation
+        ? "observation"
+        : isPermission
+          ? "permission"
+          : stepType || "event")
+  ).toString();
+  const isUser = role === "user";
+  const isThought = (s.part || "").toString() === "thought";
+  const isAsst = role === "assistant" && !isThought;
+  const isTerminal = stepType === "terminal";
+  const major: StepMajor = isUser
+    ? "user"
+    : isThought
+      ? "thought"
+      : isAsst
+        ? "agent"
+        : isObservation
+          ? "observation"
+          : isTerminal
+            ? "terminal"
+            : isPermission
+              ? "permission"
+              : isToolCall
+                ? "tool_call"
+                : "message";
+  const label = isToolCall
+    ? s.function_name || s.kind || s.title || "tool_call"
+    : isObservation
+      ? "observation"
+      : isThought
+        ? "thought"
+        : isAsst
+          ? "agent"
+          : role;
+  return {
+    major,
+    role,
+    label,
+    isUser,
+    isAsst,
+    isThought,
+    isToolCall,
+    isObservation,
+    isTerminal,
+    isPermission,
+  };
+}
+
+export function TrajectoryKindFilter({
+  steps,
+  value,
+  onChange,
+}: {
+  steps: TrajectoryStep[];
+  value: TrajectoryKind;
+  onChange: (next: TrajectoryKind) => void;
+}) {
+  const items = useMemo(() => {
+    const found = new Set<StepMajor>();
+    for (const step of steps) {
+      if (isBatchAutoApprovePermission(step)) continue;
+      found.add(classifyStep(step).major);
+    }
+    if (found.size < 2) return [];
+    return [
+      {
+        id: "all" as const,
+        label: "All",
+        icon: LayoutGrid,
+      },
+      ...KIND_FILTERS.filter((item) => found.has(item.id)),
+    ];
+  }, [steps]);
+
+  useEffect(() => {
+    if (value !== "all" && !items.some((item) => item.id === value)) onChange("all");
+  }, [items, onChange, value]);
+
+  if (items.length === 0) return null;
+  const selected = items.some((item) => item.id === value) ? value : "all";
+  const current = items.find((item) => item.id === selected) ?? items[0];
+  const CurrentIcon = current.icon;
+  const tone = selected === "all" ? "text-mute" : STEP_TONE[selected];
+  return (
+    <div className="ml-auto shrink-0">
+      <Select
+        value={selected}
+        onValueChange={(next) => {
+          if (items.some((item) => item.id === next)) onChange(next as TrajectoryKind);
+        }}
+      >
+        <SelectTrigger aria-label="Trajectory steps" className="h-9 w-auto min-w-[8.5rem]">
+          <span className="inline-flex items-center gap-2">
+            <CurrentIcon className={cn("size-3.5", tone)} aria-hidden />
+            <SelectValue />
+          </span>
+        </SelectTrigger>
+        <SelectContent className="w-max min-w-[var(--radix-select-trigger-width)]">
+          {items.map((item) => {
+            const Icon = item.icon;
+            const itemTone = item.id === "all" ? "text-mute" : STEP_TONE[item.id];
+            return (
+              <SelectItem
+                key={item.id}
+                value={item.id}
+                mono={false}
+                leading={<Icon className={cn("size-3.5", itemTone)} aria-hidden />}
+              >
+                {item.label}
+              </SelectItem>
+            );
+          })}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
@@ -242,48 +406,17 @@ function StepItem({
   const [overflows, setOverflows] = useState(false);
   const [open, setOpen] = useState(true);
 
-  const stepType = (s.type || "").toString();
-  const isToolCall = stepType === "tool_call";
-  const isObservation = stepType === "observation";
-  const isPermission = stepType === "permission_decision";
-  const role = (
-    s.role ||
-    (isToolCall
-      ? "tool_call"
-      : isObservation
-        ? "observation"
-        : isPermission
-          ? "permission"
-          : stepType || "event")
-  ).toString();
-  const isUser = role === "user";
-  const isThought = (s.part || "").toString() === "thought";
-  const isAsst = role === "assistant" && !isThought;
-  const isTerminal = stepType === "terminal";
-  const major: StepMajor = isUser
-    ? "user"
-    : isThought
-      ? "thought"
-      : isAsst
-        ? "agent"
-        : isObservation
-          ? "observation"
-          : isTerminal
-            ? "terminal"
-            : isPermission
-              ? "permission"
-              : isToolCall
-                ? "tool_call"
-                : "message";
-  const label = isToolCall
-    ? s.function_name || s.kind || s.title || "tool_call"
-    : isObservation
-      ? "observation"
-      : isThought
-        ? "thought"
-        : isAsst
-          ? "agent"
-          : role;
+  const {
+    major,
+    label,
+    isUser,
+    isAsst,
+    isThought,
+    isToolCall,
+    isObservation,
+    isTerminal,
+    isPermission,
+  } = classifyStep(s);
   const Icon = stepIcon({
     isUser,
     isAsst,
@@ -533,6 +666,7 @@ export function TrajectoryPanel({
   result,
   actors,
   panelRef,
+  kind = "all",
 }: {
   loading: boolean;
   steps: TrajectoryStep[];
@@ -540,11 +674,16 @@ export function TrajectoryPanel({
   result: Record<string, unknown> | null;
   actors: ActorRow[];
   panelRef?: RefObject<HTMLDivElement | null>;
+  kind?: TrajectoryKind;
 }) {
   const visibleSteps = useMemo(
     () => steps.filter((s) => !isBatchAutoApprovePermission(s)),
     [steps],
   );
+  const shownSteps = useMemo(() => {
+    if (kind === "all") return visibleSteps;
+    return visibleSteps.filter((s) => classifyStep(s).major === kind);
+  }, [kind, visibleSteps]);
   const actorByPid = useMemo(() => {
     return new Map(
       actors.map((a) => [a.profile_id || `${a.role}-${a.agent}`, a]),
@@ -552,7 +691,7 @@ export function TrajectoryPanel({
   }, [actors]);
   const multiRole = useMemo(() => {
     const ids = new Set<string>();
-    for (const s of visibleSteps) {
+    for (const s of shownSteps) {
       if (typeof s.profile_id === "string" && s.profile_id) ids.add(s.profile_id);
     }
     if (ids.size >= 2) return true;
@@ -562,7 +701,7 @@ export function TrajectoryPanel({
         .filter((p): p is string => typeof p === "string" && !!p),
     );
     return actorIds.size >= 2;
-  }, [visibleSteps, actors]);
+  }, [shownSteps, actors]);
   const invokes = useMemo(() => {
     type Block = {
       turn: number | null;
@@ -570,7 +709,7 @@ export function TrajectoryPanel({
       steps: TrajectoryStep[];
     };
     const blocks: Block[] = [];
-    for (const s of visibleSteps) {
+    for (const s of shownSteps) {
       const turn = typeof s.turn_index === "number" ? s.turn_index : null;
       const pid =
         typeof s.profile_id === "string" && s.profile_id ? s.profile_id : null;
@@ -583,7 +722,7 @@ export function TrajectoryPanel({
       blocks.push({ turn, profileId: pid, steps: [s] });
     }
     return blocks;
-  }, [visibleSteps]);
+  }, [shownSteps]);
   const showInvokeHeaders = multiRole && invokes.length >= 2;
   const [allExpanded, setAllExpanded] = useState(true);
   const [expandGen, setExpandGen] = useState(0);
@@ -606,6 +745,12 @@ export function TrajectoryPanel({
       container.style.removeProperty("--traj-invoke-h");
     };
   }, [showInvokeHeaders, invokes]);
+
+  useEffect(() => {
+    const el = trajScrollRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+  }, [kind]);
 
   const scroller = (children: ReactNode) => (
     <div
@@ -694,8 +839,10 @@ export function TrajectoryPanel({
         </button>
         </HoverTip>
       </div>
-      {showInvokeHeaders
-        ? scroller(
+      {shownSteps.length === 0 ? (
+        <p className="text-sm text-mute">No steps in this view.</p>
+      ) : showInvokeHeaders ? (
+        scroller(
             invokes.map((block, i) => {
               const actor = block.profileId
                 ? actorByPid.get(block.profileId)
@@ -726,7 +873,9 @@ export function TrajectoryPanel({
               );
             }),
           )
-        : scroller(renderSteps(visibleSteps))}
+      ) : (
+        scroller(renderSteps(shownSteps))
+      )}
     </div>
   );
 }

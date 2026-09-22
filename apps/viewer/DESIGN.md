@@ -91,6 +91,7 @@ Before drawing a control:
 | Row / theme overflow | `DropdownMenu` |
 | Evidence section switcher | `UnderlineTabs` (Liquid Move) |
 | Verifier dual surface | hairline button group on the same tab row (copy `CatalogScopeBar` `variant="group"`), far right; Trajectory / Files, trajectory first |
+| Trajectory step filter | Trajectory tab row, far right. `Select` (copy `BoardChartControls`). Default All. One major present in the trace (User, Agent, Thought, Tools, Observation, Terminal, Permission, Message). Trigger and menu reuse that major's step icon and tone. Hidden when fewer than two majors are present. |
 | Command | `CommandStrip` (shell highlight on `code-bg`, not flat link-blue) |
 | Dialog / confirm | existing confirm / pop (`data-ageval-pop`); portal to body / overlay root |
 | Loading / empty | `ThinkingLogo` loading vs centered empty stack (docs/13) |

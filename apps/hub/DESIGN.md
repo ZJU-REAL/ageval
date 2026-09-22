@@ -66,6 +66,7 @@ Token values, type stacks, radii, and motion curves: the YAML in [`apps/shared/D
 | Page title | `PageHead` |
 | Section switcher | `UnderlineTabs` (Liquid Move) |
 | Verifier dual surface | hairline button group on the same tab row (copy `CatalogScopeBar` `variant="group"`), far right; Trajectory / Files, trajectory first |
+| Trajectory step filter | Trajectory tab row, far right. `Select` (copy `BoardChartControls`). Default All. One major present in the trace (User, Agent, Thought, Tools, Observation, Terminal, Permission, Message). Trigger and menu reuse that major's step icon and tone. Hidden when fewer than two majors are present. |
 | In-page exclusive choice | `Select` |
 | Compact in-panel segment | `PillTabs` |
 | Wrapping label | `Chip` (overlay paths, plugin names in a preview — **not** model browse) |

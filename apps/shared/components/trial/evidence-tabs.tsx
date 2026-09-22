@@ -10,7 +10,11 @@ import { cn } from "@ageval/shared/lib/utils";
 
 import { FileSplitPanel } from "./file-split-panel";
 import { TAB_LABELS, type TabId } from "./tabs";
-import { TrajectoryPanel } from "./trajectory-panel";
+import {
+  TrajectoryKindFilter,
+  TrajectoryPanel,
+  type TrajectoryKind,
+} from "./trajectory-panel";
 
 type VerifierSurface = "trajectory" | "files";
 
@@ -121,6 +125,7 @@ export function EvidenceTabs({
   const hasChecks = treeHasFile(tree, "checks.json");
   const dualVerifier = hasJudge && hasChecks;
   const [surface, setSurface] = useState<VerifierSurface>("trajectory");
+  const [kind, setKind] = useState<TrajectoryKind>("all");
   const showVerifierTrajectory = verifierTab && (dualVerifier ? surface === "trajectory" : hasJudge);
   const showVerifierFiles = verifierTab && (dualVerifier ? surface === "files" : !hasJudge);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -129,6 +134,10 @@ export function EvidenceTabs({
   useEffect(() => {
     if (verifierTab) setSurface("trajectory");
   }, [verifierTab]);
+
+  useEffect(() => {
+    setKind("all");
+  }, [steps]);
 
   useLayoutEffect(() => {
     if (revealGen === 0) return;
@@ -195,7 +204,9 @@ export function EvidenceTabs({
               label: TAB_LABELS[tab],
             }))}
           />
-          {verifierTab && dualVerifier ? (
+          {activeTab === "trajectory" ? (
+            <TrajectoryKindFilter steps={steps} value={kind} onChange={setKind} />
+          ) : verifierTab && dualVerifier ? (
             <VerifierSurfaceToggle value={surface} onChange={setSurface} />
           ) : null}
         </div>
@@ -209,6 +220,7 @@ export function EvidenceTabs({
           result={result}
           actors={actors}
           panelRef={panelRef}
+          kind={kind}
         />
       )}
 
