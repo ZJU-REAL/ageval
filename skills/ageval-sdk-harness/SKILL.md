@@ -3,7 +3,7 @@ name: ageval-sdk-harness
 description: >
   Write dataset run.py with ageval_sdk (RunContext, Agent/AgentSession, ToolSet,
   RunTerminal, publish). Use for task run.py, sessions, tool guards, optional
-  evaluator.py LLM-as-judge. Triggers: AgentSession, RunTerminal,
+  evaluator.py LLM-as-judge. Triggers: AgentSession, RunTerminal, ScriptError,
   ctx.publish_json, write run.py, evaluator.py. SDK never decides PASS or holds
   host credentials.
 ---
@@ -31,6 +31,17 @@ Default `evaluator.py` is a script: read artifacts + gold, return `{status, scor
 | Open sessions, tools, publish | Decide PASS |
 | Use `ctx.params` | Re-read lock or secrets |
 | Return completed/failed | Raise Core ceilings |
+| Raise `ScriptError` when the script cannot continue | Use `ScriptError` for an Agent that fell short |
+
+The Agent fell short: return `RunTerminal.failed` from `run.py`, or `{"status": "FAIL", ...}` from `evaluator.py`. The script, the dataset, or scoring itself cannot continue:
+
+```python
+from ageval_sdk import ScriptError
+
+raise ScriptError(title="Judge response empty", message="judge returned no text")
+```
+
+`title` is the same label on every occurrence. Variable detail goes in `message`. The same class is raised from either script. The phase is whichever worker caught it.
 | Evaluator `Agent.session` after gold | Bind PASS from judge prose / observation.jsonl |
 
 API: [references/api.md](references/api.md). Antipatterns: [references/antipatterns.md](references/antipatterns.md).
