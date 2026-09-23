@@ -346,7 +346,8 @@ def _trial_meta_from_evidence(
         score = result.get("score")
     if score is None:
         score = summary.get("score")
-    nested = summary.get("result") if isinstance(summary.get("result"), dict) else {}
+    raw_result = summary.get("result")
+    nested = raw_result if isinstance(raw_result, dict) else {}
     error = (
         suite_row.get("error") or result.get("error") or nested.get("error") or summary.get("error")
     )
