@@ -220,6 +220,8 @@ export type SuiteRow = {
     status?: string | null;
     score?: number | null;
     run_id?: string | null;
+    error?: string | { phase?: string | null; title?: string; message?: string } | null;
+    limit?: string | null;
     /** Multi-attempt sample counts (#60 A3). */
     n?: number | null;
     c?: number | null;
@@ -417,6 +419,8 @@ export type AttemptMeta = {
   agent_label?: string;
   model_label?: string;
   score?: number | null;
+  error?: string | { phase?: string | null; title?: string; message?: string } | null;
+  limit?: string | null;
 };
 
 export async function listAttempts(

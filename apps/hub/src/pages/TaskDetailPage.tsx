@@ -21,6 +21,8 @@ import {
   useTableSort,
 } from "@ageval/shared/components/sortable-head";
 import { TableColumnPicker } from "@ageval/shared/components/ui/table-column-picker";
+import { ReasonSelect } from "@ageval/shared/components/reason-select";
+import { distinctReasons, reasonText } from "@ageval/shared/lib/reason";
 import { useTableColumns } from "@ageval/shared/hooks/use-table-columns";
 import { PillTabs } from "@ageval/shared/components/ui/pill-tabs";
 import { VersionSwitcher } from "@/components/version-switcher";
@@ -85,6 +87,8 @@ type TaskJobRow = {
   run_id?: string | null;
   has_attempt_content?: boolean;
   dataset_ref?: string | null;
+  error?: string | { phase?: string | null; title?: string; message?: string } | null;
+  limit?: string | null;
 };
 
 function jobColumnValue(row: TaskJobRow, key: string): unknown {
@@ -179,6 +183,7 @@ export function TaskDetailPage() {
   const [overlayPrefixes, setOverlayPrefixes] = useState<string[]>([]);
   const [readme, setReadme] = useState<string | null>(null);
   const [jobs, setJobs] = useState<TaskJobRow[]>([]);
+  const [jobReason, setJobReason] = useState("all");
   const [error, setError] = useState<string | null>(null);
   const [jobColumns, setJobColumns] = useTableColumns(
     "ageval.hub.columns.task-jobs",
@@ -338,6 +343,8 @@ export function TaskDetailPage() {
             run_id: hit.run_id ?? null,
             has_attempt_content: Boolean(hit.has_attempt_content),
             dataset_ref: datasetRef(s.dataset_id, s.dataset_version),
+            error: hit.error ?? null,
+            limit: hit.limit ?? null,
           });
         }
         for (const a of attempts) {
@@ -353,6 +360,8 @@ export function TaskDetailPage() {
             run_id: a.run_id,
             has_attempt_content: true,
             dataset_ref: datasetRef(a.dataset_id, a.dataset_version),
+            error: a.error ?? null,
+            limit: a.limit ?? null,
           });
         }
         rows.sort((left, right) => {
@@ -511,16 +520,22 @@ export function TaskDetailPage() {
     }
   }, [jobColumns, jobSort.sortKey, jobSort.setSortKey, jobSort.setSortDir]);
 
+  const jobReasons = useMemo(() => distinctReasons(jobs, reasonText), [jobs]);
+  const filteredJobs = useMemo(
+    () =>
+      jobReason === "all" ? jobs : jobs.filter((row) => reasonText(row) === jobReason),
+    [jobs, jobReason],
+  );
   const sortedJobs = useMemo(
     () =>
       sortRows(
-        jobs,
+        filteredJobs,
         jobSort.sortKey,
         jobSort.sortDir,
         jobColumnValue,
         compareTaskJobs,
       ),
-    [jobs, jobSort.sortKey, jobSort.sortDir],
+    [filteredJobs, jobSort.sortKey, jobSort.sortDir],
   );
 
   const pagedJobs = useMemo(
@@ -666,12 +681,22 @@ export function TaskDetailPage() {
                 Click a row with full evidence to open the detail view. Grey rows
                 are summary-only. Click headers to sort.
               </p>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+              <ReasonSelect
+                value={jobReason}
+                reasons={jobReasons}
+                onChange={(next) => {
+                  setJobReason(next);
+                  if (jobOffset > 0) setJobOffset(0);
+                }}
+              />
               <TableColumnPicker
                 options={JOB_OPTIONAL_COLUMNS}
                 value={jobColumns}
                 onChange={setJobColumns}
                 ariaLabel="Optional job columns"
               />
+              </div>
             </div>
             <div className="blob-panel overflow-hidden">
               <Table>
@@ -682,6 +707,7 @@ export function TaskDetailPage() {
                       <TableHead>{jobHead("dataset", "Dataset")}</TableHead>
                     ) : null}
                     <TableHead>{jobHead("status", "Status")}</TableHead>
+                    <TableHead>Reason</TableHead>
                     <TableHead>{jobHead("score", "Score")}</TableHead>
                     <TableHead>{jobHead("agent_label", "Harness")}</TableHead>
                     <TableHead>{jobHead("model_label", "Model")}</TableHead>
@@ -744,6 +770,15 @@ export function TaskDetailPage() {
                         <TableCell>
                           {j.status || "-"}
                         </TableCell>
+                        <TableCell
+                          className={
+                            reasonText(j) && (j.status || "").toUpperCase() === "ERROR"
+                              ? "text-error"
+                              : "text-body"
+                          }
+                        >
+                          {reasonText(j) || "-"}
+                        </TableCell>
                         <TableCell className="tabular-nums">
                           {formatScore(j.score)}
                         </TableCell>
@@ -781,7 +816,7 @@ export function TaskDetailPage() {
             <ListPager
               offset={jobOffset}
               limit={TASK_PAGE_SIZE}
-              total={jobs.length}
+              total={sortedJobs.length}
               busy={jobsLoading}
               onOffset={setJobOffset}
             />

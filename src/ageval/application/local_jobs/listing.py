@@ -987,8 +987,8 @@ def get_job_task(dataset_root: Path | str, job_id: str, task_id: str) -> dict[st
                 "score": score,
                 "duration": row.get("duration") or match.get("duration"),
                 "started": row.get("started") or started,
-                "error": row.get("error") if row.get("error") is not None else match.get("error"),
-                "limit": row.get("limit") if row.get("limit") is not None else match.get("limit"),
+                "error": row["error"] if "error" in row else match.get("error"),
+                "limit": row["limit"] if "limit" in row else match.get("limit"),
                 "run_id": rid,
                 "exit_code": row.get("exit_code")
                 if row.get("exit_code") is not None

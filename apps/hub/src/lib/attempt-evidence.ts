@@ -544,20 +544,15 @@ export function buildTrialMeta(opts: {
     }
   }
 
-  let error: string | null = null;
   const errRaw = result.error ?? summary.error;
-  if (errRaw != null) {
-    error =
-      typeof errRaw === "string"
-        ? errRaw
-        : (() => {
-            try {
-              return JSON.stringify(errRaw);
-            } catch {
-              return String(errRaw);
-            }
-          })();
-  }
+  const error = (
+    typeof errRaw === "string" ||
+    (errRaw && typeof errRaw === "object" && !Array.isArray(errRaw))
+      ? errRaw
+      : null
+  ) as Trial["error"];
+  const limitRaw = result.limit ?? summary.limit;
+  const limit = typeof limitRaw === "string" && limitRaw.trim() ? limitRaw : null;
 
   const profilesRaw = Array.isArray(lock.profiles) ? lock.profiles : [];
   const byId = new Map<string, Record<string, unknown>>();
@@ -757,6 +752,7 @@ export function buildTrialMeta(opts: {
     score,
     reward: score,
     error,
+    limit,
     started,
     duration,
     phase_timing,

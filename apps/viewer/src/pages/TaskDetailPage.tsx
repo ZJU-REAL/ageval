@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 
 import { BreadcrumbNav } from "@ageval/shared/components/breadcrumb";
@@ -18,7 +18,9 @@ import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { ModelLabel } from "@ageval/shared/components/model-label";
 import { useDocumentTitle } from "@/lib/document-title";
 import { jobPath, jobsHome, trialPath } from "@/lib/routes";
-import { cn, formatDate, formatError, formatScore } from "@ageval/shared/lib/utils";
+import { ReasonSelect } from "@ageval/shared/components/reason-select";
+import { distinctReasons, reasonText } from "@ageval/shared/lib/reason";
+import { cn, formatDate, formatScore } from "@ageval/shared/lib/utils";
 
 export function TaskDetailPage() {
   const { datasetKey = "", jobId = "", taskId = "" } = useParams();
@@ -36,6 +38,7 @@ export function TaskDetailPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reason, setReason] = useState("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +67,12 @@ export function TaskDetailPage() {
       cancelled = true;
     };
   }, [datasetKey, jobId, taskId]);
+
+  const reasons = useMemo(() => distinctReasons(trials, reasonText), [trials]);
+  const visibleTrials = useMemo(
+    () => (reason === "all" ? trials : trials.filter((row) => reasonText(row) === reason)),
+    [trials, reason],
+  );
 
   if (!loading && !error && trials.length === 1) {
     const rid = trials[0].run_id || trials[0].trial_id || task?.run_id || "";
@@ -105,9 +114,12 @@ export function TaskDetailPage() {
               ) : null}
             </p>
           </div>
-          <p className="text-xs text-mute hidden md:block">
-            j k navigate · Enter open · Esc go back
-          </p>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <ReasonSelect value={reason} reasons={reasons} onChange={setReason} />
+            <p className="text-xs text-mute hidden md:block">
+              j k navigate · Enter open · Esc go back
+            </p>
+          </div>
         </div>
 
         {runCommand ? <CommandStrip command={runCommand} /> : null}
@@ -126,15 +138,15 @@ export function TaskDetailPage() {
                   <TableHead>Started</TableHead>
                   <TableHead>Run id</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Reason</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {trials.map((tr) => {
-                  const errText = formatError(tr.error);
+                {visibleTrials.map((tr) => {
+                  const reasonLabel = reasonText(tr);
                   const bad =
                     (tr.status || "").toUpperCase() === "ERROR" ||
-                    (tr.status || "").toUpperCase() === "FAIL" ||
-                    Boolean(errText);
+                    (tr.status || "").toUpperCase() === "FAIL";
                   const rid = tr.run_id || tr.trial_id || task?.run_id || "";
                   // Open when we have a run id (detail page handles missing evidence)
                   const openable = Boolean(rid);
@@ -173,12 +185,7 @@ export function TaskDetailPage() {
                           bad ? "text-error tabular" : "tabular"
                         }
                       >
-                        {errText ||
-                          ((tr.status || "").toUpperCase() === "ERROR"
-                            ? "RuntimeError"
-                            : (tr.status || "").toUpperCase() === "FAIL"
-                              ? formatScore(tr.reward ?? tr.score)
-                              : formatScore(tr.reward ?? tr.score))}
+                        {formatScore(tr.reward ?? tr.score)}
                       </TableCell>
                       <TableCell className="text-mute">
                         {tr.duration || "-"}
@@ -196,6 +203,15 @@ export function TaskDetailPage() {
                         className={bad ? "text-error" : "text-body"}
                       >
                         {tr.status || "-"}
+                      </TableCell>
+                      <TableCell
+                        className={
+                          reasonLabel && (tr.status || "").toUpperCase() === "ERROR"
+                            ? "text-error"
+                            : "text-body"
+                        }
+                      >
+                        {reasonLabel || "-"}
                       </TableCell>
                     </TableRow>
                   );

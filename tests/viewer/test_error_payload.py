@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ageval.application.local_jobs.listing import get_job, list_jobs
+from ageval.application.local_jobs.listing import get_job, get_job_task, list_jobs
 from ageval.viewer.trials.surface import _trial_meta_from_evidence
 
 _ERROR = {"phase": "run", "title": "ValueError", "message": "seed.txt is not a file"}
@@ -111,7 +111,16 @@ def test_job_rows_carry_error_and_limit(tmp_path: Path) -> None:
                         "attempt_index": 0,
                         "error": _ERROR,
                         "limit": None,
-                    }
+                    },
+                    {
+                        "task_id": "alpha",
+                        "status": "PASS",
+                        "score": 1.0,
+                        "run_id": "run_pass",
+                        "attempt_index": 1,
+                        "error": None,
+                        "limit": None,
+                    },
                 ],
                 "metrics": {"n_tasks": 1, "n_pass": 0, "n_fail": 0, "n_error": 1},
                 "exit_code": 2,
@@ -124,6 +133,12 @@ def test_job_rows_carry_error_and_limit(tmp_path: Path) -> None:
     assert task["error"] == _ERROR
     assert task["limit"] is None
     assert task["attempts"][0]["error"] == _ERROR
+    detail_task = get_job_task(root, "suite_err", "alpha")
+    by_run = {row["run_id"]: row for row in detail_task["trials"]}
+    assert by_run["run_err"]["error"] == _ERROR
+    assert by_run["run_err"]["limit"] is None
+    assert by_run["run_pass"]["error"] is None
+    assert by_run["run_pass"]["limit"] is None
 
     evidence = root / ".ageval" / "runs" / "run_limit"
     evidence.mkdir(parents=True)
