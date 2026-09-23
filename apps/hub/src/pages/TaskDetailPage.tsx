@@ -21,6 +21,7 @@ import {
   useTableSort,
 } from "@ageval/shared/components/sortable-head";
 import { TableColumnPicker } from "@ageval/shared/components/ui/table-column-picker";
+import { ErrorInfo } from "@ageval/shared/components/trial/error-info";
 import { ReasonSelect } from "@ageval/shared/components/reason-select";
 import { distinctReasons, reasonText } from "@ageval/shared/lib/reason";
 import { useTableColumns } from "@ageval/shared/hooks/use-table-columns";
@@ -768,7 +769,18 @@ export function TaskDetailPage() {
                           </TableCell>
                         ) : null}
                         <TableCell>
-                          {j.status || "-"}
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              className={
+                                (j.status || "").toUpperCase() === "ERROR" ? "text-error" : undefined
+                              }
+                            >
+                              {j.status || "-"}
+                            </span>
+                            {(j.status || "").toUpperCase() === "ERROR" ? (
+                              <ErrorInfo error={j.error} />
+                            ) : null}
+                          </span>
                         </TableCell>
                         <TableCell
                           className={

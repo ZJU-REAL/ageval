@@ -243,7 +243,6 @@ export function JobDetailPage() {
                   // attempt yet: placeholder rows, muted, navigate nowhere.
                   const isPlaceholder =
                     statusUpper === "PENDING" || statusUpper === "RUNNING";
-                  const reasonLabel = reasonText(t);
                   const isErr = statusUpper === "ERROR" || Boolean(t.error);
                   const href = taskHref(datasetKey, jobId, t);
                   const trialCount = t.n ?? taskRunIds(t).length;
@@ -307,16 +306,18 @@ export function JobDetailPage() {
                       </TableCell>
                       <TableCell
                         className={
-                          !isPlaceholder && (isErr || statusUpper === "FAIL")
-                            ? "text-error"
-                            : "text-mute"
+                          isPlaceholder
+                            ? "text-mute"
+                            : reasonText(t) && statusUpper === "ERROR"
+                              ? "text-error"
+                              : "text-body"
                         }
                       >
                         {isPlaceholder
                           ? statusUpper === "RUNNING"
                             ? "RUNNING"
                             : "PENDING"
-                          : reasonLabel || "-"}
+                          : reasonText(t) || "-"}
                       </TableCell>
                     </TableRow>
                   );

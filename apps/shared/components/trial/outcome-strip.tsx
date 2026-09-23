@@ -1,20 +1,22 @@
-import { reasonText } from "@ageval/shared/lib/reason";
 import type { Trial } from "@ageval/shared/lib/trial-types";
 import { formatDate, formatScore } from "@ageval/shared/lib/utils";
 
+import { ErrorInfo } from "./error-info";
 import { Outcome } from "./outcome";
 
 export function OutcomeStrip({ trial }: { trial: Trial }) {
   const status = (trial.status || "").toUpperCase();
-  const reason = reasonText(trial);
   const bad = status === "ERROR" || status === "FAIL" || Boolean(trial.error);
 
   return (
     <>
       <div className="grid grid-cols-2 gap-3 blob-panel p-4 sm:grid-cols-4">
         <Outcome label="Status">
-          <span className={bad ? "text-error font-medium" : "text-ink font-medium"}>
-            {status || "-"}
+          <span className="inline-flex items-center gap-1.5">
+            <span className={bad ? "text-error font-medium" : "text-ink font-medium"}>
+              {status || "-"}
+            </span>
+            {status === "ERROR" ? <ErrorInfo error={trial.error} /> : null}
           </span>
         </Outcome>
         <Outcome label="Score">
@@ -37,17 +39,6 @@ export function OutcomeStrip({ trial }: { trial: Trial }) {
             {JSON.stringify(trial.extra, null, 2)}
           </pre>
         </details>
-      ) : null}
-      {reason ? (
-        <p
-          className={
-            status === "ERROR" || trial.error
-              ? "text-sm text-error rounded-[14px] bg-error-soft/40 px-3 py-2"
-              : "text-sm text-body rounded-[14px] bg-canvas-soft px-3 py-2"
-          }
-        >
-          {reason}
-        </p>
       ) : null}
     </>
   );

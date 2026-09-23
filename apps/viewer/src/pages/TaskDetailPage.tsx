@@ -18,6 +18,7 @@ import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { ModelLabel } from "@ageval/shared/components/model-label";
 import { useDocumentTitle } from "@/lib/document-title";
 import { jobPath, jobsHome, trialPath } from "@/lib/routes";
+import { ErrorInfo } from "@ageval/shared/components/trial/error-info";
 import { ReasonSelect } from "@ageval/shared/components/reason-select";
 import { distinctReasons, reasonText } from "@ageval/shared/lib/reason";
 import { cn, formatDate, formatScore } from "@ageval/shared/lib/utils";
@@ -143,7 +144,6 @@ export function TaskDetailPage() {
               </TableHeader>
               <TableBody>
                 {visibleTrials.map((tr) => {
-                  const reasonLabel = reasonText(tr);
                   const bad =
                     (tr.status || "").toUpperCase() === "ERROR" ||
                     (tr.status || "").toUpperCase() === "FAIL";
@@ -199,19 +199,22 @@ export function TaskDetailPage() {
                           copyable
                         />
                       </TableCell>
-                      <TableCell
-                        className={bad ? "text-error" : "text-body"}
-                      >
-                        {tr.status || "-"}
+                      <TableCell className={bad ? "text-error" : "text-body"}>
+                        <span className="inline-flex items-center gap-1.5">
+                          {tr.status || "-"}
+                          {(tr.status || "").toUpperCase() === "ERROR" ? (
+                            <ErrorInfo error={tr.error} />
+                          ) : null}
+                        </span>
                       </TableCell>
                       <TableCell
                         className={
-                          reasonLabel && (tr.status || "").toUpperCase() === "ERROR"
+                          reasonText(tr) && (tr.status || "").toUpperCase() === "ERROR"
                             ? "text-error"
                             : "text-body"
                         }
                       >
-                        {reasonLabel || "-"}
+                        {reasonText(tr) || "-"}
                       </TableCell>
                     </TableRow>
                   );
