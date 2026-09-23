@@ -18,18 +18,30 @@ from ageval.plugins.slots import AFTER_RUN, BEFORE_RUN
 PHASE = "run"
 
 
+# Worker envelope when the run clock kills the task process. Not a verdict.
+_RUN_WORKER_TIMEOUT = "task_run_timeout"
+
+
 async def run(ctx: AttemptCtx) -> None:
     ctx.phase = PHASE
-    ctx.assert_deadline()
+    ctx.arm_phase_budget("wall_time_seconds")
     await emit(ctx, BEFORE_RUN)
     try:
-        outcome = await _run_task_entry(ctx)
+        try:
+            outcome = await _run_task_entry(ctx)
+        except Exception as exc:
+            # A limit already enforced ends the phase without phase_failed.
+            # The worker exception stays on the task_run fact; evaluate still runs.
+            if ctx.limit_name() is None:
+                raise
+            outcome = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        if not isinstance(outcome, dict):
+            outcome = {"ok": False, "error": "task_run_failed"}
+        if outcome.get("error") == _RUN_WORKER_TIMEOUT:
+            ctx.note_limit_reached("wall_time_seconds")
         ctx.record_fact("task_run", outcome)
-        if not isinstance(outcome, dict) or outcome.get("ok") is not True:
-            error = "task_run_failed"
-            if isinstance(outcome, dict):
-                error = str(outcome.get("error") or error)
-            raise RuntimeError(error)
+        if outcome.get("ok") is not True and ctx.limit_name() is None:
+            raise RuntimeError(str(outcome.get("error") or "task_run_failed"))
     finally:
         if ctx.agent_service is not None:
             await _seal_run_agent_service(ctx)

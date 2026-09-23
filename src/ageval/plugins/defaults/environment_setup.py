@@ -25,13 +25,18 @@ async def default_environment_setup(ctx: Any, value: Any, nxt: NextFn) -> Any:
 
     host = ctx.host
     await host.upload(source, BOX_ENVIRONMENT_DIR)
+    timeout = ctx.remaining_seconds()
+    if timeout is not None and timeout <= 0:
+        raise EnvironmentFailure("environment_timeout", "environment_timeout")
     # Relative argv against the mapped cwd: in-box absolute paths are literals
     # to the process, and a local box has no ``/attempt`` on disk.
     result = await host.exec(
         ["sh", SETUP_FILENAME],
         cwd=BOX_ENVIRONMENT_DIR,
-        timeout_sec=ctx.remaining_seconds(),
+        timeout_sec=timeout,
     )
+    if result.exit_code != 0 and timeout is not None and ctx.phase_budget_exhausted():
+        raise EnvironmentFailure("environment_timeout", "environment_timeout")
     ctx.record_fact(
         "environment_setup",
         {"exit_code": result.exit_code, "script": f"environment/{SETUP_FILENAME}"},

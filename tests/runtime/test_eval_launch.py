@@ -128,6 +128,6 @@ async def test_handle_eval_exec_expired_wall_does_not_start_or_exec() -> None:
         _exec_ctx(host, 0.0),
         {"id": "1", "environment": "audit", "argv": ["sleep", "inf"]},
     )
-    assert reply.get("error") == "task_run_timeout"
+    assert reply.get("error") == "evaluate_timeout"
     assert host.timeouts == []
     assert host.started is False

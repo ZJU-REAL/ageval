@@ -24,14 +24,17 @@ PHASE = "environment"
 
 async def run(ctx: AttemptCtx) -> None:
     ctx.phase = PHASE
-    ctx.assert_deadline()
+    ctx.arm_phase_budget("environment_seconds")
     await emit(ctx, BEFORE_ENVIRONMENT)
     await ctx.host.start(force_build=ctx.lock.force_build)
+    ctx.assert_deadline()
     ctx.record_fact("environment_started", {"kind": ctx.host.kind})
     if ctx.seed_dir is not None and ctx.seed_dir.is_dir():
         await ctx.host.upload(ctx.seed_dir, WORKSPACE_PATH)
         ctx.record_fact("seed_uploaded", {"source": ctx.seed_dir.name})
     # Agent runtime probe / HOME preparation happens here, before task setup.
     await emit(ctx, AFTER_ENVIRONMENT_READY)
+    ctx.assert_deadline()
     await emit(ctx, ENVIRONMENT_SETUP)
+    ctx.assert_deadline()
     await emit(ctx, AFTER_ENVIRONMENT)
