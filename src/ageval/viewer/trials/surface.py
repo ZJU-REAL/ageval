@@ -387,7 +387,11 @@ def _trial_meta_from_evidence(
         "evidence_relpath": None,  # filled by caller
         "has_evidence": True,
         "available_tabs": _available_tabs(evidence),
-        "agent_invocations": result.get("agent_invocations") or summary.get("agent_invocations"),
+        "agent_invocations": (
+            result["agent_invocations"]
+            if "agent_invocations" in result
+            else summary.get("agent_invocations")
+        ),
         "harness_kind": result.get("harness_kind") or summary.get("harness_kind"),
         "framework": surface.get("framework"),
         "environment": _environment_kind(lock, result),
