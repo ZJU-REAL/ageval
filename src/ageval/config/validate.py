@@ -54,7 +54,14 @@ ALLOWED_TASK_KEYS = frozenset(
     }
 )
 
-ALLOWED_LIMIT_KEYS = frozenset({"wall_time_seconds", "agent_invocations"})
+ALLOWED_LIMIT_KEYS = frozenset(
+    {
+        "wall_time_seconds",
+        "environment_seconds",
+        "evaluate_seconds",
+        "agent_invocations",
+    }
+)
 PUBLISHABLE_KEYS = frozenset({"id", "path", "kind", "exclude"})
 PUBLISHABLE_KINDS = frozenset({"file", "tree"})
 EVALUATION_KEYS = frozenset({"entrypoint", "inputs", "docker_image", "environments"})
