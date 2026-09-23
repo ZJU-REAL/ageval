@@ -33,6 +33,8 @@ agent_profiles:
   - id: solver
 limits:
   wall_time_seconds: 300
+  environment_seconds: 600
+  evaluate_seconds: 600
   agent_invocations: 1
 artifacts:
   publishable:
@@ -44,7 +46,7 @@ evaluation:
       target: artifacts/reply.json
 ```
 
-Do not write `harness:`, `provider:`, or `assurance`. The environment and ACP entry live in `profiles.yaml`.
+Do not write `harness:`, `provider:`, or `assurance`. The environment and ACP entry live in `profiles.yaml`. `wall_time_seconds` covers the run only. `environment_seconds` and `evaluate_seconds` default to 600. `agent_invocations` counts run-phase invokes.
 
 ```bash
 ageval lock examples/datasets/minimal-demo --task hello

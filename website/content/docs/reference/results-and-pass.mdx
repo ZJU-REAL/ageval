@@ -79,5 +79,7 @@ Attempt pages may show **Timing** (and **Tokens** when present). Trajectory step
 | Execution ERROR | Failed inside the boundary |
 | FAIL | Evaluator says no |
 | PASS | Evaluator says yes |
+| Run-phase limit | Evaluator still scores; `limit` is `wall_time_seconds` or `agent_invocations` |
+| Phase clock | Environment or evaluate expiry is ERROR |
 
 Exit codes: current CLI + skill `ageval-cli`.

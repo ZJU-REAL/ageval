@@ -28,7 +28,7 @@ A dataset with no tasks fails lock. Unknown format → `invalid_format`.
 | `task_id` | = dir name = `--task` |
 | `parameters` | For `run.py` (`ctx.params`) |
 | `agent_profiles` | Role ids `{id}` only; ACP `entry` lives on root `profiles.yaml` |
-| `limits` | wall / invokes / env actions / memory |
+| `limits` | `wall_time_seconds` (run, default 300), `environment_seconds` (default 600), `evaluate_seconds` (default 600), `agent_invocations` (run phase only) |
 | `artifacts` | publishable id + path |
 | `evaluation` | optional inputs / output; `evaluator.py` is recognized |
 | `provenance` | optional |

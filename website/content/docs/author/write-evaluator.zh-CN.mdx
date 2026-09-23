@@ -52,7 +52,7 @@ evaluation:
 
 ## 两种评测
 
-缺省是**确定性脚本**：读产物和 `evaluation/` 里的参考答案，返回 `{status, score, metrics}`；status 取 PASS / FAIL / ERROR，低分与超时都算 FAIL（score 0），环境起不来、evaluator 崩了记 ERROR。不必调 Agent。没有 `evaluation/observation.jsonl`。可选额外键 `checks`（helper `evaluation_check`）会写成 `evaluation/checks.json` 给 Verifier；bind 忽略它。没有 `checks` 时 Verifier 仍是 `result.json` 与文件树。
+缺省是**确定性脚本**：读产物和 `evaluation/` 里的参考答案，返回 `{status, score, metrics}`；status 只取 PASS 或 FAIL。低分是 FAIL。其它 status（含 ERROR）让这次运行记 ERROR。run 阶段触到 limit 时，裁决仍是这份返回值，`result.json` 的 `limit` 记下那只键。环境起不来、evaluator 崩了记 ERROR。不必调 Agent。没有 `evaluation/observation.jsonl`。可选额外键 `checks`（helper `evaluation_check`）会写成 `evaluation/checks.json` 给 Verifier；bind 忽略它。没有 `checks` 时 Verifier 仍是 `result.json` 与文件树。
 
 可选 **LLM-as-judge**：同一份 job `profiles.yaml` 再写一个角色（如 `judge`），`task.yaml` 的 `agent_profiles` 列入同一 id。参考答案 **已经** upload 之后，`evaluator.py` 可以 `Agent.session("judge").invoke(...)`。提示词归 dataset。`invoke` 不得改 `profile_id` / executor。
 
@@ -85,7 +85,7 @@ def evaluate(inputs):
 | --- | --- |
 | PASS | 仍只看这次返回值（`status` / `score` / `metrics`） |
 | 轨迹 | evaluate 阶段的步写入 `evaluation/observation.jsonl`（省略 `user` 行，避免参考答案进 evidence）。不并进根 `trajectory.jsonl` |
-| 调用预算 | `limits.agent_invocations` 要覆盖 solver **和** judge |
+| 调用预算 | `limits.agent_invocations` 只计 run 阶段的 invoke。judge 的 invoke 由 `limits.evaluate_seconds` 封顶 |
 | 环境 | SDK session 走 parent 的 Unix socket。ACP `attach_stdio` 打 **打分 Host**（缺省 = run 环境；job `evaluate_host.isolated: true` 时是 docker 第二实例）。有 `evaluation.environments` 时 ACP 必须 `session(id, environment=<name>)`；`openai-http` / `anthropic-http` 忽略 `environment=`（出站仍在 parent）。不要把 Agent Service socket bind-mount 进容器 |
 
 ## 多 stage 打分 Host

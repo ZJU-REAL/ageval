@@ -74,7 +74,7 @@ ageval results upload|attach-agent|request|inbox|decide|share|unshare|set-visibi
 | `/parameters/seed` | 业务 seed 等 |
 | `/parameters/active_profile` | 切换 profile |
 | `/bindings/<role>/options/<key>` | job binding 覆盖（含 `entry`、插件 `agent` 等；ACP 仍拒绝 `command` / engine 键） |
-| `/limits/wall_time_seconds` | 墙钟（intent；**不可**覆盖 — 见下） |
+| `limits.*` | 三只时钟与 `agent_invocations`（**不可**覆盖 — 见下） |
 
 Intent `limits.*` **不能**经 `--set` 覆盖。其它指针在 lock 阶段失败。
 

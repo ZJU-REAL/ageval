@@ -44,6 +44,8 @@ agent_profiles:
   - id: solver
 limits:
   wall_time_seconds: 300
+  environment_seconds: 600
+  evaluate_seconds: 600
   agent_invocations: 1
 artifacts:
   publishable:
@@ -55,7 +57,7 @@ evaluation:
       target: artifacts/reply.json
 ```
 
-不要写 `harness:`、`provider:`、`assurance`。环境和 ACP entry 在根上 `profiles.yaml`。
+不要写 `harness:`、`provider:`、`assurance`。环境和 ACP entry 在根上 `profiles.yaml`。`wall_time_seconds` 只覆盖 run。`environment_seconds` 与 `evaluate_seconds` 缺省 600。`agent_invocations` 只计 run 阶段的 invoke。
 
 ## 3. 跑
 

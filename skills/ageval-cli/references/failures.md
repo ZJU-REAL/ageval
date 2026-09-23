@@ -18,6 +18,9 @@
 | Export fails `unsealed_invocation` | Attempt still running or metadata not terminal |
 | Export fails `secret_residual` | Fix source evidence; do not strip secrets by hand in export dir |
 | Docker ERROR | Docker daemon, image build, network/creds projection; read result / agent meta under `.ageval/runs/` |
-| Invoke / wall / verifier timeout | FAIL (`metrics.reason=timeout`), exit 1 — not ERROR. Environment start failure stays ERROR |
+| Run-phase limit (`wall_time_seconds`, `agent_invocations`) | Evaluator PASS/FAIL (exit 0 or 1). `result.json` `limit` is that key. Evaluate still runs |
+| Environment clock | ERROR, phase `environment`, token `environment_timeout`. Run does not start |
+| Evaluate clock | ERROR, phase `evaluate`, token `evaluate_timeout` |
+| Evaluator status other than PASS / FAIL | ERROR, phase `evaluate`, token `evaluator_invalid_status` |
 
 Design: `docs/design/05-runtime/evidence.md`, `docs/design/07-budget-evaluation-failure.md`.

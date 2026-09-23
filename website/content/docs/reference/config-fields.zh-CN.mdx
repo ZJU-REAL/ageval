@@ -28,7 +28,7 @@ description: ageval.yaml / task.yaml 的字段和校验规则。
 | `task_id` | = 目录名 = `--task` |
 | `parameters` | 给 `run.py`（`ctx.params`） |
 | `agent_profiles` | 成员只写 `{id}`；ACP `entry` 写在根 `profiles.yaml` |
-| `limits` | wall / agent_invocations / environment_actions / memory_mb |
+| `limits` | `wall_time_seconds`（run，缺省 300）、`environment_seconds`（缺省 600）、`evaluate_seconds`（缺省 600）、`agent_invocations`（只计 run 阶段） |
 | `artifacts.publishable` | id + path + producer |
 | `evaluation` | 可选 inputs / output；有 `evaluator.py` 就认 |
 | `provenance` | 可选 |
