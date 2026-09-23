@@ -59,6 +59,8 @@ ALLOWLISTED_OVERRIDE_POINTERS = frozenset(
 DEFAULTS: dict[str, Any] = {
     "limits": {
         "wall_time_seconds": 300,
+        "environment_seconds": 600,
+        "evaluate_seconds": 600,
         "agent_invocations": 1,
     },
     "artifacts": {

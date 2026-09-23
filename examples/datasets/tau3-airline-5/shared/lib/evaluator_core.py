@@ -89,45 +89,31 @@ def evaluate(
     except Exception:  # noqa: BLE001
         pass
 
-    try:
-        reward_info = evaluate_simulation(
-            simulation=simulation,
-            task=task,
-            evaluation_type=EvaluationType.ALL,
-            solo_mode=False,
-            domain="airline",
-        )
-        reward = float(reward_info.reward) if reward_info.reward is not None else 0.0
-        breakdown = None
-        if reward_info.reward_breakdown:
-            breakdown = {
-                str(k): float(v) for k, v in reward_info.reward_breakdown.items()
-            }
-        info = reward_info.info if isinstance(reward_info.info, dict) else {}
-        db_match = None
-        if reward_info.db_check is not None:
-            db_match = bool(reward_info.db_check.db_match)
-        ok = reward >= 1.0
-        return {
-            "status": "PASS" if ok else "FAIL",
-            "score": reward,
-            "metrics": {
-                "reward": reward,
-                "reward_breakdown": breakdown,
-                "db_match": db_match,
-                "termination_reason": term_raw,
-                "n_messages": len(messages),
-                "note": info.get("note") if isinstance(info, dict) else None,
-            },
-        }
-    except Exception as e:  # noqa: BLE001
-        return {
-            "status": "ERROR",
-            "score": 0.0,
-            "metrics": {
-                "error": str(e),
-                "error_type": type(e).__name__,
-                "n_messages": len(messages),
-                "termination_reason": term_raw,
-            },
-        }
+    reward_info = evaluate_simulation(
+        simulation=simulation,
+        task=task,
+        evaluation_type=EvaluationType.ALL,
+        solo_mode=False,
+        domain="airline",
+    )
+    reward = float(reward_info.reward) if reward_info.reward is not None else 0.0
+    breakdown = None
+    if reward_info.reward_breakdown:
+        breakdown = {str(k): float(v) for k, v in reward_info.reward_breakdown.items()}
+    info = reward_info.info if isinstance(reward_info.info, dict) else {}
+    db_match = None
+    if reward_info.db_check is not None:
+        db_match = bool(reward_info.db_check.db_match)
+    ok = reward >= 1.0
+    return {
+        "status": "PASS" if ok else "FAIL",
+        "score": reward,
+        "metrics": {
+            "reward": reward,
+            "reward_breakdown": breakdown,
+            "db_match": db_match,
+            "termination_reason": term_raw,
+            "n_messages": len(messages),
+            "note": info.get("note") if isinstance(info, dict) else None,
+        },
+    }

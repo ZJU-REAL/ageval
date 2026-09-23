@@ -39,7 +39,7 @@ TTY 下 stdout 是短 recap（单题含 `logs` 路径）；管道或 `--json` �
 - **`logs` 路径**：Dataset 根下 `.ageval/runs/<run_id>/`（`k=1`）  
 - `k>1` 时：`summary.json` 里的 **pass@k / pass^k** 等 job 指标  
 
-PASS / FAIL 仅来自 `evaluator.py`，与 Agent 完成态分离。评测没过或超时都算 FAIL（score 0）；环境起不来、evaluator 崩了记 ERROR。
+PASS / FAIL 只来自 `evaluator.py`，Agent 跑完本身不是 PASS。低分是 FAIL。run 用尽 `wall_time_seconds` 或 `agent_invocations` 时，evaluator 照常打分，`result.json` 的 `limit` 记下那只键。environment 或 evaluate 时钟到期记 ERROR。evaluator 的 status 只许 PASS 或 FAIL，其它返回值也记 ERROR。
 
 ## 常见失败
 

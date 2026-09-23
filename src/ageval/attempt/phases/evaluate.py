@@ -33,6 +33,7 @@ UNKNOWN_EVALUATE_ENVIRONMENT = "unknown_evaluate_environment"
 
 async def run(ctx: AttemptCtx) -> None:
     ctx.phase = PHASE
+    ctx.arm_phase_budget("evaluate_seconds")
     ctx.assert_writers_stopped()  # solver writers; Agent Service may still be up
     await emit(ctx, BEFORE_EVALUATE)
     if named_evaluate_environments(ctx):
@@ -42,10 +43,14 @@ async def run(ctx: AttemptCtx) -> None:
         await _ensure_evaluate_host(ctx)
         await _prepare_evaluate_runtime(ctx)
         await _materialize_on_host(ctx, ctx.scoring_host)
+    ctx.assert_deadline()
     impl = bind_winner(ctx.registry, ctx.bindings, EVALUATION_RUNTIME)
     plugin_id = ctx.bindings.winners[EVALUATION_RUNTIME].plugin_id
     ctx.services.register(EVALUATION_RUNTIME, impl, plugin_id=plugin_id)
     result = await impl.evaluate(ctx)
+    status = str(result.get("status") or "") if isinstance(result, dict) else ""
+    if status not in {"PASS", "FAIL"}:
+        raise RuntimeError("evaluator_invalid_status")
     ctx.bind_evaluation(result)
     # Post-processing may annotate metrics; it may not change the verdict.
     status_before = str((result or {}).get("status") or "")

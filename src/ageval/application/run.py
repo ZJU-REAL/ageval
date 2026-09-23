@@ -7,7 +7,6 @@ no orchestration: the phase order lives in ``ageval.attempt``.
 from __future__ import annotations
 
 import tempfile
-import time
 from pathlib import Path
 from typing import Any
 
@@ -170,14 +169,13 @@ async def run_attempt(
         task_root=task_root,
     )
     graph = binder.graph(profile_id)
-    deadline = _deadline(lock)
     # The service comes up first so the box can carry its socket in.
+    # Each phase arms its own clock; nothing is charged before environment.
     agent_service = _agent_service(
         attempt_id=attempt_ident.value,
         binder=binder,
         lock=lock,
         evidence=evidence,
-        deadline_monotonic=deadline,
     )
     host = bind_winner(
         registry,
@@ -216,12 +214,12 @@ async def run_attempt(
         environment_src=_optional_dir(task_root, lock, "environment_dir", ENVIRONMENT_DIR),
         evaluation_src=_optional_dir(task_root, lock, "evaluation_dir", EVALUATION_DIR),
         agent_service=agent_service,
-        deadline_monotonic=deadline,
         keep_workspace=keep_workspace,
         keep_vendor_raw=keep_vendor_raw,
         on_phase=on_phase,
     )
     _bind_evaluate_session_target(ctx, agent_service)
+    agent_service.service.on_limit_reached = ctx.note_limit_reached
 
     try:
         await run_attempt_pipeline(ctx)
@@ -237,7 +235,7 @@ async def run_attempt(
         evidence_path=evidence.locator,
         cleanup_warning=_fact_detail(ctx, "cleanup_warning", "error"),
         error_phase=_fact_detail(ctx, "phase_failed", "phase"),
-        error_detail=_fact_detail(ctx, "phase_failed", "error"),
+        limit=_fact_detail(ctx, "limit_reached", "name"),
         facts=tuple(ctx.facts_as_list()),
     )
     facts = ctx.facts_as_list()
@@ -396,7 +394,6 @@ def _agent_service(
     binder: AgentBinder,
     lock: LockedTaskConfig,
     evidence: AttemptEvidenceStore,
-    deadline_monotonic: float | None,
 ) -> AgentServiceServer:
     """Start the parent Agent Service the worker will call back into."""
     limits = thaw(lock.limits)
@@ -406,7 +403,6 @@ def _agent_service(
         binder=binder,
         agent_invocation_limit=int(limits["agent_invocations"]),
         evidence_store=evidence,
-        deadline_monotonic=deadline_monotonic,
         invoke_timeout_seconds=resolve_invoke_timeout_seconds(parameters),
     )
     # Short path: a Unix socket name has ~100 usable bytes, evidence roots do not.
@@ -421,13 +417,6 @@ def _optional_dir(task_root: Path, lock: LockedTaskConfig, ref: str, fallback: s
     rel = refs.get(ref) or fallback
     candidate = task_root / str(rel)
     return candidate if candidate.is_dir() else None
-
-
-def _deadline(lock: LockedTaskConfig) -> float | None:
-    wall = thaw(lock.limits).get("wall_time_seconds")
-    if not isinstance(wall, int) or wall <= 0:
-        return None
-    return time.monotonic() + float(wall)
 
 
 def _fact_detail(ctx: AttemptCtx, name: str, key: str) -> str | None:

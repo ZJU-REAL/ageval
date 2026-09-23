@@ -180,13 +180,22 @@ async def _prepare_attempt_home(
     """
     from ageval.plugins.contrib.acp.home import prepare_home
 
+    if _phase_clock_out(ctx):
+        token = _clock_token(ctx)
+        raise EnvironmentFailure(token, token)
     remaining = ctx.remaining_seconds()
-    home_timeout = 120.0 if remaining is None else max(float(remaining), 120.0)
-    prepared = await prepare_home(
-        _box_host(ctx),
-        descriptor,
-        timeout_sec=home_timeout,
-    )
+    home_timeout = 120.0 if remaining is None else min(120.0, float(remaining))
+    try:
+        prepared = await prepare_home(
+            _box_host(ctx),
+            descriptor,
+            timeout_sec=home_timeout,
+        )
+    except EnvironmentFailure as exc:
+        if _phase_clock_out(ctx):
+            token = _clock_token(ctx)
+            raise EnvironmentFailure(token, token) from exc
+        raise
     auth_files = prepared["auth_files"]
     overlay_files = await _write_lock_overlays(ctx, descriptor, timeout_sec=home_timeout)
     ctx.record_fact(
@@ -236,6 +245,9 @@ async def _write_lock_overlays(
 
 
 async def _ensure_entry_present(ctx: Any, descriptor: AcpEntryDescriptor) -> None:
+    if _phase_clock_out(ctx):
+        token = _clock_token(ctx)
+        raise EnvironmentFailure(token, token)
     probe = await _run_probe(ctx, descriptor)
     ctx.record_fact("acp_runtime_probe", {"entry": descriptor.entry_id, **probe})
     if probe.get("ok"):
@@ -264,6 +276,9 @@ async def _ensure_entry_present(ctx: Any, descriptor: AcpEntryDescriptor) -> Non
         {"entry": descriptor.entry_id, "exit_code": result.exit_code},
     )
     if result.exit_code != 0:
+        if _phase_clock_out(ctx):
+            token = _clock_token(ctx)
+            raise EnvironmentFailure(token, token)
         detail = (result.stderr or result.stdout or "").strip()[-500:]
         raise EnvironmentFailure(
             "acp_runtime_install_failed",
@@ -396,9 +411,23 @@ def _probe_env(host: Any, descriptor: AcpEntryDescriptor) -> dict[str, str]:
     return env
 
 
+def _phase_clock_out(ctx: Any) -> bool:
+    remaining = ctx.remaining_seconds()
+    return isinstance(remaining, int | float) and not isinstance(remaining, bool) and remaining <= 0
+
+
+def _clock_token(ctx: Any) -> str:
+    """The budget token for whichever phase is on the clock."""
+    if getattr(ctx, "phase", "") == "evaluate":
+        return "evaluate_timeout"
+    return "environment_timeout"
+
+
 async def _run_probe(ctx: Any, descriptor: AcpEntryDescriptor) -> dict[str, Any]:
     host = _box_host(ctx)
-    timeout = min(float(ctx.remaining_seconds()), float(_PROBE_EXEC_TIMEOUT_SEC))
+    remaining = ctx.remaining_seconds()
+    cap = float(_PROBE_EXEC_TIMEOUT_SEC)
+    timeout = cap if not isinstance(remaining, int | float) else min(float(remaining), cap)
     try:
         result = await host.exec(
             _probe_argv(host, descriptor),

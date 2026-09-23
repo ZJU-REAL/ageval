@@ -39,7 +39,7 @@ Omit `--task` to run every member in one job. `ageval status <suite_run_id> --da
 - A **`logs` path** under the Dataset root: `.ageval/runs/<run_id>/` (when `k=1`)  
 - For `k>1`: job metrics such as **pass@k / pass^k** in suite `summary.json`  
 
-PASS / FAIL comes only from `evaluator.py`, not from the Agent finishing. A low score or a timeout is FAIL (score 0); a dead environment or a crashed evaluator is ERROR.
+PASS / FAIL comes only from `evaluator.py`, not from the Agent finishing. A low score is FAIL. When the run hits `wall_time_seconds` or `agent_invocations`, the evaluator still scores and `result.json` records that key in `limit`. An environment or evaluate clock expiry, or an evaluator status other than PASS or FAIL, is ERROR.
 
 ## Common failures
 

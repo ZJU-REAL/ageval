@@ -1,0 +1,11 @@
+format: ageval.task/1
+task_id: eval-timeout
+parameters:
+  seed: 1
+agent_profiles:
+  - id: solver
+limits:
+  wall_time_seconds: 30
+  environment_seconds: 30
+  evaluate_seconds: 2
+  agent_invocations: 1

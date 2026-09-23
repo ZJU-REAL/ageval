@@ -118,9 +118,11 @@ class ParentAgentService:
     agent_invocation_limit: int
     invoke_quota: AgentInvocationQuota | None = None
     evidence_store: AttemptEvidenceStore | None = None
-    # Wall hard ceiling (monotonic seconds); checked before each external invoke.
+    # Current phase clock (monotonic seconds); checked before each external invoke.
     deadline_monotonic: float | None = None
     invoke_timeout_seconds: float = DEFAULT_INVOKE_TIMEOUT_SECONDS
+    # First run-phase limit only. Evaluate-phase refusals do not call it.
+    on_limit_reached: Any = None
     offline_env: str = "AGEVAL_OFFLINE_AGENT"
     invocations_completed: int = 0
     _sessions: dict[str, SessionBinding] = field(default_factory=dict, repr=False)
@@ -159,6 +161,7 @@ class ParentAgentService:
         environment: str | None = None,
     ) -> dict[str, Any]:
         if self._wall_expired():
+            self._note_run_limit("wall_time_seconds")
             return {"ok": False, "error": "wall_time_exceeded", "profile_id": profile_id}
         with self._lock:
             if self._run_sealed and profile_id in self._run_profile_ids:
@@ -343,7 +346,8 @@ class ParentAgentService:
         with self._lock:
             binding = self._sessions[session_id]
             assert self.invoke_quota is not None
-            if not self.invoke_quota.try_consume():
+            if not self._run_sealed and not self.invoke_quota.try_consume():
+                self._note_run_limit("agent_invocations")
                 return {"ok": False, "error": "agent_invocation_limit"}
 
         started = time.monotonic()
@@ -465,6 +469,7 @@ class ParentAgentService:
     def _refuse_before_effect(self, session_id: str) -> dict[str, Any] | None:
         """Every reason to refuse before anything external happens."""
         if self._wall_expired():
+            self._note_run_limit("wall_time_seconds")
             return _refusal("wall_time_exceeded")
         if is_offline_agent(env_name=self.offline_env):
             return _refusal("offline_forced")
@@ -480,6 +485,14 @@ class ParentAgentService:
 
     def _wall_expired(self) -> bool:
         return self.deadline_monotonic is not None and time.monotonic() >= self.deadline_monotonic
+
+    def _note_run_limit(self, name: str) -> None:
+        """Tell the Attempt which run-phase limit was enforced. First one wins upstream."""
+        if self._run_sealed:
+            return
+        callback = self.on_limit_reached
+        if callable(callback):
+            callback(name)
 
     def _remaining(self) -> int:
         assert self.invoke_quota is not None

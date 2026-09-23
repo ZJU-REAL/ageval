@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ageval.config.model import LockedTaskConfig
+from ageval.config.model import LockedTaskConfig, thaw
 from ageval.environments.protocol import EnvironmentProvider
 from ageval.plugins.protocol import ExtensionGraph
 from ageval.plugins.registry import ExtensionRegistry
@@ -94,16 +94,69 @@ class AttemptCtx:
 
     # --- budget --------------------------------------------------------------
 
+    def arm_phase_budget(self, key: str) -> None:
+        """Start this phase's clock from ``limits.<key>``.
+
+        A missing lock leaves any caller-supplied deadline alone. A non-positive
+        value leaves the phase unbounded. The parent Agent Service reads the
+        same instant for invoke and session refusals.
+        """
+        lock = self.lock
+        if lock is None:
+            return
+        limits = thaw(getattr(lock, "limits", None) or {})
+        raw = limits.get(key) if isinstance(limits, dict) else None
+        if isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
+            self.deadline_monotonic = None
+        else:
+            self.deadline_monotonic = time.monotonic() + float(raw)
+        self._push_agent_deadline()
+
+    def _push_agent_deadline(self) -> None:
+        service = self.agent_service
+        if service is None:
+            return
+        parent = getattr(service, "service", None) or service
+        if hasattr(parent, "deadline_monotonic"):
+            parent.deadline_monotonic = self.deadline_monotonic
+
     def remaining_seconds(self) -> float | None:
-        """Seconds left before the Attempt deadline, or None when unbounded."""
+        """Seconds left on the current phase clock, or None when unbounded."""
         if self.deadline_monotonic is None:
             return None
         return max(0.0, self.deadline_monotonic - time.monotonic())
 
-    def assert_deadline(self) -> None:
+    def phase_budget_exhausted(self) -> bool:
         remaining = self.remaining_seconds()
-        if remaining is not None and remaining <= 0.0:
-            raise TimeoutError("attempt wall time exceeded")
+        return remaining is not None and remaining <= 0.0
+
+    def assert_deadline(self) -> None:
+        """Fail this phase when its clock is already out.
+
+        Run does not use this: a run-phase limit is recorded and then scored.
+        """
+        if not self.phase_budget_exhausted():
+            return
+        token = {
+            "environment": "environment_timeout",
+            "evaluate": "evaluate_timeout",
+        }.get(self.phase, "phase_budget_exceeded")
+        raise TimeoutError(token)
+
+    def note_limit_reached(self, name: str) -> None:
+        """Record the first run-phase limit. Later hits do not replace it."""
+        if self.limit_name() is not None:
+            return
+        self.record_fact("limit_reached", {"name": name})
+
+    def limit_name(self) -> str | None:
+        for fact in self.phase_facts:
+            if fact.name != "limit_reached":
+                continue
+            value = fact.detail.get("name")
+            if isinstance(value, str) and value:
+                return value
+        return None
 
     # --- writers -------------------------------------------------------------
 

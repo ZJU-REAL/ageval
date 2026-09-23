@@ -285,6 +285,69 @@ def test_invocation_ceiling_refuses_before_the_executor_runs(tmp_path: Path) -> 
     assert backend.prompts == ["one"], "the ceiling must hold before the effect"
 
 
+def test_quota_refusal_records_agent_invocations(tmp_path: Path) -> None:
+    service, backend = _service(tmp_path, limit=0)
+    seen: list[str] = []
+    service.on_limit_reached = seen.append
+    session = _open(service)
+
+    refused = service.invoke(session_id=session, prompt="one")
+
+    assert refused["error"] == "agent_invocation_limit"
+    assert seen == ["agent_invocations"]
+    assert backend.prompts == []
+
+
+def test_wall_refusal_records_wall_time_seconds(tmp_path: Path) -> None:
+    service, backend = _service(tmp_path, deadline_monotonic=time.monotonic() - 1.0)
+    seen: list[str] = []
+    service.on_limit_reached = seen.append
+
+    assert service.open_session(profile_id="solver")["error"] == "wall_time_exceeded"
+    assert seen == ["wall_time_seconds"]
+    assert backend.prompts == []
+
+
+def test_sealed_judge_invoke_does_not_consume_the_run_quota(tmp_path: Path) -> None:
+    service, backend = _service(tmp_path, limit=1, extra_profiles=("judge",))
+    seen: list[str] = []
+    service.on_limit_reached = seen.append
+    assert service.invoke(session_id=_open(service), prompt="solve")["ok"] is True
+    service.seal_run()
+    service.deadline_monotonic = time.monotonic() + 30.0
+    opened = service.open_session(profile_id="judge")
+    assert opened["ok"] is True, opened
+
+    answer = service.invoke(session_id=str(opened["session_id"]), prompt="score")
+
+    assert answer["ok"] is True
+    assert seen == []
+    assert backend.prompts == ["solve", "score"]
+
+
+def test_sealed_wall_refusal_does_not_record_a_run_limit(tmp_path: Path) -> None:
+    service, _backend = _service(tmp_path, extra_profiles=("judge",))
+    service.seal_run()
+    service.deadline_monotonic = time.monotonic() - 1.0
+    seen: list[str] = []
+    service.on_limit_reached = seen.append
+
+    refused = service.open_session(profile_id="judge")
+
+    assert refused["error"] == "wall_time_exceeded"
+    assert seen == []
+
+
+def test_zero_quota_still_allows_an_evaluate_phase_invoke(tmp_path: Path) -> None:
+    service, backend = _service(tmp_path, limit=0, extra_profiles=("judge",))
+    service.seal_run()
+    opened = service.open_session(profile_id="judge")
+    assert opened["ok"] is True, opened
+
+    assert service.invoke(session_id=str(opened["session_id"]), prompt="score")["ok"] is True
+    assert backend.prompts == ["score"]
+
+
 def test_expired_wall_deadline_refuses_before_the_executor_runs(tmp_path: Path) -> None:
     service, backend = _service(tmp_path, deadline_monotonic=time.monotonic() - 1.0)
     assert service.open_session(profile_id="solver")["error"] == "wall_time_exceeded"

@@ -1,0 +1,11 @@
+format: ageval.task/1
+task_id: env-fits
+parameters:
+  seed: 1
+agent_profiles:
+  - id: solver
+limits:
+  wall_time_seconds: 3
+  environment_seconds: 8
+  evaluate_seconds: 30
+  agent_invocations: 1

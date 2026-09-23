@@ -5,7 +5,7 @@ Read this file to know what happens and when. Each phase is a file under
 ordered. Plugins change bindings — never this sequence.
 
 Engine invariants live here, not in plugins: the lock and Attempt identity, the
-deadline, ``cleanup`` always running, and PASS entering only through
+phase clocks, ``cleanup`` always running, and PASS entering only through
 ``evaluate``.
 """
 

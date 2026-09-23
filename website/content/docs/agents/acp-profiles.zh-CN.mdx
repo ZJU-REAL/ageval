@@ -26,7 +26,7 @@ agent_profiles:
 | `executor` | coding agent 用 `acp`（不要用已废弃的 `executor: codex` 等） |
 | `- plugin: acp` / `options.entry` | **必填**；本机可用 id 以 `ageval executors -v` 为准 |
 | `options.reasoning_effort` | 可选；广告了 thinking selector 的 entry 走 `set_config_option`。`grok-build` 写进 `grok agent --reasoning-effort … stdio` |
-| `options.idle_timeout_seconds` | 可选；`session/prompt` 静默上限。任意 `session/update` 或 permission 会重置。省略或 ≤0 只用墙钟 invoke timeout。触发 `acp_idle_timeout`（仍受 Parent 墙钟封顶） |
+| `options.idle_timeout_seconds` | 可选；`session/prompt` 静默上限。任意 `session/update` 或 permission 会重置。省略或 ≤0 只用当前阶段的时钟。触发 `acp_idle_timeout`（仍受该时钟封顶：run 用 `wall_time_seconds`，evaluate 用 `evaluate_seconds`） |
 | `model` | 交给该 entry 的模型 |
 | `api_key` | 可选；`${ENV_NAME}` locator |
 | `base_url` | 可选；字面 URL 或 `${ENV_NAME}` |

@@ -1,8 +1,7 @@
 """Attempt result binding — the barrier between running and judging.
 
-The Agent finishing is not a verdict. ``status`` may only come from an
-evaluator's raw output, a capability timeout (FAIL), or a non-timeout
-phase failure (ERROR).
+The Agent finishing is not a verdict. ``status`` is PASS or FAIL only when
+the evaluator says so. A phase failure is ERROR. Timeout text is not a verdict.
 """
 
 from __future__ import annotations
@@ -14,27 +13,7 @@ from typing import Any
 STATUS_PASS = "PASS"
 STATUS_FAIL = "FAIL"
 STATUS_ERROR = "ERROR"
-
-# Capability budget, not infrastructure. Matched against phase_failed error text.
-_TIMEOUT_MARKERS = (
-    "task_run_timeout",
-    "miniswe_timeout",
-    "wall_time_exceeded",
-    "attempt wall time exceeded",
-    "timeoutexpired",
-    "timed out after",
-    "exec timed out",
-    "remote command timed out",
-    "limitsexceeded",
-)
-
-
-def is_capability_timeout(*, phase: str | None, error: str | None) -> bool:
-    """True when run/evaluate hit a time budget. Environment timeouts stay ERROR."""
-    if phase not in {"run", "evaluate"}:
-        return False
-    blob = (error or "").lower()
-    return any(marker in blob for marker in _TIMEOUT_MARKERS)
+_VERDICTS = frozenset({STATUS_PASS, STATUS_FAIL})
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +33,8 @@ class AttemptResult:
     gold_materialized_at: str = "evaluate"
     # Result.logs locates the Attempt evidence root; never a score input.
     logs: str | None = None
+    # Run-phase limits key that was enforced, or None.
+    limit: str | None = None
     facts: tuple[Mapping[str, Any], ...] = field(default_factory=tuple)
 
     def as_dict(self) -> dict[str, Any]:
@@ -65,6 +46,7 @@ class AttemptResult:
             "evidence_path": self.evidence_path,
             "gold_materialized_at": self.gold_materialized_at,
             "kind": self.kind,
+            "limit": self.limit,
             "logs": self.logs or self.evidence_path,
             "metrics": dict(self.metrics),
             "score": self.score,
@@ -81,15 +63,14 @@ def bind_result(
     evidence_path: str,
     cleanup_warning: str | None = None,
     error_phase: str | None = None,
-    error_detail: str | None = None,
+    limit: str | None = None,
     logs: str | None = None,
     facts: Sequence[Mapping[str, Any]] = (),
 ) -> AttemptResult:
-    """Turn an evaluator's raw output into the Attempt verdict.
+    """Turn an evaluator verdict or a phase failure into the Attempt result.
 
-    A run/evaluate time budget is FAIL (agent capability). Other phase
-    failures and a missing evaluator result are ERROR — never a silent FAIL
-    that could be mistaken for a judged outcome.
+    PASS and FAIL come only from the evaluator's ``status``. A phase failure,
+    a missing verdict, or any other status is ERROR.
     """
     common: dict[str, Any] = {
         "cleanup_warning": cleanup_warning,
@@ -98,22 +79,10 @@ def bind_result(
         "capabilities_used": tuple(capabilities_used),
         "agent_invocations": agent_invocations,
         "logs": logs if logs is not None else evidence_path,
+        "limit": limit,
         "facts": tuple(facts),
     }
     if error_phase:
-        if is_capability_timeout(phase=error_phase, error=error_detail):
-            detail = (error_detail or "").strip()
-            return AttemptResult(
-                status=STATUS_FAIL,
-                score=0.0,
-                metrics={
-                    "reason": "timeout",
-                    "timeout_phase": error_phase,
-                    **({"error": detail[:500]} if detail else {}),
-                },
-                error_phase=None,
-                **common,
-            )
         return AttemptResult(
             status=STATUS_ERROR, score=None, metrics={}, error_phase=error_phase, **common
         )
@@ -122,7 +91,7 @@ def bind_result(
             status=STATUS_ERROR, score=None, metrics={}, error_phase="evaluate", **common
         )
     status = str(evaluator_raw.get("status") or "")
-    if status not in {STATUS_PASS, STATUS_FAIL, STATUS_ERROR}:
+    if status not in _VERDICTS:
         return AttemptResult(
             status=STATUS_ERROR, score=None, metrics={}, error_phase="evaluate", **common
         )

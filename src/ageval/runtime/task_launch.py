@@ -31,6 +31,8 @@ from ageval.runtime.offline import DEFAULT_OFFLINE_ENV, is_offline_agent
 
 WORKER_MODULE = "ageval.runtime.task_worker"
 EVAL_WORKER_MODULE = "ageval.runtime.eval_worker"
+# Evaluate-phase clock. Distinct from the run worker's task_run_timeout envelope.
+EVALUATE_TIMEOUT = "evaluate_timeout"
 # stderr is diagnostics; keep the tail that fits in one evidence fact.
 _STDERR_TAIL_BYTES = 4000
 
@@ -59,6 +61,10 @@ async def launch_task_worker(ctx: AttemptCtx) -> dict[str, Any]:
     process.stdin.close()
 
     envelope = await _collect(process, timeout=ctx.remaining_seconds())
+    if envelope.get("error") == "task_run_timeout":
+        note = getattr(ctx, "note_limit_reached", None)
+        if callable(note):
+            note("wall_time_seconds")
     _record_artifacts(ctx, envelope)
     return envelope
 
@@ -292,7 +298,7 @@ async def _handle_eval_exec(ctx: Any, frame: dict[str, Any]) -> dict[str, Any]:
     requested = float(timeout) if isinstance(timeout, int | float) else None
     remaining = _remaining_seconds(ctx)
     if remaining is not None and remaining <= 0:
-        return {"op": "exec_result", "id": req_id, "error": "task_run_timeout"}
+        return {"op": "exec_result", "id": req_id, "error": EVALUATE_TIMEOUT}
     try:
         recipes = named_evaluate_environments(ctx)
         if recipes:
@@ -313,12 +319,12 @@ async def _handle_eval_exec(ctx: Any, frame: dict[str, Any]) -> dict[str, Any]:
                 }
         leftover = _remaining_seconds(ctx)
         if leftover is not None and leftover <= 0:
-            return {"op": "exec_result", "id": req_id, "error": "task_run_timeout"}
+            return {"op": "exec_result", "id": req_id, "error": EVALUATE_TIMEOUT}
         timeout_sec = _clamp_timeout_sec(requested, leftover if leftover is not None else remaining)
         env = _resolve_scoring_env(frame.get("env"))
         result = await host.exec(argv, timeout_sec=timeout_sec, env=env or None)
     except TimeoutError:
-        return {"op": "exec_result", "id": req_id, "error": "task_run_timeout"}
+        return {"op": "exec_result", "id": req_id, "error": EVALUATE_TIMEOUT}
     except Exception as exc:  # noqa: BLE001 — worker gets one error, no retry
         message = str(exc)
         if message == UNKNOWN_EVALUATE_ENVIRONMENT or UNKNOWN_EVALUATE_ENVIRONMENT in message:
@@ -384,7 +390,7 @@ async def _serve_eval_worker(
                 await process.wait()
                 envelope: dict[str, Any] = {
                     "ok": False,
-                    "error": "task_run_timeout",
+                    "error": EVALUATE_TIMEOUT,
                     "exit_code": process.returncode,
                 }
                 if drain is not None:

@@ -1,0 +1,11 @@
+format: ageval.task/1
+task_id: wall-hit
+parameters:
+  seed: 1
+agent_profiles:
+  - id: solver
+limits:
+  wall_time_seconds: 2
+  environment_seconds: 30
+  evaluate_seconds: 30
+  agent_invocations: 1

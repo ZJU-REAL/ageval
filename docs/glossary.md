@@ -69,7 +69,7 @@ public 只许出现「public」或「both」行的规范名。internal 词出现
 | checks | checks / `evaluation/checks.json` | both | 确定性 evaluator 可选返回的检查项观察；parent 写入 `evaluation/checks.json`。不是 PASS | 把 check 退出码 / stdout 当 PASS；Verifier 检查点 |
 | 投影 / Agent 能看见 | projected workspace | both | Agent 看见的文件 | 单独写「可见性」指这件事 |
 | 公开 / 私有 | public / private | both | Hub 范围。CLI 旗标仍是 `--visibility` | 单独写可见性、visibility 当正文（旗标除外） |
-| PASS / FAIL / ERROR | PASS / FAIL / ERROR | both | 见下 | completed、轨迹完整当通过 |
+| PASS / FAIL / ERROR | PASS / FAIL / ERROR | both | 见下 | completed、轨迹完整当通过；用超时文本决定 FAIL |
 | 阶段 | phase | both | environment → run → evaluate → record；cleanup 始终执行 | 相位；用「步骤」指这些阶段（轨迹 tool step 除外） |
 | attach_stdio | attach_stdio | both | 已开环境里起前台进程，交回 stdin/stdout | — |
 | ACP entry | ACP entry | both | `options.entry`：`pi` / `codex` / `claude-code` / `opencode` / `grok-build` | — |
@@ -86,9 +86,9 @@ public 只许出现「public」或「both」行的规范名。internal 词出现
 
 | 词 | 含义 |
 | --- | --- |
-| **PASS** | 只来自 `evaluator.py` 绑定。`RunTerminal.completed`、轨迹、ACP `end_turn` 都不是 PASS |
-| **FAIL** | 评测低分，或 run/evaluate **超时**（能力问题，score 0） |
-| **ERROR** | 非能力问题：环境起不来、evaluator 崩、配置。超时不是 ERROR |
+| **PASS** | 只来自 `evaluator.py` 绑定的 `status: PASS`。`RunTerminal.completed`、轨迹、ACP `end_turn`、`limit` 都不是 PASS |
+| **FAIL** | 只来自 `evaluator.py` 绑定的 `status: FAIL`（评测低分）。run 阶段触到的 limit 仍由 evaluator 打分 |
+| **ERROR** | 环境起不来、environment / evaluate 时钟到期、evaluator 崩或返回的 status 不是 PASS / FAIL、配置。`result.json` 的 `limit` 是 run 阶段触到的 limits 键，没有则为 `null` |
 
 ## format
 

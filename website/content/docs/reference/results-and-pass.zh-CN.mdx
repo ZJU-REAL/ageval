@@ -76,8 +76,10 @@ Attempt 页可有 **Timing**（及有数据时的 **Tokens**）条。轨迹按�
 | 类型 | 直觉 |
 | --- | --- |
 | 配置 / lock | 还没进入正式执行 |
-| 执行 ERROR | 执行边界内出错（agent、超时、隔离等） |
+| 执行 ERROR | 执行边界内出错（环境、evaluate 时钟、evaluator） |
 | FAIL | 评测认为没过 |
 | PASS | 评测通过 |
+| run 阶段 limit | evaluator 照常打分；`limit` 为 `wall_time_seconds` 或 `agent_invocations` |
+| 阶段时钟 | environment 或 evaluate 到期记 ERROR |
 
 具体 exit code 与字段以当前 CLI 输出和 skill `ageval-cli` 为准。

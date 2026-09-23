@@ -37,8 +37,10 @@ parameters:
 agent_profiles:
   - id: solver
 limits:
-  wall_time_seconds: 600
-  agent_invocations: 1
+  wall_time_seconds: 600       # 只覆盖 run；缺省 300
+  environment_seconds: 600     # environment 相位；缺省 600
+  evaluate_seconds: 600        # evaluate 相位；缺省 600
+  agent_invocations: 1         # 只计 run 相位的 invoke
 artifacts:
   publishable:
     - id: reply

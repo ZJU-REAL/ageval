@@ -68,7 +68,7 @@ Two scoring styles in `evaluator.py` (same barrier; PASS still the return value)
 | Deterministic script | Default. Compare artifacts to gold. No `Agent.session`. | `result.json`. No `evaluation/observation.jsonl`. Optional `checks` via `evaluation_check(...)` → `evaluation/checks.json`. |
 | LLM-as-judge | Extra role on the **same** `profiles.yaml` (e.g. `judge`). After gold lands, `Agent.session("judge").invoke`. | `evaluation/observation.jsonl` (no `user` rows). Not merged into Agent `trajectory.jsonl`. May also return `checks`. |
 
-Judge binding stays in `profiles.yaml` (not on the member task). Budget `limits.agent_invocations` for solver **and** judge. SDK session into the evaluator process is projected on `environment: local`. No `Agent.session` = script path.
+Judge binding stays in `profiles.yaml` (not on the member task). `limits.agent_invocations` counts run-phase invokes only; judge invokes are bounded by `limits.evaluate_seconds`. SDK session into the evaluator process is projected on `environment: local`. No `Agent.session` = script path.
 
 `--profiles` swaps the job for **this** lock/run. `--agent` is mutually exclusive with `--profiles`. `--model` requires `--agent`.
 
