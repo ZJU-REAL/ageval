@@ -389,6 +389,8 @@ class RegistryClient:
         agent_label: str | None = None,
         model_label: str | None = None,
         score: float | None = None,
+        error: Any = None,
+        limit: str | None = None,
     ) -> dict[str, Any]:
         meta: dict[str, Any] = {
             "run_id": run_id,
@@ -413,6 +415,9 @@ class RegistryClient:
             meta["model_label"] = model_label
         if score is not None:
             meta["score"] = score
+        meta["error"] = error
+        if isinstance(limit, str) and limit.strip():
+            meta["limit"] = limit.strip()
         http_status, raw, _ = self._put_multipart(
             "/v1/results/attempts",
             meta=meta,

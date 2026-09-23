@@ -77,6 +77,12 @@ def _current_run_ids(ref: dict[str, Any]) -> set[str]:
     return out
 
 
+def _dump_error(value: object) -> str | None:
+    if value is None:
+        return None
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
 def _archive_looks_like_secret_leak(archive: Path) -> bool:
     with archive.open("rb") as fh:
         sample = fh.read(4_000_000)
@@ -141,6 +147,9 @@ class ResultService:
             raw_score = None
         if isinstance(raw_score, int | float):
             score = float(raw_score)
+        error_json = _dump_error(meta.get("error"))
+        raw_limit = meta.get("limit")
+        limit_name = raw_limit.strip() if isinstance(raw_limit, str) and raw_limit.strip() else None
         if not run_id or not dataset_id or not dataset_version:
             raise RegistryAppError(
                 "invalid_request",
@@ -199,6 +208,8 @@ class ResultService:
             agent_label=agent_label,
             model_label=model_label,
             score=score,
+            error_json=error_json,
+            limit_name=limit_name,
         )
         try:
             self.blobs.put_if_absent(blob_digest, archive, prefix="results")

@@ -126,7 +126,15 @@ def attempt_to_dict(row: AttemptResultRow) -> dict[str, Any]:
         out["model_label"] = row.model_label
     if row.score is not None:
         out["score"] = row.score
+    out["error"] = _load_error_json(row.error_json)
+    out["limit"] = row.limit_name or None
     return out
+
+
+def _load_error_json(raw: str | None) -> Any:
+    if not raw:
+        return None
+    return json.loads(raw)
 
 
 def org_to_dict(row: OrgRow) -> dict[str, Any]:

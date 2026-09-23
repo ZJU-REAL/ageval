@@ -44,6 +44,8 @@ class AttemptResultRow:
     agent_label: str = ""
     model_label: str = ""
     score: float | None = None
+    error_json: str | None = None
+    limit_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
