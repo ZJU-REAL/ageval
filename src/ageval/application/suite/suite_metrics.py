@@ -167,6 +167,28 @@ def previous_from_attempts(attempt_rows: Sequence[Mapping[str, Any]]) -> list[di
     return out
 
 
+def _reason_for_run(
+    row: Mapping[str, Any],
+    attempts: Sequence[Mapping[str, Any]],
+    run_id: object,
+) -> tuple[object, object]:
+    """error and limit on the attempt ``run_id`` points at."""
+    error = row.get("error")
+    limit = row.get("limit")
+    wanted = str(run_id or "")
+    if not wanted:
+        return error, limit
+    for attempt in attempts:
+        if str(attempt.get("run_id") or "") != wanted:
+            continue
+        if "error" in attempt:
+            error = attempt.get("error")
+        if "limit" in attempt:
+            limit = attempt.get("limit")
+        break
+    return error, limit
+
+
 def task_refs_for_summary(
     task_rows: Sequence[Mapping[str, Any]],
     *,
@@ -245,6 +267,9 @@ def task_refs_for_summary(
                 history = [dict(item) for item in raw_prev if isinstance(item, Mapping)]
         if history:
             ref["previous"] = history
+        error, limit = _reason_for_run(row, nested_rows, ref.get("run_id"))
+        ref["error"] = error
+        ref["limit"] = limit
         refs.append(ref)
     return refs
 
@@ -787,6 +812,7 @@ def ensure_suite_task_refs(
                 "score": attempt.get("score"),
                 "run_id": attempt.get("run_id"),
                 "error": attempt.get("error"),
+                "limit": attempt.get("limit"),
             }
         rows = list(by_tid.values())
 

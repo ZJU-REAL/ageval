@@ -17,6 +17,9 @@ from datetime import UTC, datetime
 
 from ageval.attempt.ctx import AttemptCtx
 from ageval.attempt.phases import cleanup, environment, evaluate, record, run
+from ageval.evaluation.error_record import error_record_from_exception
+
+_ATTEMPT_PHASES = frozenset({"environment", "run", "evaluate", "record"})
 
 Phase = Callable[[AttemptCtx], Awaitable[None]]
 
@@ -33,10 +36,8 @@ def _failed_phase(ctx: AttemptCtx) -> str | None:
 def _note_phase_failed(ctx: AttemptCtx, exc: BaseException) -> None:
     if _failed_phase(ctx) is not None:
         return
-    ctx.record_fact(
-        "phase_failed",
-        {"phase": ctx.phase, "error": f"{type(exc).__name__}: {exc}"},
-    )
+    phase = ctx.phase if ctx.phase in _ATTEMPT_PHASES else None
+    ctx.record_fact("phase_failed", error_record_from_exception(exc, phase=phase))
 
 
 async def run_attempt(ctx: AttemptCtx) -> None:

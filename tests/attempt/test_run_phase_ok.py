@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from ageval.attempt.phases import run as run_phase
+from ageval.evaluation.error_record import RecordedError
 
 
 class _Ctx:
@@ -93,3 +94,24 @@ async def test_later_worker_error_after_a_limit_does_not_raise(
     assert ctx.limit_name() == "agent_invocations"
     task_run = next(fact for fact in ctx.phase_facts if fact.name == "task_run")
     assert task_run.detail["error"] == "TimeoutExpired"
+
+
+@pytest.mark.asyncio
+async def test_worker_envelope_keeps_title_and_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_worker(_ctx: object) -> dict[str, object]:
+        return {
+            "ok": False,
+            "error": "Workspace seed missing",
+            "message": "seed.txt is not a file",
+            "traceback": "trace",
+        }
+
+    ctx = _patch(monkeypatch, fake_worker)
+    with pytest.raises(RecordedError) as caught:
+        await run_phase.run(ctx)  # type: ignore[arg-type]
+    assert caught.value.error_title == "Workspace seed missing"
+    assert caught.value.error_message == "seed.txt is not a file"
+    task_run = next(fact for fact in ctx.phase_facts if fact.name == "task_run")
+    assert task_run.detail["traceback"] == "trace"

@@ -34,6 +34,7 @@ from ageval.application.suite.suite_usage import collect_suite_usage
 from ageval.attempt.ctx import PhaseObserver
 from ageval.config.dataset import list_tasks, load_dataset_manifest
 from ageval.config.errors import ConfigError
+from ageval.evaluation.error_record import error_record_from_exception
 from ageval.registry.resolve import resolve_dataset_root
 
 # Instrumentation for tests: peaks concurrent in-flight workers.
@@ -301,7 +302,7 @@ async def _run_one(
             "limit": getattr(result, "limit", None),
             "metrics": dict(raw_metrics) if isinstance(raw_metrics, dict) else {},
             "run_id": run_id,
-            "error": None if code != 2 else str(getattr(result, "error_phase", None) or status),
+            "error": None if code != 2 else _copy_error(getattr(result, "error", None)),
             "phase": "terminal",
         }
     except ConfigError as exc:
@@ -315,7 +316,7 @@ async def _run_one(
             "metrics": {},
             "run_id": None,
             "digest": None,
-            "error": str(exc),
+            "error": error_record_from_exception(exc, phase=None),
             "phase_timing": None,
             "duration": None,
             "phase": "error",
@@ -331,7 +332,7 @@ async def _run_one(
             "metrics": {},
             "run_id": None,
             "digest": None,
-            "error": f"{type(exc).__name__}: {exc}",
+            "error": error_record_from_exception(exc, phase=None),
             "phase_timing": None,
             "duration": None,
             "phase": "error",
@@ -444,16 +445,42 @@ def _phase_forwarder(
     return observe
 
 
+def _copy_error(error: object) -> dict[str, Any] | None:
+    if not isinstance(error, Mapping):
+        return None
+    phase = error.get("phase")
+    title = error.get("title")
+    message = error.get("message")
+    return {
+        "phase": phase if isinstance(phase, str) else None,
+        "title": str(title or ""),
+        "message": message if isinstance(message, str) else "",
+    }
+
+
+def _attempt_for_run_id(rollup: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The attempt ``run_id`` points at, otherwise the first sample."""
+    nested = rollup.get("attempts") or []
+    rows = [row for row in nested if isinstance(row, Mapping)]
+    run_id = str(rollup.get("run_id") or "")
+    if run_id:
+        for row in rows:
+            if str(row.get("run_id") or "") == run_id:
+                return row
+    return rows[0] if rows else {}
+
+
 def _task_row_from_rollup(t: Mapping[str, Any]) -> dict[str, Any]:
     """One stable ``tasks[]`` row for any k (roll-up + primary attempt surface)."""
     nested = t.get("attempts") or []
     first: Mapping[str, Any] = nested[0] if nested and isinstance(nested[0], Mapping) else {}
+    pointed = _attempt_for_run_id(t)
     first_metrics = first.get("metrics") if isinstance(first.get("metrics"), dict) else {}
     return {
         "task_id": t.get("task_id"),
         "status": t.get("status"),
         "score": t.get("score"),
-        "limit": first.get("limit"),
+        "limit": pointed.get("limit"),
         "n": t.get("n"),
         "c": t.get("c"),
         "run_id": t.get("run_id"),
@@ -464,7 +491,7 @@ def _task_row_from_rollup(t: Mapping[str, Any]) -> dict[str, Any]:
         "exit_code": first.get("exit_code"),
         "metrics": dict(first_metrics) if first_metrics else {},
         "digest": first.get("digest"),
-        "error": first.get("error"),
+        "error": pointed.get("error"),
         "attempt_index": first.get("attempt_index", 0),
         "phase_timing": first.get("phase_timing"),
         "duration": first.get("duration"),

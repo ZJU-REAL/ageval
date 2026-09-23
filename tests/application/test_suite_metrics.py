@@ -68,7 +68,14 @@ def test_task_refs_shape() -> None:
             {"task_id": "b", "status": "FAIL", "score": None, "run_id": None},
         ]
     )
-    assert refs[0] == {"task_id": "a", "status": "PASS", "score": 1.0, "run_id": "r1"}
+    assert refs[0] == {
+        "task_id": "a",
+        "status": "PASS",
+        "score": 1.0,
+        "run_id": "r1",
+        "error": None,
+        "limit": None,
+    }
     assert refs[1]["status"] == "FAIL"
     assert refs[1]["score"] is None
 
