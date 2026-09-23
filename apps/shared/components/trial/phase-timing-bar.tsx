@@ -94,7 +94,7 @@ function SegmentBar({
         {/* Title + total on the left (Status-label style + value). */}
         <div className="flex items-baseline gap-2">
           <div className="text-xs text-mute">{title}</div>
-          <span className="text-sm tabular text-ink">{totalLabel}</span>
+          <span className="figure font-mono tabular-nums text-ink">{totalLabel}</span>
         </div>
         <div
           className="flex h-3 w-full overflow-hidden rounded-[4px] bg-canvas-soft border border-hairline"

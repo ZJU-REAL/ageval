@@ -62,7 +62,7 @@ If they disagree, fix the copies to match docs/13 + the script.
   `canvas-soft-2`). Do not draw an IKB underline. Page heads use `PageHead`
   (h1 + optional sub + hairline; no numbered kicker). One tab strip per view; a
   second exclusive choice is `Select`. Wrapping chips use `Chip`, not `bg-link/10`.
-- Operator-facing controls and table column labels use body-sm 14px. Caption is
+- Operator-facing controls and table column labels use body-sm 14px. Trial outcome values and Tokens / Timing totals use `figure` (16px). Tables do not. Caption is
   timestamps and mute meta, not column names. Do not invent a smaller clickable size. A button group is one hairline box; selected fill
   is `canvas-soft-2`. New chrome joins the toolbar already on the page — do not open a
   vacant band for a single control. Layout: SPA DESIGN.md **Composition**.

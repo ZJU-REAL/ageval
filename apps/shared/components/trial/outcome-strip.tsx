@@ -18,13 +18,13 @@ export function OutcomeStrip({ trial }: { trial: Trial }) {
           </span>
         </Outcome>
         <Outcome label="Score">
-          <span className="tabular">{formatScore(trial.score ?? trial.reward)}</span>
+          <span className="font-mono tabular-nums">{formatScore(trial.score ?? trial.reward)}</span>
         </Outcome>
         <Outcome label="Started">
-          <span className="tabular text-body">{formatDate(trial.started)}</span>
+          <span className="font-mono tabular-nums text-body">{formatDate(trial.started)}</span>
         </Outcome>
         <Outcome label="Invocations">
-          <span className="tabular">
+          <span className="font-mono tabular-nums">
             {trial.agent_invocations != null ? trial.agent_invocations : "-"}
           </span>
         </Outcome>

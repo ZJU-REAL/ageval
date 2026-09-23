@@ -58,7 +58,7 @@ landing 的 oklch 系(`oklch(15.4% 0.018 264)` 底等)是本表的 oklch 等值�
 | mono | `Geist Mono` → `ui-monospace` → `Menlo` | 代码块 / 命令条 / 数字对齐（`tabular-nums`）；列表与表格里的非数字可读字段用 sans |
 | display | `Anton`(wordmark 专用) | 只用于品牌瞬间(hero、logo),**永不**进正文或工具 UI |
 
-字号档只有 YAML 里那几档。`body-sm`(14px / `text-sm`)是操作者要读的字号:控件、表列名、单元格里的非数字正文。`caption`(12px)只给时间戳和 mute 说明,不当列名。禁止再发明第三档可点击小字。PillTabs 的 11px 是已记录的面板内紧凑例外,不是默认。
+字号档只有 YAML 里那几档。`body-sm`(14px / `text-sm`)是操作者要读的字号:控件、表列名、单元格里的非数字正文。`caption`(12px)只给时间戳和 mute 说明,不当列名。禁止再发明第三档可点击小字。PillTabs 的 11px 是已记录的面板内紧凑例外,不是默认。轨迹页结果条上的状态、分数、开始时间、调用次数，以及 Tokens / Timing 旁的总数，用 `figure`(16px / 20px)。标签仍是 caption，数字仍可走 mono。表单元格、检查项和轨迹步骤耗时不使用这一档。
 
 ## 形状与动效
 
