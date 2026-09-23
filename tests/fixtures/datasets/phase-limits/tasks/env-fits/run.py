@@ -9,5 +9,5 @@ from ageval_sdk import RunContext, RunTerminal
 
 async def run(ctx: RunContext) -> RunTerminal:
     del ctx
-    time.sleep(1)
+    time.sleep(2)
     return RunTerminal.completed("fit")

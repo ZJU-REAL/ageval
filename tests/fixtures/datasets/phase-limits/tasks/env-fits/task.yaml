@@ -5,7 +5,7 @@ parameters:
 agent_profiles:
   - id: solver
 limits:
-  wall_time_seconds: 10
+  wall_time_seconds: 3
   environment_seconds: 8
   evaluate_seconds: 30
   agent_invocations: 1

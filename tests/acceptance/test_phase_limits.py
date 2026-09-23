@@ -187,7 +187,9 @@ def _run_shipped(dataset: Path, task: str, *, timeout: float) -> dict[str, objec
 
 
 def test_tau3_runs_with_its_current_limits(tmp_path: Path) -> None:
-    dataset = Path(shutil.copytree(TAU3, tmp_path / "tau3", ignore=shutil.ignore_patterns(".ageval")))
+    dataset = Path(
+        shutil.copytree(TAU3, tmp_path / "tau3", ignore=shutil.ignore_patterns(".ageval"))
+    )
     _run_shipped(dataset, "airline-00", timeout=120)
 
 

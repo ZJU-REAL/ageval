@@ -51,7 +51,9 @@ def test_unknown_limits_key_is_one_message(tmp_path: Path) -> None:
     root = tmp_path / "pkg"
     root.mkdir()
     text = (CONFIG_MIN / "tasks" / "minimal" / "task.yaml").read_text(encoding="utf-8")
-    text = text.replace("agent_invocations: 1\n", "agent_invocations: 1\n  environment_actions: 0\n")
+    text = text.replace(
+        "agent_invocations: 1\n", "agent_invocations: 1\n  environment_actions: 0\n"
+    )
     (root / "task.yaml").write_text(text, encoding="utf-8")
     (root / "run.py").write_text("#\n", encoding="utf-8")
     (root / "evaluator.py").write_text("#\n", encoding="utf-8")
