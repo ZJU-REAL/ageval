@@ -83,8 +83,8 @@ def test_wall_clock_is_scored_and_recorded(tmp_path: Path) -> None:
     facts = _facts(dataset, document)
     assert any(
         fact.get("name") == "limit_reached"
-        and isinstance(fact.get("detail"), dict)
-        and fact["detail"].get("name") == "wall_time_seconds"
+        and isinstance(detail := fact.get("detail"), dict)
+        and detail.get("name") == "wall_time_seconds"
         for fact in facts
     )
     assert any(fact.get("phase") == "evaluate" for fact in facts)
