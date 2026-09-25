@@ -60,13 +60,18 @@ def _facts(dataset: Path, document: dict[str, object]) -> list[dict[str, object]
     return [fact for fact in facts if isinstance(fact, dict)]
 
 
+def _error(document: dict[str, object]) -> dict[str, object]:
+    error = document["error"]
+    assert isinstance(error, dict)
+    return error
+
+
 def _phase_failed(facts: list[dict[str, object]], token: str) -> bool:
     for fact in facts:
         if fact.get("name") != "phase_failed":
             continue
         detail = fact.get("detail")
-        error = detail.get("error") if isinstance(detail, dict) else ""
-        if token in str(error):
+        if isinstance(detail, dict) and detail.get("title") == token:
             return True
     return False
 
@@ -110,7 +115,8 @@ def test_environment_clock_is_error_and_run_does_not_start(tmp_path: Path) -> No
     assert proc.returncode == 2, proc.stderr
     assert document["status"] == "ERROR"
     assert document["limit"] is None
-    assert document["error"] == {"phase": "environment"}
+    assert _error(document)["phase"] == "environment"
+    assert _error(document)["title"] == "environment_timeout"
     facts = _facts(dataset, document)
     assert _phase_failed(facts, "environment_timeout")
     assert not any(fact.get("phase") == "run" for fact in facts)
@@ -123,7 +129,8 @@ def test_evaluate_clock_is_error(tmp_path: Path) -> None:
     assert proc.returncode == 2, proc.stderr
     assert document["status"] == "ERROR"
     assert document["limit"] is None
-    assert document["error"] == {"phase": "evaluate"}
+    assert _error(document)["phase"] == "evaluate"
+    assert _error(document)["title"] == "evaluate_timeout"
     assert _phase_failed(_facts(dataset, document), "evaluate_timeout")
 
 
@@ -134,7 +141,8 @@ def test_timeout_expired_from_run_is_error_without_a_limit(tmp_path: Path) -> No
     assert proc.returncode == 2, proc.stderr
     assert document["status"] == "ERROR"
     assert document["limit"] is None
-    assert document["error"] == {"phase": "run"}
+    assert _error(document)["phase"] == "run"
+    assert _error(document)["title"] == "TimeoutExpired"
 
 
 def test_evaluator_error_status_fails_the_evaluate_phase(tmp_path: Path) -> None:
@@ -144,7 +152,8 @@ def test_evaluator_error_status_fails_the_evaluate_phase(tmp_path: Path) -> None
     assert proc.returncode == 2, proc.stderr
     assert document["status"] == "ERROR"
     assert document["limit"] is None
-    assert document["error"] == {"phase": "evaluate"}
+    assert _error(document)["phase"] == "evaluate"
+    assert _error(document)["title"] == "evaluator_invalid_status"
     assert _phase_failed(_facts(dataset, document), "evaluator_invalid_status")
 
 

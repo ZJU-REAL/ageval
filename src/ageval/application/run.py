@@ -234,7 +234,7 @@ async def run_attempt(
         agent_invocations=len(evidence.list_invocations()),
         evidence_path=evidence.locator,
         cleanup_warning=_fact_detail(ctx, "cleanup_warning", "error"),
-        error_phase=_fact_detail(ctx, "phase_failed", "phase"),
+        error=_error_fact(ctx),
         limit=_fact_detail(ctx, "limit_reached", "name"),
         facts=tuple(ctx.facts_as_list()),
     )
@@ -417,6 +417,25 @@ def _optional_dir(task_root: Path, lock: LockedTaskConfig, ref: str, fallback: s
     rel = refs.get(ref) or fallback
     candidate = task_root / str(rel)
     return candidate if candidate.is_dir() else None
+
+
+def _error_fact(ctx: AttemptCtx) -> dict[str, Any] | None:
+    """The phase_failed object, or None when the Attempt was judged."""
+    for fact in reversed(ctx.phase_facts):
+        if fact.name != "phase_failed":
+            continue
+        detail = fact.detail
+        title = detail.get("title")
+        if not isinstance(title, str) or not title:
+            return None
+        phase = detail.get("phase")
+        message = detail.get("message")
+        return {
+            "phase": phase if isinstance(phase, str) else None,
+            "title": title,
+            "message": message if isinstance(message, str) else "",
+        }
+    return None
 
 
 def _fact_detail(ctx: AttemptCtx, name: str, key: str) -> str | None:

@@ -50,6 +50,8 @@ class ResultStore(ResultStoreProtocol):
                         row.agent_label or "",
                         row.model_label or "",
                         row.score,
+                        row.error_json,
+                        row.limit_name,
                     ),
                 )
                 conn.commit()
@@ -305,6 +307,8 @@ class ResultStore(ResultStoreProtocol):
                 score = float(r["score"])
             except (TypeError, ValueError):
                 score = None
+        error_json = str(r["error_json"]) if "error_json" in keys and r["error_json"] else None
+        limit_name = str(r["limit_name"]) if "limit_name" in keys and r["limit_name"] else None
         return AttemptResultRow(
             run_id=r["run_id"],
             dataset_id=r["dataset_id"],
@@ -324,6 +328,8 @@ class ResultStore(ResultStoreProtocol):
             agent_label=agent_label,
             model_label=model_label,
             score=score,
+            error_json=error_json,
+            limit_name=limit_name,
         )
 
     @staticmethod

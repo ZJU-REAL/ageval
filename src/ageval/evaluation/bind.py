@@ -10,6 +10,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from ageval.evaluation.error_record import error_record
+
 STATUS_PASS = "PASS"
 STATUS_FAIL = "FAIL"
 STATUS_ERROR = "ERROR"
@@ -23,7 +25,7 @@ class AttemptResult:
     status: str  # PASS | FAIL | ERROR
     score: float | None
     metrics: Mapping[str, Any]
-    error_phase: str | None
+    error: Mapping[str, Any] | None
     cleanup_warning: str | None
     evidence_path: str
     # Which box ran this Attempt, and which of its capabilities were used.
@@ -42,7 +44,7 @@ class AttemptResult:
             "agent_invocations": self.agent_invocations,
             "capabilities_used": list(self.capabilities_used),
             "cleanup_warning": self.cleanup_warning,
-            "error": {"phase": self.error_phase} if self.error_phase else None,
+            "error": dict(self.error) if self.error else None,
             "evidence_path": self.evidence_path,
             "gold_materialized_at": self.gold_materialized_at,
             "kind": self.kind,
@@ -62,7 +64,7 @@ def bind_result(
     agent_invocations: int = 0,
     evidence_path: str,
     cleanup_warning: str | None = None,
-    error_phase: str | None = None,
+    error: Mapping[str, Any] | None = None,
     limit: str | None = None,
     logs: str | None = None,
     facts: Sequence[Mapping[str, Any]] = (),
@@ -82,18 +84,38 @@ def bind_result(
         "limit": limit,
         "facts": tuple(facts),
     }
-    if error_phase:
+    if error is not None:
         return AttemptResult(
-            status=STATUS_ERROR, score=None, metrics={}, error_phase=error_phase, **common
+            status=STATUS_ERROR,
+            score=None,
+            metrics={},
+            error=_stored_error(error),
+            **common,
         )
     if evaluator_raw is None:
         return AttemptResult(
-            status=STATUS_ERROR, score=None, metrics={}, error_phase="evaluate", **common
+            status=STATUS_ERROR,
+            score=None,
+            metrics={},
+            error=error_record(
+                phase="evaluate",
+                title="evaluator_invalid_status",
+                message="evaluator produced no verdict document",
+            ),
+            **common,
         )
     status = str(evaluator_raw.get("status") or "")
     if status not in _VERDICTS:
         return AttemptResult(
-            status=STATUS_ERROR, score=None, metrics={}, error_phase="evaluate", **common
+            status=STATUS_ERROR,
+            score=None,
+            metrics={},
+            error=error_record(
+                phase="evaluate",
+                title="evaluator_invalid_status",
+                message="evaluator_invalid_status",
+            ),
+            **common,
         )
     # Observational ``checks`` (if any) is not an input to the Attempt verdict.
     score = evaluator_raw.get("score")
@@ -102,6 +124,17 @@ def bind_result(
         status=status,
         score=float(score) if isinstance(score, int | float) else None,
         metrics=raw_metrics if isinstance(raw_metrics, dict) else {},
-        error_phase=None,
+        error=None,
         **common,
     )
+
+
+def _stored_error(error: Mapping[str, Any]) -> dict[str, Any]:
+    phase = error.get("phase")
+    title = error.get("title")
+    message = error.get("message")
+    return {
+        "phase": phase if isinstance(phase, str) else None,
+        "title": str(title or ""),
+        "message": message if isinstance(message, str) else "",
+    }

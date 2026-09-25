@@ -32,7 +32,9 @@ export type Trial = {
   score?: number | null;
   duration?: string | null;
   started?: string | null;
-  error?: string | null;
+  error?: string | { phase?: string | null; title?: string; message?: string } | null;
+  /** Run-phase limits key that was reached, or null. */
+  limit?: string | null;
   run_id?: string | null;
   exit_code?: number | null;
   has_evidence?: boolean;

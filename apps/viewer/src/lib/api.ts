@@ -34,7 +34,8 @@ export type TaskRow = {
   status?: string | null;
   score?: number | null;
   run_id?: string | null;
-  error?: string | null;
+  error?: string | { phase?: string | null; title?: string; message?: string } | null;
+  limit?: string | null;
   exit_code?: number | null;
   agent_label?: string;
   model_label?: string;
@@ -62,7 +63,8 @@ export type Trial = {
   score?: number | null;
   duration?: string | null;
   started?: string | null;
-  error?: string | null;
+  error?: string | { phase?: string | null; title?: string; message?: string } | null;
+  limit?: string | null;
   run_id?: string | null;
   exit_code?: number | null;
   has_evidence?: boolean;

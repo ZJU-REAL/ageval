@@ -402,6 +402,8 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 
 ## Failure and Privacy Boundary
 
+An ERROR writes `error` as `{phase, title, message}`. `title` annotates that ERROR and is not a verdict. PASS and FAIL leave `error` null, including when `limit` names the run-phase key that was reached. Viewer and Hub render `error` and `limit` directly. The bounded traceback stays on the `task_run` fact.
+
 | Failure class | Appearance | Owner |
 | --- | --- | --- |
 | Config / lock failure | Non-zero; no fake PASS | Config / CLI |
@@ -411,11 +413,11 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | Unauthorized effect | Rejected before execute | Capability / box |
 | Agent infrastructure error | ERROR; may have no score | runtime / executor |
 | Low eval score | FAIL + score; Attempt still complete | Evaluation |
-| Run-phase limit (`wall_time_seconds`, `agent_invocations`) | Evaluator PASS or FAIL; `result.json` `limit` is that key | Attempt |
-| Environment phase budget | ERROR, phase `environment`, `environment_timeout`; run does not start | Attempt |
-| Evaluate phase budget | ERROR, phase `evaluate`, `evaluate_timeout` | Attempt |
-| Evaluator status other than PASS / FAIL | ERROR, phase `evaluate`, `evaluator_invalid_status` | Evaluation |
-| Evaluator crash or missing verdict | `error.phase = evaluate` ERROR | Evaluation |
+| Run-phase limit (`wall_time_seconds`, `agent_invocations`) | Evaluator PASS or FAIL; `result.json` `limit` is that key; `error` is null | Attempt |
+| Environment phase budget | ERROR; `error.phase` is `environment`; `error.title` is `environment_timeout`; run does not start | Attempt |
+| Evaluate phase budget | ERROR; `error.phase` is `evaluate`; `error.title` is `evaluate_timeout` | Attempt |
+| Evaluator status other than PASS / FAIL | ERROR; `error.phase` is `evaluate`; `error.title` is `evaluator_invalid_status` | Evaluation |
+| Evaluator crash or missing verdict | ERROR; `error.phase` is `evaluate`; `error.title` is the class name or `ScriptError.title` | Evaluation |
 | Cleanup failure | warning | Box / Attempt |
 | User cancel | Enters cleanup | Attempt / runtime |
 

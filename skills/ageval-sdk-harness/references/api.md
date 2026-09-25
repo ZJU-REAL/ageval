@@ -13,6 +13,7 @@ Package: `ageval_sdk` (see `src/ageval_sdk/`, same distribution as `ageval`).
 | `Tool` / `ToolSet` | local tools |
 | `AllowList` / `CallLimit` | soft local guards |
 | `RunTerminal` | completed / failed — not PASS |
+| `ScriptError` | `ScriptError(title, message)` from `run.py` or `evaluator.py` when the script cannot continue. `title` is a stable label; `message` is this occurrence. An Agent that fell short is `RunTerminal.failed` or evaluator FAIL |
 | `bounded_gather` / `collect_results` / `first_success` | workflow helpers |
 | `evaluation_check` | optional `checks` row for the evaluator return. `evaluation_check(id, *, title, status, score, script, environment, exit_code, stdout, stderr, exec_result)` — `id` required; `exec_result` fills exit/stdout/stderr when those kwargs are omitted |
 

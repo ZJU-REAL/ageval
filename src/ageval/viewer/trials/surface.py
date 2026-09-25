@@ -346,13 +346,18 @@ def _trial_meta_from_evidence(
         score = result.get("score")
     if score is None:
         score = summary.get("score")
-    error = suite_row.get("error") or result.get("error") or summary.get("error")
-    # SPA must receive a string; structured errors (e.g. {phase: ...}) crash React.
-    if error is not None and not isinstance(error, str):
-        try:
-            error = json.dumps(error, ensure_ascii=False, sort_keys=True)
-        except (TypeError, ValueError):
-            error = str(error)
+    raw_result = summary.get("result")
+    nested = raw_result if isinstance(raw_result, dict) else {}
+    error = (
+        suite_row.get("error") or result.get("error") or nested.get("error") or summary.get("error")
+    )
+    limit = suite_row.get("limit")
+    if limit is None:
+        limit = result.get("limit")
+    if limit is None:
+        limit = nested.get("limit")
+    if limit is None:
+        limit = summary.get("limit")
     locked_task = lock.get("task_id") if isinstance(lock.get("task_id"), str) else None
     surface = _agent_surface(evidence, lock=lock)
     did, ver = dataset_identity(lock, location=str(evidence / "lock.json"))
@@ -373,6 +378,7 @@ def _trial_meta_from_evidence(
         "score": score,
         "reward": score,
         "error": error,
+        "limit": limit,
         "exit_code": suite_row.get("exit_code") or result.get("exit_code"),
         "duration": duration,
         "started": started,
@@ -381,7 +387,11 @@ def _trial_meta_from_evidence(
         "evidence_relpath": None,  # filled by caller
         "has_evidence": True,
         "available_tabs": _available_tabs(evidence),
-        "agent_invocations": result.get("agent_invocations") or summary.get("agent_invocations"),
+        "agent_invocations": (
+            result["agent_invocations"]
+            if "agent_invocations" in result
+            else summary.get("agent_invocations")
+        ),
         "harness_kind": result.get("harness_kind") or summary.get("harness_kind"),
         "framework": surface.get("framework"),
         "environment": _environment_kind(lock, result),

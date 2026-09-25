@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ageval.evaluation.error_record import RecordedError, message_from_envelope
+
 
 async def evaluate_in_box(ctx: Any) -> dict[str, Any]:
     """Launch the evaluator worker and return its verdict document."""
@@ -21,9 +23,8 @@ async def evaluate_in_box(ctx: Any) -> dict[str, Any]:
         {"exit_code": envelope.get("exit_code"), "parent_worker": True},
     )
     if envelope.get("ok") is not True:
-        error = str(envelope.get("error") or "evaluator_failed")
-        detail = str(envelope.get("message") or envelope.get("stderr") or "")[-500:]
-        raise RuntimeError(f"{error}: {detail}" if detail else error)
+        title = str(envelope.get("error") or "evaluator_failed")
+        raise RecordedError(title, message_from_envelope(envelope))
     verdict = envelope.get("verdict")
     if not isinstance(verdict, dict):
         raise RuntimeError("evaluator produced no verdict document")

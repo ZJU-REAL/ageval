@@ -264,6 +264,8 @@ class ResultsCommands:
                     agent_label=job.get("agent_label") or None,
                     model_label=job.get("model_label") or None,
                     score=job.get("score"),
+                    error=meta.get("error"),
+                    limit=meta.get("limit") if isinstance(meta.get("limit"), str) else None,
                 )
             except RegistryError as exc:
                 if allow_existing and (

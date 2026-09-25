@@ -88,7 +88,7 @@ public 只许出现「public」或「both」行的规范名。internal 词出现
 | --- | --- |
 | **PASS** | 只来自 `evaluator.py` 绑定的 `status: PASS`。`RunTerminal.completed`、轨迹、ACP `end_turn`、`limit` 都不是 PASS |
 | **FAIL** | 只来自 `evaluator.py` 绑定的 `status: FAIL`（评测低分）。run 阶段触到的 limit 仍由 evaluator 打分 |
-| **ERROR** | 环境起不来、environment / evaluate 时钟到期、evaluator 崩或返回的 status 不是 PASS / FAIL、配置。`result.json` 的 `limit` 是 run 阶段触到的 limits 键，没有则为 `null` |
+| **ERROR** | 环境起不来、environment / evaluate 时钟到期、evaluator 崩或返回的 status 不是 PASS / FAIL、配置。`error` 是 `{phase, title, message}`；`title` 标注这次 ERROR，不是裁决。PASS / FAIL 时 `error` 为 `null`。`limit` 是 run 阶段触到的 limits 键，没有则为 `null` |
 
 ## format
 

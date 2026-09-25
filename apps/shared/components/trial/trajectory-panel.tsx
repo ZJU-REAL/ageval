@@ -614,11 +614,7 @@ function StepItem({
             {s.ok === false ? <span className="text-error">not ok</span> : null}
             {(() => {
               const elapsed = stepElapsedMs(s);
-              return elapsed != null ? (
-                <HoverTip content="duration (observational)">
-                  <span>{formatElapsedMs(elapsed)}</span>
-                </HoverTip>
-              ) : null;
+              return elapsed != null ? <span>{formatElapsedMs(elapsed)}</span> : null;
             })()}
           </div>
           {body && overflows ? (

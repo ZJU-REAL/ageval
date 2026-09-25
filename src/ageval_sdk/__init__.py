@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ageval_sdk.agent import Agent, AgentSession
 from ageval_sdk.context import RunContext, RunParameterView, RunScope
+from ageval_sdk.errors import ScriptError
 from ageval_sdk.evaluation import evaluation_check
 from ageval_sdk.terminal import RunTerminal
 from ageval_sdk.tool import AllowList, CallLimit, Tool, ToolSet
@@ -38,6 +39,7 @@ __all__ = [
     "RunParameterView",
     "RunTerminal",
     "RunScope",
+    "ScriptError",
     "Tool",
     "ToolSet",
     "bounded_gather",

@@ -66,6 +66,7 @@ type-scale:
   display-sm: { fontSize: 20px, fontWeight: 600, lineHeight: 28px, letterSpacing: -0.6px }
   body-sm: { fontSize: 14px, fontWeight: 400, lineHeight: 20px }
   body-sm-strong: { fontSize: 14px, fontWeight: 500, lineHeight: 20px }
+  figure: { fontSize: 16px, fontWeight: 400, lineHeight: 20px }
   caption: { fontSize: 12px, fontWeight: 400, lineHeight: 16px }
   code: { fontSize: 13px, fontWeight: 400, lineHeight: 20px, fontFamily: mono }
 rounded:

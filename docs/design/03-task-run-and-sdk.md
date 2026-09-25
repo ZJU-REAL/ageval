@@ -54,6 +54,7 @@ from ageval_sdk import (
 | --- | --- |
 | `RunContext` | params、workspace、artifact_dir、agent、publish |
 | `RunTerminal` | `completed` / `failed`；不是 PASS |
+| `ScriptError` | `run.py` 或 `evaluator.py` 自己无法继续时抛出。`title` 是稳定标签，`message` 是这一次的说明。Agent 没做好仍返回 `RunTerminal.failed`，或由 evaluator 返回 FAIL |
 | `Agent.session(profile_id)` | 经 unix socket 调 parent Agent Service |
 | `ToolSet` / `CallLimit` | 题包软限，不替代 Runtime limits |
 | `evaluation_check` | 组 evaluator 返回的可选 `checks` 行；不是 PASS |

@@ -34,7 +34,7 @@ The look is already chosen. Do not run a greenfield identity exercise. Skills li
 
 - Sentence case. `PageHead` is h1 + optional sub + hairline. No numbered kicker. No `uppercase tracking` eyebrow as section rhythm.
 - Sans for readable row text. Mono only for commands, digests, and `tabular-nums`.
-- Operator-facing controls and table column labels use **body-sm / `text-sm` (14px)**. Caption is timestamps and mute meta, not column names. Do not invent a third, smaller clickable size.
+- Operator-facing controls and table column labels use **body-sm / `text-sm` (14px)**. Caption is timestamps and mute meta, not column names. Do not invent a third, smaller clickable size. On the trial page, the outcome values and the Tokens / Timing totals use `figure` (16px). Tables, checks, and step elapsed times do not.
 - One radius scale (8 / 10 / 14). Search is stadium. One pop shadow (`--viewer-shadow-pop`). No second liquid shadow token. No new easing.
 - Sliding tabs use `liquid-gooey` Move (`UnderlineTabs` / `PillTabs`). Do not draw an IKB underline.
 - Semantic tokens only (`text-ink`, `border-hairline`). No `slate-` / `zinc-` / `gray-` / raw hex in app code.

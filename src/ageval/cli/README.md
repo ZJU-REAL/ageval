@@ -320,7 +320,7 @@ After `ageval run <dataset>` (full suite or Always-k), summary lives at
 | `metrics.pass_at_k["<k>"]` | `{ value, n_tasks, incomplete_tasks }` (k as string key) |
 | `metrics.pass_power_k["<k>"]` | same |
 | `metrics.n_attempts` / `k_values` / `per_task` | job sample budget, k list, per-task n/c audit |
-| `task_refs[]` | `task_id`, `status`, `score`, `run_id`; multi-attempt may add `n`, `c`, `attempt_run_ids`; replaced slots add `previous[]` |
+| `task_refs[]` | `task_id`, `status`, `score`, `run_id`, `error`, `limit`; `error` is `{phase, title, message}` on ERROR and null on PASS / FAIL; `limit` is the run-phase limits key or null; multi-attempt may add `n`, `c`, `attempt_run_ids`; replaced slots add `previous[]` |
 
 `upload-suite` **recomputes** missing k maps locally from `attempts[]` or task
 `n`/`c` before POST. Registry stores the full `metrics` blob (no strip).

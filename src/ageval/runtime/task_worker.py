@@ -53,6 +53,15 @@ class _Frames:
         return buf
 
 
+def failure_envelope(exc: BaseException) -> dict[str, str]:
+    """Title and message the parent stores. A task group is not unwrapped."""
+    from ageval_sdk.errors import ScriptError
+
+    if isinstance(exc, ScriptError):
+        return {"error": exc.title, "message": exc.message}
+    return {"error": type(exc).__name__, "message": str(exc)}
+
+
 def _claim_stdout() -> _Frames:
     """Take fd 1 for framing and give task code stderr instead.
 
@@ -150,8 +159,7 @@ async def _run(frames: _Frames) -> int:
         frames.send(
             {
                 "ok": False,
-                "error": type(exc).__name__,
-                "message": str(exc),
+                **failure_envelope(exc),
                 "attempt_id": attempt_id,
                 "traceback": traceback.format_exc(limit=5),
             }

@@ -89,12 +89,15 @@ def _attempts_for_task(summary: dict[str, Any], task_id: str) -> list[dict[str, 
             continue
         ids = ref.get("attempt_run_ids")
         if isinstance(ids, list) and ids:
+            pointed = str(ref.get("run_id") or "").strip()
             return [
                 {
                     "task_id": task_id,
                     "run_id": str(rid).strip(),
                     "status": ref.get("status"),
                     "score": ref.get("score"),
+                    "error": ref.get("error") if str(rid).strip() == pointed else None,
+                    "limit": ref.get("limit") if str(rid).strip() == pointed else None,
                 }
                 for rid in ids
                 if rid is not None and str(rid).strip()
@@ -107,6 +110,8 @@ def _attempts_for_task(summary: dict[str, Any], task_id: str) -> list[dict[str, 
                     "run_id": rid,
                     "status": ref.get("status"),
                     "score": ref.get("score"),
+                    "error": ref.get("error"),
+                    "limit": ref.get("limit"),
                 }
             ]
     return []
@@ -201,6 +206,7 @@ def _planned_pending_rows(
                 "previous": [],
                 "attempts": [],
                 "error": None,
+                "limit": None,
                 "exit_code": None,
                 "n": None,
                 "c": None,
@@ -642,6 +648,8 @@ def _single_job_row(
         "status": status.upper() if status else None,
         "score": score,
         "run_id": run_id,
+        "error": result.get("error"),
+        "limit": result.get("limit"),
         "note": "single-task attempt; per-task evaluator verdicts only",
     }
 
@@ -762,6 +770,8 @@ def get_job(dataset_root: Path | str, job_id: str) -> dict[str, Any]:
         full = by_id.get(tid, {})
         status = str(full.get("status") or ref.get("status") or "")
         score = full.get("score") if full.get("score") is not None else ref.get("score")
+        error = full.get("error") if full else ref.get("error")
+        limit = full.get("limit") if full else ref.get("limit")
         attempt_rows = _attempts_for_task(summary, tid)
         if not attempt_rows:
             rid = full.get("run_id") or ref.get("run_id")
@@ -772,7 +782,8 @@ def get_job(dataset_root: Path | str, job_id: str) -> dict[str, Any]:
                         "run_id": rid,
                         "status": status,
                         "score": score,
-                        "error": full.get("error"),
+                        "error": error,
+                        "limit": limit,
                         "exit_code": full.get("exit_code"),
                         "duration": full.get("duration"),
                     }
@@ -797,7 +808,8 @@ def get_job(dataset_root: Path | str, job_id: str) -> dict[str, Any]:
                 "attempt_run_ids": attempt_run_ids,
                 "previous": previous,
                 "attempts": attempt_rows,
-                "error": full.get("error"),
+                "error": error,
+                "limit": limit,
                 "exit_code": full.get("exit_code"),
                 "agent_label": job.get("agent_label") or "",
                 "model_label": job.get("model_label") or "",
@@ -847,6 +859,7 @@ def _get_in_progress_suite_job(
                 "attempt_run_ids": [],
                 "attempts": [],
                 "error": None,
+                "limit": None,
                 "n": 1,
             }
         )
@@ -890,12 +903,15 @@ def _get_single_job(root: Path, job_id: str) -> dict[str, Any]:
                     "run_id": job_id,
                     "status": job.get("status"),
                     "score": job.get("score"),
+                    "error": job.get("error"),
+                    "limit": job.get("limit"),
                     "exit_code": job.get("exit_code"),
                     "duration": job.get("duration"),
                     "started": job.get("started"),
                 }
             ],
-            "error": None,
+            "error": job.get("error"),
+            "limit": job.get("limit"),
             "exit_code": job.get("exit_code"),
             "agent_label": job.get("agent_label") or "",
             "model_label": job.get("model_label") or "",
@@ -947,6 +963,7 @@ def get_job_task(dataset_root: Path | str, job_id: str, task_id: str) -> dict[st
                 "status": match.get("status"),
                 "score": match.get("score"),
                 "error": match.get("error"),
+                "limit": match.get("limit"),
                 "exit_code": match.get("exit_code"),
                 "duration": match.get("duration"),
             }
@@ -970,7 +987,8 @@ def get_job_task(dataset_root: Path | str, job_id: str, task_id: str) -> dict[st
                 "score": score,
                 "duration": row.get("duration") or match.get("duration"),
                 "started": row.get("started") or started,
-                "error": row.get("error") if row.get("error") is not None else match.get("error"),
+                "error": row["error"] if "error" in row else match.get("error"),
+                "limit": row["limit"] if "limit" in row else match.get("limit"),
                 "run_id": rid,
                 "exit_code": row.get("exit_code")
                 if row.get("exit_code") is not None

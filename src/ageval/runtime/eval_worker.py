@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ageval.runtime.task_worker import _claim_stdout, _extend_import_path, _Frames
+from ageval.runtime.task_worker import _claim_stdout, _extend_import_path, _Frames, failure_envelope
 
 RESULT_NAME = "evaluation.json"
 
@@ -166,8 +166,7 @@ def _run(frames: _Frames) -> int:
         frames.send(
             {
                 "ok": False,
-                "error": type(exc).__name__,
-                "message": str(exc),
+                **failure_envelope(exc),
                 "attempt_id": attempt_id,
                 "traceback": traceback.format_exc(limit=5),
             }

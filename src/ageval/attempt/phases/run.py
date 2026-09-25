@@ -13,6 +13,7 @@ from typing import Any
 from ageval.attempt.artifact_harvest import harvest_workspace_artifacts
 from ageval.attempt.ctx import AttemptCtx
 from ageval.attempt.emit import emit
+from ageval.evaluation.error_record import RecordedError, message_from_envelope
 from ageval.plugins.slots import AFTER_RUN, BEFORE_RUN
 
 PHASE = "run"
@@ -41,7 +42,8 @@ async def run(ctx: AttemptCtx) -> None:
             ctx.note_limit_reached("wall_time_seconds")
         ctx.record_fact("task_run", outcome)
         if outcome.get("ok") is not True and ctx.limit_name() is None:
-            raise RuntimeError(str(outcome.get("error") or "task_run_failed"))
+            title = str(outcome.get("error") or "task_run_failed")
+            raise RecordedError(title, message_from_envelope(outcome))
     finally:
         if ctx.agent_service is not None:
             await _seal_run_agent_service(ctx)

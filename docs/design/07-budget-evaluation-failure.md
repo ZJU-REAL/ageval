@@ -26,6 +26,26 @@ run 相位强制一只 limit 时记一条 `limit_reached` 事实 `{"name": "<lim
 
 `bind_result` 只有两个来源：evaluator 的 PASS / FAIL，以及 `phase_failed` 的 ERROR。引擎不写 `metrics.reason`、`metrics.timeout_phase`、`metrics.error`。`metrics` 是 evaluator 的。executor / host 的超时字符串不进入裁决。没有 `limit_reached` 时，`run.py` 或 `evaluator.py` 抛出的异常是 ERROR，与文本无关。
 
+ERROR 的 `result.json` `error` 是一个对象。PASS / FAIL 时 `error` 为 `null`，包括已经写下 `limit` 的那次。`error.title` 标注这次 ERROR，不是裁决。Viewer 和 Hub 直接渲染 `error` 与 `limit`。
+
+| 字段 | 含义 |
+| --- | --- |
+| `phase` | `run_attempt` 记下的失败相位：`environment`、`run`、`evaluate`、`record`。相位开始前的失败（lock、preflight）为 `null` |
+| `title` | 两边页面显示、并用来筛选的标签 |
+| `message` | 写在 title 旁边的说明 |
+
+`title` 按这个顺序取：
+
+- `run.py` 或 `evaluator.py` 抛出的 `ScriptError`：构造时的 `title`。`message` 是构造时的 `message`。同一个类，相位由抓住异常的 worker 决定。
+- 脚本里逃出的其他异常：类名（`ValueError`），`message` 为 `str(exc)`。任务组里的 `ScriptError` 以 `ExceptionGroup` 到达 worker，worker 不拆开，title 为 `ExceptionGroup`。
+- 引擎 ERROR：已经产出的稳定 token。worker envelope 的 `error`（`task_worker_no_result`、`task_worker_unreadable_result`），`EnvironmentFailure.kind`（`environment_setup_failed`），`environment_timeout`、`evaluate_timeout`、`evaluator_invalid_status`，以及 `ConfigError`。没有这种 token 时用异常类名。`message` 是已记下的文字：envelope 的 `message`，否则有界的 stderr 尾部。
+
+traceback 留在 worker envelope 上，记在 `task_run` 事实里，不进 `result.json` 的 `error`。
+
+suite 的 task 行和 attempt 行在 status 为 ERROR 时带同一个对象；`task_refs[]` 带 `run_id` 指向的那次 attempt 的 `error` 和 `limit`。`suite_cancelled` 仍是字符串。字符串 `error`，或没有 `title` 的对象，页面按原文显示。
+
+`RunTerminal.failed` 和 evaluator 返回的 FAIL 不产生这个对象。Cleanup 失败和 `record_warning` 仍是 warning，不改已 bind 的分。
+
 完整失败归属表：[ARCHITECTURE.md](../../ARCHITECTURE.md) § Failure and Privacy Boundary。
 
 | 退出码 | 含义 |
@@ -41,10 +61,10 @@ run 相位强制一只 limit 时记一条 `limit_reached` 事实 `{"name": "<lim
 | 缺钥 | preflight 一次失败，`started: false` | 环境 / executor |
 | 评测低分 | FAIL + score | Evaluation |
 | run 相位 limit（wall、invoke 额度） | evaluator 的 PASS / FAIL；`result.json` 的 `limit` 为该键 | Attempt |
-| environment 时钟到期 | ERROR，phase `environment`，`environment_timeout` | Attempt |
-| evaluate 时钟到期 | ERROR，phase `evaluate`，`evaluate_timeout` | Attempt |
-| evaluator 的 status 不是 PASS / FAIL | ERROR，phase `evaluate`，`evaluator_invalid_status` | Evaluation |
-| Evaluator 崩、缺 verdict | `error.phase = evaluate` ERROR | Evaluation |
+| environment 时钟到期 | ERROR，`error.phase` 为 `environment`，`error.title` 为 `environment_timeout` | Attempt |
+| evaluate 时钟到期 | ERROR，`error.phase` 为 `evaluate`，`error.title` 为 `evaluate_timeout` | Attempt |
+| evaluator 的 status 不是 PASS / FAIL | ERROR，`error.phase` 为 `evaluate`，`error.title` 为 `evaluator_invalid_status` | Evaluation |
+| Evaluator 崩、缺 verdict | ERROR，`error.phase` 为 `evaluate`，`error.title` 为类名或 `ScriptError.title` | Evaluation |
 | Cleanup 失败 | warning | 不改已 bind 的分 |
 
 相位失败记在该 phase。未知键：拒绝，一条消息。不要把 skip 写成通过。

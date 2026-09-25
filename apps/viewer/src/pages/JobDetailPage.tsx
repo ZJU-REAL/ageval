@@ -34,7 +34,9 @@ import { AxisLabel } from "@ageval/shared/components/axis-label";
 import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { ModelLabel } from "@ageval/shared/components/model-label";
 import { useDocumentTitle } from "@/lib/document-title";
-import { formatError, formatScore } from "@ageval/shared/lib/utils";
+import { ReasonSelect } from "@ageval/shared/components/reason-select";
+import { distinctReasons, reasonText } from "@ageval/shared/lib/reason";
+import { formatScore } from "@ageval/shared/lib/utils";
 
 type SortKey = "task_id" | "agent_label" | "model_label" | "score" | "status";
 
@@ -49,6 +51,7 @@ export function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<string | null>("task_id");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [reason, setReason] = useState("all");
   const [overlayTree, setOverlayTree] = useState<TreeEntry[]>([]);
   const [overlayPath, setOverlayPath] = useState<string | null>(null);
   const [overlayContent, setOverlayContent] = useState<string | null>(null);
@@ -137,11 +140,14 @@ export function JobDetailPage() {
     };
   }, [datasetKey, jobId, overlayPath]);
 
+  const reasons = useMemo(() => distinctReasons(tasks, reasonText), [tasks]);
   const rows = useMemo(() => {
-    if (!sortKey || !sortDir) return tasks;
+    const filtered =
+      reason === "all" ? tasks : tasks.filter((row) => reasonText(row) === reason);
+    if (!sortKey || !sortDir) return filtered;
     const key = sortKey as SortKey;
-    return [...tasks].sort((a, b) => compareValues(a[key], b[key], sortDir));
-  }, [tasks, sortKey, sortDir]);
+    return [...filtered].sort((a, b) => compareValues(a[key], b[key], sortDir));
+  }, [tasks, reason, sortKey, sortDir]);
 
   function onSort(key: string) {
     const next = nextSort(sortKey, sortDir, key);
@@ -174,7 +180,8 @@ export function JobDetailPage() {
           ]}
         />
 
-        <div>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
           <h1 className="text-2xl font-semibold tracking-tight text-ink">{jobId}</h1>
           {job && (
             <p className="text-xs text-mute mt-1 flex flex-wrap items-center gap-x-1.5">
@@ -198,6 +205,8 @@ export function JobDetailPage() {
               ) : null}
             </p>
           )}
+          </div>
+          <ReasonSelect value={reason} reasons={reasons} onChange={setReason} />
         </div>
 
         {loading ? (
@@ -215,7 +224,7 @@ export function JobDetailPage() {
                 <TableHead>Trials</TableHead>
                 <TableHead>Errors</TableHead>
                 <TableHead>Avg Duration</TableHead>
-                <TableHead>{head("status", "Exception")}</TableHead>
+                <TableHead>Reason</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -234,8 +243,7 @@ export function JobDetailPage() {
                   // attempt yet: placeholder rows, muted, navigate nowhere.
                   const isPlaceholder =
                     statusUpper === "PENDING" || statusUpper === "RUNNING";
-                  const errText = formatError(t.error);
-                  const isErr = statusUpper === "ERROR" || Boolean(errText);
+                  const isErr = statusUpper === "ERROR" || Boolean(t.error);
                   const href = taskHref(datasetKey, jobId, t);
                   const trialCount = t.n ?? taskRunIds(t).length;
                   const navProps = isPlaceholder
@@ -298,21 +306,18 @@ export function JobDetailPage() {
                       </TableCell>
                       <TableCell
                         className={
-                          !isPlaceholder && (isErr || statusUpper === "FAIL")
-                            ? "text-error"
-                            : "text-mute"
+                          isPlaceholder
+                            ? "text-mute"
+                            : reasonText(t) && statusUpper === "ERROR"
+                              ? "text-error"
+                              : "text-body"
                         }
                       >
                         {isPlaceholder
                           ? statusUpper === "RUNNING"
                             ? "RUNNING"
                             : "PENDING"
-                          : errText ||
-                            (statusUpper === "ERROR"
-                              ? "ERROR"
-                              : statusUpper === "FAIL"
-                                ? "FAIL"
-                                : "-")}
+                          : reasonText(t) || "-"}
                       </TableCell>
                     </TableRow>
                   );

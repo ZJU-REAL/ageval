@@ -62,8 +62,9 @@ INSERT_ATTEMPT = """
 INSERT INTO attempt_results(
     run_id, dataset_id, dataset_version, task_id, lock_digest, status,
     visibility, blob_digest, size, created_at, uploaded_by,
-    suite_run_id, environment, agent_label, model_label, score
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    suite_run_id, environment, agent_label, model_label, score,
+    error_json, limit_name
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 SELECT_ATTEMPT = "SELECT * FROM attempt_results WHERE run_id=?"
@@ -487,6 +488,9 @@ SCHEMA_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("attempt_results", "agent_label", "TEXT NOT NULL DEFAULT ''"),
     ("attempt_results", "model_label", "TEXT NOT NULL DEFAULT ''"),
     ("attempt_results", "score", "REAL"),
+    # API names are error and limit. `limit` is reserved in Postgres.
+    ("attempt_results", "error_json", "TEXT"),
+    ("attempt_results", "limit_name", "TEXT"),
     ("attempt_results", "dataset_version", "TEXT NOT NULL DEFAULT ''"),
     ("suite_results", "uploaded_by", "TEXT NOT NULL DEFAULT ''"),
     ("suite_results", "complete", "INTEGER NOT NULL DEFAULT 0"),
