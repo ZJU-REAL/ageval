@@ -5,10 +5,13 @@ export function AxisLabel({
   value,
   className,
   empty = "-",
+  clip = true,
 }: {
   value?: string | null;
   className?: string;
   empty?: string;
+  /** False keeps the full label so a wide table can scroll instead of ellipsizing. */
+  clip?: boolean;
 }) {
   const { text, title } = formatAxisLabel(value);
   const shown = text === "-" ? empty : text;
@@ -23,5 +26,5 @@ export function AxisLabel({
   if (!value?.trim() || shown === empty) {
     return <span className={className}>{shown}</span>;
   }
-  return <TruncateTip text={value} className={className} />;
+  return <TruncateTip text={value} className={className} clip={clip} />;
 }

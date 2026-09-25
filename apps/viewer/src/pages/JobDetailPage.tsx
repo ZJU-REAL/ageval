@@ -30,8 +30,8 @@ import {
   type TreeEntry,
 } from "@/lib/api";
 import { jobsHome, taskHref, taskRunIds } from "@/lib/routes";
-import { AxisLabel } from "@ageval/shared/components/axis-label";
 import { TruncateTip } from "@ageval/shared/components/hover-tip";
+import { HarnessLabel } from "@ageval/shared/components/harness-label";
 import { ModelLabel } from "@ageval/shared/components/model-label";
 import { useDocumentTitle } from "@/lib/document-title";
 import { ReasonSelect } from "@ageval/shared/components/reason-select";
@@ -212,25 +212,33 @@ export function JobDetailPage() {
         {loading ? (
           <LoadingState label="Loading tasks" />
         ) : (
-        <div className="blob-panel overflow-hidden">
-          <Table>
+        <div className="blob-panel overflow-x-auto">
+          <Table
+            wrapClassName="overflow-visible"
+            className="w-max min-w-full table-fixed border-separate border-spacing-0"
+          >
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead>{head("task_id", "Task")}</TableHead>
-                <TableHead>{head("agent_label", "Harness")}</TableHead>
-                <TableHead>{head("model_label", "Model")}</TableHead>
-                <TableHead>Dataset</TableHead>
-                <TableHead>{head("score", "Avg Reward")}</TableHead>
-                <TableHead>Trials</TableHead>
-                <TableHead>Errors</TableHead>
-                <TableHead>Avg Duration</TableHead>
-                <TableHead>Reason</TableHead>
+                <TableHead className="w-[16rem] max-w-[16rem]">
+                  {head("task_id", "Task")}
+                </TableHead>
+                <TableHead className="w-[12rem] max-w-[12rem]">
+                  {head("agent_label", "Harness")}
+                </TableHead>
+                <TableHead className="w-[16rem] max-w-[16rem]">
+                  {head("model_label", "Model")}
+                </TableHead>
+                <TableHead className="w-[8rem]">{head("score", "Avg Reward")}</TableHead>
+                <TableHead className="w-[6rem]">Trials</TableHead>
+                <TableHead className="w-[6rem]">Errors</TableHead>
+                <TableHead className="w-[8rem]">Avg Duration</TableHead>
+                <TableHead className="w-[16rem] max-w-[16rem]">Reason</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {error && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-error py-10">
+                  <TableCell colSpan={8} className="text-center text-error py-10">
                     {error}
                   </TableCell>
                 </TableRow>
@@ -271,26 +279,27 @@ export function JobDetailPage() {
                       aria-disabled={isPlaceholder || undefined}
                       {...navProps}
                     >
-                      <TableCell className="font-medium max-w-[12rem]">
-                        <TruncateTip text={t.task_id} copyable />
-                      </TableCell>
-                      <TableCell className="max-w-[14rem]">
-                        <AxisLabel
-                          value={isPlaceholder ? null : t.agent_label || job?.agent_label}
-                          className="block truncate"
+                      <TableCell className="max-w-[16rem] font-medium">
+                        <TruncateTip
+                          className="block w-full max-w-[16rem]"
+                          text={t.task_id}
+                          copyable
                         />
                       </TableCell>
-                      <TableCell className="max-w-[18rem]">
+                      <TableCell className="max-w-[12rem]">
+                        <HarnessLabel
+                          className="max-w-full"
+                          value={isPlaceholder ? null : t.agent_label || job?.agent_label}
+                        />
+                      </TableCell>
+                      <TableCell className="max-w-[16rem]">
                         <ModelLabel
+                          className="max-w-full"
                           value={isPlaceholder ? null : t.model_label || job?.model_label}
                           effort={
                             isPlaceholder ? null : t.reasoning_effort || job?.reasoning_effort
                           }
-                          className="truncate"
                         />
-                      </TableCell>
-                      <TableCell className="text-body">
-                        {t.dataset || job?.dataset_ref || "-"}
                       </TableCell>
                       <TableCell className="tabular">
                         {isPlaceholder ? "-" : formatScore(t.score)}
@@ -307,17 +316,22 @@ export function JobDetailPage() {
                       <TableCell
                         className={
                           isPlaceholder
-                            ? "text-mute"
+                            ? "max-w-[16rem] text-mute"
                             : reasonText(t) && statusUpper === "ERROR"
-                              ? "text-error"
-                              : "text-body"
+                              ? "max-w-[16rem] text-error"
+                              : "max-w-[16rem] text-body"
                         }
                       >
-                        {isPlaceholder
-                          ? statusUpper === "RUNNING"
-                            ? "RUNNING"
-                            : "PENDING"
-                          : reasonText(t) || "-"}
+                        <TruncateTip
+                          className="block w-full max-w-[16rem]"
+                          text={
+                            isPlaceholder
+                              ? statusUpper === "RUNNING"
+                                ? "RUNNING"
+                                : "PENDING"
+                              : reasonText(t) || "-"
+                          }
+                        />
                       </TableCell>
                     </TableRow>
                   );

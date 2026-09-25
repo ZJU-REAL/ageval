@@ -68,6 +68,7 @@ export function DisabledTip({
 
 /** Visible cap vs unwrapped width on the same node (no ellipsis scrollWidth, no body probe). */
 function isOverflowTruncated(el: HTMLElement): boolean {
+  if (el.scrollWidth > el.clientWidth + 1) return true;
   const parent = el.parentElement;
   const cap = parent
     ? Math.min(
@@ -96,11 +97,14 @@ export function TruncateTip({
   className,
   copyable = false,
   copyValue,
+  clip = true,
 }: {
   text?: string | null;
   className?: string;
   copyable?: boolean;
   copyValue?: string | null;
+  /** False shows the full string and lets the table scroll instead of ellipsizing. */
+  clip?: boolean;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [truncated, setTruncated] = useState(false);
@@ -144,14 +148,22 @@ export function TruncateTip({
   const textSpan = (
     <span
       ref={ref}
-      className={cn(className, "min-w-0 flex-1 truncate align-bottom")}
+      className={cn(
+        className,
+        clip ? "min-w-0 flex-1 truncate align-bottom" : "whitespace-nowrap",
+      )}
     >
       {label}
     </span>
   );
 
   return (
-    <span className="group/copy inline-flex min-w-0 max-w-full items-center">
+    <span
+      className={cn(
+        "group/copy inline-flex items-center",
+        clip && "min-w-0 max-w-full",
+      )}
+    >
       <HoverTip content={truncated && shown ? shown : undefined}>{textSpan}</HoverTip>
       {canCopy ? (
         <Button

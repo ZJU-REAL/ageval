@@ -9,7 +9,7 @@ import { JobCheck } from "@/components/job-check";
 import { JobNoteDialog } from "@/components/job-note-dialog";
 import { JobRowActions } from "@/components/job-row-actions";
 import { Shell } from "@/components/layout";
-import { STICKY_HEAD, StickyChrome } from "@/components/sticky-chrome";
+import { StickyChrome } from "@/components/sticky-chrome";
 import { useDocumentTitle } from "@/lib/document-title";
 import {
   compareValues,
@@ -48,7 +48,7 @@ import { useReadySession } from "@/lib/session";
 import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { HarnessLabel } from "@ageval/shared/components/harness-label";
 import { ModelLabel } from "@ageval/shared/components/model-label";
-import { ScoreRing } from "@ageval/shared/components/score-ring";
+import { ScoreBar, ScoreRing } from "@ageval/shared/components/score-ring";
 import { formatDate, formatModelLabel, formatScore, formatTrials } from "@ageval/shared/lib/utils";
 
 type SortKey =
@@ -321,7 +321,7 @@ export function JobsPage() {
 
   return (
     <Shell>
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
         <StickyChrome>
         <div className="flex h-10 items-center gap-2">
           <div className="relative h-10 min-w-0 w-full max-w-sm">
@@ -492,9 +492,12 @@ export function JobsPage() {
             }
           />
         ) : (
-          <div className="blob-panel">
-          <Table wrapClassName="overflow-visible" className="border-separate border-spacing-0">
-            <TableHeader className={STICKY_HEAD}>
+          <div className="blob-panel min-h-0 flex-1 overflow-auto">
+          <Table
+            wrapClassName="overflow-visible"
+            className="w-max min-w-full table-fixed border-separate border-spacing-0"
+          >
+            <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-canvas-soft">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-8 pr-0">
                   <JobCheck
@@ -504,23 +507,28 @@ export function JobsPage() {
                     onChange={toggleAllVisible}
                   />
                 </TableHead>
-                <TableHead>{head("job_name", "Job Name")}</TableHead>
-                <TableHead>Dataset</TableHead>
-                <TableHead>{head("agent_label", "Harness")}</TableHead>
-                <TableHead>{head("model_label", "Models")}</TableHead>
-                <TableHead>{head("pass_rate", "Pass rate")}</TableHead>
-                <TableHead>{head("result", "Mean")}</TableHead>
+                <TableHead className="w-[16rem] max-w-[16rem]">
+                  {head("job_name", "Job Name")}
+                </TableHead>
+                <TableHead className="w-[12rem] max-w-[12rem]">
+                  {head("agent_label", "Harness")}
+                </TableHead>
+                <TableHead className="w-[16rem] max-w-[16rem]">
+                  {head("model_label", "Models")}
+                </TableHead>
+                <TableHead className="w-[8rem]">{head("pass_rate", "Pass rate")}</TableHead>
+                <TableHead className="w-[10rem]">{head("result", "Mean score")}</TableHead>
                 {columns.includes("environment") ? (
-                  <TableHead>{head("environment", "Environment")}</TableHead>
+                  <TableHead className="w-[8rem]">{head("environment", "Environment")}</TableHead>
                 ) : null}
                 {columns.includes("started") ? (
-                  <TableHead>{head("started", "Started")}</TableHead>
+                  <TableHead className="w-[11rem]">{head("started", "Started")}</TableHead>
                 ) : null}
                 {columns.includes("duration") ? (
-                  <TableHead>Duration</TableHead>
+                  <TableHead className="w-[7rem]">Duration</TableHead>
                 ) : null}
                 {columns.includes("trials_total") ? (
-                  <TableHead>{head("trials_total", "Trials")}</TableHead>
+                  <TableHead className="w-[6rem]">{head("trials_total", "Trials")}</TableHead>
                 ) : null}
                 <TableHead className="w-7 pl-0 pr-2">
                   <span className="sr-only">Actions</span>
@@ -560,23 +568,21 @@ export function JobsPage() {
                         onChange={(next) => toggleOne(job.job_id, next)}
                       />
                     </TableCell>
-                    <TableCell className="font-medium max-w-[16rem]">
-                      <TruncateTip text={jobDisplayName(job)} copyable />
-                    </TableCell>
-                    <TableCell className="text-body max-w-[16rem]">
-                      <TruncateTip text={job.dataset_ref || ""} copyable />
-                    </TableCell>
-                    <TableCell className="max-w-[14rem]">
-                      <HarnessLabel
-                        value={job.agent_label}
-                        className="block truncate"
+                    <TableCell className="max-w-[16rem] font-medium">
+                      <TruncateTip
+                        className="block w-full max-w-[16rem]"
+                        text={jobDisplayName(job)}
+                        copyable
                       />
                     </TableCell>
-                    <TableCell className="max-w-[18rem]">
+                    <TableCell className="max-w-[12rem]">
+                      <HarnessLabel className="max-w-full" value={job.agent_label} />
+                    </TableCell>
+                    <TableCell className="max-w-[16rem]">
                       <ModelLabel
+                        className="max-w-full"
                         value={job.model_label}
                         effort={job.reasoning_effort}
-                        className="truncate"
                       />
                     </TableCell>
                     <TableCell className="tabular-nums">
@@ -587,12 +593,17 @@ export function JobsPage() {
                       </ScoreRing>
                     </TableCell>
                     <TableCell className="tabular-nums">
-                      <ScoreRing value={job.mean_score ?? job.result}>
+                      <ScoreBar value={job.mean_score ?? job.result}>
                         {formatScore(job.mean_score ?? job.result)}
-                      </ScoreRing>
+                      </ScoreBar>
                     </TableCell>
                     {columns.includes("environment") ? (
-                      <TableCell>{job.environment || "-"}</TableCell>
+                      <TableCell className="max-w-[10rem]">
+                        <TruncateTip
+                          className="block w-full max-w-[8rem]"
+                          text={job.environment || "-"}
+                        />
+                      </TableCell>
                     ) : null}
                     {columns.includes("started") ? (
                       <TableCell className="tabular text-body">

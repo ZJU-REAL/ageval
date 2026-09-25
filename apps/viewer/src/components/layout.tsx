@@ -76,7 +76,7 @@ export function Shell({
         tabIndex={-1}
         className="flex min-h-0 w-full flex-1 flex-col overflow-auto bg-canvas px-4 pb-5 pt-5 sm:px-6"
       >
-        <div className="flex min-w-0 w-full flex-1 flex-col xl:mx-auto xl:w-[80%]">
+        <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col xl:mx-auto xl:w-[80%]">
           {children}
         </div>
       </main>

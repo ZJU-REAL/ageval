@@ -15,6 +15,7 @@ export function ModelLabel({
   to,
   onClick,
   mark = true,
+  clip = true,
 }: {
   value?: string | null;
   effort?: string | null;
@@ -28,6 +29,8 @@ export function ModelLabel({
    * Off when the group head already shows the lab (plaza Model / `/models`).
    */
   mark?: boolean;
+  /** False keeps the full label so a wide table can scroll instead of ellipsizing. */
+  clip?: boolean;
 }) {
   const { text, title } = formatModelLabel(value);
   const extra = (effort || "").trim();
@@ -43,7 +46,9 @@ export function ModelLabel({
       <HoverTip content={title}>
         <span
           className={cn(
-            "inline-block w-max min-w-0 max-w-full truncate",
+            clip
+              ? "inline-block w-max min-w-0 max-w-full truncate"
+              : "whitespace-nowrap",
             !to && "cursor-help",
           )}
         >
@@ -51,11 +56,17 @@ export function ModelLabel({
         </span>
       </HoverTip>
     ) : (
-      <TruncateTip text={shown} />
+      <TruncateTip text={shown} clip={clip} />
     );
 
   return (
-    <span className={cn("inline-flex min-w-0 max-w-full items-center", className)}>
+    <span
+      className={cn(
+        "inline-flex items-center",
+        clip && "min-w-0 max-w-full",
+        className,
+      )}
+    >
       {lab ? <LabMark lab={lab} size={16} className="mr-1.5" /> : null}
       {to ? (
         <Link
@@ -64,7 +75,7 @@ export function ModelLabel({
             event.stopPropagation();
             onClick?.(event);
           }}
-          className={cn("inline-flex min-w-0", INTERNAL_LINK_CLASS)}
+          className={cn(clip && "min-w-0", "inline-flex", INTERNAL_LINK_CLASS)}
         >
           {model}
         </Link>

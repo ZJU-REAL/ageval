@@ -33,6 +33,7 @@ export function HarnessLabel({
   onClick,
   mark = true,
   pack,
+  clip = true,
 }: {
   value?: string | null;
   className?: string;
@@ -46,6 +47,8 @@ export function HarnessLabel({
    */
   mark?: boolean;
   pack?: PackageMarkSource | null;
+  /** False keeps the full label so a wide table can scroll instead of ellipsizing. */
+  clip?: boolean;
 }) {
   const { text, title } = formatAxisLabel(value);
   const extraTitle = title && title !== text ? title : "";
@@ -61,7 +64,9 @@ export function HarnessLabel({
       <HoverTip content={extraTitle}>
         <span
           className={cn(
-            "inline-block w-max min-w-0 max-w-full truncate",
+            clip
+              ? "inline-block w-max min-w-0 max-w-full truncate"
+              : "whitespace-nowrap",
             !to && "cursor-help",
           )}
         >
@@ -69,11 +74,17 @@ export function HarnessLabel({
         </span>
       </HoverTip>
     ) : (
-      <TruncateTip text={shown} />
+      <TruncateTip text={shown} clip={clip} />
     );
 
   return (
-    <span className={cn("inline-flex min-w-0 max-w-full items-center", className)}>
+    <span
+      className={cn(
+        "inline-flex items-center",
+        clip && "min-w-0 max-w-full",
+        className,
+      )}
+    >
       {resolved ? (
         <BrandMark
           mark={resolved}
@@ -95,7 +106,7 @@ export function HarnessLabel({
             event.stopPropagation();
             onClick?.(event);
           }}
-          className={cn("inline-flex min-w-0", INTERNAL_LINK_CLASS)}
+          className={cn(clip && "min-w-0", "inline-flex", INTERNAL_LINK_CLASS)}
         >
           {name}
         </Link>

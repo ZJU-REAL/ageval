@@ -129,17 +129,20 @@ export function TaskDetailPage() {
         {error && <p className="text-sm text-error">{error}</p>}
 
         {!loading && !error && (
-          <div className="blob-panel overflow-hidden">
-            <Table>
+          <div className="blob-panel overflow-x-auto">
+            <Table
+              wrapClassName="overflow-visible"
+              className="w-max min-w-full table-fixed border-separate border-spacing-0"
+            >
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Trial</TableHead>
-                  <TableHead>Reward</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Started</TableHead>
-                  <TableHead>Run id</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Reason</TableHead>
+                  <TableHead className="w-[16rem] max-w-[16rem]">Trial</TableHead>
+                  <TableHead className="w-[8rem]">Reward</TableHead>
+                  <TableHead className="w-[8rem]">Duration</TableHead>
+                  <TableHead className="w-[11rem]">Started</TableHead>
+                  <TableHead className="w-[16rem] max-w-[16rem]">Run id</TableHead>
+                  <TableHead className="w-[8rem]">Status</TableHead>
+                  <TableHead className="w-[16rem] max-w-[16rem]">Reason</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -172,8 +175,12 @@ export function TaskDetailPage() {
                       tabIndex={openable ? 0 : undefined}
                       role={openable ? "link" : undefined}
                     >
-                      <TableCell className="font-medium max-w-[16rem]">
-                        <TruncateTip text={tr.trial_id} copyable />
+                      <TableCell className="max-w-[16rem] font-medium">
+                        <TruncateTip
+                          className="block w-full max-w-[16rem]"
+                          text={tr.trial_id}
+                          copyable
+                        />
                         {tr.has_evidence ? (
                           <span className="ml-2 text-[11px] text-mute font-sans">
                             evidence
@@ -193,8 +200,9 @@ export function TaskDetailPage() {
                       <TableCell className="tabular text-body">
                         {formatDate(tr.started || job?.started)}
                       </TableCell>
-                      <TableCell className="text-mute max-w-[16rem]">
+                      <TableCell className="max-w-[16rem] text-mute">
                         <TruncateTip
+                          className="block w-full max-w-[16rem]"
                           text={tr.run_id || task?.run_id || ""}
                           copyable
                         />
@@ -210,11 +218,14 @@ export function TaskDetailPage() {
                       <TableCell
                         className={
                           reasonText(tr) && (tr.status || "").toUpperCase() === "ERROR"
-                            ? "text-error"
-                            : "text-body"
+                            ? "max-w-[16rem] text-error"
+                            : "max-w-[16rem] text-body"
                         }
                       >
-                        {reasonText(tr) || "-"}
+                        <TruncateTip
+                          className="block w-full max-w-[16rem]"
+                          text={reasonText(tr) || "-"}
+                        />
                       </TableCell>
                     </TableRow>
                   );
