@@ -48,12 +48,14 @@ import { useReadySession } from "@/lib/session";
 import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { HarnessLabel } from "@ageval/shared/components/harness-label";
 import { ModelLabel } from "@ageval/shared/components/model-label";
+import { ScoreRing } from "@ageval/shared/components/score-ring";
 import { formatDate, formatModelLabel, formatScore, formatTrials } from "@ageval/shared/lib/utils";
 
 type SortKey =
   | "job_name"
   | "agent_label"
   | "model_label"
+  | "pass_rate"
   | "result"
   | "environment"
   | "started"
@@ -225,19 +227,23 @@ export function JobsPage() {
       const av =
         key === "result"
           ? (a.mean_score ?? a.result)
-          : key === "trials_total"
-            ? a.trials_total
-            : key === "job_name"
-              ? jobDisplayName(a)
-              : a[key];
+          : key === "pass_rate"
+            ? a.pass_rate
+            : key === "trials_total"
+              ? a.trials_total
+              : key === "job_name"
+                ? jobDisplayName(a)
+                : a[key];
       const bv =
         key === "result"
           ? (b.mean_score ?? b.result)
-          : key === "trials_total"
-            ? b.trials_total
-            : key === "job_name"
-              ? jobDisplayName(b)
-              : b[key];
+          : key === "pass_rate"
+            ? b.pass_rate
+            : key === "trials_total"
+              ? b.trials_total
+              : key === "job_name"
+                ? jobDisplayName(b)
+                : b[key];
       return compareValues(av, bv, sortDir);
     });
     return rows;
@@ -502,7 +508,8 @@ export function JobsPage() {
                 <TableHead>Dataset</TableHead>
                 <TableHead>{head("agent_label", "Harness")}</TableHead>
                 <TableHead>{head("model_label", "Models")}</TableHead>
-                <TableHead>{head("result", "Result")}</TableHead>
+                <TableHead>{head("pass_rate", "Pass rate")}</TableHead>
+                <TableHead>{head("result", "Mean")}</TableHead>
                 {columns.includes("environment") ? (
                   <TableHead>{head("environment", "Environment")}</TableHead>
                 ) : null}
@@ -572,8 +579,17 @@ export function JobsPage() {
                         className="truncate"
                       />
                     </TableCell>
-                    <TableCell className="tabular">
-                      {formatScore(job.mean_score ?? job.result)}
+                    <TableCell className="tabular-nums">
+                      <ScoreRing value={job.pass_rate}>
+                        {job.pass_rate == null
+                          ? "-"
+                          : `${(Number(job.pass_rate) * 100).toFixed(1)}%`}
+                      </ScoreRing>
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      <ScoreRing value={job.mean_score ?? job.result}>
+                        {formatScore(job.mean_score ?? job.result)}
+                      </ScoreRing>
                     </TableCell>
                     {columns.includes("environment") ? (
                       <TableCell>{job.environment || "-"}</TableCell>

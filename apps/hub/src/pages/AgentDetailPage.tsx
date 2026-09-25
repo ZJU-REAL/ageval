@@ -84,7 +84,7 @@ import { performanceCanonical } from "@/lib/model-appearances";
 import { joinOverlay, loadModelPin } from "@ageval/shared/lib/model-pin";
 import { getToken } from "@/lib/auth";
 import { buildNestedTree, type TreeNode } from "@ageval/shared/lib/file-tree";
-import { ScoreRing } from "@/components/score-ring";
+import { ScoreRing } from "@ageval/shared/components/score-ring";
 import { formatScore } from "@ageval/shared/lib/utils";
 
 type AgentTab = "overview" | "performance" | "files";

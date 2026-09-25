@@ -9,7 +9,7 @@ import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { ModelLabel } from "@ageval/shared/components/model-label";
 import { JobOverlayPreview } from "@/components/overlay-file-panel";
 import { ResultOwnerOps } from "@/components/result-owner-ops";
-import { ScoreRing } from "@/components/score-ring";
+import { ScoreRing } from "@ageval/shared/components/score-ring";
 import { ScrollTable } from "@/components/scroll-table";
 import { Input } from "@ageval/shared/components/ui/input";
 import { TableColumnPicker } from "@ageval/shared/components/ui/table-column-picker";

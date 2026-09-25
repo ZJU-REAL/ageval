@@ -35,9 +35,7 @@ export function ScoreRing({
   const filled = ratio * CIRCUMFERENCE;
 
   return (
-    <span
-      className={cn("inline-flex items-center gap-1.5", className)}
-    >
+    <span className={cn("inline-flex items-center gap-1.5", className)}>
       <svg
         width={SIZE}
         height={SIZE}

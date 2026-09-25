@@ -35,7 +35,7 @@ import { BrandMark } from "@ageval/shared/components/brand-mark";
 import { HarnessLabel } from "@ageval/shared/components/harness-label";
 import { HoverTip, TruncateTip } from "@ageval/shared/components/hover-tip";
 import { ModelLabel } from "@ageval/shared/components/model-label";
-import { ScoreRing } from "@/components/score-ring";
+import { ScoreRing } from "@ageval/shared/components/score-ring";
 import { resolveMechanismMark } from "@ageval/shared/lib/brand-marks";
 import { shortSuiteId } from "@/components/suite-inspector";
 

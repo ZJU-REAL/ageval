@@ -8,7 +8,7 @@ import { HuggingFaceMark } from "@/components/huggingface-mark";
 import { LabMark } from "@ageval/shared/components/lab-mark";
 import { ModalityMarks } from "@/components/modality-mark";
 import { CatalogHead } from "@/components/page-head";
-import { ScoreRing } from "@/components/score-ring";
+import { ScoreRing } from "@ageval/shared/components/score-ring";
 import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
 import { Button } from "@ageval/shared/components/ui/button";
 import {

@@ -17,7 +17,7 @@ import { LeaderboardWaffle } from "@/components/leaderboard-waffle";
 import { HarnessLabel } from "@ageval/shared/components/harness-label";
 import { ModelLabel } from "@ageval/shared/components/model-label";
 import { OfficialMark } from "@/components/official-mark";
-import { ScoreRing } from "@/components/score-ring";
+import { ScoreRing } from "@ageval/shared/components/score-ring";
 import {
   SortableHead,
   nextSort,
