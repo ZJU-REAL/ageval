@@ -22,6 +22,7 @@ from ageval.evidence.identity import dataset_identity, dataset_ref
 from ageval.evidence.locators import (
     default_runs_root,
     default_suite_runs_root,
+    resolve_attempt_run_dir,
     resolve_evidence_root,
     safe_id_segment,
 )
@@ -558,6 +559,32 @@ def _duration_label(phase_timing: dict[str, Any] | None) -> str | None:
     return None
 
 
+def _duration_ms_for_run(root: Path, run_id: str) -> float | None:
+    """Wall time from an Attempt's evidence ``phase_timing.total_ms``."""
+    from ageval.application.suite.suite_usage import duration_s_from_run_dir
+
+    text = str(run_id or "").strip()
+    if not text:
+        return None
+    try:
+        seconds = duration_s_from_run_dir(resolve_attempt_run_dir(root, text))
+    except ConfigError:
+        return None
+    if seconds is None:
+        return None
+    return float(seconds) * 1000.0
+
+
+def _mean_duration_label(root: Path, run_ids: list[str], fallback: object) -> str | None:
+    """Mean Attempt duration. Suite summaries omit it; evidence still has timing."""
+    samples = [ms for rid in run_ids if (ms := _duration_ms_for_run(root, rid)) is not None]
+    if samples:
+        return format_duration_ms(sum(samples) / len(samples))
+    if isinstance(fallback, str) and fallback.strip():
+        return fallback.strip()
+    return None
+
+
 def _reasoning_effort_from_summary(summary: dict[str, Any]) -> str:
     from ageval.config.profiles import (
         join_display_names,
@@ -816,7 +843,11 @@ def get_job(dataset_root: Path | str, job_id: str) -> dict[str, Any]:
                 "reasoning_effort": job.get("reasoning_effort") or "",
                 "provider_label": job.get("provider_label") or "",
                 "dataset": job.get("dataset_ref") or job.get("dataset_id"),
-                "duration": full.get("duration"),
+                "duration": _mean_duration_label(
+                    root,
+                    attempt_run_ids,
+                    full.get("duration"),
+                ),
                 "phase_timing": full.get("phase_timing"),
                 "n": n_val,
                 "c": full.get("c") if full.get("c") is not None else ref.get("c"),

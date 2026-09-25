@@ -474,6 +474,24 @@ def _write_attempt_evidence(
     return evidence
 
 
+def test_suite_task_duration_averages_attempt_evidence(tmp_path: Path) -> None:
+    db = _clean_db(tmp_path)
+    job_id = _seed_suite_run(db)
+    _write_attempt_evidence(db, "run_a", task_id="alpha", kind="docker")
+    _write_attempt_evidence(db, "run_b", task_id="beta", kind="docker")
+    beta = db / ".ageval" / "runs" / "run_b" / "summary.json"
+    raw = json.loads(beta.read_text(encoding="utf-8"))
+    raw["phase_timing"]["total_ms"] = 13500.0
+    raw["phase_timing"]["phases"][0]["duration_ms"] = 13500.0
+    beta.write_text(json.dumps(raw) + "\n", encoding="utf-8")
+
+    detail = jobs.get_job(db, job_id)
+    by_id = {row["task_id"]: row for row in detail["tasks"]}
+    assert by_id["alpha"]["duration"] == "4.5s"
+    assert by_id["beta"]["duration"] == "14s"
+    assert by_id["gamma"]["duration"] is None
+
+
 def test_single_job_environment_and_timing_from_current_evidence(tmp_path: Path) -> None:
     db = _clean_db(tmp_path)
     _write_attempt_evidence(db, "run_e2b_alpha", task_id="alpha", kind="e2b")
