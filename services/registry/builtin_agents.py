@@ -24,6 +24,7 @@ HARNESS_ICON_KEY = {
     "pi": "pi",
     "opencode": "opencode",
     "codex": "codex",
+    "miniswe": "miniswe",
     "claude-code": "claude-code",
     "grok-build": "grok",
     "openai-http": "openai",

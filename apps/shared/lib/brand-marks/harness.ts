@@ -10,6 +10,7 @@ export const HARNESS_BRAND_MARK: Record<string, string> = {
   pi: "pi",
   opencode: "opencode",
   codex: "codex",
+  miniswe: "miniswe",
   "claude-code": "claude-code",
   "grok-build": "grok",
   "openai-http": "openai",
