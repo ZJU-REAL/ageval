@@ -17,7 +17,7 @@ import { LeaderboardWaffle } from "@/components/leaderboard-waffle";
 import { HarnessLabel } from "@ageval/shared/components/harness-label";
 import { ModelLabel } from "@ageval/shared/components/model-label";
 import { OfficialMark } from "@/components/official-mark";
-import { ScoreRing } from "@ageval/shared/components/score-ring";
+import { ScoreBar, ScoreRing } from "@ageval/shared/components/score-ring";
 import {
   SortableHead,
   nextSort,
@@ -254,7 +254,7 @@ function PassMeanCells({
         </ScoreRing>
       </TableCell>
       <TableCell className="tabular-nums">
-        <ScoreRing value={meanScore}>{formatScore(meanScore)}</ScoreRing>
+        <ScoreBar value={meanScore}>{formatScore(meanScore)}</ScoreBar>
       </TableCell>
     </>
   );
@@ -359,7 +359,7 @@ export function PlazaDatasetTables({
           <TableHead className={STICKY_TH}>{head("harness", "Harness")}</TableHead>
           <TableHead className={STICKY_TH}>{head("model", "Model")}</TableHead>
           <TableHead className={STICKY_TH}>{head("pass_rate", "Pass rate")}</TableHead>
-          <TableHead className={STICKY_TH}>{head("mean_score", "Mean")}</TableHead>
+          <TableHead className={STICKY_TH}>{head("mean_score", "Mean score")}</TableHead>
           {showUploaded ? (
             <TableHead className={STICKY_TH}>{head("created_at", "Uploaded")}</TableHead>
           ) : null}
@@ -531,7 +531,7 @@ export function PlazaAgentTables({
           <TableHead className={STICKY_TH}>{head("role", "Role")}</TableHead>
           <TableHead className={STICKY_TH}>{head("model", "Model")}</TableHead>
           <TableHead className={STICKY_TH}>{head("pass_rate", "Pass rate")}</TableHead>
-          <TableHead className={STICKY_TH}>{head("mean_score", "Mean")}</TableHead>
+          <TableHead className={STICKY_TH}>{head("mean_score", "Mean score")}</TableHead>
         </>
       ),
       body: (

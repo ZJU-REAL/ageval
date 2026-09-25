@@ -84,7 +84,7 @@ import { performanceCanonical } from "@/lib/model-appearances";
 import { joinOverlay, loadModelPin } from "@ageval/shared/lib/model-pin";
 import { getToken } from "@/lib/auth";
 import { buildNestedTree, type TreeNode } from "@ageval/shared/lib/file-tree";
-import { ScoreRing } from "@ageval/shared/components/score-ring";
+import { ScoreBar, ScoreRing } from "@ageval/shared/components/score-ring";
 import { formatScore } from "@ageval/shared/lib/utils";
 
 type AgentTab = "overview" | "performance" | "files";
@@ -753,7 +753,7 @@ export function AgentDetailPage() {
                               {performanceSort.head("pass_rate", "Pass rate")}
                             </TableHead>
                             <TableHead>
-                              {performanceSort.head("mean_score", "Mean")}
+                              {performanceSort.head("mean_score", "Mean score")}
                             </TableHead>
                           </TableRow>
                         </TableHeader>
@@ -791,9 +791,9 @@ export function AgentDetailPage() {
                                   </ScoreRing>
                                 </TableCell>
                                 <TableCell className="tabular-nums">
-                                  <ScoreRing value={row.mean_score}>
+                                  <ScoreBar value={row.mean_score}>
                                     {formatScore(row.mean_score)}
-                                  </ScoreRing>
+                                  </ScoreBar>
                                 </TableCell>
                               </TableRow>
                             );
