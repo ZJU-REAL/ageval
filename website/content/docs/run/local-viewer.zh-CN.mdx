@@ -45,12 +45,12 @@ Datasets、Jobs、Agents、Plugins 上，搜索和筛选停在滚动列顶部。
 
 | 层 | 内容 |
 | --- | --- |
-| Jobs | 本地整份 dataset 的运行结果，以及只跑一题的结果（Kind：suite / single）。Kind / Source 是过滤器；suite 的 Source 只列 task id |
-| Tasks | 每题状态 / 分数。整份跑完且一题只有一次运行时，点进后直接打开那一次 |
+| Jobs | 本地整份 dataset 的运行结果，以及只跑一题的结果（Kind：suite / single）。Kind / Source 是过滤器；suite 的 Source 只列 task id。分数列是 Pass rate 和 Mean score；数据集是你已经选中的那一份 |
+| Tasks | 每题状态 / 分数，以及各次 attempt 的 phase timing 平均时长。还没跑的题，时长留空。整份跑完且一题只有一次运行时，点进后直接打开那一次 |
 | Attempt | 结果条、**Timing**（有数据时还有 **Tokens**）、角色、证据页签（Trajectory / Agent / …） |
 
-Timing 来自 Attempt `phase_timing`（prepare / run / evaluate / cleanup）；hover 色条看分段耗时。  
-轨迹按轨迹文件顺序展示：一段 thought，紧接着它调用的工具，再下一段 thought。轨迹行（thought / `tool_call` / 最终 assistant）若带 `elapsed_ms`，步骤头会显示该步耗时；没有就不画标签。Viewer 不会用文件 mtime 或页面时钟补造。  
+Timing 来自 Attempt `phase_timing`（environment / run / evaluate / record / cleanup）；hover 色条看分段耗时。  
+轨迹按轨迹文件顺序展示：一段 thought，紧接着它调用的工具，再下一段 thought。轨迹行（thought / `tool_call` / 最终 assistant）若带 `elapsed_ms`，步骤头会显示该步耗时；没有就不画标签。Viewer 不会用文件 mtime 或页面时钟补造。Trajectory 页签可以按步骤种类筛选。右侧一条跳转可以对到某一步。  
 Trajectory 里每条 **tool-call**（以及过长行）可折叠；观测 PASS 条上有全部展开 / 全部收起，和 Hub 上 Attempt 页一样。
 
 **Verifier**：同时有 `evaluation/observation.jsonl` 与 `evaluation/checks.json` 时，页签行最右侧是 Trajectory / Files 切换（默认轨迹）。只有一种时就只显示那一种。在文件树里选中 `checks.json`，右侧预览渲染检查点（计数、可展开行、stdout/stderr、dataset 脚本）。没有单独的 Checks 面板。Agent 的 Trajectory 页仍只读根 `trajectory.jsonl`。

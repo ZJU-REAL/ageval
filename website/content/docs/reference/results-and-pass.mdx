@@ -76,7 +76,7 @@ Attempt pages may show **Timing** (and **Tokens** when present). Trajectory step
 | Kind | Intuition |
 | --- | --- |
 | Config / lock | Never entered formal execution |
-| Execution ERROR | Failed inside the boundary |
+| Execution ERROR | Failed inside the boundary. `error` stores phase, title, and message. A `ScriptError` keeps the title you passed; other exceptions use the class name. Viewer and Hub show that title beside ERROR. PASS and FAIL leave `error` empty |
 | FAIL | Evaluator says no |
 | PASS | Evaluator says yes |
 | Run-phase limit | Evaluator still scores; `limit` is `wall_time_seconds` or `agent_invocations` |

@@ -43,12 +43,12 @@ On Datasets, Jobs, Agents, and Plugins, search and filters stay at the top of th
 
 | Layer | Content |
 | --- | --- |
-| Jobs | Local results for the whole dataset, and for a single task (Kind: suite / single). Kind / Source are filters; suite Source lists task ids only |
-| Tasks | Per-task status / score. A suite task with one run opens that run directly |
+| Jobs | Local results for the whole dataset, and for a single task (Kind: suite / single). Kind / Source are filters; suite Source lists task ids only. Pass rate and Mean score are the score columns; the dataset is the one you already picked |
+| Tasks | Per-task status / score, and average duration from each attempt's phase timing. A task that has not run leaves duration blank. A suite task with one run opens that run directly |
 | Attempt | Outcome, **Timing** (and **Tokens** when present), actors, evidence tabs |
 
-Timing comes from Attempt `phase_timing` (`prepare` / `run` / `evaluate` / `cleanup`); hover bar segments for durations.  
-Trajectory steps follow the sealed file order: a thought, then the tools that thought invoked, then the next thought. When a sealed step (thought, `tool_call`, or final assistant) carries `elapsed_ms`, the step header shows that duration. Missing timing is omitted — Viewer does not invent it from file mtimes or the page clock.  
+Timing comes from Attempt `phase_timing` (`environment` / `run` / `evaluate` / `record` / `cleanup`); hover bar segments for durations.  
+Trajectory steps follow the sealed file order: a thought, then the tools that thought invoked, then the next thought. When a sealed step (thought, `tool_call`, or final assistant) carries `elapsed_ms`, the step header shows that duration. Missing timing is omitted — Viewer does not invent it from file mtimes or the page clock. The Trajectory tab can filter steps by kind. A rail on the right jumps to a step.  
 Each **tool-call** row (and other long rows) can collapse; the observational PASS note has expand-all / collapse-all, same as the Hub Attempt page.
 
 **Verifier:** When both `evaluation/observation.jsonl` and `evaluation/checks.json` are present, a Trajectory / Files toggle sits on the far right of the tab row (trajectory first). Otherwise the tab shows the one surface that exists. Selecting `checks.json` in the file tree renders the checkpoints in the preview (counts, expandable rows, stdout/stderr, package script). There is no separate Checks panel. The Agent Trajectory tab still reads only root `trajectory.jsonl`.
