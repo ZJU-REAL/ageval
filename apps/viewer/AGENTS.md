@@ -135,6 +135,11 @@ Same stack as Hub: overlap primitives in `apps/shared/components/ui/`. Role → 
    message into the page. Inline `text-error` is for a field, or for a row
    whose result is an error. Confirmations stay in the existing dialog.
    Docs/13: do not also toast when the control already shows success.
+7. **Do not restyle Button at the call site.** Hover, border, fill, and
+   radius come from the variant. `className` is layout only. Header
+   destinations use `sidebarHoverClass` (the bar is `canvas-soft`).
+   Button groups use `SegmentedControl`. In-app links use
+   `INTERNAL_LINK_CLASS`. See docs/13.
 
 ## Backend contract
 

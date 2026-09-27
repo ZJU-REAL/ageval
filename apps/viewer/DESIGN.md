@@ -90,7 +90,12 @@ Before drawing a control:
 | Kind / source / time filter | `Select` |
 | Row / theme overflow | `DropdownMenu` |
 | Evidence section switcher | `UnderlineTabs` (Liquid Move). Unselected hover is Button `quietHoverClass` |
-| Icon action | Button `ghost`. No extra hover classes |
+| Icon action | Button `ghost` `size="icon"`. `className` is layout only (gap, opacity reveal, shrink, position). No hover, border, background, text color, or radius classes. Do not add `transition-opacity` |
+| Inline icon on a text line | Button `ghost` `size="iconSm"` (trajectory step copy / expand, expand all). 20px box, 14px icon. Do not shrink `size="icon"` with a height class |
+| Header destination | Inactive text is `mute`. Hover is `sidebarHoverClass` (the header is `canvas-soft`). Do not use `quietHoverClass` here |
+| In-app link | `INTERNAL_LINK_CLASS` |
+| Button group | `SegmentedControl` |
+| File tree row | `treeRowClass` / `treeRowIdleClass` / `treeRowOnClass` |
 | Verifier dual surface | hairline button group on the same tab row (copy `CatalogScopeBar` `variant="group"`), far right; Trajectory / Files, trajectory first |
 | Trajectory step filter | Trajectory tab row, far right. `Select` (copy `BoardChartControls`). Default All. One major present in the trace (User, Agent, Thought, Tools, Observation, Terminal, Permission, Message). Trigger and menu reuse that major's step icon and tone. Hidden when fewer than two majors are present. |
 | Trajectory step outline | Right of the trajectory port (`lg+`, `xl` gutter). Collapsed hairline bars, length by preview. Hover expands the step icon and one truncated line. Click scrolls that step to the top of the port. Hidden below two steps. |

@@ -20,7 +20,7 @@ export const DropdownMenuContent = React.forwardRef<
       sideOffset={sideOffset}
       data-ageval-menu=""
       className={cn(
-        "z-[70] min-w-[8rem] overflow-hidden rounded-[12px] border border-hairline bg-canvas p-1 text-ink shadow-[var(--viewer-shadow-pop)]",
+        "z-[70] min-w-[8rem] overflow-hidden rounded-[14px] border border-hairline bg-canvas p-1 text-ink shadow-[var(--viewer-shadow-pop)]",
         className,
       )}
       {...props}
@@ -44,6 +44,10 @@ export const DropdownMenuItem = React.forwardRef<
   />
 ));
 DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
+
+/** Destructive row inside a menu. Do not restate text-error at the call site. */
+export const dropdownDangerItemClass =
+  "text-error focus:text-error data-[highlighted]:text-error";
 
 export const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,

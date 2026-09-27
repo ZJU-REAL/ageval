@@ -394,15 +394,15 @@
 }
 
 @utility squish {
-  transition-property: color, background-color, border-color, transform;
-  transition-duration: 200ms, 200ms, 200ms, 500ms;
+  transition-property: color, background-color, border-color, opacity, transform;
+  transition-duration: 200ms, 200ms, 200ms, 200ms, 500ms;
   transition-timing-function: var(--ease-smooth), var(--ease-smooth),
-    var(--ease-smooth), var(--ease-spring);
+    var(--ease-smooth), var(--ease-smooth), var(--ease-spring);
   &:active {
     transform: scale(0.96);
-    transition-duration: 200ms, 200ms, 200ms, 80ms;
+    transition-duration: 200ms, 200ms, 200ms, 200ms, 80ms;
     transition-timing-function: var(--ease-smooth), var(--ease-smooth),
-      var(--ease-smooth), ease-out;
+      var(--ease-smooth), var(--ease-smooth), ease-out;
   }
 }
 

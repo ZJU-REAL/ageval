@@ -7,4 +7,4 @@ export const INTERNAL_LINK_CLASS =
 
 /** Off-site: IKB at rest. */
 export const EXTERNAL_LINK_CLASS =
-  "text-link hover:text-link-deep hover:underline underline-offset-2";
+  "text-link hover:text-link-deep hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70";

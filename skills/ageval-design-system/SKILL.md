@@ -58,6 +58,12 @@ If they disagree, fix the copies to match docs/13 + the script.
 - Radii are 8 / 10 / 14px only. Primary CTA (SPA Button `default`) is IKB fill +
   `rounded-[8px]` + mono 13px + pop shadow + `focus-visible:ring-2 ring-link/70`.
   Search is stadium. Do not use clip-path chamfer on buttons.
+  Button `className` is layout only. Do not restate hover, border, fill, text
+  color, or radius at the call site. Icon actions are `ghost` `size="icon"`.
+  An icon sitting on a text line (trajectory step copy / expand) is `ghost` `size="iconSm"`.
+  Groups are `SegmentedControl`. Canvas-soft chrome (sidebar, Viewer header)
+  uses `sidebarHoverClass`. In-app links use `INTERNAL_LINK_CLASS`; off-site
+  links use `EXTERNAL_LINK_CLASS`.
 - Section tabs use `UnderlineTabs` (sans `text-sm`, liquid-gooey Move thumb, fill
   `canvas-soft-2`). Do not draw an IKB underline. Page heads use `PageHead`
   (h1 + optional sub + hairline; no numbered kicker). One tab strip per view; a

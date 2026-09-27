@@ -95,11 +95,17 @@ landing 的 oklch 系(`oklch(15.4% 0.018 264)` 底等)是本表的 oklch 等值�
 | 语汇 | 规则 |
 | --- | --- |
 | 主按钮(SPA Button `default`) | 1px `cta` 描边 + `cta` 填充（两套主题都是 `#1B54E8`）+ `rounded-[8px]` + `font-mono text-[13px] font-semibold` + pop 阴影 + `focus-visible:ring-2 ring-link/70`，hover 描边和填充一起到 `cta-deep`。不要用深色 `link`（`#5B7BFF`）做填充。`:active` 为 Squish(`scale` 0.96、80ms 按下 / spring 松开) |
-| 次按钮(Button `outline`) | 1px `hairline` + `canvas` 底，文字 `ink`。和主按钮一样是 1px 描边。hover 背景淡入 `liquid-hover` |
-| 安静按钮(Button `ghost`) | 无可见描边。文字 / 图标 `mute`。hover 背景淡入 `liquid-hover`（`canvas-soft`），颜色 200ms `--ease-smooth`，由 Button 上的 `squish` 提供。图标动作只用这个 variant。`UnderlineTabs` 未选中项用同一条 `quietHoverClass`。不要在调用点再写一套 hover |
+| 次按钮(Button `outline` / `secondary`) | 同一套字段：1px `hairline` + `canvas` 底，文字 `ink`。和主按钮一样是 1px 描边。hover 背景淡入 `liquid-hover`。不要再写第三套次按钮 |
+| 安静按钮(Button `ghost`) | 无可见描边。文字 / 图标 `mute`。hover 背景淡入 `liquid-hover`（`canvas-soft`），颜色、描边、透明度 200ms `--ease-smooth`，由 Button 上的 `squish` 提供。图标动作用 `size="icon"`（32px）。贴着一行字的小动作（轨迹步骤条上的复制、展开，以及同排的全部展开）用 `size="iconSm"`：20px 盒、14px 图标、圆角 4px，hover 仍是 ghost。这是唯一更小的按钮尺寸。`className` 只放布局：间距、显隐、`shrink`、绝对定位。禁止在调用点再写 `hover:`、`border`、`bg-`、`text-mute`、`text-ink`、`text-body`、`rounded-`，也不要自己写 `h-5` / `h-6` / `h-7`，也不要 `transition-opacity`（会盖掉 squish 的颜色过渡）。`UnderlineTabs` 未选中项用同一条 `quietHoverClass`。星标点亮时只允许把字色改成 `text-star`（含 `hover:text-star`），底和描边仍是 ghost |
+| 危险按钮 | 实心 `danger`：1px `error` 描边 + `error` 填充，hover 填充 `error/80`。线框 `dangerOutline`：1px `hairline` + `canvas`，hover 字色 `error`、底 `error/15`。菜单里的删除行用 `dropdownDangerItemClass`，不要在调用点再写 `text-error` |
 | 分段 tab | `UnderlineTabs`:sans `text-sm` + Liquid Move thumb(fill `canvas-soft-2`)。一页一条。不要再画 IKB `border-b-2` 底条。Models plaza 模态过滤是记录例外：搜索栏下第二条 `UnderlineTabs`（All / Text / Image / Video / PDF / Transcription / Speech）。选中/hover 只给图标上色，走现有 `nav-*`（text=`nav-models`，image=`nav-agents`，video=`nav-inbox`，pdf=`nav-orgs`，transcription=`nav-datasets`，speech=`nav-plugins`），标签走 `body`，不要新 hex 族；thumb 仍是 `canvas-soft-2`。行名右侧可叠多枚徽章（纯 text 才出 text 标；PDF 用 `FileText`，色走 `nav-orgs`）。徽章 hover 走共用 tooltip。次底用该色与 canvas 的 `color-mix`，禁止 `/15` 透明度拼色 |
 | 紧凑 pill | `PillTabs`:同上,11px。只用于面板内紧凑分段。同页再出现互斥选择用 `Select` |
-| 按钮组 | 并列选项收进**一个** hairline 容器(8px 圆角)。选中 `canvas-soft-2` + `ink`,hover `canvas-soft`。字号 `body-sm`。不要 IKB 填充 |
+| 按钮组 | `SegmentedControl`（`segmentGroupClass` / `segmentItemClass`）。外框和内项都是 8px，不要 6px。选中 `segmentOnClass`（`canvas-soft-2` + `ink`），未选中 `segmentOffClass`（`text-body`，hover `canvas-soft`）。字号 `body-sm`。不要 IKB 填充，不要在调用点再写 hover |
+| 侧栏 / Viewer 顶栏 hover | 底是 `canvas-soft`，所以不用 `quietHoverClass`（`liquid-hover` 与底同色）。用 `sidebarHoverClass`：hover `canvas/50`，字到 `ink`。折叠图标是 ghost 尺寸再叠这一条，不要在调用点重写 `hover:bg-canvas/50` |
+| 文本链接 | 站内 `INTERNAL_LINK_CLASS`（静止 `ink`，hover 下划线 + `link-deep`）。站外 `EXTERNAL_LINK_CLASS`（静止 `link`）。句子里的 Sign in 走站外这一条。禁止手写 `text-link hover:text-link-deep` |
+| 文件树行 | `treeRowClass`。8px，`text-sm`。未选 `treeRowIdleClass`，选中 `treeRowOnClass`（`canvas-soft-2`）。Hub 与 trial 同一套。不要 4px，不要 `text-[12.5px]`，不要 `row-hover` |
+| 表头按钮 | `SortableHead`：只把字从 `mute` 过渡到 `ink`，不加填充。这是表头，不是 ghost |
+| 静态小标签 | `metaChipClass`：8px、hairline、`text-xs`、`mute`。不是可点的 `Chip` |
 | Chip | 散开的标签用 `Chip`:8px、hairline、选中 `canvas-soft-2`、hover `canvas-soft`。不要 `bg-link/10`。**不要**用 Chip 做模型浏览（`/models` 是 lab 分组表；harness Model 区是 `ModelItem`） |
 | 扫描字段 | 搜索是 stadium,焦点描边保持 `hairline`。不要给新搜索叠 `border-link` |
 | Toast | 底中 Overshoot 进场;只用于没有本地成功态的写操作。Copy / star 等控件自身已有反馈的不要再 toast。实色 `*-soft` 次底 + `--viewer-shadow-pop`,无描边、无第三方面包。图标走对应功能色,正文走 `body` |
@@ -109,9 +115,9 @@ landing 的 oklch 系(`oklch(15.4% 0.018 264)` 底等)是本表的 oklch 等值�
 | 表 | hairline 表。表头底 `canvas-soft`，表身 `canvas`。列名 `text-sm` / `mute`。不要 zinc 灰表头，也不要表头表身同色 |
 | 页头(PageHead) | h1 + 可选 sub + hairline(无编号 kicker) |
 | 相位/耗时图谱 | `--viewer-phase-1..6` 用 ink / body / mute / hairline 冷灰阶。执行段 `--viewer-phase-1` 为 ink 与 mute 的 `color-mix`（约 55% ink），不用实心 ink，也不用 IKB。IKB 留给链接 / 焦点 / 主 CTA。禁 zinc 等外部灰阶 |
-| 弹层(tooltip/select/dropdown/dialog) | hairline 边框 + `--viewer-shadow-pop`。Portal 到 `document.body` 或 `OverlayRoot`;不要挂在已有 `transform` 的 pop 里(`position:fixed` 会跟错) |
+| 弹层(tooltip/select/dropdown/dialog) | 圆角 14px。hairline 边框 + `--viewer-shadow-pop`。Select 触发器复制 `scanTriggerClass`（高 36px、`text-sm`），不要另写 `h-8` / `text-xs` / 另一套焦点环。Portal 到 `document.body` 或 `OverlayRoot`;不要挂在已有 `transform` 的 pop 里(`position:fixed` 会跟错) |
 | 危险确认 | Modal：较大标题 + mute 说明后果 + Cancel / Confirm 两枚按钮 |
-| Hub 壳 | 左右分区:整列侧栏 `canvas-soft` + 右 hairline;顶栏与主列 `canvas`(不透明,无 blur)。Logo 行 `border-b`,GitHub / Documentation 脚 `border-t`。选中侧栏行 Liquid fill 走 `canvas`;hover `canvas/50`。宽屏(`xl`)正文居中 `w-[80%]`;顶栏仍铺满主列 |
+| Hub 壳 | 左右分区:整列侧栏 `canvas-soft` + 右 hairline;顶栏与主列 `canvas`(不透明,无 blur)。Logo 行 `border-b`,GitHub / Documentation 脚 `border-t`。选中侧栏行 Liquid fill 走 `canvas`;hover 走 `sidebarHoverClass`（`canvas/50`）。宽屏(`xl`)正文居中 `w-[80%]`;顶栏仍铺满主列 |
 | Viewer 壳 | 无侧栏。顶栏 `canvas-soft` + `border-b`;主列 `canvas`。宽屏(`xl`)正文居中 `w-[80%]`;顶栏仍铺满 |
 | Docs 壳 | 文档侧栏 `muted`(canvas-soft) + 右 hairline;阅读列 `background`(canvas)。不引入 liquid-gooey |
 | 侧栏字形色 | Hub 目的地 lucide 只涂对应 `nav-*`。标签走正文 sans + `body-sm`(`text-sm`),不是 mono。未选:该令牌与 `mute` 的 `color-mix`,标签 `font-normal`,描边 2;选中:令牌本体 + 行底 `canvas`,标签 `font-semibold`,描边 2.5。字重与描边用默认 200ms `--ease-smooth` 过渡;不要 fill。`prefers-reduced-motion: reduce` 时瞬时到位。焦点环仍是 IKB。不要拿字形色铺页面或涂正文。Viewer 无 Hub 侧栏;功能图标继续 `mute` |

@@ -57,6 +57,12 @@ Stack is Vite + React + Tailwind + **shadcn/ui**. Overlap primitives live in
    Do not dump `code: message` into the page. Inline error is a field, or
    a row whose result is an error. A control that already shows success
    does not also toast (docs/13). Confirmations stay in the dialog.
+9. **Do not restyle Button at the call site.** Color, hover, border, and
+   radius come from the variant (`default` / `outline` / `ghost` / `danger`).
+   `className` is layout only. Sidebar hover is `sidebarHoverClass`.
+   A button group is `SegmentedControl`. In-app links use
+   `INTERNAL_LINK_CLASS`; off-site links use `EXTERNAL_LINK_CLASS`.
+   See docs/13.
 
 New overlap chrome requires a new `apps/shared/components/ui/` primitive first, used by both
 Hub and Viewer. Do not one-off style a native element.

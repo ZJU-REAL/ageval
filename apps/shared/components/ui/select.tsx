@@ -8,6 +8,10 @@ import { cn } from "@ageval/shared/lib/utils";
 export const Select = SelectPrimitive.Root;
 export const SelectValue = SelectPrimitive.Value;
 
+/** Scan trigger. Copy this; do not draw a second height, radius, or focus ring. */
+export const scanTriggerClass =
+  "group flex h-9 select-none items-center justify-between gap-2 rounded-[8px] border border-hairline bg-canvas px-3.5 text-sm text-ink squish focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/40 disabled:cursor-not-allowed disabled:opacity-50";
+
 export const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
@@ -15,8 +19,7 @@ export const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "group flex h-9 select-none items-center justify-between gap-2 rounded-[8px] border border-hairline bg-canvas px-3.5 text-sm text-ink squish",
-      "focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/40 disabled:cursor-not-allowed disabled:opacity-50",
+      scanTriggerClass,
       "data-[placeholder]:text-mute min-w-[9rem]",
       className,
     )}
@@ -41,7 +44,7 @@ export const SelectContent = React.forwardRef<
       ref={ref}
       data-ageval-menu=""
       className={cn(
-        "z-[70] min-w-[8rem] overflow-hidden rounded-[12px] border border-hairline bg-canvas text-ink shadow-[var(--viewer-shadow-pop)]",
+        "z-[70] min-w-[8rem] overflow-hidden rounded-[14px] border border-hairline bg-canvas text-ink shadow-[var(--viewer-shadow-pop)]",
         "max-h-[min(24rem,var(--radix-select-content-available-height,24rem))]",
         className,
       )}
