@@ -1027,8 +1027,19 @@ class ResultsCommands:
         suite_run_id: str,
         hub_url: str | None = None,
         registry_url: str | None = None,
+        live: bool = False,
     ) -> dict[str, Any]:
-        """Upload a read-only snapshot. Does not create or relabel a catalog suite."""
+        """Upload a read-only snapshot. Does not create or relabel a catalog suite.
+
+        ``live=True`` keeps one token and patches it. A later call for the same
+        suite reuses that token.
+        """
+        from ageval.application.registry_ops.live_share import (
+            push_bound_live_share,
+            read_live_share,
+            source_hashes,
+            write_live_share,
+        )
         from ageval.application.registry_ops.snapshot_share import build_snapshot_share_archive
         from ageval.registry.share_snapshot import SNAPSHOT_SHARE_KIND
 
@@ -1038,7 +1049,6 @@ class ResultsCommands:
         dataset_id, dataset_version = dataset_identity(
             summary, location=str(suite_dir / "summary.json")
         )
-        archive_bytes, blob_digest, size = build_snapshot_share_archive(root, suite_run_id)
         client = self._client_factory(
             registry_url=registry_url, require_token=True, accept_results_url=True
         )
@@ -1053,6 +1063,25 @@ class ResultsCommands:
                 "set --hub-url or AGEVAL_HUB_URL",
                 location="hub",
             )
+        if live:
+            bound = read_live_share(root, suite_run_id)
+            if bound and bound.get("token") and bound.get("last_error") != "not_found":
+                bound["hub_url"] = hub
+                bound["registry_url"] = client.base_url
+                write_live_share(root, suite_run_id, bound)
+                synced = push_bound_live_share(root, suite_run_id, include_files=True)
+                if synced.get("ok") and not synced.get("skipped"):
+                    synced["dataset_id"] = dataset_id
+                    return synced
+                if synced.get("error") != "not_found":
+                    raise ConfigError(
+                        str(synced.get("error") or "sync_failed"),
+                        "live share sync failed",
+                        location="registry",
+                    )
+        archive_bytes, blob_digest, size = build_snapshot_share_archive(
+            root, suite_run_id, allow_in_progress=live
+        )
         import tempfile
 
         with tempfile.TemporaryDirectory(prefix="ageval-share-up-") as tmp_name:
@@ -1066,19 +1095,72 @@ class ResultsCommands:
                     blob_digest=blob_digest,
                     size=size,
                     archive=archive,
+                    mode="live" if live else "static",
                 )
             except RegistryError as exc:
                 raise ConfigError(exc.code, exc.message, location="registry") from exc
         token = str(info.get("token") or "")
+        if live:
+            write_live_share(
+                root,
+                suite_run_id,
+                {
+                    "mode": "live",
+                    "token": token,
+                    "registry_url": client.base_url,
+                    "hub_url": hub,
+                    "sources": source_hashes(root, suite_run_id),
+                    "last_error": "",
+                },
+            )
         return {
             "ok": True,
             "kind": SNAPSHOT_SHARE_KIND,
+            "mode": "live" if live else "static",
             "token": token,
             "path": info.get("path") or f"/s/{token}",
             "url": f"{hub}/s/{token}",
             "suite_run_id": suite_run_id,
             "dataset_id": dataset_id,
         }
+
+    def sync_snapshot(
+        self,
+        dataset_root: Path | str,
+        *,
+        suite_run_id: str,
+        include_files: bool = True,
+        registry_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Patch the live share bound to this local suite. Same token."""
+        from ageval.application.registry_ops.live_share import (
+            push_bound_live_share,
+            read_live_share,
+            write_live_share,
+        )
+
+        root = resolve_dataset_root(dataset_root)
+        bound = read_live_share(root, suite_run_id)
+        if not bound or not bound.get("token"):
+            raise ConfigError(
+                "invalid_request",
+                "this suite has no live share; create one with share-snapshot --live",
+                location=str(root / ".ageval" / "suite-runs" / suite_run_id),
+            )
+        if registry_url:
+            client = self._client_factory(
+                registry_url=registry_url, require_token=True, accept_results_url=True
+            )
+            bound["registry_url"] = client.base_url
+            write_live_share(root, suite_run_id, bound)
+        synced = push_bound_live_share(root, suite_run_id, include_files=include_files)
+        if not synced.get("ok"):
+            raise ConfigError(
+                str(synced.get("error") or "sync_failed"),
+                "live share sync failed",
+                location="registry",
+            )
+        return synced
 
     def revoke_snapshot(
         self,

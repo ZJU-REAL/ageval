@@ -754,6 +754,48 @@ async def execute_suite_run(
 ) -> dict[str, Any]:
     """Execute planned task×attempt units with a concurrency pool; write summary.
 
+    When a live share sidecar is present, each finished job and a periodic
+    counts/status heartbeat patch that same token. Sync failures stay on the
+    sidecar and do not change the suite result.
+    """
+    from ageval.application.registry_ops.live_share import (
+        push_bound_live_share,
+        start_live_share_heartbeat,
+    )
+
+    stop_heartbeat = start_live_share_heartbeat(plan.dataset_root, plan.suite_run_id)
+    try:
+        summary = await _execute_suite_run(
+            plan,
+            overrides=overrides,
+            run_fn=run_fn,
+            profiles_path=profiles_path,
+            resume=resume,
+            replace_slots=replace_slots,
+            on_progress=on_progress,
+            keep_workspace=keep_workspace,
+            keep_vendor_raw=keep_vendor_raw,
+        )
+        push_bound_live_share(plan.dataset_root, plan.suite_run_id, include_files=True)
+        return summary
+    finally:
+        stop_heartbeat()
+
+
+async def _execute_suite_run(
+    plan: SuitePlan,
+    *,
+    overrides: dict[str, Any] | None = None,
+    run_fn: Callable[..., Awaitable[tuple[int, Any]]] | None = None,
+    profiles_path: Path | str | None = None,
+    resume: bool = False,
+    replace_slots: set[tuple[str, int]] | None = None,
+    on_progress: ProgressCallback | None = None,
+    keep_workspace: bool = False,
+    keep_vendor_raw: bool = False,
+) -> dict[str, Any]:
+    """Execute planned task×attempt units with a concurrency pool; write summary.
+
     When ``resume=True``, load existing attempts for ``plan.suite_run_id``, skip
     units that already finished a real run, **append** new attempts (including
     re-runs of suite-cancel placeholders), and recompute metrics.
@@ -827,6 +869,11 @@ async def execute_suite_run(
         if on_progress is not None:
             with contextlib.suppress(Exception):
                 on_progress(event)
+
+    def _sync_live_share() -> None:
+        from ageval.application.registry_ops.live_share import push_bound_live_share
+
+        push_bound_live_share(plan.dataset_root, plan.suite_run_id, include_files=True)
 
     # ``created_at`` locks on the first write of this suite (resume keeps the
     # original) and every later rewrite — live or final — reuses it.
@@ -978,6 +1025,7 @@ async def execute_suite_run(
                         "duration": row.get("duration"),
                     }
                 )
+            _sync_live_share()
 
     if worker_n:
         await asyncio.gather(*[asyncio.create_task(_worker()) for _ in range(worker_n)])

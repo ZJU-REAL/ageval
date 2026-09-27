@@ -144,3 +144,152 @@ def test_share_snapshot_prints_url_and_keeps_local_secrets(
         anon.get_snapshot_share(payload["token"])
     assert missing.value.code == "not_found"
     assert before == (_sha(summary_path), _sha(profiles_path), _sha(result_path))
+
+
+def _invoke(runner: CliRunner, args: list[str]) -> dict:
+    result = runner.invoke(app, args)
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert isinstance(payload, dict)
+    return payload
+
+
+def test_live_share_reuses_the_token_and_leaves_local_files(
+    registry_server, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AGEVAL_REGISTRY_URL", registry_server["url"])
+    monkeypatch.setenv("AGEVAL_REGISTRY_TOKEN", registry_server["token"])
+    root = tmp_path / "dataset"
+    summary_path, _profiles, result_path = _write_suite(root)
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary["status"] = "running"
+    summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    before = _sha(result_path)
+    runner = CliRunner()
+    frozen = runner.invoke(
+        app,
+        [
+            "results",
+            "share-snapshot",
+            str(root),
+            "--suite-run",
+            "suite0001",
+            "--hub-url",
+            "https://hub.example",
+            "--registry-url",
+            registry_server["url"],
+        ],
+    )
+    assert frozen.exit_code == 2
+    assert "running" in frozen.stderr
+
+    created = _invoke(
+        runner,
+        [
+            "results",
+            "share-snapshot",
+            str(root),
+            "--suite-run",
+            "suite0001",
+            "--live",
+            "--hub-url",
+            "https://hub.example",
+            "--registry-url",
+            registry_server["url"],
+        ],
+    )
+    assert created["mode"] == "live"
+    assert created["url"] == f"https://hub.example/s/{created['token']}"
+    sidecar = root / ".ageval" / "suite-runs" / "suite0001" / "live-share.json"
+    assert json.loads(sidecar.read_text(encoding="utf-8"))["token"] == created["token"]
+    assert SECRET in summary_path.read_text(encoding="utf-8")
+    assert _sha(result_path) == before
+
+    state = registry_server["state"]
+    with state.stores.results._connect() as conn:
+        rows = state.stores.results._exec(
+            conn,
+            "SELECT path FROM snapshot_share_files WHERE token=?",
+            (created["token"],),
+        ).fetchall()
+    assert rows
+    assert all("live-share.json" not in str(row["path"]) for row in rows)
+    with state.stores.results._connect() as conn:
+        suites = state.stores.results._exec(
+            conn, "SELECT COUNT(*) AS n FROM suite_results"
+        ).fetchone()
+    assert int(suites["n"]) == 0
+
+    summary["status"] = "complete"
+    summary["task_refs"][0]["status"] = "FAIL"
+    summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    result_path.write_text(
+        json.dumps({"status": "FAIL", "score": 0, "api_key": SECRET, "marker": "synced"}) + "\n",
+        encoding="utf-8",
+    )
+    heartbeat = _invoke(
+        runner,
+        [
+            "results",
+            "sync-snapshot",
+            str(root),
+            "--suite-run",
+            "suite0001",
+            "--heartbeat",
+            "--registry-url",
+            registry_server["url"],
+        ],
+    )
+    assert heartbeat["token"] == created["token"]
+    anon = RegistryClient(registry_server["url"], token=None)
+    mid = anon.get_snapshot_share(created["token"])
+    assert mid["status"] == "complete"
+    held = anon._request(
+        "GET",
+        f"/v1/shares/{created['token']}/attempts/run000001/files/"
+        ".ageval/runs/run000001/result.json",
+        auth=False,
+    )[1].decode()
+    assert "synced" not in held
+
+    synced = _invoke(
+        runner,
+        [
+            "results",
+            "sync-snapshot",
+            str(root),
+            "--suite-run",
+            "suite0001",
+            "--registry-url",
+            registry_server["url"],
+        ],
+    )
+    assert synced["token"] == created["token"]
+    again = _invoke(
+        runner,
+        [
+            "results",
+            "share-snapshot",
+            str(root),
+            "--suite-run",
+            "suite0001",
+            "--live",
+            "--hub-url",
+            "https://hub.example",
+            "--registry-url",
+            registry_server["url"],
+        ],
+    )
+    assert again["token"] == created["token"]
+    view = anon.get_snapshot_share(created["token"])
+    assert view["task_refs"][0]["status"] == "FAIL"
+    body = anon._request(
+        "GET",
+        f"/v1/shares/{created['token']}/attempts/run000001/files/"
+        ".ageval/runs/run000001/result.json",
+        auth=False,
+    )[1].decode()
+    assert "synced" in body
+    assert SECRET not in body
+    assert "[redacted]" in body
+    assert SECRET in result_path.read_text(encoding="utf-8")

@@ -494,6 +494,16 @@ def register(app: typer.Typer) -> None:
                 ),
             ),
         ] = None,
+        live: Annotated[
+            bool,
+            typer.Option(
+                "--live",
+                help=(
+                    "Keep one /s/{token} link and patch it when jobs finish. "
+                    "Default is a frozen snapshot."
+                ),
+            ),
+        ] = False,
         registry_url: Annotated[
             str | None,
             typer.Option("--registry-url", help="Override registry / results URL."),
@@ -502,6 +512,7 @@ def register(app: typer.Typer) -> None:
         """Upload a read-only snapshot and print its Hub link.
 
         Does not change suite visibility, result_shares, or board_listed.
+        ``--live`` allows a suite that is still running and reuses the token.
         """
         from ageval.application.composition import build_results_commands
         from ageval.config.errors import ConfigError
@@ -511,6 +522,45 @@ def register(app: typer.Typer) -> None:
                 dataset,
                 suite_run_id=suite_run,
                 hub_url=hub_url,
+                registry_url=registry_url,
+                live=live,
+            )
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        emit(summary)
+
+    @sub.command("sync-snapshot")
+    def results_sync_snapshot_command(
+        dataset: Annotated[
+            str,
+            typer.Argument(help="Local Dataset root containing the live share sidecar."),
+        ],
+        suite_run: Annotated[
+            str,
+            typer.Option("--suite-run", help="Suite run id bound with share-snapshot --live."),
+        ],
+        heartbeat: Annotated[
+            bool,
+            typer.Option(
+                "--heartbeat",
+                help="Send suite counts and status only, without Attempt files.",
+            ),
+        ] = False,
+        registry_url: Annotated[
+            str | None,
+            typer.Option("--registry-url", help="Override registry / results URL."),
+        ] = None,
+    ) -> None:
+        """Patch the live share for this suite. The token stays the same."""
+        from ageval.application.composition import build_results_commands
+        from ageval.config.errors import ConfigError
+
+        try:
+            summary = build_results_commands().sync_snapshot(
+                dataset,
+                suite_run_id=suite_run,
+                include_files=not heartbeat,
                 registry_url=registry_url,
             )
         except ConfigError as exc:
