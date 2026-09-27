@@ -105,19 +105,23 @@ ageval results upload-suite <dataset|id@version> --suite-run <8-hex> --public --
 
 ## Snapshot share
 
-A snapshot share is a read-only link for one local suite, including one that is still running. The link freezes the summary and Attempt evidence present at upload. `upload-suite` still refuses an unfinished summary. `ageval results share` still grants org or user access. Leaderboard listing still goes through `upload-suite` and an owner approval.
+A snapshot share is a read-only link for one local suite, including one that is still running. The default link freezes the summary and Attempt evidence present at upload. `upload-suite` still refuses an unfinished summary. `ageval results share` still grants org or user access. Leaderboard listing still goes through `upload-suite` and an owner approval.
 
 ```bash
 ageval results share-snapshot <dataset> --suite-run <id> --hub-url https://hub.example
 ageval results share-snapshot <dataset> --suite-run <id> --run <run_id> --hub-url https://hub.example
 ageval results share-snapshot <dataset> --run <run_id> --hub-url https://hub.example
+ageval results share-snapshot <dataset> --suite-run <id> --live --hub-url https://hub.example
+ageval results sync-snapshot <dataset> --suite-run <id>
 ```
 
-`--suite-run` uploads that suite. `--run` uploads one Attempt. Both together upload that one job inside the suite. The command prints `{hub}/s/{token}`. The local Viewer icon on an opened suite or job runs the same command. It opens a dialog that explains the upload; confirming it shows the link and a copy button. Opening the icon again shows that link, and can remove the share. Anyone with the link can open it without signing in. The page shows the jobs and Attempt evidence from the moment of upload. Later edits on disk or in Hub do not change the link.
+`--suite-run` uploads that suite. `--run` uploads one Attempt. Both together upload that one job inside the suite. The command prints `{hub}/s/{token}`. The local Viewer icon on an opened suite or job runs the same command without `--live`. It opens a dialog that explains the upload; confirming it shows the link and a copy button. Opening the icon again shows that link, and can remove the share. Anyone with the link can open it without signing in. The page shows the jobs and Attempt evidence from the moment of upload. Later edits on disk or in Hub do not change a default link.
 
-`ageval results revoke-snapshot <token-or-url>` deletes the link. Local `.ageval/suite-runs` and `.ageval/runs` stay. The suite's public or private setting and any leaderboard listing stay as they were. The link does not expire.
+`--live` keeps that same `{hub}/s/{token}` and updates it when a job finishes. The runner also sends counts and status about every 45 seconds, so a long single job does not leave the board looking idle. `sync-snapshot` sends the current summary again after the runner stops, on the same token. The Hub page refreshes while the link is live. An Attempt page shows the files already uploaded. A job that is still running does not stream its trajectory.
 
-The body limit is the same 512 MiB cap as `upload-suite`. `api_key` values that are not environment locators are removed before upload. The link cannot be imported as a catalog suite or sent to the leaderboard.
+`ageval results revoke-snapshot <token-or-url>` deletes the link. It works for a frozen link and a live link. Local `.ageval/suite-runs` and `.ageval/runs` stay. The suite's public or private setting and any leaderboard listing stay as they were. The link does not expire.
+
+The body limit is the same 512 MiB cap as `upload-suite`. `api_key` values that are not environment locators are removed before upload and again on each live update. The link cannot be imported as a catalog suite or sent to the leaderboard.
 
 Dataset Leaderboard lists every suite that passed the board gate. The header version switcher only changes README / Tasks. The Select to the right of Public filters rows by the suite's `dataset_version` (default All versions).
 
