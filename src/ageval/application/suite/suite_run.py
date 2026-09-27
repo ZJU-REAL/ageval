@@ -759,7 +759,7 @@ async def execute_suite_run(
     sidecar and do not change the suite result.
     """
     from ageval.application.registry_ops.live_share import (
-        push_bound_live_share,
+        push_suite_share,
         start_live_share_heartbeat,
     )
 
@@ -776,7 +776,12 @@ async def execute_suite_run(
             keep_workspace=keep_workspace,
             keep_vendor_raw=keep_vendor_raw,
         )
-        push_bound_live_share(plan.dataset_root, plan.suite_run_id, include_files=True)
+        await asyncio.to_thread(
+            push_suite_share,
+            plan.dataset_root,
+            plan.suite_run_id,
+            include_files=True,
+        )
         return summary
     finally:
         stop_heartbeat()
@@ -870,10 +875,15 @@ async def _execute_suite_run(
             with contextlib.suppress(Exception):
                 on_progress(event)
 
-    def _sync_live_share() -> None:
-        from ageval.application.registry_ops.live_share import push_bound_live_share
+    async def _sync_live_share() -> None:
+        from ageval.application.registry_ops.live_share import push_suite_share
 
-        push_bound_live_share(plan.dataset_root, plan.suite_run_id, include_files=True)
+        await asyncio.to_thread(
+            push_suite_share,
+            plan.dataset_root,
+            plan.suite_run_id,
+            include_files=True,
+        )
 
     # ``created_at`` locks on the first write of this suite (resume keeps the
     # original) and every later rewrite — live or final — reuses it.
@@ -1025,7 +1035,7 @@ async def _execute_suite_run(
                         "duration": row.get("duration"),
                     }
                 )
-            _sync_live_share()
+            await _sync_live_share()
 
     if worker_n:
         await asyncio.gather(*[asyncio.create_task(_worker()) for _ in range(worker_n)])

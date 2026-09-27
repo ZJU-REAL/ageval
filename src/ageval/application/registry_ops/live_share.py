@@ -68,6 +68,19 @@ def push_bound_live_share(
         return _push_locked(Path(dataset_root), suite_run_id, include_files=include_files)
 
 
+def push_suite_share(
+    dataset_root: Path | str,
+    suite_run_id: str,
+    *,
+    include_files: bool,
+) -> None:
+    """Suite boundary. A push failure does not change the suite result."""
+    try:
+        push_bound_live_share(dataset_root, suite_run_id, include_files=include_files)
+    except Exception:
+        return
+
+
 def start_live_share_heartbeat(
     dataset_root: Path,
     suite_run_id: str,
@@ -79,7 +92,7 @@ def start_live_share_heartbeat(
 
     def loop() -> None:
         while not stop.wait(interval):
-            push_bound_live_share(dataset_root, suite_run_id, include_files=False)
+            push_suite_share(dataset_root, suite_run_id, include_files=False)
 
     thread = threading.Thread(target=loop, name="ageval-live-share", daemon=True)
     thread.start()

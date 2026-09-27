@@ -53,7 +53,10 @@ def test_build_suite_archive_excludes_nested_l1_work(tmp_path: Path) -> None:
     nested.mkdir(parents=True)
     (nested / "leak.txt").write_text("nope\n", encoding="utf-8")
 
+    (suite_dir / "live-share.json").write_text('{"token":"capability"}\n', encoding="utf-8")
+
     archive, _, _ = build_suite_archive(suite_dir, suite_run_id=suite_id)
     names = _arcnames(archive)
     assert f".ageval/suite-runs/{suite_id}/summary.json" in names
     assert not any("l1-work" in n for n in names)
+    assert not any("live-share.json" in n for n in names)
