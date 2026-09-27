@@ -739,8 +739,10 @@ class ResultService:
         Performance consent; other uploaders only stamp provenance. Builtin
         short ids require a platform maintainer (or an approved request).
         """
-        from services.registry.package_service import _agent_preview_from_archive
-        from services.registry.store import package_kind_for_media_type
+        from services.registry.packages.service import agent_preview_from_archive
+        from services.registry.packages.dto import (
+            package_kind_for_media_type,
+        )
 
         from ageval.application.suite.attach_agent_ref import (
             AttachAgentRefError,
@@ -801,7 +803,7 @@ class ResultService:
             data = read_blob(self.blobs, release.blob_digest, prefix="packages")
             if data is None:
                 raise RegistryAppError("not_found", "agent package blob missing", http_status=404)
-            preview = _agent_preview_from_archive(data)
+            preview = agent_preview_from_archive(data)
             binding = preview.get("binding")
             if not isinstance(binding, Mapping):
                 raise RegistryAppError(

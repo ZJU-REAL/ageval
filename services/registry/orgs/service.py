@@ -9,7 +9,7 @@ from typing import Any
 
 from services.registry.access import AccessPolicy
 from services.registry.auth.tokens import TokenInfo
-from services.registry.brand_marks import normalize_icon_github, normalize_icon_key
+from services.registry.packages.brand_marks import normalize_icon_github, normalize_icon_key
 from services.registry.clock import now
 from services.registry.errors import RegistryAppError
 from services.registry.orgs.official import is_official_upload_org

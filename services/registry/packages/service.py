@@ -9,16 +9,16 @@ from typing import Any
 
 from services.registry.access import AccessPolicy
 from services.registry.content.blob_io import read_blob, sha256_file
-from services.registry.brand_marks import normalize_icon_github, normalize_icon_key
-from services.registry.builtin_agents import (
+from services.registry.packages.brand_marks import normalize_icon_github, normalize_icon_key
+from services.registry.packages.builtin_agents import (
     builtin_agent_item,
     builtin_agent_items,
     is_builtin_agent_id,
     reserved_harness_leaf,
 )
-from services.registry.builtin_agents import builtin_list_files as builtin_agent_list_files
-from services.registry.builtin_agents import builtin_read_file as builtin_agent_read_file
-from services.registry.builtin_plugins import (
+from services.registry.packages.builtin_agents import builtin_list_files as builtin_agent_list_files
+from services.registry.packages.builtin_agents import builtin_read_file as builtin_agent_read_file
+from services.registry.packages.builtin_plugins import (
     builtin_plugin_item,
     builtin_plugin_items,
     is_builtin_plugin_id,
@@ -27,12 +27,16 @@ from services.registry.dataset import DRAFT_SLOT, is_draft_version
 from services.registry.errors import RegistryAppError
 from services.registry.paging import page_slice
 from services.registry.auth.tokens import TokenInfo
-from services.registry.store import (
+from services.registry.packages.rows import (
     DraftRow,
     ReleaseRow,
-    now,
+)
+from services.registry.packages.dto import (
     package_kind_for_media_type,
     release_to_dict,
+)
+from services.registry.store import (
+    now,
 )
 
 
@@ -600,7 +604,7 @@ class PackageService:
             data = read_blob(self.blobs, row.blob_digest, prefix="packages")
             if data is not None:
                 with contextlib.suppress(Exception):
-                    payload["agent_preview"] = _agent_preview_from_archive(data)
+                    payload["agent_preview"] = agent_preview_from_archive(data)
         return payload
 
     def serve_content(
@@ -631,7 +635,7 @@ class PackageService:
         version: str | None = None,
         package_kind: str | None = None,
     ) -> dict[str, Any]:
-        from services.registry.builtin_plugins import builtin_list_files
+        from services.registry.packages.builtin_plugins import builtin_list_files
         from services.registry.content.files import get_or_build_index
 
         kind = overlay_kind(dataset_id, package_kind)
@@ -712,7 +716,7 @@ class PackageService:
         version: str | None = None,
         package_kind: str | None = None,
     ) -> dict[str, Any]:
-        from services.registry.builtin_plugins import builtin_read_file
+        from services.registry.packages.builtin_plugins import builtin_read_file
         from services.registry.content.files import (
             MAX_FILE_BYTES,
             PackageFileNotFound,
@@ -1172,7 +1176,7 @@ class PackageService:
             raise RegistryAppError("invalid_archive", str(exc), http_status=400) from exc
 
 
-def _agent_preview_from_archive(archive: bytes) -> dict[str, Any]:
+def agent_preview_from_archive(archive: bytes) -> dict[str, Any]:
     """Secret-free agent detail preview (design/14): manifest + binding + files."""
     from ageval.agents.manifest import load_agent_manifest
     from ageval.config.profiles import project_job_overlay

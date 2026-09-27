@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 from services.registry.access import AccessPolicy
 from services.registry.auth.tokens import TokenInfo
-from services.registry.brand_marks import ALLOWED_KEYS, normalize_icon_github
 from services.registry.content.blobs import MemoryBlobStore
 from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
-from services.registry.package_service import PackageService
+from services.registry.packages.brand_marks import ALLOWED_KEYS, normalize_icon_github
+from services.registry.packages.service import PackageService
 
 from ageval.registry.archive import MEDIA_TYPE, build_archive
 from ageval.registry.digest import compute_package_digest
@@ -55,7 +55,7 @@ def _meta_archive(tmp_path: Path) -> tuple[dict[str, object], Path]:
 
 
 def test_hub_harness_marks_match_registry() -> None:
-    from services.registry.builtin_agents import HARNESS_ICON_KEY
+    from services.registry.packages.builtin_agents import HARNESS_ICON_KEY
 
     ts = (REPO / "apps/shared/lib/brand-marks/harness.ts").read_text(encoding="utf-8")
     block = re.search(
@@ -76,7 +76,7 @@ def test_hub_harness_marks_match_registry() -> None:
 
 def test_hub_catalog_keys_match_assets() -> None:
     allow = json.loads(
-        (REPO / "services/registry/brand_marks.json").read_text(encoding="utf-8"),
+        (REPO / "services/registry/packages/brand_marks.json").read_text(encoding="utf-8"),
     )
     ts = (REPO / "apps/shared/lib/brand-marks/catalog.ts").read_text(encoding="utf-8")
     ids = re.findall(r'id: "([a-z0-9-]+)"', ts)

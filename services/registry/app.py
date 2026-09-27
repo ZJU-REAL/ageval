@@ -143,7 +143,7 @@ class RegistryState:
         from services.registry.auth.service import AuthService
         from services.registry.orgs.service import OrgService
         from services.registry.orgs.users import UserService
-        from services.registry.package_service import PackageService
+        from services.registry.packages.service import PackageService
         from services.registry.request_service import RequestService
         from services.registry.result_service import ResultService
         from services.registry.runtime_service import RuntimeService

@@ -177,7 +177,7 @@ def test_reject_agent_yaml_as_dataset(env: dict[str, str], tmp_path: Path) -> No
     import tarfile
 
     from services.registry.errors import RegistryAppError
-    from services.registry.package_service import PackageService
+    from services.registry.packages.service import PackageService
 
     pkg = tmp_path / "sneaky"
     pkg.mkdir()

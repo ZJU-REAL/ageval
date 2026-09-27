@@ -171,16 +171,17 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   └── hub/                         # Registry Dataset / Plugin / Agent / Leaderboard
 ├── services/registry/               # standalone HTTP: Route.access + *Service
 │   ├── app.py / asgi.py / backend.py
-│   ├── http/                        # dispatch, routes; auth and org handlers cut out
+│   ├── http/                        # dispatch, routes; auth, org, and package handlers
 │   ├── auth/                        # AuthService, GitHub OAuth, token stores
 │   ├── orgs/                        # service, users, store, protocol, rows, queries, official
-│   ├── package_service.py / result_service.py
+│   ├── packages/                    # service, store, protocol, rows, queries, dto, builtins
+│   ├── result_service.py
 │   ├── request_service.py           # listing + performance requests; Inbox
 │   ├── share_service.py             # snapshot share link; not catalog ACL
 │   ├── content/                     # files, blob_io, blobs
 │   ├── db/                          # dialect, sql_adapter, schema (open_stores)
 │   ├── queries.py / dataset.py      # SQL not yet cut into an aggregate
-│   ├── store_package.py / store_result.py / store_inbox.py
+│   ├── store_result.py / store_inbox.py
 │   ├── rows.py / protocols.py       # rows and protocols not yet cut out
 │   └── store.py                     # remaining row/DTO vocabulary
 ├── examples/
@@ -402,7 +403,7 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | Other Agent backends | `openai-http` / `anthropic-http` / external `nooa` `dsh` | Not vendor stdout scrape |
 | Official base image | `plugins/contrib/docker/attempt/` | GHCR `ageval-attempt:<cli-ver>` then local `ageval-attempt:base`; miss → packaged Dockerfile. Bake ACP entries at image build; no `npm i` at invoke |
 | ACP task image layer | `plugins/contrib/acp` | `config.image_layers` bakes the bound `options.entry` onto the task recipe |
-| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is four aggregate stores (orgs in `orgs/store.py`; packages, results, and inbox still `store_*.py`) behind narrow protocols, one schema init in `db/schema.open_stores`, org SQL in `orgs/queries.py`, remaining SQL in `queries.py`, dialect only in `db/sql_adapter.py` |
+| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is four aggregate stores (`orgs/store.py`, `packages/store.py`; results and inbox still `store_*.py`) behind narrow protocols, one schema init in `db/schema.open_stores`, org SQL in `orgs/queries.py`, package SQL in `packages/queries.py`, remaining SQL in `queries.py`, dialect only in `db/sql_adapter.py` |
 
 ## Failure and Privacy Boundary
 

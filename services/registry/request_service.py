@@ -193,7 +193,9 @@ class RequestService:
     def _apply_performance(
         self, suite: Any, auth: TokenInfo, agent: str, canonical_model: str
     ) -> dict[str, Any]:
-        from services.registry.store import package_kind_for_media_type
+        from services.registry.packages.dto import (
+            package_kind_for_media_type,
+        )
 
         from ageval.application.suite.attach_agent_ref import (
             AttachAgentRefError,

@@ -291,7 +291,9 @@ class RuntimeService:
         auth: TokenInfo,
     ) -> dict[str, Any]:
         from services.registry.errors import RegistryAppError
-        from services.registry.store import package_kind_for_media_type
+        from services.registry.packages.dto import (
+            package_kind_for_media_type,
+        )
 
         if not auth.user_id:
             raise RegistryAppError("unauthorized", "authentication required", http_status=401)

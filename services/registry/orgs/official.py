@@ -28,7 +28,9 @@ def is_official_upload_org(org_id: str | None) -> bool:
 
 def official_dataset_ids(releases: Iterable[Any]) -> frozenset[str]:
     """Dataset ids that have a non-draft official-org dataset release."""
-    from services.registry.store import package_kind_for_media_type
+    from services.registry.packages.dto import (
+        package_kind_for_media_type,
+    )
 
     out: set[str] = set()
     for row in releases:

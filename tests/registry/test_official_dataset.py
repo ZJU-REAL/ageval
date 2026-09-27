@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from services.registry.dataset import BOUND_RELEASE
 from services.registry.orgs.official import is_official_dataset, official_dataset_ids
+from services.registry.packages.dto import (
+    release_to_dict,
+)
+from services.registry.packages.rows import (
+    ReleaseRow,
+)
 from services.registry.runtime_service import is_plaza_source_suite
-from services.registry.store import ReleaseRow, release_to_dict
 
 from ageval.registry.media_types import DATASET_MEDIA_TYPE, PLUGIN_MEDIA_TYPE
 

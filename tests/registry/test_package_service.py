@@ -11,7 +11,7 @@ from services.registry.content.blob_io import read_blob
 from services.registry.content.blobs import MemoryBlobStore
 from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
-from services.registry.package_service import PackageService
+from services.registry.packages.service import PackageService
 
 from ageval.registry.archive import MEDIA_TYPE, build_archive
 from ageval.registry.digest import compute_package_digest
@@ -590,7 +590,7 @@ def test_list_tasks_skips_blob_after_publish(
     def _no_blob(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("list_tasks must not read the package blob")
 
-    monkeypatch.setattr("services.registry.package_service.read_blob", _no_blob)
+    monkeypatch.setattr("services.registry.packages.service.read_blob", _no_blob)
     listed = svc.list_tasks(
         dataset_id="test/publish-min",
         auth=auth,

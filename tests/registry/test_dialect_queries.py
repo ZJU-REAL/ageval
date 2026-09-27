@@ -5,21 +5,22 @@ from __future__ import annotations
 from services.registry import queries as Q
 from services.registry.db.dialect import pg_sql
 from services.registry.http.routes import match_route
+from services.registry.packages import queries as package_queries
 
 
 def test_pg_sql_translates_placeholders() -> None:
     assert pg_sql("SELECT * FROM t WHERE a=? AND b=?") == "SELECT * FROM t WHERE a=%s AND b=%s"
-    assert "?" not in pg_sql(Q.INSERT_RELEASE)
+    assert "?" not in pg_sql(package_queries.INSERT_RELEASE)
 
 
 def test_list_releases_query_public_default() -> None:
-    sql, params = Q.list_releases_query()
+    sql, params = package_queries.list_releases_query()
     assert "visibility = 'public'" in sql
     assert params == []
 
 
 def test_list_releases_query_private_filter() -> None:
-    sql, params = Q.list_releases_query(include_private=True, visibility="private")
+    sql, params = package_queries.list_releases_query(include_private=True, visibility="private")
     assert "visibility = ?" in sql
     assert params == ["private"]
     assert "visibility = %s" in pg_sql(sql)

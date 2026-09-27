@@ -13,7 +13,7 @@ from services.registry.errors import RegistryAppError
 
 _PATH = Path(__file__).with_name("builtin_plugins.json")
 _ROW_KEYS = frozenset({"plugin_id", "description", "host_requires", "exclusive", "chain"})
-_CONTRIB_ROOT = Path(__file__).resolve().parents[2] / "src" / "ageval" / "plugins" / "contrib"
+_CONTRIB_ROOT = Path(__file__).resolve().parents[3] / "src" / "ageval" / "plugins" / "contrib"
 _CONTRIB_DIR = {
     "local": "local",
     "docker": "docker",

@@ -101,8 +101,14 @@ def test_ageval_runs_layout_owned_by_evidence() -> None:
 
 
 def test_queries_own_single_releases_ddl() -> None:
-    queries = (REPO / "services" / "registry" / "queries.py").read_text(encoding="utf-8")
+    queries = (REPO / "services" / "registry" / "packages" / "queries.py").read_text(
+        encoding="utf-8"
+    )
     assert queries.count("CREATE TABLE IF NOT EXISTS releases") == 1
+    root_queries = (REPO / "services" / "registry" / "queries.py").read_text(
+        encoding="utf-8"
+    )
+    assert "CREATE TABLE IF NOT EXISTS releases" not in root_queries
     adapter = (REPO / "services" / "registry" / "db" / "sql_adapter.py").read_text(encoding="utf-8")
     assert "CREATE TABLE IF NOT EXISTS releases" not in adapter
 
@@ -161,7 +167,7 @@ def test_store_has_no_sql_literals() -> None:
     rels = {p.relative_to(root).as_posix() for p in store_files}
     assert {
         "store.py",
-        "store_package.py",
+        "packages/store.py",
         "store_result.py",
         "store_inbox.py",
         "orgs/store.py",

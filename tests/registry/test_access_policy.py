@@ -7,8 +7,10 @@ from pathlib import Path
 from services.registry.access import AccessPolicy
 from services.registry.auth.tokens import TokenInfo
 from services.registry.db.schema import open_sqlite_stores
-from services.registry.store import (
+from services.registry.packages.rows import (
     ReleaseRow,
+)
+from services.registry.store import (
     now,
 )
 

@@ -13,22 +13,23 @@ from typing import Any
 
 from services.registry import queries as Q
 from services.registry.orgs import queries as org_queries
+from services.registry.packages import queries as package_queries
 from services.registry.store_inbox import InboxStore
 from services.registry.orgs.store import OrgStore
-from services.registry.store_package import PackageStore
+from services.registry.packages.store import PackageStore
 from services.registry.store_result import ResultStore
 
 
 def init_schema(adapter: Any) -> None:
     with adapter.connect() as conn:
         adapter.lock_schema(conn)
-        for stmt in (*Q.SCHEMA_STATEMENTS, *org_queries.SCHEMA_STATEMENTS):
+        for stmt in (*Q.SCHEMA_STATEMENTS, *org_queries.SCHEMA_STATEMENTS, *package_queries.SCHEMA_STATEMENTS):
             if "api_tokens" in stmt:
                 continue
             adapter.execute(conn, stmt)
-        for table, column, decl in (*Q.SCHEMA_MIGRATIONS, *org_queries.SCHEMA_MIGRATIONS):
+        for table, column, decl in (*Q.SCHEMA_MIGRATIONS, *org_queries.SCHEMA_MIGRATIONS, *package_queries.SCHEMA_MIGRATIONS):
             adapter.add_column(conn, table, column, decl)
-        for table, column in (*Q.SCHEMA_INTEGER_FLAGS, *org_queries.SCHEMA_INTEGER_FLAGS):
+        for table, column in (*Q.SCHEMA_INTEGER_FLAGS, *org_queries.SCHEMA_INTEGER_FLAGS, *package_queries.SCHEMA_INTEGER_FLAGS):
             adapter.align_integer_flag(conn, table, column)
         conn.commit()
 
