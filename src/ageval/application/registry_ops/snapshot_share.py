@@ -15,8 +15,11 @@ from ageval.application.suite import document as suite_document
 from ageval.config.errors import ConfigError
 from ageval.evidence.identity import dataset_identity
 from ageval.evidence.locators import (
+    default_runs_root,
     default_suite_runs_root,
     resolve_attempt_run_dir,
+    run_locator,
+    suite_run_locator,
 )
 from ageval.evidence.slim import is_vendor_raw_rel
 from ageval.registry.results_archive import pack_members
@@ -99,14 +102,14 @@ def build_snapshot_share_archive(dataset_root: Path, suite_run_id: str) -> tuple
         raise ConfigError(
             "invalid_package",
             f"missing local run dir(s) under .ageval/runs/ for: {preview}",
-            location=str(root / ".ageval" / "runs"),
+            location=str(default_runs_root(root)),
         )
 
     with tempfile.TemporaryDirectory(prefix="ageval-snapshot-") as tmp_name:
         temp = Path(tmp_name)
-        _copy_files(suite_dir, temp / ".ageval" / "suite-runs" / suite_run_id)
+        _copy_files(suite_dir, temp / suite_run_locator(suite_run_id))
         for run_id, run_dir in run_dirs:
-            _copy_files(run_dir, temp / ".ageval" / "runs" / run_id)
+            _copy_files(run_dir, temp / run_locator(run_id))
         scrub_tree(temp)
         marker = {
             "kind": SNAPSHOT_SHARE_KIND,
