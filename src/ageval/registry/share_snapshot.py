@@ -20,6 +20,7 @@ import yaml
 SNAPSHOT_SHARE_KIND = "snapshot-share"
 SNAPSHOT_SHARE_MARKER = "snapshot-share.json"
 SHARE_BLOB_PREFIX = "shares"
+LIVE_SHARE_SIDECAR = "live-share.json"
 
 _SECRET_KEYS = (
     "api_key",
@@ -87,29 +88,44 @@ def _value_is_plaintext_secret(value: bytes) -> bool:
     return _ENV_NAME.fullmatch(text) is None
 
 
+def text_has_plaintext_secret(chunk: bytes) -> bool:
+    """True when a text chunk assigns a plaintext secret or embeds a private key."""
+    if b"\x00" in chunk:
+        return False
+    if _PRIVATE_KEY.search(chunk):
+        return True
+    for match in _ASSIGNED_VALUE.finditer(chunk):
+        if _value_is_plaintext_secret(match.group("value")):
+            return True
+    return False
+
+
 def snapshot_has_plaintext_secret(archive: Path) -> bool:
     """Scan decompressed text members for a secret assigned to a known key."""
     try:
-        with _open_tar(archive) as tar:
-            seen = 0
-            for info in tar.getmembers():
-                if not info.isfile() or seen >= 4_000_000:
-                    continue
-                extracted = tar.extractfile(info)
-                if extracted is None:
-                    continue
-                chunk = extracted.read(min(int(info.size), 4_000_000 - seen))
-                seen += len(chunk)
-                if b"\x00" in chunk:
-                    continue
-                if _PRIVATE_KEY.search(chunk):
-                    return True
-                for match in _ASSIGNED_VALUE.finditer(chunk):
-                    if _value_is_plaintext_secret(match.group("value")):
-                        return True
+        seen = 0
+        for _name, chunk in iter_archive_files(archive):
+            if seen >= 4_000_000:
+                break
+            piece = chunk[: 4_000_000 - seen]
+            seen += len(piece)
+            if text_has_plaintext_secret(piece):
+                return True
     except (OSError, tarfile.TarError, gzip.BadGzipFile, EOFError):
         return False
     return False
+
+
+def iter_archive_files(archive: Path) -> Iterator[tuple[str, bytes]]:
+    """Yield ``(normalized path, bytes)`` for each regular file member."""
+    with _open_tar(archive) as tar:
+        for info in tar.getmembers():
+            if not info.isfile():
+                continue
+            extracted = tar.extractfile(info)
+            if extracted is None:
+                continue
+            yield _norm_name(info.name), extracted.read()
 
 
 def read_archive_member(archive: Path, member: str, *, max_bytes: int = 2_000_000) -> bytes | None:
@@ -260,3 +276,21 @@ def scrub_tree(root: Path) -> None:
     for path in sorted(root.rglob("*")):
         if path.is_file() and path.suffix.lower() in _TEXT_SUFFIXES:
             scrub_file(path)
+
+
+def scrub_member_bytes(name: str, data: bytes) -> bytes:
+    """Return scrubbed bytes for one archive member. Non-text members pass through."""
+    suffix = Path(name).suffix.lower()
+    if suffix not in _TEXT_SUFFIXES or b"\x00" in data:
+        return data
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="ageval-scrub-") as tmp:
+        path = Path(tmp) / f"member{suffix}"
+        path.write_text(text, encoding="utf-8")
+        scrub_file(path)
+        return path.read_bytes()

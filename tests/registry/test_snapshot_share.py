@@ -309,3 +309,161 @@ def test_create_requires_upload_scope(registry_server, tmp_path: Path) -> None:
     with pytest.raises(RegistryError) as denied:
         _upload(anon, _archive(tmp_path))
     assert denied.value.status == 401
+
+
+def _upload_live(client: RegistryClient, archive: Path) -> dict:
+    return client.create_snapshot_share(
+        suite_run_id="suite0001",
+        dataset_id="acme/demo",
+        dataset_version="0.1.0",
+        blob_digest=sha256_file(archive),
+        size=archive.stat().st_size,
+        archive=archive,
+        mode="live",
+    )
+
+
+def test_static_share_is_immutable(registry_server, tmp_path: Path) -> None:
+    owner = RegistryClient(registry_server["url"], token=registry_server["token"])
+    created = _upload(owner, _archive(tmp_path))
+    assert created["mode"] == "static"
+    state = registry_server["state"]
+    assert _count(state, "snapshot_share_files") == 0
+    with pytest.raises(RegistryError) as denied:
+        owner.patch_snapshot_share(created["token"], summary=_summary())
+    assert denied.value.code == "invalid_request"
+
+
+def test_live_patch_keeps_the_token_and_serves_the_last_summary(
+    registry_server, tmp_path: Path
+) -> None:
+    state = registry_server["state"]
+    owner = RegistryClient(registry_server["url"], token=registry_server["token"])
+    created = _upload_live(owner, _archive(tmp_path))
+    token = created["token"]
+    assert created["mode"] == "live"
+    assert created["path"] == f"/s/{token}"
+    assert created["run_id"] == ""
+    assert _count(state, "suite_results") == 0
+    assert _count(state, "result_shares") == 0
+    assert _count(state, "snapshot_share_files") >= 1
+
+    anon = RegistryClient(registry_server["url"], token=None)
+    first = anon.get_snapshot_share(token)
+    assert first["task_refs"][0]["status"] == "PASS"
+    assert first["task_refs"][0]["has_attempt_content"] is True
+    file_body = anon._request(
+        "GET",
+        f"/v1/shares/{token}/attempts/run000001/files/.ageval/runs/run000001/result.json",
+        auth=False,
+    )[1].decode()
+    assert "PASS" in file_body
+
+    running = _summary()
+    running["status"] = "running"
+    running["task_refs"] = [
+        {"task_id": "hello", "status": "PASS", "score": 1, "run_id": "run000001"},
+        {"task_id": "next", "status": "FAIL", "score": 0, "run_id": "run000002"},
+    ]
+    running["progress"] = {"done": 1, "total": 2, "status": "running", "running": 1}
+    patched = owner.patch_snapshot_share(token, summary=running, heartbeat=True)
+    assert patched["token"] == token
+    mid = anon.get_snapshot_share(token)
+    assert mid["token"] == token
+    assert [item["task_id"] for item in mid["task_refs"]] == ["hello", "next"]
+    assert mid["status"] == "running"
+    assert mid["progress"]["running"] == 1
+    assert mid["task_refs"][1]["has_attempt_content"] is False
+    assert anon.get_snapshot_share(token)["status"] == "running"
+
+    done = dict(running)
+    done["status"] = "complete"
+    done["progress"] = {"done": 2, "total": 2, "status": "complete", "running": 0}
+    again = owner.patch_snapshot_share(token, summary=done)
+    assert again["token"] == token
+    assert anon.get_snapshot_share(token)["status"] == "complete"
+
+
+def test_live_patch_scrubs_files_and_rejects_non_owners(registry_server, tmp_path: Path) -> None:
+    state = registry_server["state"]
+    owner = RegistryClient(registry_server["url"], token=registry_server["token"])
+    created = _upload_live(owner, _archive(tmp_path, name="live.tar.gz"))
+    token = created["token"]
+    secret_summary = _summary(api_key="sk-supersecretvalue")
+    secret_summary["visibility"] = "public"
+    with pytest.raises(RegistryError) as acl:
+        owner.patch_snapshot_share(token, summary=secret_summary)
+    assert acl.value.code == "invalid_request"
+
+    secret_summary.pop("visibility")
+    patched = owner.patch_snapshot_share(token, summary=secret_summary)
+    assert patched["job_overlay"]["solver"]["api_key"] == "[redacted]"
+    anon = RegistryClient(registry_server["url"], token=None)
+    assert "sk-supersecretvalue" not in json.dumps(anon.get_snapshot_share(token))
+
+    patch_archive = tmp_path / "patch.tar.gz"
+    patch_archive.write_bytes(
+        _gzip_tar(
+            {
+                ".ageval/runs/run000002/result.json": (
+                    b'{"status":"FAIL","score":0,"api_key":"sk-supersecretvalue"}\n'
+                ),
+            }
+        )
+    )
+    advanced = _summary()
+    advanced["task_refs"] = [
+        {"task_id": "hello", "status": "PASS", "score": 1, "run_id": "run000001"},
+        {"task_id": "next", "status": "FAIL", "score": 0, "run_id": "run000002"},
+    ]
+    owner.patch_snapshot_share(token, summary=advanced, archive=patch_archive)
+    view = anon.get_snapshot_share(token)
+    fail_ref = next(item for item in view["task_refs"] if item["task_id"] == "next")
+    assert fail_ref["has_attempt_content"] is True
+    stored = anon._request(
+        "GET",
+        f"/v1/shares/{token}/attempts/run000002/files/.ageval/runs/run000002/result.json",
+        auth=False,
+    )[1].decode()
+    assert "sk-supersecretvalue" not in stored
+    assert "[redacted]" in stored
+
+    key_archive = tmp_path / "key.tar.gz"
+    key_archive.write_bytes(_gzip_tar({"notes.txt": b"-----BEGIN PRIVATE KEY-----\nabc\n"}))
+    with pytest.raises(RegistryError) as leaked:
+        owner.patch_snapshot_share(token, summary=advanced, archive=key_archive)
+    assert leaked.value.code == "secret_scan_failed"
+
+    mallory = RegistryClient(registry_server["url"], token="mallory-token")
+    with pytest.raises(RegistryError) as denied:
+        mallory.patch_snapshot_share(token, summary=_summary())
+    assert denied.value.code == "forbidden"
+    anon_writer = RegistryClient(registry_server["url"], token=None)
+    with pytest.raises(RegistryError) as unsigned:
+        anon_writer.patch_snapshot_share(token, summary=_summary())
+    assert unsigned.value.status == 401
+
+    ceiling = state.shares.max_upload
+    state.shares.max_upload = int(anon.get_snapshot_share(token)["size"])
+    extra = tmp_path / "extra.tar.gz"
+    extra.write_bytes(_gzip_tar({".ageval/runs/run000002/note.txt": b"more-evidence\n"}))
+    with pytest.raises(RegistryError) as too_big:
+        owner.patch_snapshot_share(token, summary=advanced, archive=extra)
+    assert too_big.value.code == "payload_too_large"
+    state.shares.max_upload = ceiling
+
+    digests: list[str] = []
+    with state.stores.results._connect() as conn:
+        found = state.stores.results._exec(
+            conn, "SELECT blob_digest FROM snapshot_share_files WHERE token=?", (token,)
+        ).fetchall()
+        digests = [str(row["blob_digest"]) for row in found]
+    assert digests
+    assert owner.delete_snapshot_share(token)["ok"] is True
+    assert _count(state, "snapshot_shares") == 0
+    assert _count(state, "snapshot_share_files") == 0
+    for digest in digests:
+        assert state.blobs.open(digest, prefix="shares") is None
+    with pytest.raises(RegistryError) as missing:
+        anon.get_snapshot_share(token)
+    assert missing.value.code == "not_found"

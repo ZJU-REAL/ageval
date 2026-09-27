@@ -6,7 +6,7 @@ import shutil
 
 from services.registry.auth.tokens import TokenInfo
 from services.registry.errors import RegistryAppError
-from services.registry.http.dispatch import HttpResult, _caught, json_result
+from services.registry.http.dispatch import HttpResult, _caught, _ctx, _header, json_result
 
 
 class ShareHandlers:
@@ -25,6 +25,39 @@ class ShareHandlers:
             if work is not None:
                 shutil.rmtree(work, ignore_errors=True)
         return json_result(201, payload)
+
+    def _patch_snapshot_share(self, *, token: str, auth: TokenInfo) -> HttpResult:
+        ctx = _ctx.get()
+        if ctx.content_length > self.state.max_upload:
+            return json_result(
+                413,
+                {
+                    "error": "payload_too_large",
+                    "message": f"max {self.state.max_upload} bytes",
+                },
+            )
+        ctype = _header(ctx.headers, "Content-Type").lower()
+        work: Path | None = None
+        try:
+            if "multipart/form-data" in ctype:
+                with self.state.upload_slots.hold():
+                    parsed = self._read_multipart_archive()
+                    if isinstance(parsed, HttpResult):
+                        return parsed
+                    meta, archive, work = parsed
+                    payload = self.state.shares.patch(token, meta=meta, archive=archive, auth=auth)
+            else:
+                body = self._read_json_body()
+                if isinstance(body, HttpResult):
+                    return body
+                payload = self.state.shares.patch(token, meta=body, archive=None, auth=auth)
+        except RegistryAppError as exc:
+            return _caught(exc)
+        finally:
+            if work is not None:
+                shutil.rmtree(work, ignore_errors=True)
+        return json_result(200, payload)
+
     def _find_snapshot_share(self, *, auth: TokenInfo, qs: dict[str, list[str]]) -> HttpResult:
         unknown = set(qs) - {"suite_run_id", "run_id"}
         if unknown:

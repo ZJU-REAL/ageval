@@ -483,6 +483,13 @@ ROUTES: tuple[Route, ...] = (
     # PATCH
     Route(
         "PATCH",
+        "patch_snapshot_share",
+        access="results_upload",
+        pattern=r"/v1/shares/([^/]+)",
+        groups=("token",),
+    ),
+    Route(
+        "PATCH",
         "patch_performance_collect",
         access="bearer",
         pattern=r"/v1/packages/(.+)/performance-collect",

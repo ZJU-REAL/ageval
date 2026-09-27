@@ -56,7 +56,7 @@ or Caddy in front of **Hub** (compose publishes Hub `:8080`). Hub reverse-proxie
 
 | Knob | Where | Same number |
 | --- | --- | --- |
-| Body limit | Proxy `client_max_body_size` / Caddy `request_body.max_size` | Application `MAX_UPLOAD_BYTES` (512 MiB). Snapshot share `POST /v1/shares` uses this same cap. |
+| Body limit | Proxy `client_max_body_size` / Caddy `request_body.max_size` | Application `MAX_UPLOAD_BYTES` (512 MiB). Snapshot share `POST` and `PATCH /v1/shares` use this same cap. |
 | In-flight uploads | Proxy concurrent-request cap (optional) | `workers × AGEVAL_REGISTRY_UPLOAD_SLOTS` |
 | Workers | `--workers` / `AGEVAL_REGISTRY_WORKERS` (default 2 in public mode) | One process per worker; each has its own slot pool |
 

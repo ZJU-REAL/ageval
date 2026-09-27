@@ -177,7 +177,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   ├── packages/                    # service, store, protocol, rows, queries, dto, builtins
 │   ├── runtimes/                    # derived agent performance
 │   ├── results/                     # service, store, protocol, rows, queries, dto
-│   ├── shares/                      # snapshot share service and store
+│   ├── shares/                      # snapshot share; static archive or live patch
 │   ├── inbox/                       # requests, maintainers, store
 │   ├── content/                     # files, blob_io, blobs
 │   ├── db/                          # dialect, sql_adapter, schema (open_stores)
