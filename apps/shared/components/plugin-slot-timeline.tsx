@@ -1,4 +1,5 @@
 import { HoverTip } from "@ageval/shared/components/hover-tip";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 
 /** Host slot vocabulary from src/ageval/plugins/slots.py — exclusive + chain only. */
 const SLOT_LEVEL: Record<string, number> = {
@@ -136,7 +137,7 @@ export function PluginSlotTimeline({
                         <button
                           type="button"
                           onClick={() => onOpenPath(path)}
-                          className="cursor-pointer text-xs text-ink underline-offset-2 hover:underline hover:decoration-mute"
+                          className={`${INTERNAL_LINK_CLASS} text-sm`}
                         >
                           {slot.id}
                         </button>

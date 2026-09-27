@@ -6,6 +6,7 @@ import {
 import { createPortal } from "react-dom";
 import { Search } from "lucide-react";
 
+import { Button } from "@ageval/shared/components/ui/button";
 import { cn } from "@ageval/shared/lib/utils";
 
 /** Glass search dialog shell (Models Cmd/Ctrl+F, attach pickers). */
@@ -83,14 +84,16 @@ export function SearchPalette({
             spellCheck={false}
             className="h-12 min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-mute"
           />
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={onClose}
             aria-label="Close search"
-            className="shrink-0 rounded-[6px] border border-hairline px-1.5 py-0.5 text-xs text-mute transition-colors duration-200 ease-smooth hover:text-ink"
+            className="shrink-0"
           >
             Esc
-          </button>
+          </Button>
         </div>
         <div
           ref={listRef}

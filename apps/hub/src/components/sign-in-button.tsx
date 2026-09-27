@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { GitHubIcon } from "@/components/github-icon";
 import { HoverTip } from "@ageval/shared/components/hover-tip";
 import { Button } from "@ageval/shared/components/ui/button";
+import { EXTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 import {
   formatLoginError,
   redirectToGitHubLogin,
@@ -72,7 +73,8 @@ export function SignInLink({
       type="button"
       disabled={busy}
       className={cn(
-        "text-link hover:text-link-deep underline underline-offset-2 disabled:opacity-50",
+        EXTERNAL_LINK_CLASS,
+        "underline disabled:opacity-50",
         className,
       )}
       onClick={() => {

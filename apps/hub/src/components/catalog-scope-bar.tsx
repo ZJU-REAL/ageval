@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
+import { SegmentedControl } from "@ageval/shared/components/ui/button";
 import { Input } from "@ageval/shared/components/ui/input";
 import {
   Select,
@@ -152,29 +153,12 @@ export function CatalogScopeBar<T extends string>({
       <div className={cn("mb-4", className)}>
         <div className="flex items-center gap-2">
           {search}
-          <div
-            role="group"
-            aria-label="Catalog scope"
-            className="inline-flex shrink-0 items-center gap-0.5 rounded-[8px] border border-hairline p-0.5"
-          >
-            {items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                aria-pressed={scope === item.id}
-                onClick={() => onScope?.(item.id)}
-                className={cn(
-                  "rounded-[6px] px-2.5 py-1 text-sm transition-colors duration-200 ease-smooth",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70",
-                  scope === item.id
-                    ? "bg-canvas-soft-2 text-ink"
-                    : "text-body hover:bg-canvas-soft",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label="Catalog scope"
+            items={items}
+            selected={(id) => scope === id}
+            onSelect={(id) => onScope?.(id)}
+          />
           {end ? <div className="ml-auto shrink-0">{end}</div> : null}
         </div>
       </div>

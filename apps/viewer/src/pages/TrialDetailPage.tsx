@@ -12,6 +12,7 @@ import { PhaseTimingBar } from "@ageval/shared/components/trial/phase-timing-bar
 import { TrialHeader } from "@ageval/shared/components/trial/trial-header";
 import { useTrialDetail } from "@/hooks/use-trial-detail";
 import { jobPath, jobsHome, taskPath, trialPath } from "@/lib/routes";
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 
 export function TrialDetailPage() {
   const { datasetKey = "", jobId = "", taskId = "", runId = "" } = useParams();
@@ -139,18 +140,18 @@ export function TrialDetailPage() {
 
             <p className="text-xs text-mute">
               {job?.source_kind === "single" ? (
-                <Link to="/" className="text-link hover:text-link-deep">
+                <Link to="/" className={INTERNAL_LINK_CLASS}>
                   ← Back to jobs
                 </Link>
               ) : siblingRunIds.length > 1 ? (
                 <Link
                   to={taskPath(datasetKey, jobId, taskId)}
-                  className="text-link hover:text-link-deep"
+                  className={INTERNAL_LINK_CLASS}
                 >
                   ← Back to trials
                 </Link>
               ) : (
-                <Link to={jobPath(datasetKey, jobId)} className="text-link hover:text-link-deep">
+                <Link to={jobPath(datasetKey, jobId)} className={INTERNAL_LINK_CLASS}>
                   ← Back to job
                 </Link>
               )}

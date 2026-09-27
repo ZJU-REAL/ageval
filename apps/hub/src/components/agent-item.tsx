@@ -1,4 +1,5 @@
 import { BrandMark } from "@ageval/shared/components/brand-mark";
+import { metaChipClass } from "@ageval/shared/components/ui/button";
 import { BuiltinMark } from "@/components/builtin-mark";
 import { OfficialMark } from "@/components/official-mark";
 import { markFromPackage } from "@ageval/shared/lib/brand-marks";
@@ -52,7 +53,7 @@ export function AgentItem({
         ) : null}
       </span>
       {meta ? (
-        <span className="ml-auto shrink-0 whitespace-nowrap rounded-[6px] border border-hairline px-1.5 py-0.5 text-xs leading-4 text-mute">
+        <span className={cn(metaChipClass, "ml-auto shrink-0")}>
           {meta}
         </span>
       ) : null}

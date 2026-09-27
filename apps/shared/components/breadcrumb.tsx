@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 import { cn } from "@ageval/shared/lib/utils";
 
 export type Crumb = { label: string; href?: string | null };
@@ -38,7 +39,7 @@ export function BreadcrumbNav({
             ) : (
               <Link
                 to={item.href}
-                className="text-body hover:text-ink truncate max-w-[28ch] transition-colors"
+                className={cn(INTERNAL_LINK_CLASS, "truncate max-w-[28ch]")}
               >
                 {item.label}
               </Link>

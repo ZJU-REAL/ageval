@@ -35,7 +35,7 @@ import { OwlIcon } from "@ageval/shared/components/owl-icon";
 import { PageHeadSlotProvider } from "@/components/page-head";
 import { SignInButton } from "@/components/sign-in-button";
 import { ThemeToggle } from "@ageval/shared/components/theme-toggle";
-import { Button, buttonVariants } from "@ageval/shared/components/ui/button";
+import { Button, buttonVariants, sidebarHoverClass } from "@ageval/shared/components/ui/button";
 import { Toaster } from "@ageval/shared/components/ui/toaster";
 import { usePublicUser } from "@/hooks/use-public-user";
 import { liquidGroup } from "@ageval/shared/lib/liquid";
@@ -137,7 +137,8 @@ function SidebarLink({
           aria-label={label}
           className={cn(
             buttonVariants({ variant: "ghost", size: "icon" }),
-            "hover:bg-canvas/50 aria-[current=page]:bg-transparent aria-[current=page]:shadow-none",
+            sidebarHoverClass,
+            "aria-[current=page]:bg-transparent aria-[current=page]:shadow-none",
           )}
         >
           <SidebarGlyph icon={icon} glyph={glyph} />
@@ -158,7 +159,7 @@ function SidebarLink({
           "gap-2 px-2",
           isActive
             ? "font-semibold text-ink"
-            : "font-normal text-body hover:bg-canvas/50 hover:text-ink",
+            : cn("font-normal text-body", sidebarHoverClass),
         )
       }
     >
@@ -187,7 +188,10 @@ function SidebarExternal({
           target="_blank"
           rel="noreferrer"
           aria-label={label}
-          className={buttonVariants({ variant: "ghost", size: "icon" })}
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "icon" }),
+            sidebarHoverClass,
+          )}
         >
           <Icon className="h-4 w-4 text-mute" strokeWidth={2.5} />
         </a>
@@ -203,7 +207,8 @@ function SidebarExternal({
       aria-label={label}
       className={cn(
         navItemClass,
-        "gap-2 px-2 text-body hover:bg-canvas/50 hover:text-ink",
+        "gap-2 px-2 text-body",
+        sidebarHoverClass,
       )}
     >
       <Icon className="h-4 w-4 shrink-0 text-mute" strokeWidth={2.5} />

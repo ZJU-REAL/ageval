@@ -7,6 +7,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  dropdownDangerItemClass,
 } from "@ageval/shared/components/ui/dropdown-menu";
 import {
   Tooltip,
@@ -52,7 +53,7 @@ export function JobRowActions({ job, pref, onPin, onNote, onDelete }: Props) {
         data-pinned={pinned && !noted ? "" : undefined}
         aria-label={`Actions for ${name}`}
         aria-haspopup="menu"
-        className="h-7 w-7 opacity-0 transition-opacity focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+        className="opacity-0 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
         style={open || keepVisible ? { opacity: 1 } : undefined}
       >
         {icon}
@@ -87,7 +88,7 @@ export function JobRowActions({ job, pref, onPin, onNote, onDelete }: Props) {
           <StickyNote className="h-3.5 w-3.5" />
           Note
         </DropdownMenuItem>
-        <DropdownMenuItem className="text-error focus:text-error" onSelect={onDelete}>
+        <DropdownMenuItem className={dropdownDangerItemClass} onSelect={onDelete}>
           <Trash2 className="h-3.5 w-3.5" />
           Delete
         </DropdownMenuItem>

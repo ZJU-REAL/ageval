@@ -94,8 +94,8 @@ export function BrandMarkPicker({
           onClick={() => setSelected({ mode: "default" })}
           className={cn(
             buttonVariants({ variant: "secondary" }),
-            "h-auto flex-col gap-1 rounded-[12px] px-2 py-2 text-center",
-            selected.mode === "default" && "bg-canvas-soft-2 shadow-[var(--viewer-shadow-pop)]",
+            "h-auto flex-col gap-1 px-2 py-2 text-center",
+            selected.mode === "default" && "bg-canvas-soft-2 hover:bg-canvas-soft-2",
           )}
         >
           <BrandMark
@@ -112,7 +112,7 @@ export function BrandMarkPicker({
             }
             size={20}
           />
-          <span className="text-[10px] text-mute">Default</span>
+          <span className="text-xs text-mute">Default</span>
         </button>
         {rows.map((row) => (
           <button
@@ -121,14 +121,14 @@ export function BrandMarkPicker({
             onClick={() => setSelected({ mode: "catalog", id: row.id })}
             className={cn(
               buttonVariants({ variant: "secondary" }),
-              "h-auto flex-col gap-1 rounded-[12px] px-2 py-2 text-center",
+              "h-auto flex-col gap-1 px-2 py-2 text-center",
               selected.mode === "catalog" &&
                 selected.id === row.id &&
-                "bg-canvas-soft-2 shadow-[var(--viewer-shadow-pop)]",
+                "bg-canvas-soft-2 hover:bg-canvas-soft-2",
             )}
           >
             <BrandMark mark={{ kind: "catalog", id: row.id }} size={20} />
-            <span className="w-full truncate text-[10px] text-body">
+            <span className="w-full truncate text-xs text-body">
               {row.label}
             </span>
           </button>

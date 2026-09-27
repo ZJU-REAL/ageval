@@ -566,7 +566,7 @@ export function SuiteInspector({
                   <li key={p.plugin_id}>
                     <Link
                       to={`/plugins/${encodeDatasetId(p.plugin_id)}`}
-                      className="flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-row-hover"
+                      className="flex items-center justify-between gap-3 px-3 py-2 text-sm transition-colors duration-200 ease-smooth hover:bg-canvas-soft"
                     >
                       <span className={`inline-flex min-w-0 items-center gap-1.5 ${INTERNAL_LINK_CLASS}`}>
                         {p.plugin_id}

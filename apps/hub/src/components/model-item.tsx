@@ -11,10 +11,10 @@ import {
   modalityBadges,
   modelModalities,
 } from "@ageval/shared/lib/model-pin";
+import { metaChipClass } from "@ageval/shared/components/ui/button";
 import { cn } from "@ageval/shared/lib/utils";
 
-const META_CHIP =
-  "whitespace-nowrap rounded-[6px] border border-hairline px-1.5 py-0.5 text-xs leading-4 text-mute tabular-nums";
+const META_CHIP = cn(metaChipClass, "tabular-nums");
 
 export function ModelItem({
   canonical,

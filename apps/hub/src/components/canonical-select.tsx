@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import { Check, ChevronDown, Search } from "lucide-react";
 
 import { ModelItem } from "@/components/model-item";
+import { scanTriggerClass } from "@ageval/shared/components/ui/select";
 import { loadModelPin } from "@ageval/shared/lib/model-pin";
 import { cn } from "@ageval/shared/lib/utils";
 
@@ -327,7 +328,7 @@ export function CanonicalSelect({
     return (
       <div
         className={cn(
-          "flex max-h-[min(24rem,50vh)] flex-col overflow-hidden rounded-[12px] border border-hairline bg-canvas",
+          "flex max-h-[min(24rem,50vh)] flex-col overflow-hidden rounded-[14px] border border-hairline bg-canvas",
           disabled && "opacity-50",
         )}
       >
@@ -356,10 +357,7 @@ export function CanonicalSelect({
             return going;
           });
         }}
-        className={cn(
-          "group flex h-8 min-w-[12rem] max-w-[20rem] shrink-0 items-center justify-between gap-2 rounded-[8px] border border-hairline bg-canvas px-3 text-xs text-ink squish",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-link/70 disabled:cursor-not-allowed disabled:opacity-50",
-        )}
+        className={cn(scanTriggerClass, "min-w-[12rem] max-w-[20rem] shrink-0")}
       >
         <span className="min-w-0 truncate">{selectedLabel}</span>
         <ChevronDown
@@ -376,7 +374,7 @@ export function CanonicalSelect({
               data-ageval-pop=""
               role="dialog"
               aria-label={label}
-              className="fixed z-[80] flex flex-col overflow-hidden rounded-[12px] border border-hairline bg-canvas shadow-[var(--viewer-shadow-pop)]"
+              className="fixed z-[80] flex flex-col overflow-hidden rounded-[14px] border border-hairline bg-canvas shadow-[var(--viewer-shadow-pop)]"
               style={{
                 top: pos.top,
                 left: pos.left,

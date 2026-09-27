@@ -6,6 +6,7 @@ import { OwlIcon } from "@ageval/shared/components/owl-icon";
 import { Toaster } from "@ageval/shared/components/ui/toaster";
 import { useSession } from "@/lib/session";
 import { jobsHome } from "@/lib/routes";
+import { sidebarHoverClass } from "@ageval/shared/components/ui/button";
 import { cn } from "@ageval/shared/lib/utils";
 
 const DESTINATIONS = [
@@ -58,8 +59,9 @@ export function Shell({
                 to={hrefFor(item.id)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "rounded-[8px] px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70",
-                  active ? "font-medium text-ink" : "text-mute hover:text-ink",
+                  "rounded-[8px] px-2 py-1 text-sm transition-colors duration-200 ease-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70",
+                  sidebarHoverClass,
+                  active ? "font-medium text-ink" : "text-mute",
                 )}
               >
                 {item.label}

@@ -8,7 +8,9 @@ import { GitHubIcon } from "@/components/github-icon";
 import { PageHead } from "@/components/page-head";
 import { MaintainerMark } from "@/components/maintainer-mark";
 import { OfficialMark } from "@/components/official-mark";
+import { quietHoverClass } from "@ageval/shared/components/ui/button";
 import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
+import { cn } from "@ageval/shared/lib/utils";
 import {
   Table,
   TableBody,
@@ -153,7 +155,10 @@ export function UserPage() {
                     href={githubHref}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex text-mute hover:text-ink"
+                    className={cn(
+                      "inline-flex rounded-[8px] p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70",
+                      quietHoverClass,
+                    )}
                     aria-label={`${user.user_id} on GitHub`}
                   >
                     <GitHubIcon className="h-4 w-4" />

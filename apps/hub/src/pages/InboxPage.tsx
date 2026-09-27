@@ -472,7 +472,7 @@ export function InboxPage() {
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="ml-auto h-8 w-8 text-mute"
+                className="ml-auto"
                 aria-label="Hide processed requests from your inbox"
                 disabled={busy}
                 onClick={() => setConfirmHide(true)}

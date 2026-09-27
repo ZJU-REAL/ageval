@@ -23,7 +23,7 @@ export function SortableHead({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center justify-start gap-1 p-0 text-left text-sm font-medium text-mute hover:text-ink transition-colors",
+        "flex w-full items-center justify-start gap-1 p-0 text-left text-sm font-medium text-mute hover:text-ink transition-colors duration-200 ease-smooth",
         className,
       )}
     >

@@ -88,7 +88,7 @@ export function DisplayNameEditor({
             variant="secondary"
             disabled={busy}
             aria-label="Save"
-            className="h-8 w-8 shrink-0"
+            className="shrink-0"
           >
             <Check className="size-4" />
           </Button>
@@ -98,7 +98,7 @@ export function DisplayNameEditor({
             variant="ghost"
             disabled={busy}
             aria-label="Cancel"
-            className="h-8 w-8 shrink-0"
+            className="shrink-0"
             onClick={() => {
               setDraft(value);
               setEditing(false);
@@ -118,14 +118,16 @@ export function DisplayNameEditor({
       {afterTitle}
       {canEdit ? (
         <HoverTip content="Edit display name">
-          <button
+          <Button
             type="button"
-            className="inline-flex shrink-0 rounded-[8px] p-1 text-mute hover:text-body hover:bg-liquid-hover"
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
             aria-label="Edit display name"
             onClick={() => setEditing(true)}
           >
             <Pencil className="size-4" strokeWidth={1.75} />
-          </button>
+          </Button>
         </HoverTip>
       ) : null}
     </div>

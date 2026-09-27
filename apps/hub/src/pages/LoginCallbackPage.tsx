@@ -60,7 +60,7 @@ export function LoginCallbackPage() {
         {error ? (
           <>
             <p className="text-sm text-error mb-4">{error}</p>
-            <SignInLink className="text-sm text-link hover:text-link-deep">
+            <SignInLink className="text-sm">
               Try again
             </SignInLink>
           </>

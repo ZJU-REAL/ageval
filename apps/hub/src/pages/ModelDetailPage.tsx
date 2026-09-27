@@ -152,7 +152,7 @@ export function ModelDetailPage() {
                     target="_blank"
                     rel="noreferrer"
                     title={labInfo.website}
-                    className="inline-flex items-center gap-0.5 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70"
+                    className={`inline-flex items-center gap-0.5 ${EXTERNAL_LINK_CLASS}`}
                   >
                     {labName}
                     <ArrowUpRight className="size-3" aria-hidden />
@@ -373,9 +373,8 @@ function FactRow({
                 variant="ghost"
                 size="icon"
                 aria-label={`About ${label}`}
-                className="h-5 w-5 text-mute hover:text-ink"
               >
-                <Info className="size-3.5" aria-hidden />
+                <Info className="h-4 w-4" aria-hidden />
               </Button>
             </HoverTip>
           ) : null}

@@ -5,6 +5,7 @@ import {
   BrandMarkPicker,
   type MarkDraft,
 } from "@/components/brand-mark-picker";
+import { Button } from "@ageval/shared/components/ui/button";
 import { toast } from "@ageval/shared/components/ui/toast";
 import { toastError } from "@/lib/toast-error";
 import { updatePackageIcon } from "@/lib/api";
@@ -12,7 +13,6 @@ import {
   resolveEntityMark,
   type EntityMarkHint,
 } from "@ageval/shared/lib/brand-marks";
-import { cn } from "@ageval/shared/lib/utils";
 
 function draftFromHint(hint: EntityMarkHint): MarkDraft {
   const key = (hint.iconKey || "").trim();
@@ -65,19 +65,17 @@ export function EntityMarkControl({
 
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => {
           setOpen(true);
         }}
         aria-label="Change icon"
-        className={cn(
-          "inline-flex shrink-0 rounded-[8px] p-0.5",
-          "hover:bg-canvas-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70",
-        )}
+        className="h-auto w-auto shrink-0 p-0.5"
       >
         <BrandMark mark={mark} size={size} />
-      </button>
+      </Button>
       <BrandMarkPicker
         open={open}
         current={draftFromHint(hint)}

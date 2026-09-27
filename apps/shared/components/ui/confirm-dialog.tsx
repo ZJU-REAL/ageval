@@ -228,7 +228,7 @@ export function Modal({
             variant="ghost"
             size="icon"
             aria-label="Close"
-            className="-mr-1 -mt-1 h-8 w-8 text-mute"
+            className="-mr-1 -mt-1"
             onClick={onClose}
           >
             <X className="h-4 w-4" aria-hidden />

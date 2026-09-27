@@ -12,6 +12,11 @@ import {
 import { FileTypeIcon } from "@ageval/shared/components/file-type-icon";
 import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { Markdown } from "@ageval/shared/components/markdown";
+import {
+  treeRowClass,
+  treeRowIdleClass,
+  treeRowOnClass,
+} from "@ageval/shared/components/ui/button";
 import { Input } from "@ageval/shared/components/ui/input";
 import { CodeHighlight } from "@ageval/shared/lib/code-highlight";
 import { countFiles } from "@ageval/shared/lib/file-icons";
@@ -406,8 +411,9 @@ export function FileSplitPanel({
                           type="button"
                           onClick={() => toggleDir(node.path)}
                           className={cn(
-                            "w-full flex items-center gap-1 text-left h-7 pr-2 text-[12.5px]",
-                            "text-body hover:bg-liquid-hover transition-colors rounded-[8px]",
+                            treeRowClass,
+                            "gap-1",
+                            treeRowIdleClass,
                           )}
                           style={{ paddingLeft: 8 + depth * 12 }}
                         >
@@ -441,10 +447,9 @@ export function FileSplitPanel({
                         type="button"
                         onClick={() => onSelect(node.path)}
                         className={cn(
-                          "w-full flex items-center gap-1.5 text-left h-7 pr-2 text-[12.5px] transition-colors rounded-[8px]",
-                          selected
-                            ? "bg-canvas-soft-2 text-ink font-medium"
-                            : "text-body hover:bg-liquid-hover hover:text-ink",
+                          treeRowClass,
+                          "gap-1.5",
+                          selected ? treeRowOnClass : treeRowIdleClass,
                         )}
                         style={{ paddingLeft: 8 + depth * 12 + 18 }}
                       >

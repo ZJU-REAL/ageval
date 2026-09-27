@@ -5,6 +5,7 @@ import { Boxes } from "lucide-react";
 import { CatalogScopeBar } from "@/components/catalog-scope-bar";
 import { ModKeyHint } from "@/components/mod-key-hint";
 import { EmptyState, LoadingState } from "@ageval/shared/components/empty-state";
+import { Button } from "@ageval/shared/components/ui/button";
 import { MODALITY_TAB_META } from "@/components/modality-mark";
 import { ModelLabTables, type ModelLabRow } from "@/components/model-lab-tables";
 import { ModelSearchModal } from "@/components/model-search-modal";
@@ -184,13 +185,14 @@ export function ModelsPage() {
           }
           action={
             query.trim() ? (
-              <button
+              <Button
                 type="button"
-                className="text-sm text-link hover:text-link-deep"
+                variant="outline"
+                size="sm"
                 onClick={() => setQuery("")}
               >
                 Clear search
-              </button>
+              </Button>
             ) : undefined
           }
         />

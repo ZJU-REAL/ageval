@@ -5,6 +5,7 @@ import { Star } from "lucide-react";
 import { setPackageFavorite, type PackageRelease } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { rememberReturnPath } from "@/lib/return-path";
+import { Button } from "@ageval/shared/components/ui/button";
 import { cn } from "@ageval/shared/lib/utils";
 
 function starBurst() {
@@ -49,8 +50,10 @@ export function StarToggle({
   }
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon"
       disabled={busy}
       aria-pressed={starred}
       aria-label={starred ? "Unstar" : "Star"}
@@ -60,11 +63,8 @@ export function StarToggle({
         onToggle();
       }}
       className={cn(
-        "relative inline-flex h-8 w-8 items-center justify-center overflow-visible rounded-[8px] squish hover:bg-liquid-hover",
-        "transition-colors duration-200 ease-smooth",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70",
-        "disabled:pointer-events-none disabled:opacity-50",
-        starred ? "text-star" : "text-mute hover:text-body",
+        "relative overflow-visible",
+        starred && "text-star hover:text-star",
       )}
     >
       <Star
@@ -89,7 +89,7 @@ export function StarToggle({
           }
         />
       ))}
-    </button>
+    </Button>
   );
 }
 

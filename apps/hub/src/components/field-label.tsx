@@ -41,9 +41,8 @@ export function FieldLabel({
           variant="ghost"
           size="icon"
           aria-label={about}
-          className="h-5 w-5 text-mute hover:text-ink"
         >
-          <Info className="size-3.5" aria-hidden />
+          <Info className="h-4 w-4" aria-hidden />
         </Button>
       </HoverTip>
     </div>

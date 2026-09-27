@@ -63,7 +63,7 @@ export function CodeFence({
         size="icon"
         onClick={onCopy}
         aria-label="Copy"
-        className="absolute right-1.5 top-1.5 z-10 h-7 w-7 shrink-0"
+        className="absolute right-1.5 top-1.5 z-10 shrink-0"
       >
         <span className="relative h-3.5 w-3.5">
           <Copy

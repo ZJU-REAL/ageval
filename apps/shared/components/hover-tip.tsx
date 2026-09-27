@@ -172,7 +172,7 @@ export function TruncateTip({
           size="icon"
           aria-label={copied ? "Copied" : `Copy ${payload}`}
           onClick={copy}
-          className="ml-1.5 h-6 w-6 shrink-0 opacity-0 pointer-events-none hover:bg-liquid-hover motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-smooth group-hover/copy:pointer-events-auto group-hover/copy:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
+          className="ml-1.5 shrink-0 opacity-0 pointer-events-none group-hover/copy:pointer-events-auto group-hover/copy:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
         >
           <span className="relative h-3.5 w-3.5">
             <Copy

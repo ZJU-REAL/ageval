@@ -1,6 +1,7 @@
 import { ArrowUpRight } from "lucide-react";
 
 import { LabMark } from "@ageval/shared/components/lab-mark";
+import { EXTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 import { LAB_INFO } from "@ageval/shared/lib/model-pin";
 
 export function LabGroupHead({
@@ -23,7 +24,7 @@ export function LabGroupHead({
             target="_blank"
             rel="noreferrer"
             title={info.website}
-            className="inline-flex items-center gap-1 hover:text-link-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70"
+            className={`inline-flex items-center gap-1 ${EXTERNAL_LINK_CLASS}`}
           >
             {name}
             <ArrowUpRight className="size-3 text-mute" aria-hidden />

@@ -11,6 +11,11 @@ import {
 
 import { FilePreview } from "@/components/file-preview";
 import { FileTypeIcon } from "@ageval/shared/components/file-type-icon";
+import {
+  treeRowClass,
+  treeRowIdleClass,
+  treeRowOnClass,
+} from "@ageval/shared/components/ui/button";
 import { Input } from "@ageval/shared/components/ui/input";
 import { countFiles } from "@ageval/shared/lib/file-icons";
 import { ancestorDirPaths, type TreeNode } from "@ageval/shared/lib/file-tree";
@@ -312,10 +317,7 @@ export function FileSplitPanel({
                         <button
                           type="button"
                           onClick={() => toggleDir(node.path)}
-                          className={cn(
-                            "w-full flex items-center gap-1 text-left h-7 pr-2 text-[12.5px]",
-                            "text-body hover:bg-row-hover transition-colors rounded-[4px]",
-                          )}
+                          className={cn(treeRowClass, "gap-1", treeRowIdleClass)}
                           style={{ paddingLeft: 8 + depth * 12 }}
                         >
                           {open ? (
@@ -345,10 +347,9 @@ export function FileSplitPanel({
                         type="button"
                         onClick={() => onSelect(node.path)}
                         className={cn(
-                          "w-full flex items-center gap-1.5 text-left h-7 pr-2 text-[12.5px] truncate transition-colors rounded-[4px]",
-                          selected
-                            ? "bg-canvas-soft text-ink font-medium"
-                            : "text-body hover:bg-row-hover",
+                          treeRowClass,
+                          "gap-1.5",
+                          selected ? treeRowOnClass : treeRowIdleClass,
                         )}
                         style={{ paddingLeft: 8 + depth * 12 + 18 }}
                       >

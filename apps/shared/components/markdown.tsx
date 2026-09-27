@@ -144,7 +144,7 @@ const components: Components = {
     const text = String(children).replace(/\n$/, "");
     if (!isBlock) {
       return (
-        <code className="max-w-full whitespace-pre-wrap break-all font-mono text-[12px] bg-canvas-soft-2 text-ink px-1 py-0.5 rounded-[4px]">
+        <code className="max-w-full whitespace-pre-wrap break-all font-mono text-xs bg-canvas-soft-2 text-ink px-1 py-0.5 rounded-[8px]">
           {text}
         </code>
       );
@@ -218,7 +218,7 @@ export function InlineMarkdown({
           ),
           em: ({ children }) => <em className="italic">{children}</em>,
           code: ({ children }) => (
-            <code className="max-w-full whitespace-pre-wrap break-all font-mono text-[12px] bg-canvas-soft-2 text-ink px-1 py-0.5 rounded-[4px]">
+            <code className="max-w-full whitespace-pre-wrap break-all font-mono text-xs bg-canvas-soft-2 text-ink px-1 py-0.5 rounded-[8px]">
               {String(children).replace(/\n$/, "")}
             </code>
           ),

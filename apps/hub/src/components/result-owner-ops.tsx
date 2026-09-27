@@ -16,6 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  dropdownDangerItemClass,
 } from "@ageval/shared/components/ui/dropdown-menu";
 import { Input } from "@ageval/shared/components/ui/input";
 import { toast } from "@ageval/shared/components/ui/toast";
@@ -788,7 +789,6 @@ export function ResultOwnerOps({
             size="icon"
             aria-label="Job settings"
             aria-haspopup="menu"
-            className="h-8 w-8 text-mute"
           >
             <Settings className="h-4 w-4" aria-hidden />
           </Button>
@@ -817,7 +817,7 @@ export function ResultOwnerOps({
           {showShare && canManage ? <DropdownMenuSeparator /> : null}
           {canManage ? (
             <DropdownMenuItem
-              className="text-error focus:text-error data-[highlighted]:text-error"
+              className={dropdownDangerItemClass}
               onSelect={() => {
                 setConfirmDelete(true);
               }}

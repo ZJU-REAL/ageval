@@ -1,6 +1,6 @@
 import { ChevronDown } from "lucide-react";
 
-import { Button } from "@ageval/shared/components/ui/button";
+import { Button, SegmentedControl } from "@ageval/shared/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -44,33 +44,14 @@ export function TableColumnPicker<T extends string>({
 
   return (
     <div className={cn("flex shrink-0 items-center justify-end", className)}>
-      <div
-        role="group"
-        aria-label={ariaLabel}
-        className="hidden h-9 rounded-[8px] border border-hairline bg-canvas p-0.5 md:inline-flex"
-      >
-        {options.map((opt) => {
-          const on = selected.has(opt.id);
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              aria-pressed={on}
-              onClick={() => onChange(toggleId(options, value, opt.id))}
-              className={cn(
-                "h-full rounded-[8px] px-3 text-sm font-medium squish",
-                "transition-colors duration-200 ease-smooth",
-                "focus-visible:outline-none focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-link/70",
-                on
-                  ? "bg-canvas-soft-2 text-ink"
-                  : "text-body hover:bg-liquid-hover hover:text-ink",
-              )}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
+      <SegmentedControl
+        label={ariaLabel}
+        items={options}
+        selected={(id) => selected.has(id)}
+        onSelect={(id) => onChange(toggleId(options, value, id))}
+        className="hidden h-9 md:inline-flex"
+        itemClassName="h-full px-3"
+      />
       <div className="md:hidden">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

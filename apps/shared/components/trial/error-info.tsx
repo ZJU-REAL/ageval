@@ -1,5 +1,6 @@
 import { Info } from "lucide-react";
 
+import { Button } from "@ageval/shared/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
@@ -31,14 +32,15 @@ export function ErrorInfo({ error }: { error: unknown }) {
     <TooltipProvider delayDuration={80}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             aria-label="Error detail"
-            className="inline-flex rounded-[8px] text-mute hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70"
             onClick={(event) => event.stopPropagation()}
           >
-            <Info className="h-3.5 w-3.5" aria-hidden />
-          </button>
+            <Info className="h-4 w-4" aria-hidden />
+          </Button>
         </TooltipTrigger>
         <TooltipContent side="right" className="max-w-sm px-3 py-2 text-sm leading-5">
           {title ? <span className="block font-semibold text-error">{title}</span> : null}

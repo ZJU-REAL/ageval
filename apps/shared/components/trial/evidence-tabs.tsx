@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
+import { SegmentedControl } from "@ageval/shared/components/ui/button";
 import {
   alignInScrollParent,
   revealTallPanel,
 } from "@ageval/shared/lib/scroll-port";
 import type { TrajectoryStep, TreeEntry, Trial } from "@ageval/shared/lib/trial-types";
-import { cn } from "@ageval/shared/lib/utils";
 
 import { FileSplitPanel } from "./file-split-panel";
 import { TAB_LABELS, type TabId } from "./tabs";
@@ -34,34 +34,15 @@ function VerifierSurfaceToggle({
   onChange: (next: VerifierSurface) => void;
 }) {
   return (
-    <div
-      role="group"
-      aria-label="Verifier surface"
-      className="inline-flex shrink-0 items-center gap-0.5 rounded-[8px] border border-hairline p-0.5"
-    >
-      {(
-        [
-          ["trajectory", "Trajectory"],
-          ["files", "Files"],
-        ] as const
-      ).map(([id, label]) => (
-        <button
-          key={id}
-          type="button"
-          aria-pressed={value === id}
-          onClick={() => onChange(id)}
-          className={cn(
-            "rounded-[6px] px-2.5 py-1 text-sm transition-colors duration-200 ease-smooth",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70",
-            value === id
-              ? "bg-canvas-soft-2 text-ink"
-              : "text-body hover:bg-canvas-soft",
-          )}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl<VerifierSurface>
+      label="Verifier surface"
+      items={[
+        { id: "trajectory", label: "Trajectory" },
+        { id: "files", label: "Files" },
+      ]}
+      selected={(id) => value === id}
+      onSelect={onChange}
+    />
   );
 }
 

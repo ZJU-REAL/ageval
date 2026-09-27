@@ -88,7 +88,7 @@ export function DatasetOrgHead({
         {orgId ? (
           <Link
             to={`/organizations/${encodeURIComponent(orgId)}`}
-            className="inline-flex items-center gap-1 hover:text-link-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70"
+            className={`inline-flex items-center gap-1 ${INTERNAL_LINK_CLASS}`}
           >
             {name}
           </Link>
