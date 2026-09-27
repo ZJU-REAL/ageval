@@ -15,20 +15,34 @@ from services.registry import queries as Q
 from services.registry.orgs import queries as org_queries
 from services.registry.packages import queries as package_queries
 from services.registry.results import queries as result_queries
+from services.registry.shares import queries as share_queries
 from services.registry.store_inbox import InboxStore
 from services.registry.orgs.store import OrgStore
 from services.registry.packages.store import PackageStore
 from services.registry.results.store import ResultStore
+from services.registry.shares.store import ShareStore
 
 
 def init_schema(adapter: Any) -> None:
     with adapter.connect() as conn:
         adapter.lock_schema(conn)
-        for stmt in (*Q.SCHEMA_STATEMENTS, *org_queries.SCHEMA_STATEMENTS, *package_queries.SCHEMA_STATEMENTS, *result_queries.SCHEMA_STATEMENTS):
+        for stmt in (
+            *Q.SCHEMA_STATEMENTS,
+            *org_queries.SCHEMA_STATEMENTS,
+            *package_queries.SCHEMA_STATEMENTS,
+            *result_queries.SCHEMA_STATEMENTS,
+            *share_queries.SCHEMA_STATEMENTS,
+        ):
             if "api_tokens" in stmt:
                 continue
             adapter.execute(conn, stmt)
-        for table, column, decl in (*Q.SCHEMA_MIGRATIONS, *org_queries.SCHEMA_MIGRATIONS, *package_queries.SCHEMA_MIGRATIONS, *result_queries.SCHEMA_MIGRATIONS):
+        for table, column, decl in (
+            *Q.SCHEMA_MIGRATIONS,
+            *org_queries.SCHEMA_MIGRATIONS,
+            *package_queries.SCHEMA_MIGRATIONS,
+            *result_queries.SCHEMA_MIGRATIONS,
+            *share_queries.SCHEMA_MIGRATIONS,
+        ):
             adapter.add_column(conn, table, column, decl)
         for table, column in (*Q.SCHEMA_INTEGER_FLAGS, *org_queries.SCHEMA_INTEGER_FLAGS, *package_queries.SCHEMA_INTEGER_FLAGS, *result_queries.SCHEMA_INTEGER_FLAGS):
             adapter.align_integer_flag(conn, table, column)
@@ -37,10 +51,11 @@ def init_schema(adapter: Any) -> None:
 
 @dataclass(frozen=True, slots=True)
 class RegistryStores:
-    """The four aggregate stores sharing one dialect adapter."""
+    """The five aggregate stores sharing one dialect adapter."""
 
     packages: PackageStore
     results: ResultStore
+    shares: ShareStore
     orgs: OrgStore
     inbox: InboxStore
 
@@ -56,11 +71,12 @@ def open_stores(*, db_path: Path | None = None, adapter: Any | None = None) -> R
     return RegistryStores(
         packages=PackageStore(adapter),
         results=ResultStore(adapter),
+        shares=ShareStore(adapter),
         orgs=OrgStore(adapter),
         inbox=InboxStore(adapter),
     )
 
 
 def open_sqlite_stores(db_path: Path) -> RegistryStores:
-    """Test / local factory: four aggregate stores over one SQLite file."""
+    """Test / local factory: five aggregate stores over one SQLite file."""
     return open_stores(db_path=db_path)

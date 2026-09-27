@@ -27,6 +27,7 @@ class RequestService:
         orgs: Any,
         packages: Any,
         results: Any,
+        shares: Any,
         access: Any,
         results_api: Any,
     ) -> None:
@@ -34,6 +35,7 @@ class RequestService:
         self.orgs = orgs
         self.packages = packages
         self.results = results
+        self.shares = shares
         self.access = access
         self.results_api = results_api
 
@@ -46,7 +48,7 @@ class RequestService:
         agent: str | None = None,
         canonical_model: str | None = None,
     ) -> dict[str, Any]:
-        if suite_run_id and self.results.get_snapshot_share(suite_run_id) is not None:
+        if suite_run_id and self.shares.get_snapshot_share(suite_run_id) is not None:
             raise RegistryAppError(
                 "share_not_listable",
                 "snapshot share cannot be listed on the plaza or leaderboard",

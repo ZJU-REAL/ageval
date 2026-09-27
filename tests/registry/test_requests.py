@@ -48,7 +48,9 @@ def _svcs(tmp_path: Path) -> tuple[PackageService, ResultService, RequestService
         access,
         max_upload=64 * 1024 * 1024,
     )
-    requests = RequestService(meta.inbox, meta.orgs, meta.packages, meta.results, access, results)
+    requests = RequestService(
+        meta.inbox, meta.orgs, meta.packages, meta.results, meta.shares, access, results
+    )
     return packages, results, requests, RuntimeService(meta.inbox, meta.packages, results)
 
 

@@ -147,7 +147,7 @@ class RegistryState:
         from services.registry.request_service import RequestService
         from services.registry.results.service import ResultService
         from services.registry.runtimes.service import RuntimeService
-        from services.registry.share_service import ShareService
+        from services.registry.shares.service import ShareService
 
         self.auth = AuthService(
             tokens,
@@ -168,10 +168,16 @@ class RegistryState:
             self.access,
             max_upload=max_upload,
         )
-        self.shares = ShareService(stores.results, blobs, max_upload=max_upload)
+        self.shares = ShareService(stores.shares, blobs, max_upload=max_upload)
         self.runtimes = RuntimeService(stores.inbox, stores.packages, self.results)
         self.requests = RequestService(
-            stores.inbox, stores.orgs, stores.packages, stores.results, self.access, self.results
+            stores.inbox,
+            stores.orgs,
+            stores.packages,
+            stores.results,
+            stores.shares,
+            self.access,
+            self.results,
         )
         self.orgs = OrgService(stores.orgs, self.access)
         self.users = UserService(stores.orgs)

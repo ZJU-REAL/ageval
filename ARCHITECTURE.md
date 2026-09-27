@@ -177,8 +177,8 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   ├── packages/                    # service, store, protocol, rows, queries, dto, builtins
 │   ├── runtimes/                    # derived agent performance
 │   ├── results/                     # service, store, protocol, rows, queries, dto
+│   ├── shares/                      # snapshot share service and store
 │   ├── request_service.py           # listing + performance requests; Inbox
-│   ├── share_service.py             # snapshot share link; not catalog ACL
 │   ├── content/                     # files, blob_io, blobs
 │   ├── db/                          # dialect, sql_adapter, schema (open_stores)
 │   ├── queries.py / dataset.py      # SQL not yet cut into an aggregate
@@ -404,7 +404,7 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | Other Agent backends | `openai-http` / `anthropic-http` / external `nooa` `dsh` | Not vendor stdout scrape |
 | Official base image | `plugins/contrib/docker/attempt/` | GHCR `ageval-attempt:<cli-ver>` then local `ageval-attempt:base`; miss → packaged Dockerfile. Bake ACP entries at image build; no `npm i` at invoke |
 | ACP task image layer | `plugins/contrib/acp` | `config.image_layers` bakes the bound `options.entry` onto the task recipe |
-| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is four aggregate stores (`orgs/store.py`, `packages/store.py`, `results/store.py`; inbox still `store_inbox.py`) behind narrow protocols, one schema init in `db/schema.open_stores`, org SQL in `orgs/queries.py`, package SQL in `packages/queries.py`, result SQL in `results/queries.py`, remaining SQL in `queries.py`, dialect only in `db/sql_adapter.py` |
+| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is five aggregate stores (`packages`, `results`, `shares`, `orgs`, and inbox still `store_inbox.py`) behind narrow protocols, one schema init in `db/schema.open_stores`, SQL in each aggregate `queries.py` except inbox SQL still in `queries.py`, dialect only in `db/sql_adapter.py` |
 
 ## Failure and Privacy Boundary
 

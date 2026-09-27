@@ -16,9 +16,7 @@ from typing import Any
 
 from services.registry.content.blob_io import read_blob, sha256_file
 from services.registry.errors import RegistryAppError
-from services.registry.results.rows import (
-    SnapshotShareRow,
-)
+from services.registry.shares.rows import SnapshotShareRow
 from services.registry.auth.tokens import TokenInfo
 from services.registry.store import now
 
@@ -52,8 +50,8 @@ def _require_str(meta: dict[str, Any], key: str) -> str:
 
 
 class ShareService:
-    def __init__(self, results: Any, blobs: Any, *, max_upload: int) -> None:
-        self.results = results
+    def __init__(self, shares: Any, blobs: Any, *, max_upload: int) -> None:
+        self.shares = shares
         self.blobs = blobs
         self.max_upload = max_upload
 
@@ -141,7 +139,7 @@ class ShareService:
         )
         self.blobs.put_if_absent(blob_digest, archive, prefix=SHARE_BLOB_PREFIX)
         try:
-            self.results.insert_snapshot_share(row)
+            self.shares.insert_snapshot_share(row)
         except ValueError as exc:
             raise RegistryAppError(
                 "conflict",
@@ -160,7 +158,7 @@ class ShareService:
                 "authentication required",
                 http_status=401,
             )
-        row = self.results.find_snapshot_share(
+        row = self.shares.find_snapshot_share(
             owner_user_id=auth.user_id,
             suite_run_id=suite_run_id,
             run_id=run_id,
@@ -180,8 +178,8 @@ class ShareService:
                 "snapshot share owner required",
                 http_status=403,
             )
-        self.results.delete_snapshot_share(token)
-        if self.results.count_snapshot_share_blob_refs(row.blob_digest) == 0:
+        self.shares.delete_snapshot_share(token)
+        if self.shares.count_snapshot_share_blob_refs(row.blob_digest) == 0:
             self.blobs.delete(row.blob_digest, prefix=SHARE_BLOB_PREFIX)
         return {"ok": True, "token": token}
 
@@ -263,7 +261,7 @@ class ShareService:
         return file_payload(safe_path, data, size=size, truncated=truncated)
 
     def _require(self, token: str) -> SnapshotShareRow:
-        row = self.results.get_snapshot_share(token)
+        row = self.shares.get_snapshot_share(token)
         if row is None:
             raise RegistryAppError("not_found", "snapshot share not found", http_status=404)
         return row
