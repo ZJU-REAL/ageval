@@ -16,7 +16,7 @@ from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
 from services.registry.http.dispatch import RegistryHttpApi
 from services.registry.packages.service import PackageService
-from services.registry.result_service import ResultService
+from services.registry.results.service import ResultService
 from services.registry.runtimes.service import RuntimeService
 
 from ageval.registry.archive import MEDIA_TYPE, build_archive

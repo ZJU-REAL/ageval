@@ -5,10 +5,10 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from services.registry import queries as Q
+from services.registry.results import queries as Q
 from services.registry.clock import now
-from services.registry.protocols import ResultStoreProtocol
-from services.registry.rows import (
+from services.registry.results.protocol import ResultStoreProtocol
+from services.registry.results.rows import (
     AttemptResultRow,
     ResultShareRow,
     SnapshotShareRow,

@@ -30,14 +30,18 @@ from services.registry.orgs.rows import (
 from services.registry.auth.tokens import (
     TokenInfo,
 )
-from services.registry.store import (
+from services.registry.results.rows import (
     AttemptResultRow,
     SuiteResultRow,
+)
+from services.registry.results.dto import (
     _run_ids_from_tasks_json,
     attempt_to_dict,
-    now,
     share_to_dict,
     suite_to_dict,
+)
+from services.registry.store import (
+    now,
 )
 
 _SECRET_PATTERNS = (

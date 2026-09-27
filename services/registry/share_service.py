@@ -16,7 +16,9 @@ from typing import Any
 
 from services.registry.content.blob_io import read_blob, sha256_file
 from services.registry.errors import RegistryAppError
-from services.registry.rows import SnapshotShareRow
+from services.registry.results.rows import (
+    SnapshotShareRow,
+)
 from services.registry.auth.tokens import TokenInfo
 from services.registry.store import now
 

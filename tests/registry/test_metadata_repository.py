@@ -19,8 +19,10 @@ from services.registry.db.sql_adapter import PostgresAdapter
 from services.registry.packages.rows import (
     ReleaseRow,
 )
-from services.registry.store import (
+from services.registry.results.rows import (
     AttemptResultRow,
+)
+from services.registry.store import (
     now,
 )
 

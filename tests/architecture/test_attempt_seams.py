@@ -168,7 +168,7 @@ def test_store_has_no_sql_literals() -> None:
     assert {
         "store.py",
         "packages/store.py",
-        "store_result.py",
+        "results/store.py",
         "store_inbox.py",
         "orgs/store.py",
     } <= rels
