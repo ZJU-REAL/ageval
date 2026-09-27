@@ -734,54 +734,13 @@ class ShareService:
                 "suite summary.json is missing from the snapshot",
                 http_status=400,
             )
-        try:
-            summary = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise RegistryAppError(
-                "invalid_request",
-                "suite summary.json is not JSON",
-                http_status=400,
-            ) from exc
-        if not isinstance(summary, dict):
-            raise RegistryAppError(
-                "invalid_request",
-                "suite summary.json must be an object",
-                http_status=400,
-            )
-        if str(summary.get("dataset_id") or "") != dataset_id:
-            raise RegistryAppError(
-                "invalid_request",
-                "dataset_id does not match summary.json",
-                http_status=400,
-            )
-        if str(summary.get("dataset_version") or "") != dataset_version:
-            raise RegistryAppError(
-                "invalid_request",
-                "dataset_version does not match summary.json",
-                http_status=400,
-            )
-        if summary.get("suite_run_id") and str(summary.get("suite_run_id")) != suite_run_id:
-            raise RegistryAppError(
-                "invalid_request",
-                "suite_run_id does not match summary.json",
-                http_status=400,
-            )
-        names = set(archive_member_names(archive))
-        refs = summary.get("task_refs")
-        if isinstance(refs, list):
-            stamped: list[Any] = []
-            for ref in refs:
-                if not isinstance(ref, dict):
-                    stamped.append(ref)
-                    continue
-                item = dict(ref)
-                run_id = str(item.get("run_id") or "").strip()
-                prefix = f"{run_locator(run_id)}/" if run_id else ""
-                item["has_attempt_content"] = bool(prefix) and any(
-                    name.startswith(prefix) for name in names
-                )
-                stamped.append(item)
-            summary["task_refs"] = stamped
+        summary = self._summary_object(
+            raw,
+            suite_run_id=suite_run_id,
+            dataset_id=dataset_id,
+            dataset_version=dataset_version,
+        )
+        _stamp_attempt_content(summary, set(archive_member_names(archive)))
         return summary
 
     def _public(self, row: SnapshotShareRow) -> dict[str, Any]:
