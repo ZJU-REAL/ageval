@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.registry.blob_io import read_blob, sha256_file
+from services.registry.content.blob_io import read_blob, sha256_file
+from services.registry.content.blobs import (
+    FilesystemBlobStore,
+    MemoryBlobStore,
+)
 from services.registry.spool import extract_multipart_archive, spool_body
-from services.registry.store import FilesystemBlobStore, MemoryBlobStore
 
 
 def test_filesystem_put_tmp_rename_and_open(tmp_path: Path) -> None:
@@ -60,7 +63,7 @@ def test_s3_stub_uses_upload_fileobj(tmp_path: Path) -> None:
         def delete_object(self, **kwargs: object) -> None:
             return None
 
-    from services.registry.store import S3BlobStore
+    from services.registry.content.blobs import S3BlobStore
 
     store = object.__new__(S3BlobStore)
     store.bucket = "ageval"

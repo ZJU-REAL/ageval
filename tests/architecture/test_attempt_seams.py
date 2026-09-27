@@ -103,7 +103,7 @@ def test_ageval_runs_layout_owned_by_evidence() -> None:
 def test_queries_own_single_releases_ddl() -> None:
     queries = (REPO / "services" / "registry" / "queries.py").read_text(encoding="utf-8")
     assert queries.count("CREATE TABLE IF NOT EXISTS releases") == 1
-    adapter = (REPO / "services" / "registry" / "sql_adapter.py").read_text(encoding="utf-8")
+    adapter = (REPO / "services" / "registry" / "db" / "sql_adapter.py").read_text(encoding="utf-8")
     assert "CREATE TABLE IF NOT EXISTS releases" not in adapter
 
 
@@ -160,7 +160,6 @@ def test_store_has_no_sql_literals() -> None:
         "store_result.py",
         "store_org.py",
         "store_inbox.py",
-        "store_schema.py",
     }
     for path in store_files:
         for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):

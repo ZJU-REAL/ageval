@@ -81,19 +81,21 @@ from services.registry.backend import (  # noqa: E402
     PublicBackendError,
     require_public_backend,
 )
+from services.registry.content.blobs import (  # noqa: E402
+    FilesystemBlobStore,
+    MemoryBlobStore,
+    S3BlobStore,
+)
+from services.registry.db.schema import (  # noqa: E402
+    open_sqlite_stores,
+    open_stores,
+)
 from services.registry.envload import load_env_file  # noqa: E402
 from services.registry.http_api import RegistryHttpApi, write_http_result  # noqa: E402
 from services.registry.store import (  # noqa: E402
     ADMIN_SCOPES,
-    FilesystemBlobStore,
-    MemoryBlobStore,
     PostgresTokenStore,
-    S3BlobStore,
     SqliteTokenStore,
-)
-from services.registry.store_schema import (  # noqa: E402
-    open_sqlite_stores,
-    open_stores,
 )
 from services.registry.upload_slots import (  # noqa: E402
     UploadSlotPool,
@@ -288,7 +290,7 @@ def build_state_from_env(
         )
 
     database_url, s3_endpoint = require_public_backend()
-    from services.registry.sql_adapter import PostgresAdapter
+    from services.registry.db.sql_adapter import PostgresAdapter
 
     stores = open_stores(adapter=PostgresAdapter(database_url))
     tokens = PostgresTokenStore(database_url)

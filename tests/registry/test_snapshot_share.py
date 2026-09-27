@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 from services.registry.app import build_default_state, make_handler
-from services.registry.blob_io import sha256_file
+from services.registry.content.blob_io import sha256_file
 from services.registry.tokens import DEFAULT_LOGIN_SCOPES
 
 from ageval.registry.client import RegistryClient, RegistryError

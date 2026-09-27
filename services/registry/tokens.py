@@ -160,7 +160,7 @@ class SqliteTokenStore(PersistentTokenStore):
     """Persistent tokens in the same SQLite file as metadata."""
 
     def __init__(self, db_path: Path) -> None:
-        from services.registry.sql_adapter import SqliteAdapter
+        from services.registry.db.sql_adapter import SqliteAdapter
 
         PersistentTokenStore.__init__(self, adapter=SqliteAdapter(db_path))
 
@@ -169,7 +169,7 @@ class PostgresTokenStore(PersistentTokenStore):
     """Persistent tokens in Postgres."""
 
     def __init__(self, database_url: str) -> None:
-        from services.registry.sql_adapter import PostgresAdapter
+        from services.registry.db.sql_adapter import PostgresAdapter
 
         PersistentTokenStore.__init__(self, adapter=PostgresAdapter(database_url))
         self.database_url = database_url

@@ -1,4 +1,4 @@
-"""Registry metadata, tokens, results, and blob storage.
+"""Registry row types, token adapters, and DTO helpers.
 
 Unit tests: SQLite + Memory blob.
 Compose / production: Postgres + S3-compatible (RustFS).
@@ -9,10 +9,9 @@ Packages require ``org_id`` on new publishes; results carry ``uploaded_by``
 and optional share targets (org / user). Private read is ownership/membership
 based (admin bypass); scopes alone no longer grant global private sight.
 
-Blob and token adapters live in ``blobs.py`` / ``tokens.py``; the four
-aggregate stores live in ``store_*.py`` behind the narrow protocols.
-This module keeps the row/DTO vocabulary and re-exports while importers
-migrate.
+Token adapters live in ``tokens.py``. The four aggregate stores live in
+``store_*.py`` behind the narrow protocols. Blob stores live in
+``content/blobs.py``. Schema init lives in ``db/schema.py``.
 """
 
 from __future__ import annotations
@@ -21,11 +20,6 @@ import contextlib
 import json
 from typing import Any
 
-from services.registry.blobs import (  # noqa: F401
-    FilesystemBlobStore,
-    MemoryBlobStore,
-    S3BlobStore,
-)
 from services.registry.clock import now
 from services.registry.rows import (  # noqa: F401
     AttemptResultRow,
@@ -39,11 +33,6 @@ from services.registry.rows import (  # noqa: F401
     ResultShareRow,
     SuiteResultRow,
     UserProfileRow,
-)
-from services.registry.store_schema import (  # noqa: F401
-    RegistryStores,
-    open_sqlite_stores,
-    open_stores,
 )
 from services.registry.tokens import (  # noqa: F401
     ADMIN_SCOPES,

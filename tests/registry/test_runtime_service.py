@@ -10,15 +10,14 @@ from pathlib import Path
 import pytest
 from services.registry.access import AccessPolicy
 from services.registry.app import build_default_state
+from services.registry.content.blobs import MemoryBlobStore
+from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
 from services.registry.http_api import RegistryHttpApi
 from services.registry.package_service import PackageService
 from services.registry.result_service import ResultService
 from services.registry.runtime_service import RuntimeService
-from services.registry.store import MemoryBlobStore, TokenInfo
-from services.registry.store_schema import (
-    open_sqlite_stores,
-)
+from services.registry.store import TokenInfo
 
 from ageval.registry.archive import MEDIA_TYPE, build_archive
 from ageval.registry.digest import compute_package_digest

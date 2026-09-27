@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from services.registry.access import AccessPolicy
-from services.registry.blob_io import read_blob, sha256_file
+from services.registry.content.blob_io import read_blob, sha256_file
 from services.registry.dataset import (
     BOUND_DRAFT,
     BOUND_RELEASE,
@@ -273,7 +273,7 @@ class ResultService:
         return fh, int(size), row
 
     def list_attempt_files(self, *, run_id: str, auth: TokenInfo) -> dict[str, Any]:
-        from services.registry.package_files import get_or_build_index
+        from services.registry.content.files import get_or_build_index
 
         row = self._require_visible_attempt(run_id, auth)
         archive = read_blob(self.blobs, row.blob_digest, prefix="results")
@@ -296,7 +296,7 @@ class ResultService:
         }
 
     def read_attempt_file(self, *, run_id: str, file_path: str, auth: TokenInfo) -> dict[str, Any]:
-        from services.registry.package_files import (
+        from services.registry.content.files import (
             MAX_FILE_BYTES,
             PackageFileNotFound,
             PackageFileTooLarge,
@@ -1153,7 +1153,7 @@ class ResultService:
         if blob is None:
             return kind, frozenset()
         try:
-            from services.registry.package_files import get_or_build_index
+            from services.registry.content.files import get_or_build_index
 
             index = get_or_build_index(blob, package_digest=digest or "bound")
             paths = [item.get("path") or "" for item in index.list_items()]

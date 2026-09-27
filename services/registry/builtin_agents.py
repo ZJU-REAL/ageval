@@ -109,7 +109,7 @@ def builtin_list_files(dataset_id: str) -> dict[str, Any]:
 
 
 def builtin_read_file(dataset_id: str, file_path: str) -> dict[str, Any]:
-    from services.registry.package_files import (
+    from services.registry.content.files import (
         MAX_FILE_BYTES,
         PackagePathError,
         file_payload,

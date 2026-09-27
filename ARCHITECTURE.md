@@ -174,11 +174,12 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   ├── auth_service.py / package_service.py / result_service.py / org_service.py
 │   ├── request_service.py           # listing + performance requests; Inbox
 │   ├── share_service.py             # snapshot share link; not catalog ACL
-│   ├── queries.py / dataset.py / sql_adapter.py
-│   ├── store_schema.py              # open_stores: schema once → RegistryStores
+│   ├── content/                     # files, blob_io, blobs
+│   ├── db/                          # dialect, sql_adapter, schema (open_stores)
+│   ├── queries.py / dataset.py
 │   ├── store_package.py / store_result.py / store_org.py / store_inbox.py
-│   ├── blobs.py / tokens.py / rows.py / protocols.py   # narrow store protocols
-│   ├── store.py                     # row/DTO vocabulary + re-exports
+│   ├── tokens.py / rows.py / protocols.py   # narrow store protocols
+│   ├── store.py                     # row/DTO vocabulary + token re-exports
 │   └── routes.py                    # ROUTES must declare access
 ├── examples/
 │   ├── datasets/
@@ -399,7 +400,7 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | Other Agent backends | `openai-http` / `anthropic-http` / external `nooa` `dsh` | Not vendor stdout scrape |
 | Official base image | `plugins/contrib/docker/attempt/` | GHCR `ageval-attempt:<cli-ver>` then local `ageval-attempt:base`; miss → packaged Dockerfile. Bake ACP entries at image build; no `npm i` at invoke |
 | ACP task image layer | `plugins/contrib/acp` | `config.image_layers` bakes the bound `options.entry` onto the task recipe |
-| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is four aggregate stores (`store_*.py`) behind narrow protocols, one schema init in `store_schema.open_stores`, SQL only in `queries.py`, dialect only in `sql_adapter.py` |
+| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is four aggregate stores (`store_*.py`) behind narrow protocols, one schema init in `db/schema.open_stores`, SQL only in `queries.py`, dialect only in `db/sql_adapter.py` |
 
 ## Failure and Privacy Boundary
 

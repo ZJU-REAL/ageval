@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from services.registry.access import AccessPolicy
-from services.registry.blob_io import read_blob, sha256_file
+from services.registry.content.blob_io import read_blob, sha256_file
 from services.registry.brand_marks import normalize_icon_github, normalize_icon_key
 from services.registry.builtin_agents import (
     builtin_agent_item,
@@ -636,7 +636,7 @@ class PackageService:
         package_kind: str | None = None,
     ) -> dict[str, Any]:
         from services.registry.builtin_plugins import builtin_list_files
-        from services.registry.package_files import get_or_build_index
+        from services.registry.content.files import get_or_build_index
 
         kind = overlay_kind(dataset_id, package_kind)
         if kind == "plugin":
@@ -717,7 +717,7 @@ class PackageService:
         package_kind: str | None = None,
     ) -> dict[str, Any]:
         from services.registry.builtin_plugins import builtin_read_file
-        from services.registry.package_files import (
+        from services.registry.content.files import (
             MAX_FILE_BYTES,
             PackageFileNotFound,
             PackageFileTooLarge,
@@ -979,7 +979,7 @@ class PackageService:
         return bool(self.blobs.delete(blob_digest, prefix="packages"))
 
     def _store_task_summary(self, archive: Path, package_digest: str) -> None:
-        from services.registry.package_files import build_index_from_archive
+        from services.registry.content.files import build_index_from_archive
 
         index = build_index_from_archive(archive.read_bytes(), package_digest=package_digest)
         tasks, has_shared = index.list_tasks()
@@ -994,7 +994,7 @@ class PackageService:
     def _backfill_task_summary(
         self, package_digest: str, blob_digest: str
     ) -> tuple[list[dict[str, Any]], bool, list[str]]:
-        from services.registry.package_files import get_or_build_index
+        from services.registry.content.files import get_or_build_index
 
         archive = read_blob(self.blobs, blob_digest, prefix="packages")
         if archive is None:

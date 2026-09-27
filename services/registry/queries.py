@@ -1,6 +1,6 @@
 """Shared SQL text for Registry metadata stores (SQLite ``?`` placeholders).
 
-Postgres adapters rewrite placeholders in :mod:`services.registry.sql_adapter`.
+Postgres adapters rewrite placeholders in :mod:`services.registry.db.sql_adapter`.
 DDL lives here once; dialect adapters only connect / placeholder / row-map.
 """
 

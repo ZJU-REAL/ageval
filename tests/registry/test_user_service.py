@@ -10,11 +10,9 @@ from pathlib import Path
 
 import pytest
 from services.registry.app import build_default_state, make_handler
+from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
 from services.registry.store import DEFAULT_LOGIN_SCOPES
-from services.registry.store_schema import (
-    open_sqlite_stores,
-)
 from services.registry.user_service import UserService
 
 

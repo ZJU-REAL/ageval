@@ -43,7 +43,7 @@ class RegistryStores:
 
 
 def open_stores(*, db_path: Path | None = None, adapter: Any | None = None) -> RegistryStores:
-    from services.registry.sql_adapter import SqliteAdapter
+    from services.registry.db.sql_adapter import SqliteAdapter
 
     if adapter is None:
         if db_path is None:

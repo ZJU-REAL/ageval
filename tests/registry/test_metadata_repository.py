@@ -6,18 +6,18 @@ import os
 from pathlib import Path
 
 import pytest
-from services.registry.sql_adapter import PostgresAdapter
+from services.registry.db.schema import (
+    RegistryStores,
+    open_sqlite_stores,
+    open_stores,
+)
+from services.registry.db.sql_adapter import PostgresAdapter
 from services.registry.store import (
     AttemptResultRow,
     PostgresTokenStore,
     ReleaseRow,
     SqliteTokenStore,
     now,
-)
-from services.registry.store_schema import (
-    RegistryStores,
-    open_sqlite_stores,
-    open_stores,
 )
 
 

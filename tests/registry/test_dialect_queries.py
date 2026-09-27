@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from services.registry import queries as Q
-from services.registry.dialect import pg_sql
+from services.registry.db.dialect import pg_sql
 from services.registry.routes import match_route
 
 
@@ -62,7 +62,7 @@ def test_upsert_token_does_not_bind_created_at() -> None:
 
 
 def test_sqlite_align_integer_flag_is_noop(tmp_path) -> None:
-    from services.registry.sql_adapter import SqliteAdapter
+    from services.registry.db.sql_adapter import SqliteAdapter
 
     adapter = SqliteAdapter(tmp_path / "meta.sqlite3")
     with adapter.connect() as conn:
@@ -70,7 +70,7 @@ def test_sqlite_align_integer_flag_is_noop(tmp_path) -> None:
 
 
 def test_sqlite_lock_schema_is_noop(tmp_path) -> None:
-    from services.registry.sql_adapter import SqliteAdapter
+    from services.registry.db.sql_adapter import SqliteAdapter
 
     adapter = SqliteAdapter(tmp_path / "meta.sqlite3")
     with adapter.connect() as conn:
@@ -78,7 +78,7 @@ def test_sqlite_lock_schema_is_noop(tmp_path) -> None:
 
 
 def test_postgres_lock_schema_uses_xact_advisory_lock() -> None:
-    from services.registry.sql_adapter import (
+    from services.registry.db.sql_adapter import (
         _SCHEMA_LOCK_ID,
         _SCHEMA_LOCK_NS,
         PostgresAdapter,
@@ -98,7 +98,7 @@ def test_postgres_lock_schema_uses_xact_advisory_lock() -> None:
 
 
 def test_postgres_add_column_skips_when_present() -> None:
-    from services.registry.sql_adapter import PostgresAdapter
+    from services.registry.db.sql_adapter import PostgresAdapter
 
     executed: list[str] = []
 
@@ -113,9 +113,9 @@ def test_postgres_add_column_skips_when_present() -> None:
 
 
 def test_metadata_and_token_init_take_schema_lock(tmp_path, monkeypatch) -> None:
-    from services.registry.sql_adapter import SqliteAdapter
+    from services.registry.db.schema import open_sqlite_stores
+    from services.registry.db.sql_adapter import SqliteAdapter
     from services.registry.store import SqliteTokenStore
-    from services.registry.store_schema import open_sqlite_stores
 
     calls: list[str] = []
     orig = SqliteAdapter.lock_schema
@@ -133,7 +133,7 @@ def test_metadata_and_token_init_take_schema_lock(tmp_path, monkeypatch) -> None
 
 def test_align_integer_flag_rejects_bad_ident() -> None:
     import pytest
-    from services.registry.sql_adapter import PostgresAdapter
+    from services.registry.db.sql_adapter import PostgresAdapter
 
     fake = object.__new__(PostgresAdapter)
     with pytest.raises(ValueError, match="identifier"):

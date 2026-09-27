@@ -14,7 +14,7 @@ import tarfile
 from pathlib import Path
 from typing import Any
 
-from services.registry.blob_io import read_blob, sha256_file
+from services.registry.content.blob_io import read_blob, sha256_file
 from services.registry.errors import RegistryAppError
 from services.registry.rows import SnapshotShareRow
 from services.registry.store import TokenInfo, now
@@ -205,7 +205,7 @@ class ShareService:
         row = self._require(token)
         self.attempt_meta(token, run_id)
         archive = self._archive_bytes(row)
-        from services.registry.package_files import get_or_build_index
+        from services.registry.content.files import get_or_build_index
 
         index = get_or_build_index(archive, package_digest=row.blob_digest)
         prefix = run_locator(run_id)
@@ -222,7 +222,7 @@ class ShareService:
         }
 
     def read_attempt_file(self, token: str, run_id: str, file_path: str) -> dict[str, Any]:
-        from services.registry.package_files import (
+        from services.registry.content.files import (
             MAX_FILE_BYTES,
             PackageFileNotFound,
             PackageFileTooLarge,
