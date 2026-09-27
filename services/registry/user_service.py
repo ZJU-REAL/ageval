@@ -8,7 +8,11 @@ from services.registry.errors import RegistryAppError
 from services.registry.maintainers import is_maintainer
 from services.registry.official import is_official_upload_org
 from services.registry.org_service import normalize_description
-from services.registry.store import TokenInfo, _normalize_user_id, org_to_dict
+from services.registry.auth.tokens import (
+    TokenInfo,
+    _normalize_user_id,
+)
+from services.registry.store import org_to_dict
 
 _USER_DESCRIPTION_MAX = 280
 

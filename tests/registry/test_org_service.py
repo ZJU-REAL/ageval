@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 from services.registry.access import AccessPolicy
+from services.registry.auth.tokens import TokenInfo
 from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
 from services.registry.org_service import OrgService
-from services.registry.store import TokenInfo
 
 
 def _orgs(tmp_path: Path) -> OrgService:

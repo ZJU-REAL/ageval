@@ -14,7 +14,7 @@ from services.registry.rows import (
     OrgRow,
     UserProfileRow,
 )
-from services.registry.tokens import _normalize_user_id
+from services.registry.auth.tokens import _normalize_user_id
 
 
 class OrgStore(OrgStoreProtocol):

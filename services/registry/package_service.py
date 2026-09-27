@@ -16,12 +16,8 @@ from services.registry.builtin_agents import (
     is_builtin_agent_id,
     reserved_harness_leaf,
 )
-from services.registry.builtin_agents import (
-    builtin_list_files as builtin_agent_list_files,
-)
-from services.registry.builtin_agents import (
-    builtin_read_file as builtin_agent_read_file,
-)
+from services.registry.builtin_agents import builtin_list_files as builtin_agent_list_files
+from services.registry.builtin_agents import builtin_read_file as builtin_agent_read_file
 from services.registry.builtin_plugins import (
     builtin_plugin_item,
     builtin_plugin_items,
@@ -30,10 +26,10 @@ from services.registry.builtin_plugins import (
 from services.registry.dataset import DRAFT_SLOT, is_draft_version
 from services.registry.errors import RegistryAppError
 from services.registry.paging import page_slice
+from services.registry.auth.tokens import TokenInfo
 from services.registry.store import (
     DraftRow,
     ReleaseRow,
-    TokenInfo,
     now,
     package_kind_for_media_type,
     release_to_dict,

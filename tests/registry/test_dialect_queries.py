@@ -113,9 +113,9 @@ def test_postgres_add_column_skips_when_present() -> None:
 
 
 def test_metadata_and_token_init_take_schema_lock(tmp_path, monkeypatch) -> None:
+    from services.registry.auth.tokens import SqliteTokenStore
     from services.registry.db.schema import open_sqlite_stores
     from services.registry.db.sql_adapter import SqliteAdapter
-    from services.registry.store import SqliteTokenStore
 
     calls: list[str] = []
     orig = SqliteAdapter.lock_schema

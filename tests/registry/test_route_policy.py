@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 from services.registry.access import AccessPolicy
+from services.registry.auth.tokens import TokenInfo
 from services.registry.http.routes import ROUTES, Route
-from services.registry.store import TokenInfo
 
 
 def test_every_route_declares_access() -> None:

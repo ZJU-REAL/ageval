@@ -20,7 +20,7 @@ from services.registry.maintainers import (
     auth_is_maintainer,
 )
 from services.registry.official import official_dataset_ids
-from services.registry.store import TokenInfo
+from services.registry.auth.tokens import TokenInfo
 
 from ageval.agents.refs import published_agent_ref_parts
 from ageval.agents.reserved import builtin_harness_ids, canonical_harness_id

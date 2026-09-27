@@ -11,8 +11,8 @@ from unittest.mock import patch
 
 import pytest
 from services.registry.app import build_default_state, make_handler
-from services.registry.oauth_github import DeviceCodeResponse, GitHubIdentity
-from services.registry.store import DEFAULT_LOGIN_SCOPES
+from services.registry.auth.oauth_github import DeviceCodeResponse, GitHubIdentity
+from services.registry.auth.tokens import DEFAULT_LOGIN_SCOPES
 
 from ageval.application.composition import (
     build_publish_command,
@@ -214,7 +214,7 @@ def test_oauth_device_flow_mocked(
 
     with (
         patch(
-            "services.registry.auth_service.request_device_code",
+            "services.registry.auth.service.request_device_code",
             return_value=DeviceCodeResponse(
                 device_code="dev-code",
                 user_code="ABCD-1234",
@@ -224,11 +224,11 @@ def test_oauth_device_flow_mocked(
             ),
         ),
         patch(
-            "services.registry.auth_service.poll_access_token",
+            "services.registry.auth.service.poll_access_token",
             side_effect=[None, "gho_test_token"],
         ),
         patch(
-            "services.registry.auth_service.fetch_user",
+            "services.registry.auth.service.fetch_user",
             return_value=GitHubIdentity(login="testuser", id=1),
         ),
     ):
@@ -264,7 +264,7 @@ def test_oauth_empty_allowlist_allows_any_github_user(
     client = RegistryClient(registry_server["url"], token=None)
     with (
         patch(
-            "services.registry.auth_service.request_device_code",
+            "services.registry.auth.service.request_device_code",
             return_value=DeviceCodeResponse(
                 device_code="dev-open",
                 user_code="AAAA-0000",
@@ -274,11 +274,11 @@ def test_oauth_empty_allowlist_allows_any_github_user(
             ),
         ),
         patch(
-            "services.registry.auth_service.poll_access_token",
+            "services.registry.auth.service.poll_access_token",
             return_value="gho_open",
         ),
         patch(
-            "services.registry.auth_service.fetch_user",
+            "services.registry.auth.service.fetch_user",
             return_value=GitHubIdentity(login="anyone", id=7),
         ),
     ):
@@ -289,7 +289,7 @@ def test_oauth_empty_allowlist_allows_any_github_user(
 
 
 def test_web_redirect_allows_compose_and_vite_hub() -> None:
-    from services.registry.auth_service import AuthService
+    from services.registry.auth.service import AuthService
 
     auth = AuthService(
         tokens=object(),
@@ -310,7 +310,7 @@ def test_oauth_allowlist_denies_unknown_user(
     client = RegistryClient(registry_server["url"], token=None)
     with (
         patch(
-            "services.registry.auth_service.request_device_code",
+            "services.registry.auth.service.request_device_code",
             return_value=DeviceCodeResponse(
                 device_code="dev-deny",
                 user_code="ZZZZ-9999",
@@ -320,11 +320,11 @@ def test_oauth_allowlist_denies_unknown_user(
             ),
         ),
         patch(
-            "services.registry.auth_service.poll_access_token",
+            "services.registry.auth.service.poll_access_token",
             return_value="gho_other",
         ),
         patch(
-            "services.registry.auth_service.fetch_user",
+            "services.registry.auth.service.fetch_user",
             return_value=GitHubIdentity(login="not-allowed", id=99),
         ),
     ):

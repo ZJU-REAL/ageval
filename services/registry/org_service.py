@@ -11,9 +11,11 @@ from services.registry.access import AccessPolicy
 from services.registry.brand_marks import normalize_icon_github, normalize_icon_key
 from services.registry.errors import RegistryAppError
 from services.registry.official import is_official_upload_org
-from services.registry.store import (
+from services.registry.auth.tokens import (
     TokenInfo,
     _normalize_user_id,
+)
+from services.registry.store import (
     invite_key_to_dict,
     membership_to_dict,
     now,

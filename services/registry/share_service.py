@@ -17,7 +17,8 @@ from typing import Any
 from services.registry.content.blob_io import read_blob, sha256_file
 from services.registry.errors import RegistryAppError
 from services.registry.rows import SnapshotShareRow
-from services.registry.store import TokenInfo, now
+from services.registry.auth.tokens import TokenInfo
+from services.registry.store import now
 
 from ageval.evidence.locators import run_locator, suite_run_locator
 from ageval.registry.media_types import SHARE_SNAPSHOT_MEDIA_TYPE

@@ -77,6 +77,11 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from services.registry.access import AccessPolicy  # noqa: E402
+from services.registry.auth.tokens import (  # noqa: E402
+    ADMIN_SCOPES,
+    PostgresTokenStore,
+    SqliteTokenStore,
+)
 from services.registry.backend import (  # noqa: E402
     PublicBackendError,
     require_public_backend,
@@ -92,11 +97,6 @@ from services.registry.db.schema import (  # noqa: E402
 )
 from services.registry.envload import load_env_file  # noqa: E402
 from services.registry.http.dispatch import RegistryHttpApi, write_http_result  # noqa: E402
-from services.registry.store import (  # noqa: E402
-    ADMIN_SCOPES,
-    PostgresTokenStore,
-    SqliteTokenStore,
-)
 from services.registry.upload_slots import (  # noqa: E402
     UploadSlotPool,
     slots_from_env,
@@ -140,7 +140,7 @@ class RegistryState:
             self.upload_slots = UploadSlotPool(
                 slots_from_env() if upload_slots is None else upload_slots
             )
-        from services.registry.auth_service import AuthService
+        from services.registry.auth.service import AuthService
         from services.registry.org_service import OrgService
         from services.registry.package_service import PackageService
         from services.registry.request_service import RequestService

@@ -9,8 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from services.registry.auth.tokens import TokenInfo
 from services.registry.rows import DraftRow, ReleaseRow
-from services.registry.tokens import TokenInfo
 
 OrgOwnerStatus = Literal["ok", "not_found", "unauthorized", "forbidden"]
 

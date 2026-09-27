@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from services.registry.auth.tokens import TokenInfo
     from services.registry.rows import (
         AttemptResultRow,
         DatasetAclRow,
@@ -24,7 +25,6 @@ if TYPE_CHECKING:
         SuiteResultRow,
         UserProfileRow,
     )
-    from services.registry.tokens import TokenInfo
 
 
 @runtime_checkable

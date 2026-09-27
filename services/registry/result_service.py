@@ -24,11 +24,13 @@ from services.registry.errors import RegistryAppError
 from services.registry.official import official_dataset_ids
 from services.registry.paging import page_slice
 from services.registry.runtime_service import attach_agent_refs
+from services.registry.auth.tokens import (
+    TokenInfo,
+    _normalize_user_id,
+)
 from services.registry.store import (
     AttemptResultRow,
     SuiteResultRow,
-    TokenInfo,
-    _normalize_user_id,
     _run_ids_from_tasks_json,
     attempt_to_dict,
     now,

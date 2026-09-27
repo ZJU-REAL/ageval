@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 from services.registry.app import build_default_state, make_handler
-from services.registry.store import DEFAULT_LOGIN_SCOPES
+from services.registry.auth.tokens import DEFAULT_LOGIN_SCOPES
 
 from ageval.application.composition import (
     build_publish_command,

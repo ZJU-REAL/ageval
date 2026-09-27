@@ -8,7 +8,12 @@ from typing import Any
 from services.registry.dataset import BOUND_RELEASE
 from services.registry.errors import RegistryAppError
 from services.registry.maintainers import MAINTAINER_INBOX_ORG, auth_is_maintainer
-from services.registry.store import ResourceRequestRow, TokenInfo, now, request_to_dict
+from services.registry.auth.tokens import TokenInfo
+from services.registry.store import (
+    ResourceRequestRow,
+    now,
+    request_to_dict,
+)
 
 REQUEST_KINDS = frozenset({"leaderboard_list", "agent_performance"})
 REQUEST_STATUSES = frozenset({"pending", "approved", "rejected"})

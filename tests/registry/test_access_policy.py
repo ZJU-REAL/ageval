@@ -5,8 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from services.registry.access import AccessPolicy
+from services.registry.auth.tokens import TokenInfo
 from services.registry.db.schema import open_sqlite_stores
-from services.registry.store import ReleaseRow, TokenInfo, now
+from services.registry.store import (
+    ReleaseRow,
+    now,
+)
 
 
 def test_visible_package_public_and_org_member(tmp_path: Path) -> None:

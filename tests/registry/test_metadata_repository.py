@@ -6,6 +6,10 @@ import os
 from pathlib import Path
 
 import pytest
+from services.registry.auth.tokens import (
+    PostgresTokenStore,
+    SqliteTokenStore,
+)
 from services.registry.db.schema import (
     RegistryStores,
     open_sqlite_stores,
@@ -14,9 +18,7 @@ from services.registry.db.schema import (
 from services.registry.db.sql_adapter import PostgresAdapter
 from services.registry.store import (
     AttemptResultRow,
-    PostgresTokenStore,
     ReleaseRow,
-    SqliteTokenStore,
     now,
 )
 

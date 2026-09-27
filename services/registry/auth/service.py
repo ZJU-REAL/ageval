@@ -8,8 +8,7 @@ import sys
 import time
 from typing import Any
 
-from services.registry.errors import RegistryAppError
-from services.registry.oauth_github import (
+from services.registry.auth.oauth_github import (
     GitHubOAuthError,
     build_web_authorize_url,
     exchange_web_code,
@@ -17,7 +16,8 @@ from services.registry.oauth_github import (
     poll_access_token,
     request_device_code,
 )
-from services.registry.store import DEFAULT_LOGIN_SCOPES, TokenInfo
+from services.registry.auth.tokens import DEFAULT_LOGIN_SCOPES, TokenInfo
+from services.registry.errors import RegistryAppError
 
 
 class AuthService:
@@ -91,7 +91,7 @@ class AuthService:
             dc = request_device_code(client_id=self.github_client_id)
         except GitHubOAuthError as exc:
             raise RegistryAppError(exc.code, exc.message, http_status=502) from exc
-        from services.registry.oauth_github import _device_verify_url
+        from services.registry.auth.oauth_github import _device_verify_url
 
         return {
             "device_code": dc.device_code,

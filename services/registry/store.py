@@ -1,4 +1,4 @@
-"""Registry row types, token adapters, and DTO helpers.
+"""Registry row types and DTO helpers.
 
 Unit tests: SQLite + Memory blob.
 Compose / production: Postgres + S3-compatible (RustFS).
@@ -9,9 +9,9 @@ Packages require ``org_id`` on new publishes; results carry ``uploaded_by``
 and optional share targets (org / user). Private read is ownership/membership
 based (admin bypass); scopes alone no longer grant global private sight.
 
-Token adapters live in ``tokens.py``. The four aggregate stores live in
-``store_*.py`` behind the narrow protocols. Blob stores live in
-``content/blobs.py``. Schema init lives in ``db/schema.py``.
+The four aggregate stores live in ``store_*.py`` behind the narrow protocols.
+Blob stores live in ``content/blobs.py``. Schema init lives in ``db/schema.py``.
+Token adapters live in ``auth/tokens.py``.
 """
 
 from __future__ import annotations
@@ -34,17 +34,6 @@ from services.registry.rows import (  # noqa: F401
     SuiteResultRow,
     UserProfileRow,
 )
-from services.registry.tokens import (  # noqa: F401
-    ADMIN_SCOPES,
-    DEFAULT_LOGIN_SCOPES,
-    PersistentTokenStore,
-    PostgresTokenStore,
-    SqliteTokenStore,
-    TokenInfo,
-    TokenStore,
-    _normalize_user_id,
-)
-
 
 # ---------------------------------------------------------------------------
 def package_kind_for_media_type(media_type: str) -> str:

@@ -14,7 +14,7 @@ from services.registry.rows import (
     DraftRow,
     ReleaseRow,
 )
-from services.registry.tokens import _normalize_user_id
+from services.registry.auth.tokens import _normalize_user_id
 
 
 class PackageStore(PackageStoreProtocol):

@@ -9,7 +9,7 @@ from services.registry import queries as Q
 from services.registry.clock import now
 from services.registry.protocols import InboxStoreProtocol
 from services.registry.rows import ResourceRequestRow
-from services.registry.tokens import _normalize_user_id
+from services.registry.auth.tokens import _normalize_user_id
 
 
 class InboxStore(InboxStoreProtocol):

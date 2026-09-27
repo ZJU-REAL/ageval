@@ -6,12 +6,12 @@ import hashlib
 from pathlib import Path
 
 from services.registry.access import AccessPolicy
+from services.registry.auth.tokens import TokenInfo
 from services.registry.content.blobs import MemoryBlobStore
 from services.registry.db.schema import open_sqlite_stores
 from services.registry.result_service import ResultService
 from services.registry.store import (
     AttemptResultRow,
-    TokenInfo,
     attempt_to_dict,
     now,
 )

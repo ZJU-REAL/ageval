@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 from services.registry.app import build_default_state, make_handler
+from services.registry.auth.tokens import DEFAULT_LOGIN_SCOPES
 from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
-from services.registry.store import DEFAULT_LOGIN_SCOPES
 from services.registry.user_service import UserService
 
 
@@ -104,7 +104,7 @@ def test_unknown_login_is_not_found(tmp_path: Path) -> None:
 
 
 def test_self_can_patch_description(tmp_path: Path) -> None:
-    from services.registry.store import TokenInfo
+    from services.registry.auth.tokens import TokenInfo
 
     svc = _users(tmp_path)
     svc.orgs.upsert_user_profile(user_id="alice", display_name="Alice")
@@ -118,7 +118,7 @@ def test_self_can_patch_description(tmp_path: Path) -> None:
 
 
 def test_patch_other_user_is_forbidden(tmp_path: Path) -> None:
-    from services.registry.store import TokenInfo
+    from services.registry.auth.tokens import TokenInfo
 
     svc = _users(tmp_path)
     svc.orgs.upsert_user_profile(user_id="alice", display_name="Alice")

@@ -19,15 +19,13 @@ from pathlib import Path
 from typing import Any, BinaryIO
 from urllib.parse import parse_qs, unquote, urlparse
 
+from services.registry.auth.tokens import TokenInfo
 from services.registry.errors import RegistryAppError
 from services.registry.http.routes import match_route
 from services.registry.paging import parse_limit, parse_offset
 from services.registry.spool import extract_multipart_archive, spool_body
-from services.registry.store import TokenInfo
 
-from ageval.registry.media_types import (
-    ATTEMPT_RESULT_MEDIA_TYPE as RESULT_MEDIA_TYPE,
-)
+from ageval.registry.media_types import ATTEMPT_RESULT_MEDIA_TYPE as RESULT_MEDIA_TYPE
 from ageval.registry.media_types import SUITE_RESULT_MEDIA_TYPE
 
 _ctx: ContextVar[RequestCtx] = ContextVar("registry_http_ctx")
