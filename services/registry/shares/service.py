@@ -31,6 +31,7 @@ from ageval.registry.share_snapshot import (
     LIVE_SHARE_SIDECAR,
     SHARE_BLOB_PREFIX,
     SNAPSHOT_SHARE_KIND,
+    ShareArchiveTooLarge,
     archive_contains_snapshot_marker,
     archive_member_names,
     iter_archive_files,
@@ -557,56 +558,74 @@ class ShareService:
                 "snapshot-share.json is required",
                 http_status=400,
             )
-        try:
-            pairs = list(iter_archive_files(archive))
-        except (OSError, tarfile.TarError, gzip.BadGzipFile, EOFError) as exc:
-            raise RegistryAppError(
-                "invalid_request",
-                "snapshot archive is unreadable",
-                http_status=400,
-            ) from exc
         work = Path(tempfile.mkdtemp(prefix="ageval-live-"))
         members: list[_LiveMember] = []
         seen: set[str] = set()
         total = 0
         ok = False
         try:
-            for name, raw in pairs:
-                if not name or Path(name).name == LIVE_SHARE_SIDECAR:
-                    continue
-                path = _safe_member_path(name)
-                if path in seen:
-                    continue
-                seen.add(path)
-                data = scrub_member_bytes(path, raw)
-                if text_has_plaintext_secret(data):
-                    raise RegistryAppError(
-                        "secret_scan_failed",
-                        "snapshot contains a plaintext secret",
-                        http_status=400,
-                    )
-                total += len(data)
-                if total > self.max_upload:
-                    raise RegistryAppError(
-                        "payload_too_large",
-                        f"max {self.max_upload} bytes",
-                        http_status=413,
-                    )
-                spool = work / str(len(members))
-                spool.write_bytes(data)
-                members.append(
-                    _LiveMember(
-                        path=path,
-                        digest=_sha256_bytes(data),
-                        size=len(data),
-                        spool=spool,
-                    )
-                )
+            try:
+                for name, raw in iter_archive_files(archive, max_total=self.max_upload):
+                    total += self._append_live_member(members, seen, work, name, raw, total=total)
+            except ShareArchiveTooLarge as exc:
+                raise RegistryAppError(
+                    "payload_too_large",
+                    f"max {self.max_upload} bytes",
+                    http_status=413,
+                ) from exc
+            except (OSError, tarfile.TarError, gzip.BadGzipFile, EOFError) as exc:
+                raise RegistryAppError(
+                    "invalid_request",
+                    "snapshot archive is unreadable",
+                    http_status=400,
+                ) from exc
             ok = True
             return members
         finally:
             if not ok:
                 shutil.rmtree(work, ignore_errors=True)
+
+    def _append_live_member(
+        self,
+        members: list[_LiveMember],
+        seen: set[str],
+        work: Path,
+        name: str,
+        raw: bytes,
+        *,
+        total: int,
+    ) -> int:
+        if not name or Path(name).name == LIVE_SHARE_SIDECAR:
+            return 0
+        path = _safe_member_path(name)
+        if path in seen:
+            return 0
+        seen.add(path)
+        data = scrub_member_bytes(path, raw)
+        if text_has_plaintext_secret(data):
+            raise RegistryAppError(
+                "secret_scan_failed",
+                "snapshot contains a plaintext secret",
+                http_status=400,
+            )
+        size = len(data)
+        if total + size > self.max_upload:
+            raise RegistryAppError(
+                "payload_too_large",
+                f"max {self.max_upload} bytes",
+                http_status=413,
+            )
+        spool = work / str(len(members))
+        spool.write_bytes(data)
+        members.append(
+            _LiveMember(
+                path=path,
+                digest=_sha256_bytes(data),
+                size=size,
+                spool=spool,
+            )
+        )
+        return size
 
     def _summary_from_live_members(
         self,

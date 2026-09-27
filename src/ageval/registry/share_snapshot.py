@@ -100,24 +100,36 @@ def text_has_plaintext_secret(chunk: bytes) -> bool:
     return False
 
 
+class ShareArchiveTooLarge(Exception):
+    """Decompressed members exceed the caller's byte cap."""
+
+
 def snapshot_has_plaintext_secret(archive: Path) -> bool:
-    """Scan decompressed text members for a secret assigned to a known key."""
+    """Scan decompressed text members for a secret assigned to a known key.
+
+    Reads at most 4 MiB total. A later member is not loaded into memory.
+    """
     try:
-        seen = 0
-        for _name, chunk in iter_archive_files(archive):
-            if seen >= 4_000_000:
-                break
-            piece = chunk[: 4_000_000 - seen]
-            seen += len(piece)
-            if text_has_plaintext_secret(piece):
-                return True
+        with _open_tar(archive) as tar:
+            seen = 0
+            for info in tar.getmembers():
+                if not info.isfile() or seen >= 4_000_000:
+                    continue
+                extracted = tar.extractfile(info)
+                if extracted is None:
+                    continue
+                chunk = extracted.read(min(int(info.size), 4_000_000 - seen))
+                seen += len(chunk)
+                if text_has_plaintext_secret(chunk):
+                    return True
     except (OSError, tarfile.TarError, gzip.BadGzipFile, EOFError):
         return False
     return False
 
 
-def iter_archive_files(archive: Path) -> Iterator[tuple[str, bytes]]:
-    """Yield ``(normalized path, bytes)`` for each regular file member."""
+def iter_archive_files(archive: Path, *, max_total: int) -> Iterator[tuple[str, bytes]]:
+    """Yield ``(normalized path, bytes)`` without reading past ``max_total``."""
+    seen = 0
     with _open_tar(archive) as tar:
         for info in tar.getmembers():
             if not info.isfile():
@@ -125,7 +137,12 @@ def iter_archive_files(archive: Path) -> Iterator[tuple[str, bytes]]:
             extracted = tar.extractfile(info)
             if extracted is None:
                 continue
-            yield _norm_name(info.name), extracted.read()
+            budget = max_total - seen
+            data = extracted.read(budget + 1)
+            if len(data) > budget:
+                raise ShareArchiveTooLarge(max_total)
+            seen += len(data)
+            yield _norm_name(info.name), data
 
 
 def read_archive_member(archive: Path, member: str, *, max_bytes: int = 2_000_000) -> bytes | None:
