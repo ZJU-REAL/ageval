@@ -637,14 +637,6 @@ class RegistryHttpApi:
             )
         kind = str(body.get("kind") or "").strip()
         suite_run_id = str(body.get("suite_run_id") or "").strip()
-        if suite_run_id and self.state.stores.results.get_snapshot_share(suite_run_id) is not None:
-            return json_result(
-                400,
-                {
-                    "error": "share_not_listable",
-                    "message": "snapshot share cannot be listed on the plaza or leaderboard",
-                },
-            )
         agent_raw = body.get("agent")
         agent = str(agent_raw).strip() if isinstance(agent_raw, str) else None
         canonical_raw = body.get("canonical_model")
