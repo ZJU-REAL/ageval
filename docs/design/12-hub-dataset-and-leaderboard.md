@@ -140,3 +140,28 @@ Dataset 描述来源是包根 `ageval.yaml` 的 `/description`（`ageval.dataset
 Owner `PATCH /v1/packages/{id}` 另认 `description` 键（与 `display_name` 同权，不进 blob，不按 version）：字符串、trim 后 ≤500 字符，空字符串清除。`description` 是 owner 覆写，与 manifest 描述分层：**覆写 > manifest**，清除后回到 manifest 值。未知键拒绝不变。
 
 CLI：`ageval registry set-description <dataset_id> --description "…"`（`--description ""` 清除覆写）。Hub 端展示：datasets 首页按组织分组，Description 列在 Dataset 列右侧、最多两行截断。右侧 `GroupOutline`（`lg+`，少于两个组织则隐藏）按包数量画短条；悬停展开组织标、名称和数量；点击把该组织的表钉到吸顶栏下。Dataset 详情页标题区用与 org 详情同一套 DescriptionEditor，org owner 可编辑并同步该覆写。plugin / agent 卡仍用各自 manifest 的 preview description，不走此覆写。
+
+## 快照分享
+
+本地 suite 跑完之后，owner 可以交出一条只读链接，对方打开就能看这一次的 suite 和 Attempt 证据。路径是 Hub 上的 `/s/{token}`。打开不需要登录。
+
+链接和目录 ACL 分开存：
+
+| 写入 | 行为 |
+| --- | --- |
+| `snapshot_shares` 行，BlobStore 前缀 `shares/` | 创建时写入。blob 是当时的 suite summary 和 Attempt 证据，根上有 `snapshot-share.json`（`kind: snapshot-share`）。 |
+| `visibility` | 保持原样。已经在目录里的 suite 不会因此变成公开；只在本地的 suite 也不会因此进目录。 |
+| `result_shares` | 不写。身份 ACL 仍是 `ageval results share --share-org` / `--share-user`。 |
+| `board_listed` | 不写。不进 plaza，不进 Leaderboard。 |
+
+没有默认 TTL，也没有持续同步。之后本地或 Hub 上的 suite 变了，链接里的内容不变。`ageval results revoke-snapshot <token 或 url>` 删掉 share blob 和这一行；本地 `.ageval/suite-runs` 与 `.ageval/runs` 不动。链接随后不再解析。
+
+创建：`ageval results share-snapshot <dataset> --suite-run <id>`。打印的 `url` 是 `{hub}/s/{token}`。hub 取 `--hub-url`，否则 `AGEVAL_HUB_URL`，否则当次 Registry 源（compose 和公网入口上，Hub 反代 `/v1`）。没创建过分享时，不存在这条路径。
+
+体积上限与 suite / 包上传相同：`MAX_UPLOAD_BYTES`（512 MiB）。超出返回 `payload_too_large`。
+
+创建和撤销要 `results:upload`。撤销还要是该链接的 owner。持链接的人只读。把带 `snapshot-share.json` 的归档再 POST 到 `/v1/results/suites` 或 `/v1/results/attempts` 会拒绝。用 token 申请 `leaderboard_list` 或 `agent_performance` 会拒绝。`/s/{token}` 上没有导入、改公开 / 私有、或申请上榜。`upload-suite` 在不走分享时保持原样。
+
+上传前去掉能识别的密钥：overlay / profiles 里的 `api_key` 以及同类字段。`${NAME}` 和纯环境变量名留下。看起来像密钥值的写成 `[redacted]`。这份 blob 不是 Config format，Config Core 不读它。
+
+页面复用 Hub / Viewer 已有组件和 [13](13-web-ui-tokens.md) 的令牌，不新增色板，因此不改 13。轨迹和 harness completed 仍然不是 PASS。
