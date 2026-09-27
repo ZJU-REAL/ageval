@@ -108,9 +108,10 @@ def _push_locked(dataset_root: Path, suite_run_id: str, *, include_files: bool) 
             require_token=True,
             accept_results_url=True,
         )
-        sources = side.get("sources") if isinstance(side.get("sources"), dict) else {}
+        raw_sources = side.get("sources")
+        sources: dict[str, Any] = raw_sources if isinstance(raw_sources, dict) else {}
         archive: Path | None = None
-        new_sources = dict(sources)
+        new_sources: dict[str, str] = {str(key): str(value) for key, value in sources.items()}
         tmp_dir: tempfile.TemporaryDirectory[str] | None = None
         if include_files:
             changed, new_sources = _changed_members(root, suite_run_id, sources)
@@ -133,9 +134,9 @@ def _push_locked(dataset_root: Path, suite_run_id: str, *, include_files: bool) 
         write_live_share(root, suite_run_id, side)
         return {"ok": False, "error": code, "token": token, "skipped": False}
     except ConfigError as exc:
-        side["last_error"] = exc.code
+        side["last_error"] = exc.error_code
         write_live_share(root, suite_run_id, side)
-        return {"ok": False, "error": exc.code, "token": token, "skipped": False}
+        return {"ok": False, "error": exc.error_code, "token": token, "skipped": False}
     except OSError as exc:
         side["last_error"] = "sync_failed"
         write_live_share(root, suite_run_id, side)
