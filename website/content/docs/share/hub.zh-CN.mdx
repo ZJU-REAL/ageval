@@ -103,6 +103,20 @@ ageval results upload-suite <dataset|id@version> --suite-run <8-hex> --public --
 # ageval results upload <dataset> --run <run_id>
 ```
 
+## 快照分享
+
+快照分享是一条只读链接，对应本机已经跑完的一份 suite。`ageval results share` 仍是把结果交给某个 org 或用户。上榜仍走 `upload-suite` 和 owner 批准。
+
+```bash
+ageval results share-snapshot <dataset> --suite-run <id> --hub-url https://hub.example
+```
+
+命令打印 `{hub}/s/{token}`。拿到链接的人不用登录就能打开，看到的是上传那一刻的 jobs 和 Attempt 证据。之后本机或 Hub 上的内容变了，链接里的内容不变。
+
+`ageval results revoke-snapshot <token 或 url>` 删掉链接。本机 `.ageval/suite-runs` 和 `.ageval/runs` 还在。suite 的公开或私有、以及已经上榜的状态，都保持原样。链接没有到期时间。
+
+体积上限与 `upload-suite` 相同，512 MiB。上传前会去掉不是环境变量名的 `api_key`。这条链接不能再导入成目录里的 suite，也不能拿去申请上榜。
+
 Dataset Leaderboard 默认列出该包全部过门的整份运行。页顶版本切换只切 README / Tasks；榜上 Public 右侧的版本选择器才按这次上传的 `dataset_version` 过滤，默认 All versions。
 
 Hub 前端必须指向与 `ageval login` / `~/.ageval/credentials` **同一** Registry（本机开发常见 `127.0.0.1:8700`）。
