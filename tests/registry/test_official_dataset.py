@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from services.registry.dataset import BOUND_RELEASE
-from services.registry.official import is_official_dataset, official_dataset_ids
+from services.registry.orgs.official import is_official_dataset, official_dataset_ids
 from services.registry.runtime_service import is_plaza_source_suite
 from services.registry.store import ReleaseRow, release_to_dict
 

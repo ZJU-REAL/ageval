@@ -108,7 +108,12 @@ def test_queries_own_single_releases_ddl() -> None:
 
 
 def test_handler_calls_all_domain_services() -> None:
-    api = (REPO / "services" / "registry" / "http" / "dispatch.py").read_text(encoding="utf-8")
+    http = REPO / "services" / "registry" / "http"
+    api = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(http.glob("*.py"))
+        if path.name != "__init__.py"
+    )
     for needle in ("state.packages.", "state.results.", "state.orgs.", "state.auth."):
         assert needle in api, needle
 
@@ -125,21 +130,13 @@ def test_handler_methods_do_not_touch_store() -> None:
             )
             break
     assert handler is not None
-    api_text = (REPO / "services" / "registry" / "http" / "dispatch.py").read_text(encoding="utf-8")
-    api_tree = ast.parse(api_text)
-    http = next(
-        (
-            n
-            for n in ast.walk(api_tree)
-            if isinstance(n, ast.ClassDef) and n.name == "RegistryHttpApi"
-        ),
-        None,
-    )
-    assert http is not None
-    for src in (
-        ast.get_source_segment(text, handler) or "",
-        ast.get_source_segment(api_text, http) or "",
-    ):
+    sources = [ast.get_source_segment(text, handler) or ""]
+    http_dir = REPO / "services" / "registry" / "http"
+    for path in sorted(http_dir.glob("*.py")):
+        if path.name in {"__init__.py", "routes.py"}:
+            continue
+        sources.append(path.read_text(encoding="utf-8"))
+    for src in sources:
         assert "state.meta." not in src
         assert "state.blobs." not in src
         assert "state.stores." not in src
@@ -158,21 +155,24 @@ def test_bearer_is_only_used_by_dispatch() -> None:
 def test_store_has_no_sql_literals() -> None:
     needles = ("DELETE FROM", "INSERT INTO", "CREATE TABLE", "UPDATE ")
     offenders: list[str] = []
-    store_files = sorted((REPO / "services" / "registry").glob("store*.py"))
-    assert {p.name for p in store_files} >= {
+    root = REPO / "services" / "registry"
+    store_files = sorted(root.glob("store*.py")) + sorted(root.rglob("store.py"))
+    store_files = sorted(set(store_files))
+    rels = {p.relative_to(root).as_posix() for p in store_files}
+    assert {
         "store.py",
         "store_package.py",
         "store_result.py",
-        "store_org.py",
         "store_inbox.py",
-    }
+        "orgs/store.py",
+    } <= rels
     for path in store_files:
         for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             stripped = line.strip()
             if stripped.startswith("#"):
                 continue
             if any(n in line for n in needles):
-                offenders.append(f"{path.name}:{i}:{stripped}")
+                offenders.append(f"{path.relative_to(root).as_posix()}:{i}:{stripped}")
     assert offenders == []
 
 

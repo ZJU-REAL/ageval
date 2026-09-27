@@ -14,7 +14,9 @@ from services.registry.rows import (
     DraftRow,
     ReleaseRow,
 )
-from services.registry.auth.tokens import _normalize_user_id
+from services.registry.orgs.rows import (
+    normalize_user_id,
+)
 
 
 class PackageStore(PackageStoreProtocol):
@@ -454,7 +456,7 @@ class PackageStore(PackageStoreProtocol):
             return {str(r["dataset_id"]): int(r["download_count"] or 0) for r in cur.fetchall()}
 
     def add_package_favorite(self, user_id: str, dataset_id: str) -> None:
-        uid = _normalize_user_id(user_id) or ""
+        uid = normalize_user_id(user_id) or ""
         did = (dataset_id or "").strip()
         if not uid or not did:
             raise ValueError("user_id and dataset_id required")
@@ -463,7 +465,7 @@ class PackageStore(PackageStoreProtocol):
             conn.commit()
 
     def remove_package_favorite(self, user_id: str, dataset_id: str) -> None:
-        uid = _normalize_user_id(user_id) or ""
+        uid = normalize_user_id(user_id) or ""
         did = (dataset_id or "").strip()
         if not uid or not did:
             raise ValueError("user_id and dataset_id required")
@@ -482,7 +484,7 @@ class PackageStore(PackageStoreProtocol):
     def package_favorites_for_user(
         self, user_id: str, dataset_ids: list[str] | set[str]
     ) -> set[str]:
-        uid = _normalize_user_id(user_id) or ""
+        uid = normalize_user_id(user_id) or ""
         ids = sorted({d for d in dataset_ids if d})
         if not uid or not ids:
             return set()

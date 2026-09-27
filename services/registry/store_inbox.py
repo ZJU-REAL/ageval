@@ -9,7 +9,9 @@ from services.registry import queries as Q
 from services.registry.clock import now
 from services.registry.protocols import InboxStoreProtocol
 from services.registry.rows import ResourceRequestRow
-from services.registry.auth.tokens import _normalize_user_id
+from services.registry.orgs.rows import (
+    normalize_user_id,
+)
 
 
 class InboxStore(InboxStoreProtocol):
@@ -243,7 +245,7 @@ class InboxStore(InboxStoreProtocol):
             conn.commit()
 
     def list_hidden_inbox_ids(self, user_id: str) -> set[str]:
-        uid = _normalize_user_id(user_id) or ""
+        uid = normalize_user_id(user_id) or ""
         if not uid:
             return set()
         with self._connect() as conn:
@@ -251,7 +253,7 @@ class InboxStore(InboxStoreProtocol):
             return {str(r["request_id"]) for r in cur.fetchall()}
 
     def hide_inbox_requests(self, *, user_id: str, request_ids: list[str]) -> None:
-        uid = _normalize_user_id(user_id) or ""
+        uid = normalize_user_id(user_id) or ""
         ids = [i for i in request_ids if i]
         if not uid or not ids:
             return

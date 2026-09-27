@@ -63,9 +63,9 @@ def _builtin_item(dataset_id: str, kind: str) -> dict[str, Any]:
 
 def _normalize_plugin_name_segment(dataset_id: str, raw: object) -> str:
     """Store only the name leaf. ``org/name`` ids cannot change the org prefix."""
-    from services.registry.org_service import _normalize_display_name
+    from services.registry.orgs.service import normalize_display_name
 
-    name = _normalize_display_name(raw)
+    name = normalize_display_name(raw)
     org, _leaf = (dataset_id.split("/", 1) + [""])[:2] if "/" in dataset_id else ("", dataset_id)
     if "/" in name:
         prefix, rest = name.split("/", 1)
@@ -75,7 +75,7 @@ def _normalize_plugin_name_segment(dataset_id: str, raw: object) -> str:
                 "display_name cannot change the org prefix",
                 http_status=400,
             )
-        name = _normalize_display_name(rest)
+        name = normalize_display_name(rest)
     if not name:
         raise RegistryAppError("invalid_request", "display_name required", http_status=400)
     if "/" in name:

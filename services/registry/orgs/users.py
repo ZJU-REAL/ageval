@@ -4,15 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.registry.auth.tokens import TokenInfo
 from services.registry.errors import RegistryAppError
 from services.registry.maintainers import is_maintainer
-from services.registry.official import is_official_upload_org
-from services.registry.org_service import normalize_description
-from services.registry.auth.tokens import (
-    TokenInfo,
-    _normalize_user_id,
-)
-from services.registry.store import org_to_dict
+from services.registry.orgs.official import is_official_upload_org
+from services.registry.orgs.rows import normalize_user_id
+from services.registry.orgs.service import normalize_description, org_to_dict
 
 _USER_DESCRIPTION_MAX = 280
 
@@ -22,7 +19,7 @@ class UserService:
         self.orgs = orgs
 
     def get_public(self, user_id: str) -> dict[str, Any]:
-        uid = _normalize_user_id(user_id)
+        uid = normalize_user_id(user_id)
         if not uid:
             raise RegistryAppError("invalid_request", "user_id required", http_status=400)
         profile = self.orgs.get_user_profile(uid)
@@ -58,12 +55,12 @@ class UserService:
         description: object,
         auth: TokenInfo,
     ) -> dict[str, Any]:
-        uid = _normalize_user_id(user_id)
+        uid = normalize_user_id(user_id)
         if not uid:
             raise RegistryAppError("invalid_request", "user_id required", http_status=400)
         if not auth.user_id:
             raise RegistryAppError("unauthorized", "login required", http_status=401)
-        if _normalize_user_id(auth.user_id) != uid:
+        if normalize_user_id(auth.user_id) != uid:
             raise RegistryAppError("forbidden", "cannot edit another user", http_status=403)
         text = normalize_description(description, max_len=_USER_DESCRIPTION_MAX)
         self.orgs.set_user_description(uid, text)

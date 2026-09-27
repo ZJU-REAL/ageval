@@ -19,7 +19,7 @@ from services.registry.maintainers import (
     DEFAULT_BUILTIN_COLLECT,
     auth_is_maintainer,
 )
-from services.registry.official import official_dataset_ids
+from services.registry.orgs.official import official_dataset_ids
 from services.registry.auth.tokens import TokenInfo
 
 from ageval.agents.refs import published_agent_ref_parts

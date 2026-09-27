@@ -258,7 +258,7 @@ def test_release_dict_marks_official_from_allowlist() -> None:
 
 
 def test_official_org_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.registry.official import is_official_upload_org, official_orgs
+    from services.registry.orgs.official import is_official_upload_org, official_orgs
 
     monkeypatch.delenv("AGEVAL_OFFICIAL_ORGS", raising=False)
     assert "official" in official_orgs()

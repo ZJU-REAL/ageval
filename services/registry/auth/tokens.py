@@ -16,6 +16,7 @@ from typing import Any
 
 from services.registry import queries as Q
 from services.registry.protocols import TokenStoreProtocol
+from services.registry.orgs.rows import normalize_user_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,14 +52,6 @@ ADMIN_SCOPES: frozenset[str] = frozenset(
 )
 
 
-def _normalize_user_id(raw: str | None) -> str | None:
-    if raw is None:
-        return None
-    u = str(raw).strip()
-    if not u:
-        return None
-    return u.casefold()
-
 
 class TokenStore(TokenStoreProtocol):
     """In-memory tokens (tests). Prefer SqliteTokenStore / PostgresTokenStore."""
@@ -80,7 +73,7 @@ class TokenStore(TokenStoreProtocol):
         with self._lock:
             self._tokens[self.hash_token(raw_token)] = TokenInfo(
                 scopes=frozenset(scopes),
-                user_id=_normalize_user_id(github_user),
+                user_id=normalize_user_id(github_user),
             )
 
     def auth_for(self, raw_token: str | None) -> TokenInfo:
@@ -149,7 +142,7 @@ class PersistentTokenStore(TokenStoreProtocol):
                 return TokenInfo(scopes=frozenset())
             return TokenInfo(
                 scopes=frozenset(str(s) for s in data),
-                user_id=_normalize_user_id(row["github_user"]),
+                user_id=normalize_user_id(row["github_user"]),
             )
 
     def scopes_for(self, raw_token: str | None) -> frozenset[str]:

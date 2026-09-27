@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import os
 
+from services.registry.orgs.rows import (
+    normalize_user_id,
+)
 from services.registry.auth.tokens import (
     TokenInfo,
-    _normalize_user_id,
 )
 
 ENV_MAINTAINERS = "AGEVAL_REGISTRY_MAINTAINERS"
@@ -25,14 +27,14 @@ def maintainer_logins() -> frozenset[str]:
         return frozenset()
     out: set[str] = set()
     for part in raw.split(","):
-        uid = _normalize_user_id(part)
+        uid = normalize_user_id(part)
         if uid:
             out.add(uid)
     return frozenset(out)
 
 
 def is_maintainer(user_id: str | None) -> bool:
-    uid = _normalize_user_id(user_id)
+    uid = normalize_user_id(user_id)
     return bool(uid) and uid in maintainer_logins()
 
 

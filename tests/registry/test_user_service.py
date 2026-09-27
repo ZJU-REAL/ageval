@@ -13,7 +13,7 @@ from services.registry.app import build_default_state, make_handler
 from services.registry.auth.tokens import DEFAULT_LOGIN_SCOPES
 from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
-from services.registry.user_service import UserService
+from services.registry.orgs.users import UserService
 
 
 def _users(tmp_path: Path) -> UserService:

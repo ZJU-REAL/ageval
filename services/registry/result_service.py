@@ -21,12 +21,14 @@ from services.registry.dataset import (
     task_set_digest,
 )
 from services.registry.errors import RegistryAppError
-from services.registry.official import official_dataset_ids
+from services.registry.orgs.official import official_dataset_ids
 from services.registry.paging import page_slice
 from services.registry.runtime_service import attach_agent_refs
+from services.registry.orgs.rows import (
+    normalize_user_id,
+)
 from services.registry.auth.tokens import (
     TokenInfo,
-    _normalize_user_id,
 )
 from services.registry.store import (
     AttemptResultRow,
@@ -976,7 +978,7 @@ class ResultService:
                 http_status=400,
             )
         if target_type == "user":
-            target_id = _normalize_user_id(target_id) or target_id.casefold()
+            target_id = normalize_user_id(target_id) or target_id.casefold()
         else:
             target_id = target_id.casefold()
             if self.orgs.get_org(target_id) is None:
@@ -1010,7 +1012,7 @@ class ResultService:
         target_type = target_type.strip()
         target_id = target_id.strip()
         if target_type == "user":
-            target_id = _normalize_user_id(target_id) or target_id.casefold()
+            target_id = normalize_user_id(target_id) or target_id.casefold()
         else:
             target_id = target_id.casefold()
         try:

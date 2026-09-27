@@ -9,9 +9,8 @@ Packages require ``org_id`` on new publishes; results carry ``uploaded_by``
 and optional share targets (org / user). Private read is ownership/membership
 based (admin bypass); scopes alone no longer grant global private sight.
 
-The four aggregate stores live in ``store_*.py`` behind the narrow protocols.
 Blob stores live in ``content/blobs.py``. Schema init lives in ``db/schema.py``.
-Token adapters live in ``auth/tokens.py``.
+Token adapters live in ``auth/tokens.py``. Org rows and org SQL live under ``orgs/``.
 """
 
 from __future__ import annotations
@@ -25,14 +24,10 @@ from services.registry.rows import (  # noqa: F401
     AttemptResultRow,
     DatasetAclRow,
     DraftRow,
-    MembershipRow,
-    OrgInviteKeyRow,
-    OrgRow,
     ReleaseRow,
     ResourceRequestRow,
     ResultShareRow,
     SuiteResultRow,
-    UserProfileRow,
 )
 
 # ---------------------------------------------------------------------------
@@ -68,7 +63,7 @@ def release_to_dict(row: ReleaseRow) -> dict[str, Any]:
         out["package_kind"] = package_kind_for_media_type(row.media_type)
     if row.org_id:
         out["org_id"] = row.org_id
-    from services.registry.official import is_official_upload_org
+    from services.registry.orgs.official import is_official_upload_org
 
     out["official"] = is_official_upload_org(row.org_id)
     if row.uploaded_by:
@@ -115,73 +110,7 @@ def _load_error_json(raw: str | None) -> Any:
     return json.loads(raw)
 
 
-def org_to_dict(row: OrgRow) -> dict[str, Any]:
-    from services.registry.official import is_official_upload_org
 
-    out: dict[str, Any] = {
-        "org_id": row.org_id,
-        "name": row.name,
-        "display_name": row.display_name,
-        "description": row.description,
-        "is_claimable": row.is_claimable,
-        "created_at": row.created_at,
-        "official": is_official_upload_org(row.org_id),
-    }
-    if row.icon_key:
-        out["icon_key"] = row.icon_key
-    if row.icon_github:
-        out["icon_github"] = row.icon_github
-    return out
-
-
-def membership_to_dict(
-    row: MembershipRow,
-    *,
-    profile: UserProfileRow | None = None,
-) -> dict[str, Any]:
-    out: dict[str, Any] = {
-        "org_id": row.org_id,
-        "user_id": row.user_id,
-        "role": row.role,
-        "created_at": row.created_at,
-    }
-    if profile is not None:
-        if profile.display_name:
-            out["display_name"] = profile.display_name
-        if profile.avatar_url:
-            out["avatar_url"] = profile.avatar_url
-        if profile.github_id:
-            out["github_id"] = profile.github_id
-    return out
-
-
-def invite_key_to_dict(
-    row: OrgInviteKeyRow,
-    *,
-    invite_key: str | None = None,
-) -> dict[str, Any]:
-    """Serialize invite key metadata for owner APIs.
-
-    Pass ``invite_key`` only on create so the secret is returned once.
-    List/revoke omit it; storage keeps hash + prefix only.
-    """
-    out: dict[str, Any] = {
-        "key_id": row.key_id,
-        "org_id": row.org_id,
-        "token_prefix": row.token_prefix,
-        "created_by": row.created_by,
-        "max_uses": row.max_uses,
-        "use_count": row.use_count,
-        "expires_at": row.expires_at,
-        "revoked_at": row.revoked_at,
-        "created_at": row.created_at,
-        "active": row.revoked_at is None
-        and (row.expires_at is None or row.expires_at > now())
-        and (row.max_uses is None or row.use_count < row.max_uses),
-    }
-    if invite_key:
-        out["invite_key"] = invite_key
-    return out
 
 
 def share_to_dict(row: ResultShareRow) -> dict[str, Any]:

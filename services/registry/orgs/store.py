@@ -5,16 +5,16 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from services.registry import queries as Q
+from services.registry.orgs import queries as Q
 from services.registry.clock import now
-from services.registry.protocols import OrgStoreProtocol
-from services.registry.rows import (
+from services.registry.orgs.protocol import OrgStoreProtocol
+from services.registry.orgs.rows import (
     MembershipRow,
     OrgInviteKeyRow,
     OrgRow,
     UserProfileRow,
+    normalize_user_id,
 )
-from services.registry.auth.tokens import _normalize_user_id
 
 
 class OrgStore(OrgStoreProtocol):
@@ -177,7 +177,7 @@ class OrgStore(OrgStoreProtocol):
     def set_member_role(self, org_id: str, user_id: str, *, role: str) -> MembershipRow:
         if role not in {"owner", "member"}:
             raise ValueError("invalid role")
-        uid = _normalize_user_id(user_id) or user_id
+        uid = normalize_user_id(user_id) or user_id
         mem = self.membership(org_id, uid)
         if mem is None:
             raise LookupError("membership not found")
@@ -203,8 +203,8 @@ class OrgStore(OrgStoreProtocol):
         self, org_id: str, *, from_user_id: str, to_user_id: str
     ) -> tuple[MembershipRow, MembershipRow]:
         """Atomic: target → owner, caller → member. Target must already be a member."""
-        src = _normalize_user_id(from_user_id) or from_user_id
-        dst = _normalize_user_id(to_user_id) or to_user_id
+        src = normalize_user_id(from_user_id) or from_user_id
+        dst = normalize_user_id(to_user_id) or to_user_id
         if not src or not dst:
             raise ValueError("user_id required")
         if src == dst:
@@ -234,7 +234,7 @@ class OrgStore(OrgStoreProtocol):
         return new_target, new_caller
 
     def remove_member(self, org_id: str, user_id: str) -> None:
-        uid = _normalize_user_id(user_id) or user_id
+        uid = normalize_user_id(user_id) or user_id
         mem = self.membership(org_id, uid)
         if mem is None:
             raise LookupError("membership not found")
@@ -272,7 +272,7 @@ class OrgStore(OrgStoreProtocol):
 
     def leave_org(self, org_id: str, user_id: str) -> None:
         """Member (or non-sole owner) leaves the org."""
-        uid = _normalize_user_id(user_id) or user_id
+        uid = normalize_user_id(user_id) or user_id
         mem = self.membership(org_id, uid)
         if mem is None:
             raise LookupError("membership not found")
@@ -429,7 +429,7 @@ class OrgStore(OrgStoreProtocol):
         ``max_uses`` is enforced by a conditional ``UPDATE`` so concurrent
         redeems cannot over-admit under multi-writer backends.
         """
-        uid = _normalize_user_id(user_id) or user_id
+        uid = normalize_user_id(user_id) or user_id
         with self._connect() as conn:
             cur = self._exec(
                 conn,
@@ -520,7 +520,7 @@ class OrgStore(OrgStoreProtocol):
         avatar_url: str = "",
         github_id: str = "",
     ) -> UserProfileRow:
-        uid = _normalize_user_id(user_id) or user_id
+        uid = normalize_user_id(user_id) or user_id
         row = UserProfileRow(
             user_id=uid,
             display_name=(display_name or "").strip(),
@@ -548,7 +548,7 @@ class OrgStore(OrgStoreProtocol):
         return stored
 
     def get_user_profile(self, user_id: str) -> UserProfileRow | None:
-        uid = _normalize_user_id(user_id) or user_id
+        uid = normalize_user_id(user_id) or user_id
         with self._connect() as conn:
             cur = self._exec(
                 conn,
@@ -568,7 +568,7 @@ class OrgStore(OrgStoreProtocol):
             )
 
     def set_user_description(self, user_id: str, description: str) -> UserProfileRow:
-        uid = _normalize_user_id(user_id) or user_id
+        uid = normalize_user_id(user_id) or user_id
         with self._connect() as conn:
             self._exec(
                 conn,
@@ -582,7 +582,7 @@ class OrgStore(OrgStoreProtocol):
         return row
 
     def get_user_profiles(self, user_ids: list[str] | set[str]) -> dict[str, UserProfileRow]:
-        ids = sorted({_normalize_user_id(u) or u for u in user_ids if u})
+        ids = sorted({normalize_user_id(u) or u for u in user_ids if u})
         if not ids:
             return {}
         with self._connect() as conn:

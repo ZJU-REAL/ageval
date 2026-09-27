@@ -8,18 +8,17 @@ import secrets
 from typing import Any
 
 from services.registry.access import AccessPolicy
+from services.registry.auth.tokens import TokenInfo
 from services.registry.brand_marks import normalize_icon_github, normalize_icon_key
+from services.registry.clock import now
 from services.registry.errors import RegistryAppError
-from services.registry.official import is_official_upload_org
-from services.registry.auth.tokens import (
-    TokenInfo,
-    _normalize_user_id,
-)
-from services.registry.store import (
-    invite_key_to_dict,
-    membership_to_dict,
-    now,
-    org_to_dict,
+from services.registry.orgs.official import is_official_upload_org
+from services.registry.orgs.rows import (
+    MembershipRow,
+    OrgInviteKeyRow,
+    OrgRow,
+    UserProfileRow,
+    normalize_user_id,
 )
 
 _ORG_NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9_-]{0,62}[a-z0-9])?$")
@@ -27,7 +26,72 @@ _DISPLAY_NAME_MAX = 80
 _DESCRIPTION_MAX = 500
 
 
-def _normalize_display_name(raw: object) -> str:
+
+def org_to_dict(row: OrgRow) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "org_id": row.org_id,
+        "name": row.name,
+        "display_name": row.display_name,
+        "description": row.description,
+        "is_claimable": row.is_claimable,
+        "created_at": row.created_at,
+        "official": is_official_upload_org(row.org_id),
+    }
+    if row.icon_key:
+        out["icon_key"] = row.icon_key
+    if row.icon_github:
+        out["icon_github"] = row.icon_github
+    return out
+
+def membership_to_dict(
+    row: MembershipRow,
+    *,
+    profile: UserProfileRow | None = None,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "org_id": row.org_id,
+        "user_id": row.user_id,
+        "role": row.role,
+        "created_at": row.created_at,
+    }
+    if profile is not None:
+        if profile.display_name:
+            out["display_name"] = profile.display_name
+        if profile.avatar_url:
+            out["avatar_url"] = profile.avatar_url
+        if profile.github_id:
+            out["github_id"] = profile.github_id
+    return out
+
+def invite_key_to_dict(
+    row: OrgInviteKeyRow,
+    *,
+    invite_key: str | None = None,
+) -> dict[str, Any]:
+    """Serialize invite key metadata for owner APIs.
+
+    Pass ``invite_key`` only on create so the secret is returned once.
+    List/revoke omit it; storage keeps hash + prefix only.
+    """
+    out: dict[str, Any] = {
+        "key_id": row.key_id,
+        "org_id": row.org_id,
+        "token_prefix": row.token_prefix,
+        "created_by": row.created_by,
+        "max_uses": row.max_uses,
+        "use_count": row.use_count,
+        "expires_at": row.expires_at,
+        "revoked_at": row.revoked_at,
+        "created_at": row.created_at,
+        "active": row.revoked_at is None
+        and (row.expires_at is None or row.expires_at > now())
+        and (row.max_uses is None or row.use_count < row.max_uses),
+    }
+    if invite_key:
+        out["invite_key"] = invite_key
+    return out
+
+def normalize_display_name(raw: object) -> str:
     if not isinstance(raw, str):
         raise RegistryAppError("invalid_request", "display_name must be a string", http_status=400)
     name = " ".join(raw.split())
@@ -157,7 +221,7 @@ class OrgService:
                 "display_name or description or icon required",
                 http_status=400,
             )
-        name = None if display_name is None else _normalize_display_name(display_name)
+        name = None if display_name is None else normalize_display_name(display_name)
         desc = (
             None
             if description is None
@@ -346,7 +410,7 @@ class OrgService:
                 "owner required to add members",
                 http_status=403,
             )
-        target = _normalize_user_id(user_id)
+        target = normalize_user_id(user_id)
         if not target:
             raise RegistryAppError("invalid_request", "user_id required", http_status=400)
         try:
@@ -372,7 +436,7 @@ class OrgService:
                 "owner required to change member role",
                 http_status=403,
             )
-        target = _normalize_user_id(user_id)
+        target = normalize_user_id(user_id)
         if not target:
             raise RegistryAppError("invalid_request", "user_id required", http_status=400)
         wanted = (role or "").strip().casefold()
@@ -403,7 +467,7 @@ class OrgService:
                 "owner required to transfer",
                 http_status=403,
             )
-        target = _normalize_user_id(user_id)
+        target = normalize_user_id(user_id)
         if not target:
             raise RegistryAppError("invalid_request", "user_id required", http_status=400)
         if target == auth.user_id:
@@ -438,7 +502,7 @@ class OrgService:
 
     def remove_member(self, *, org_id: str, user_id: str, auth: TokenInfo) -> dict[str, Any]:
         org_id = org_id.casefold()
-        target = _normalize_user_id(user_id) or user_id.casefold()
+        target = normalize_user_id(user_id) or user_id.casefold()
         mem = self.orgs.membership(org_id, auth.user_id) if auth.user_id else None
         if not AccessPolicy.is_admin(auth.scopes) and (mem is None or mem.role != "owner"):
             raise RegistryAppError(
