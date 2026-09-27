@@ -23,8 +23,11 @@ import { harnessHref, modelCatalogHref } from "@/lib/links";
 
 type ShareTab = "jobs" | "profiles";
 
+const LIVE_POLL_MS = 15_000;
+
 /**
- * Anonymous read of one snapshot. No catalog import, visibility, or listing.
+ * Anonymous read of one snapshot. Live mode refreshes suite meta on a short
+ * poll. No catalog import, visibility, or listing, and no trajectory stream.
  */
 export function ShareSnapshotPage() {
   const { token: rawToken = "" } = useParams();
@@ -65,6 +68,28 @@ export function ShareSnapshotPage() {
       cancelled = true;
     };
   }, [token]);
+
+  useEffect(() => {
+    if (!token || share?.mode !== "live") return;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      getSnapshotShare(token)
+        .then((row) => {
+          if (!cancelled) setShare(row);
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          if (err instanceof RegistryHttpError && err.status === 404) {
+            setShare(null);
+            setError("This snapshot link is not available.");
+          }
+        });
+    }, LIVE_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [token, share?.mode]);
 
   const rows = useMemo(() => {
     const out: Array<{
@@ -162,9 +187,32 @@ export function ShareSnapshotPage() {
                 {" · "}
                 <span className="font-mono">{shortSuiteId(share.suite_run_id)}</span>
               </p>
+              {share.mode === "live" ? (
+                <p className="text-xs text-mute">
+                  Live
+                  {share.progress ? (
+                    <>
+                      {" · "}
+                      <span className="tabular-nums text-ink">
+                        {share.progress.done ?? 0}/{share.progress.total ?? 0}
+                      </span>
+                      {share.progress.running ? (
+                        <>
+                          {" · "}
+                          <span className="tabular-nums text-ink">
+                            {share.progress.running}
+                          </span>
+                          {" running"}
+                        </>
+                      ) : null}
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
               <p className="text-sm text-body">
-                Read-only snapshot. Opening this link does not publish the suite
-                or list it on the leaderboard.
+                {share.mode === "live"
+                  ? "Live link. The board updates when a job finishes. Opening it does not publish the suite or list it on the leaderboard."
+                  : "Read-only snapshot. Opening this link does not publish the suite or list it on the leaderboard."}
               </p>
             </div>
             <UnderlineTabs
@@ -178,7 +226,11 @@ export function ShareSnapshotPage() {
             />
             {tab === "jobs" ? (
               rows.length === 0 ? (
-                <p className="text-sm text-mute">No task results in this snapshot.</p>
+                <p className="text-sm text-mute">
+                  {share.mode === "live"
+                    ? "No finished jobs yet."
+                    : "No task results in this snapshot."}
+                </p>
               ) : (
                 <div className="space-y-2">
                   <Input

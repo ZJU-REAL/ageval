@@ -113,7 +113,9 @@ ageval results share-snapshot <dataset> --suite-run <id> --hub-url https://hub.e
 
 命令打印 `{hub}/s/{token}`。拿到链接的人不用登录就能打开，看到的是上传那一刻的 jobs 和 Attempt 证据。之后本机或 Hub 上的内容变了，链接里的内容不变。
 
-`ageval results revoke-snapshot <token 或 url>` 删掉链接。本机 `.ageval/suite-runs` 和 `.ageval/runs` 还在。suite 的公开或私有、以及已经上榜的状态，都保持原样。链接没有到期时间。
+`--live` 在 suite 还在跑的时候保留同一条链接。某个 job 结束时，runner 会把板上的进度补上去；大约每分钟再送一次 counts 和 status。打开某一次运行，看到的是已经传上去的证据；job 还在跑时，页面上是当时已经写下的文件。runner 停了，链接就停在最后一次更新。`ageval results sync-snapshot <dataset> --suite-run <id>` 把当前磁盘上的文件补到同一个 token。
+
+`ageval results revoke-snapshot <token 或 url>` 删掉链接。本机 `.ageval/suite-runs` 和 `.ageval/runs` 还在。suite 的公开或私有、以及已经上榜的状态，都保持原样。链接没有到期时间。静态链接和 `--live` 都用这条命令撤销。
 
 体积上限与 `upload-suite` 相同，512 MiB。上传前会去掉不是环境变量名的 `api_key`。这条链接不能再导入成目录里的 suite，也不能拿去申请上榜。
 

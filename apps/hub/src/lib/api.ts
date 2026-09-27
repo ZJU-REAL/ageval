@@ -899,12 +899,21 @@ export type SnapshotShare = {
   token: string;
   path: string;
   kind: string;
+  mode?: "static" | "live" | string;
   suite_run_id: string;
   dataset_id?: string;
   dataset_version?: string;
+  status?: string;
+  updated_at?: number;
   pass_rate?: number | null;
   mean_score?: number | null;
   metrics?: Record<string, unknown>;
+  progress?: {
+    done?: number | null;
+    total?: number | null;
+    status?: string;
+    running?: number;
+  };
   task_refs?: SuiteRow["task_refs"];
   agent_label?: string;
   model_label?: string;

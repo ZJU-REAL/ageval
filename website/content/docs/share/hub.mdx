@@ -113,7 +113,9 @@ ageval results share-snapshot <dataset> --suite-run <id> --hub-url https://hub.e
 
 The command prints `{hub}/s/{token}`. Anyone with the link can open it without signing in. The page shows that suite's jobs and Attempt evidence from the moment of upload. Later edits on disk or in Hub do not change the link.
 
-`ageval results revoke-snapshot <token-or-url>` deletes the link. Local `.ageval/suite-runs` and `.ageval/runs` stay. The suite's public or private setting and any leaderboard listing stay as they were. The link does not expire.
+`--live` keeps that same link while the suite is still running. The runner updates the board when a job finishes, and about once a minute sends the suite counts and status. Opening one attempt shows evidence that has already been uploaded. A job that is still running does not send its trajectory. If the runner stops, the link stays on the last update. `ageval results sync-snapshot <dataset> --suite-run <id>` sends the current files to that same token.
+
+`ageval results revoke-snapshot <token-or-url>` deletes the link. Local `.ageval/suite-runs` and `.ageval/runs` stay. The suite's public or private setting and any leaderboard listing stay as they were. The link does not expire. Static and live links revoke the same way.
 
 The body limit is the same 512 MiB cap as `upload-suite`. `api_key` values that are not environment locators are removed before upload. The link cannot be imported as a catalog suite or sent to the leaderboard.
 
