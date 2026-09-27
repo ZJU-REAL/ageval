@@ -105,13 +105,15 @@ ageval results upload-suite <dataset|id@version> --suite-run <8-hex> --public --
 
 ## 快照分享
 
-快照分享是一条只读链接，对应本机已经跑完的一份 suite。`ageval results share` 仍是把结果交给某个 org 或用户。上榜仍走 `upload-suite` 和 owner 批准。
+快照分享是一条只读链接，对应本机的一份 suite，正在跑的也可以。链接定格在上传那一刻的 summary 和 Attempt 证据。`upload-suite` 仍然拒绝未结束的 summary。`ageval results share` 仍是把结果交给某个 org 或用户。上榜仍走 `upload-suite` 和 owner 批准。
 
 ```bash
 ageval results share-snapshot <dataset> --suite-run <id> --hub-url https://hub.example
+ageval results share-snapshot <dataset> --suite-run <id> --run <run_id> --hub-url https://hub.example
+ageval results share-snapshot <dataset> --run <run_id> --hub-url https://hub.example
 ```
 
-命令打印 `{hub}/s/{token}`。拿到链接的人不用登录就能打开，看到的是上传那一刻的 jobs 和 Attempt 证据。之后本机或 Hub 上的内容变了，链接里的内容不变。
+`--suite-run` 上传整份 suite。`--run` 只上传这一次 Attempt。两个一起用，只上传该 suite 里的这一次 job。命令打印 `{hub}/s/{token}`。本地 Viewer 打开一份 suite 或一个 job 时，分享图标走的是同一条命令。点开先说明这一下会上传，确认后给出链接和复制按钮。再次点开可以看到这条链接，也可以取消共享。拿到链接的人不用登录就能打开，看到的是上传那一刻的 jobs 和 Attempt 证据。之后本机或 Hub 上的内容变了，链接里的内容不变。
 
 `ageval results revoke-snapshot <token 或 url>` 删掉链接。本机 `.ageval/suite-runs` 和 `.ageval/runs` 还在。suite 的公开或私有、以及已经上榜的状态，都保持原样。链接没有到期时间。
 

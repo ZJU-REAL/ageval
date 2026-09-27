@@ -143,7 +143,7 @@ CLI：`ageval registry set-description <dataset_id> --description "…"`（`--de
 
 ## 快照分享
 
-本地 suite 跑完之后，owner 可以交出一条只读链接，对方打开就能看这一次的 suite 和 Attempt 证据。路径是 Hub 上的 `/s/{token}`。打开不需要登录。
+本地 suite 跑完，或还在跑，owner 都可以交出一条只读链接，对方打开就能看上传那一刻的 suite 和 Attempt 证据。路径是 Hub 上的 `/s/{token}`。打开不需要登录。正在跑或正在取消的 suite 也可以分享；链接定格在那一刻，之后的进度不会写进去。`upload-suite` 仍然拒绝这种未结束的 summary。
 
 链接和目录 ACL 分开存：
 
@@ -156,7 +156,7 @@ CLI：`ageval registry set-description <dataset_id> --description "…"`（`--de
 
 没有默认 TTL，也没有持续同步。之后本地或 Hub 上的 suite 变了，链接里的内容不变。`ageval results revoke-snapshot <token 或 url>` 删掉 share blob 和这一行；本地 `.ageval/suite-runs` 与 `.ageval/runs` 不动。链接随后不再解析。
 
-创建：`ageval results share-snapshot <dataset> --suite-run <id>`。打印的 `url` 是 `{hub}/s/{token}`。hub 取 `--hub-url`，否则 `AGEVAL_HUB_URL`，否则当次 Registry 源（compose 和公网入口上，Hub 反代 `/v1`）。没创建过分享时，不存在这条路径。
+创建走 CLI。`ageval results share-snapshot <dataset> --suite-run <id>` 上传整份 suite。`--run <run_id>` 只上传这一次 Attempt；和 `--suite-run` 一起用时，只上传该 suite 里的这一次 job。本地 Viewer 打开对应页面后的分享图标调用同一条命令。打印或页面上的 `url` 是 `{hub}/s/{token}`。hub 取 `--hub-url`，否则 `AGEVAL_HUB_URL`，否则当次 Registry 源（compose 和公网入口上，Hub 反代 `/v1`）。点分享图标先说明这一下会把当时的内容上传到 Registry，确认后在同一个对话框里给出链接，可以复制。已有链接时再点开，可以复制，也可以取消共享。没创建过分享时，不存在这条路径。
 
 体积上限与 suite / 包上传相同：`MAX_UPLOAD_BYTES`（512 MiB）。超出返回 `payload_too_large`。
 
