@@ -144,10 +144,11 @@ def _caught(exc: RegistryAppError) -> HttpResult:
 
 
 # After the helpers above: http.orgs imports those helpers from this module.
+from services.registry.http.auth import AuthHandlers
 from services.registry.http.orgs import OrgHandlers
 
 
-class RegistryHttpApi(OrgHandlers):
+class RegistryHttpApi(AuthHandlers, OrgHandlers):
     def __init__(self, state: Any) -> None:
         self.state = state
 
@@ -263,50 +264,6 @@ class RegistryHttpApi(OrgHandlers):
 
     def _health(self) -> HttpResult:
         return json_result(200, {"ok": True, "service": "ageval-registry"})
-
-    def _auth_web_start(self) -> HttpResult:
-        body = self._read_json_body()
-        if isinstance(body, HttpResult):
-            return body
-        try:
-            payload = self.state.auth.web_start(
-                redirect_uri=str(body.get("redirect_uri") or "").strip()
-            )
-        except RegistryAppError as exc:
-            return _caught(exc)
-        return json_result(200, payload)
-
-    def _auth_web_callback(self) -> HttpResult:
-        body = self._read_json_body()
-        if isinstance(body, HttpResult):
-            return body
-        try:
-            payload = self.state.auth.web_callback(
-                code=str(body.get("code") or "").strip(),
-                state=str(body.get("state") or "").strip(),
-                redirect_uri=str(body.get("redirect_uri") or "").strip(),
-            )
-        except RegistryAppError as exc:
-            return _caught(exc)
-        return json_result(200, payload)
-
-    def _auth_device_code(self) -> HttpResult:
-        try:
-            return json_result(200, self.state.auth.device_code())
-        except RegistryAppError as exc:
-            return _caught(exc)
-
-    def _auth_device_poll(self) -> HttpResult:
-        body = self._read_json_body()
-        if isinstance(body, HttpResult):
-            return body
-        try:
-            status, payload = self.state.auth.device_poll(
-                device_code=str(body.get("device_code") or "")
-            )
-        except RegistryAppError as exc:
-            return _caught(exc)
-        return json_result(status, payload)
 
     def _publish_package(self, *, auth: TokenInfo) -> HttpResult:
         work: Path | None = None
