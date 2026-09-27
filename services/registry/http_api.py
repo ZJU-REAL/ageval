@@ -637,6 +637,14 @@ class RegistryHttpApi:
             )
         kind = str(body.get("kind") or "").strip()
         suite_run_id = str(body.get("suite_run_id") or "").strip()
+        if suite_run_id and self.state.stores.results.get_snapshot_share(suite_run_id) is not None:
+            return json_result(
+                400,
+                {
+                    "error": "share_not_listable",
+                    "message": "snapshot share cannot be listed on the plaza or leaderboard",
+                },
+            )
         agent_raw = body.get("agent")
         agent = str(agent_raw).strip() if isinstance(agent_raw, str) else None
         canonical_raw = body.get("canonical_model")
@@ -1195,6 +1203,57 @@ class RegistryHttpApi:
                 visibility=visibility,
                 auth=auth,
             )
+        except RegistryAppError as exc:
+            return _caught(exc)
+        return json_result(200, payload)
+
+    def _create_snapshot_share(self, *, auth: TokenInfo) -> HttpResult:
+        work: Path | None = None
+        try:
+            with self.state.upload_slots.hold():
+                parsed = self._read_multipart_archive()
+                if isinstance(parsed, HttpResult):
+                    return parsed
+                meta, archive, work = parsed
+                payload = self.state.shares.create(meta=meta, archive=archive, auth=auth)
+        except RegistryAppError as exc:
+            return _caught(exc)
+        finally:
+            if work is not None:
+                shutil.rmtree(work, ignore_errors=True)
+        return json_result(201, payload)
+
+    def _get_snapshot_share(self, *, token: str) -> HttpResult:
+        try:
+            payload = self.state.shares.get(token)
+        except RegistryAppError as exc:
+            return _caught(exc)
+        return json_result(200, payload)
+
+    def _get_snapshot_attempt(self, *, token: str, run_id: str) -> HttpResult:
+        try:
+            payload = self.state.shares.attempt_meta(token, run_id)
+        except RegistryAppError as exc:
+            return _caught(exc)
+        return json_result(200, payload)
+
+    def _list_snapshot_attempt_files(self, *, token: str, run_id: str) -> HttpResult:
+        try:
+            payload = self.state.shares.list_attempt_files(token, run_id)
+        except RegistryAppError as exc:
+            return _caught(exc)
+        return json_result(200, payload)
+
+    def _read_snapshot_attempt_file(self, *, token: str, run_id: str, file_path: str) -> HttpResult:
+        try:
+            payload = self.state.shares.read_attempt_file(token, run_id, file_path)
+        except RegistryAppError as exc:
+            return _caught(exc)
+        return json_result(200, payload)
+
+    def _revoke_snapshot_share(self, *, token: str, auth: TokenInfo) -> HttpResult:
+        try:
+            payload = self.state.shares.revoke(token, auth=auth)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)

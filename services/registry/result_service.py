@@ -89,6 +89,22 @@ def _archive_looks_like_secret_leak(archive: Path) -> bool:
     return any(p.search(sample) for p in _SECRET_PATTERNS)
 
 
+def _refuse_snapshot_share_import(meta: Mapping[str, Any], archive: Path) -> None:
+    from ageval.registry.share_snapshot import (
+        SNAPSHOT_SHARE_KIND,
+        archive_contains_snapshot_marker,
+    )
+
+    if str(meta.get("kind") or "") == SNAPSHOT_SHARE_KIND or archive_contains_snapshot_marker(
+        archive
+    ):
+        raise RegistryAppError(
+            "share_not_importable",
+            "snapshot share cannot be imported as a catalog result",
+            http_status=400,
+        )
+
+
 class ResultService:
     def __init__(
         self,
@@ -128,6 +144,7 @@ class ResultService:
                 f"max {self.max_upload} bytes",
                 http_status=413,
             )
+        _refuse_snapshot_share_import(meta, archive)
         run_id = str(meta.get("run_id") or "")
         dataset_id = str(meta.get("dataset_id") or "")
         dataset_version = str(meta.get("dataset_version") or "").strip()
@@ -326,6 +343,7 @@ class ResultService:
                 f"max {self.max_upload} bytes",
                 http_status=413,
             )
+        _refuse_snapshot_share_import(meta, archive)
         suite_run_id = str(meta.get("suite_run_id") or "")
         dataset_id = str(meta.get("dataset_id") or "")
         dataset_version = str(meta.get("dataset_version") or "")

@@ -269,6 +269,23 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS snapshot_shares (
+        token TEXT PRIMARY KEY,
+        owner_user_id TEXT NOT NULL,
+        suite_run_id TEXT NOT NULL,
+        dataset_id TEXT NOT NULL,
+        dataset_version TEXT NOT NULL,
+        blob_digest TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        summary_json TEXT NOT NULL,
+        created_at REAL NOT NULL
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_snapshot_shares_blob
+    ON snapshot_shares(blob_digest)
+    """,
+    """
     CREATE TABLE IF NOT EXISTS user_profiles (
         user_id TEXT PRIMARY KEY,
         display_name TEXT NOT NULL DEFAULT '',
@@ -686,6 +703,15 @@ SELECT 1 FROM result_shares
 WHERE result_kind=? AND result_id=? AND target_type='user' AND target_id=?
 LIMIT 1
 """
+INSERT_SNAPSHOT_SHARE = """
+INSERT INTO snapshot_shares(
+    token, owner_user_id, suite_run_id, dataset_id, dataset_version,
+    blob_digest, size, summary_json, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+SELECT_SNAPSHOT_SHARE = "SELECT * FROM snapshot_shares WHERE token=?"
+DELETE_SNAPSHOT_SHARE = "DELETE FROM snapshot_shares WHERE token=?"
+COUNT_SNAPSHOT_SHARE_BLOB = "SELECT COUNT(*) AS n FROM snapshot_shares WHERE blob_digest=?"
 UPSERT_USER_PROFILE = """
 INSERT INTO user_profiles(
     user_id, display_name, avatar_url, github_id, description, updated_at

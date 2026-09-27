@@ -41,6 +41,12 @@ Endpoints:
   PATCH /v1/results/suites/{suite_run_id}/agent-ref
   GET  /v1/results/suites/{suite_run_id}/content
   GET|POST|DELETE /v1/results/suites/{suite_run_id}/shares
+  POST /v1/shares
+  GET  /v1/shares/{token}
+  GET  /v1/shares/{token}/attempts/{run_id}
+  GET  /v1/shares/{token}/attempts/{run_id}/files
+  GET  /v1/shares/{token}/attempts/{run_id}/files/{path}
+  DELETE /v1/shares/{token}
   GET  /v1/requests
   POST /v1/requests
   POST /v1/requests/decide
@@ -138,6 +144,7 @@ class RegistryState:
         from services.registry.request_service import RequestService
         from services.registry.result_service import ResultService
         from services.registry.runtime_service import RuntimeService
+        from services.registry.share_service import ShareService
         from services.registry.user_service import UserService
 
         self.auth = AuthService(
@@ -159,6 +166,7 @@ class RegistryState:
             self.access,
             max_upload=max_upload,
         )
+        self.shares = ShareService(stores.results, blobs, max_upload=max_upload)
         self.runtimes = RuntimeService(stores.inbox, stores.packages, self.results)
         self.requests = RequestService(
             stores.inbox, stores.orgs, stores.packages, stores.results, self.access, self.results
