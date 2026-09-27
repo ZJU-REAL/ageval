@@ -5,6 +5,7 @@ import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { BreadcrumbNav } from "@ageval/shared/components/breadcrumb";
 import { LoadingState } from "@ageval/shared/components/empty-state";
 import { Shell } from "@/components/layout";
+import { SnapshotShareControl } from "@/components/snapshot-share";
 import {
   compareValues,
   nextSort,
@@ -206,7 +207,12 @@ export function JobDetailPage() {
             </p>
           )}
           </div>
-          <ReasonSelect value={reason} reasons={reasons} onChange={setReason} />
+          <div className="flex flex-wrap items-start justify-end gap-2">
+            {job && job.source_kind !== "single" ? (
+              <SnapshotShareControl jobId={jobId} />
+            ) : null}
+            <ReasonSelect value={reason} reasons={reasons} onChange={setReason} />
+          </div>
         </div>
 
         {loading ? (

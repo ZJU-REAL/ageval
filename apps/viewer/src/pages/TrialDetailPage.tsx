@@ -4,6 +4,7 @@ import { BreadcrumbNav } from "@ageval/shared/components/breadcrumb";
 import { CommandStrip } from "@ageval/shared/components/command-strip";
 import { LoadingState } from "@ageval/shared/components/empty-state";
 import { Shell } from "@/components/layout";
+import { SnapshotShareControl } from "@/components/snapshot-share";
 import { ActorsTable } from "@ageval/shared/components/trial/actors-table";
 import { EvidenceTabs } from "@ageval/shared/components/trial/evidence-tabs";
 import { OutcomeStrip } from "@ageval/shared/components/trial/outcome-strip";
@@ -90,6 +91,7 @@ export function TrialDetailPage() {
           slotCurrentStartedAt={slotCurrentStartedAt}
           slotPrevious={slotPrevious}
           onSlotSelect={goSibling}
+          actions={<SnapshotShareControl jobId={jobId} runId={runId} />}
         />
 
         {runCommand ? <CommandStrip command={runCommand} /> : null}

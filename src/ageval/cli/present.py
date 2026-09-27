@@ -96,6 +96,17 @@ def humanize(payload: Mapping[str, Any], *, width: int | None = None) -> str:
         return _id_version_table(payload["agents"], id_key="agent_id", title="agents", width=width)
     if payload.get("campaign"):
         return _campaign_block(payload)
+    if payload.get("kind") == "snapshot-share" and payload.get("url"):
+        lines = [_kv("url", str(payload["url"]))]
+        suite_id = payload.get("suite_run_id")
+        if suite_id:
+            lines.append(_kv("suite", str(suite_id)))
+        run_id = payload.get("run_id")
+        if run_id:
+            lines.append(_kv("run", str(run_id)))
+        return "\n".join(lines) + "\n"
+    if payload.get("revoked") is True and payload.get("token"):
+        return _kv("revoked", str(payload["token"])) + "\n"
     if payload.get("suite_run_id") and "pass_rate" in payload:
         return _suite_upload_block(payload)
     if payload.get("github_user") is not None or payload.get("credentials_path"):

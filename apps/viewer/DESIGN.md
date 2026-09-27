@@ -57,7 +57,7 @@ A new control joins the chrome already on the page. It does not start a new band
 
 ### Interaction
 
-- Full cycle: loading is `ThinkingLogo` + one line; empty is a centered static stack; error uses the `error` token, inline when it is about a field.
+- Full cycle: loading is `ThinkingLogo` + one line; empty is a centered static stack; a field error stays inline on that field. A failed write with no success state on the control uses `toast(message, { tone: "error" })`. Do not dump that message into the page. Success that the control already shows (a link, a saved mark) does not also toast. A dangerous confirm is the existing dialog, not a toast.
 - Scan vs edit focus (docs/13). Motion is feedback or state change. Honor `prefers-reduced-motion`.
 
 ### Reject
@@ -89,12 +89,14 @@ Before drawing a control:
 | Jobs search | `Input` + `focus-visible:border-hairline` |
 | Kind / source / time filter | `Select` |
 | Row / theme overflow | `DropdownMenu` |
-| Evidence section switcher | `UnderlineTabs` (Liquid Move) |
+| Evidence section switcher | `UnderlineTabs` (Liquid Move). Unselected hover is Button `quietHoverClass` |
+| Icon action | Button `ghost`. No extra hover classes |
 | Verifier dual surface | hairline button group on the same tab row (copy `CatalogScopeBar` `variant="group"`), far right; Trajectory / Files, trajectory first |
 | Trajectory step filter | Trajectory tab row, far right. `Select` (copy `BoardChartControls`). Default All. One major present in the trace (User, Agent, Thought, Tools, Observation, Terminal, Permission, Message). Trigger and menu reuse that major's step icon and tone. Hidden when fewer than two majors are present. |
 | Trajectory step outline | Right of the trajectory port (`lg+`, `xl` gutter). Collapsed hairline bars, length by preview. Hover expands the step icon and one truncated line. Click scrolls that step to the top of the port. Hidden below two steps. |
 | Command | `CommandStrip` (shell highlight on `code-bg`, not flat link-blue) |
 | Dialog / confirm | existing confirm / pop (`data-ageval-pop`); portal to body / overlay root |
+| Action failure | `toast` from `@ageval/shared/components/ui/toast`, `tone: "error"`. Not a paragraph under the control. Inline `text-error` is a field, or a result that is itself an error. |
 | Loading / empty | `ThinkingLogo` loading vs centered empty stack (docs/13) |
 
 Viewer has no Hub sidebar. Header is opaque `canvas-soft` + `border-b` and spans the viewport. Main is `canvas`; wide (`xl`) copy is `w-[80%]` centered. Brand is the owl lockup; page-action icons stay `mute`.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -163,6 +164,21 @@ def _local_suite_item(summary: dict[str, Any], *, suite_dir: Path) -> dict[str, 
     }
     item.update(_config_fields_from_summary(summary))
     return item
+
+
+def _snapshot_token(token_or_url: str) -> str:
+    text = token_or_url.strip()
+    marker = "/s/"
+    if marker in text:
+        text = text.split(marker, 1)[1]
+    text = text.split("?", 1)[0].split("#", 1)[0].strip().strip("/")
+    if not text:
+        raise ConfigError(
+            "invalid_request",
+            "snapshot token is required",
+            location="token",
+        )
+    return text
 
 
 def _run_ids_from_task_refs(task_refs: list[dict[str, Any]]) -> list[str]:
@@ -1002,6 +1018,149 @@ class ResultsCommands:
             "result_id": result_id,
             "unshared": removed,
             "count": len(removed),
+        }
+
+    def share_snapshot(
+        self,
+        dataset_root: Path | str,
+        *,
+        suite_run_id: str,
+        run_id: str | None = None,
+        hub_url: str | None = None,
+        registry_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Upload a read-only snapshot. Does not create or relabel a catalog suite."""
+        from ageval.application.registry_ops.snapshot_share import (
+            build_single_attempt_snapshot,
+            build_snapshot_share_archive,
+            snapshot_share_scope,
+        )
+        from ageval.evidence.locators import default_suite_runs_root
+        from ageval.registry.share_snapshot import SNAPSHOT_SHARE_KIND
+
+        root = resolve_dataset_root(dataset_root)
+        stored_suite, stored_run = snapshot_share_scope(root, suite_run_id, run_id)
+        suite_dir = default_suite_runs_root(root) / suite_run_id
+        if suite_dir.is_dir():
+            summary = _load_suite_summary(suite_dir)
+            dataset_id, dataset_version = dataset_identity(
+                summary, location=str(suite_dir / "summary.json")
+            )
+            archive_bytes, blob_digest, size = build_snapshot_share_archive(
+                root, suite_run_id, run_id=stored_run or None
+            )
+        else:
+            from ageval.application.registry_ops.snapshot_share import _attempt_identity
+            from ageval.evidence.locators import resolve_attempt_run_dir
+
+            dataset_id, dataset_version = _attempt_identity(
+                resolve_attempt_run_dir(root, suite_run_id)
+            )
+            archive_bytes, blob_digest, size = build_single_attempt_snapshot(root, suite_run_id)
+        client = self._client_factory(
+            registry_url=registry_url, require_token=True, accept_results_url=True
+        )
+        hub = (
+            (hub_url or os.environ.get("AGEVAL_HUB_URL") or client.base_url or "")
+            .strip()
+            .rstrip("/")
+        )
+        if not hub:
+            raise ConfigError(
+                "invalid_request",
+                "set --hub-url or AGEVAL_HUB_URL",
+                location="hub",
+            )
+        import tempfile
+
+        with tempfile.TemporaryDirectory(prefix="ageval-share-up-") as tmp_name:
+            archive = Path(tmp_name) / "snapshot.tar.gz"
+            archive.write_bytes(archive_bytes)
+            try:
+                info = client.create_snapshot_share(
+                    suite_run_id=stored_suite,
+                    dataset_id=dataset_id,
+                    dataset_version=dataset_version,
+                    blob_digest=blob_digest,
+                    size=size,
+                    archive=archive,
+                    run_id=stored_run,
+                )
+            except RegistryError as exc:
+                raise ConfigError(exc.code, exc.message, location="registry") from exc
+        token = str(info.get("token") or "")
+        return {
+            "ok": True,
+            "shared": True,
+            "kind": SNAPSHOT_SHARE_KIND,
+            "token": token,
+            "path": info.get("path") or f"/s/{token}",
+            "url": f"{hub}/s/{token}",
+            "suite_run_id": stored_suite,
+            "run_id": stored_run,
+            "dataset_id": dataset_id,
+        }
+
+    def snapshot_status(
+        self,
+        dataset_root: Path | str,
+        *,
+        suite_run_id: str,
+        run_id: str | None = None,
+        registry_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Whether this owner already has a snapshot link for the suite or job."""
+        from ageval.application.registry_ops.snapshot_share import snapshot_share_scope
+
+        root = resolve_dataset_root(dataset_root)
+        stored_suite, stored_run = snapshot_share_scope(root, suite_run_id, run_id)
+        client = self._client_factory(
+            registry_url=registry_url, require_token=True, accept_results_url=True
+        )
+        try:
+            info = client.find_snapshot_share(suite_run_id=stored_suite, run_id=stored_run)
+        except RegistryError as exc:
+            raise ConfigError(exc.code, exc.message, location="registry") from exc
+        if not info.get("shared"):
+            return {
+                "ok": True,
+                "shared": False,
+                "suite_run_id": stored_suite,
+                "run_id": stored_run,
+            }
+        hub = (os.environ.get("AGEVAL_HUB_URL") or client.base_url or "").strip().rstrip("/")
+        token = str(info.get("token") or "")
+        url = f"{hub}/s/{token}" if hub and token else str(info.get("path") or "")
+        return {
+            "ok": True,
+            "shared": True,
+            "token": token,
+            "path": info.get("path") or f"/s/{token}",
+            "url": url,
+            "suite_run_id": stored_suite,
+            "run_id": stored_run,
+        }
+
+    def revoke_snapshot(
+        self,
+        token_or_url: str,
+        *,
+        registry_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Delete a snapshot share blob. Local suite files are not touched."""
+        token = _snapshot_token(token_or_url)
+        client = self._client_factory(
+            registry_url=registry_url, require_token=True, accept_results_url=True
+        )
+        try:
+            info = client.delete_snapshot_share(token)
+        except RegistryError as exc:
+            raise ConfigError(exc.code, exc.message, location="registry") from exc
+        return {
+            "ok": True,
+            "kind": "snapshot-share",
+            "token": str(info.get("token") or token),
+            "revoked": True,
         }
 
     def delete_result(

@@ -248,6 +248,18 @@ def make_handler(
         def do_OPTIONS(self) -> None:  # noqa: N802
             self.do_GET()
 
+        def do_POST(self) -> None:  # noqa: N802
+            parsed = urlparse(self.path)
+            path = unquote(parsed.path)
+            if not path.startswith("/api/jobs/"):
+                _error(self, 404, "not_found", "unknown API path")
+                return
+            parts = [p for p in path[len("/api/jobs/") :].split("/") if p]
+            if len(parts) != 2 or parts[1] != "share":
+                _error(self, 404, "not_found", "unknown API path")
+                return
+            self._api_job_share_create(parts[0])
+
         def do_DELETE(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
             path = unquote(parsed.path)
@@ -255,6 +267,9 @@ def make_handler(
                 _error(self, 404, "not_found", "unknown API path")
                 return
             parts = [p for p in path[len("/api/jobs/") :].split("/") if p]
+            if len(parts) == 2 and parts[1] == "share":
+                self._api_job_share_delete(parts[0])
+                return
             if len(parts) != 1:
                 _error(self, 404, "not_found", "unknown jobs API path")
                 return
@@ -345,6 +360,68 @@ def make_handler(
                 return
             _json(self, 200, payload)
 
+        def _share_run_id(self) -> str | None:
+            raw = _dataset_query_value(self.path, "run_id")
+            return raw or None
+
+        def _api_job_share_status(self, job_id: str) -> None:
+            self._share_call("status", job_id, run_id=self._share_run_id())
+
+        def _api_job_share_create(self, job_id: str) -> None:
+            run_id = self._share_run_id()
+            length = int(self.headers.get("Content-Length") or "0")
+            if length > 65_536:
+                _error(self, 400, "invalid_request", "share request is too large")
+                return
+            if length:
+                try:
+                    body = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    _error(self, 400, "invalid_request", "bad JSON")
+                    return
+                if not isinstance(body, dict):
+                    _error(self, 400, "invalid_request", "bad JSON")
+                    return
+                extra = set(body) - {"run_id"}
+                if extra:
+                    _error(
+                        self,
+                        400,
+                        "invalid_request",
+                        "unknown keys: " + ", ".join(sorted(extra)),
+                    )
+                    return
+                posted = body.get("run_id")
+                if isinstance(posted, str) and posted.strip():
+                    run_id = posted.strip()
+            self._share_call("create", job_id, run_id=run_id)
+
+        def _api_job_share_delete(self, job_id: str) -> None:
+            self._share_call("revoke", job_id, run_id=self._share_run_id())
+
+        def _share_call(self, action: str, job_id: str, *, run_id: str | None) -> None:
+            from ageval.viewer.snapshot_share import create_share, revoke_share, share_status
+
+            try:
+                opened = self._opened()
+            except ConfigError as exc:
+                _error(self, _config_status(exc), exc.error_code, str(exc))
+                return
+            try:
+                if action == "status":
+                    payload = share_status(opened.root, job_id, run_id=run_id)
+                elif action == "create":
+                    payload = create_share(opened.root, job_id, run_id=run_id)
+                else:
+                    payload = revoke_share(opened.root, job_id, run_id=run_id)
+            except ConfigError as exc:
+                status = 401 if exc.error_code == "unauthorized" else _config_status(exc)
+                if exc.error_code == "not_found":
+                    status = 404
+                _error(self, status, exc.error_code, str(exc))
+                return
+            _json(self, 200, payload)
+
         def _api_job_delete(self, job_id: str, confirm: str) -> None:
             from ageval.application.composition import build_local_jobs_commands
 
@@ -368,7 +445,7 @@ def make_handler(
             if not cors_origin:
                 return
             self.send_header("Access-Control-Allow-Origin", cors_origin)
-            self.send_header("Access-Control-Allow-Methods", "GET, DELETE, OPTIONS")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
         def _serve_file(self, path: Path, content_type: str) -> None:
@@ -423,6 +500,9 @@ def make_handler(
                         200,
                         build_local_jobs_commands().preview_delete_job(root, job_id=job_id),
                     )
+                    return
+                if len(parts) == 2 and parts[1] == "share":
+                    self._api_job_share_status(job_id)
                     return
                 if len(parts) == 1:
                     _json(self, 200, jobs.get_job(root, job_id))

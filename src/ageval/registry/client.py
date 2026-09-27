@@ -74,7 +74,7 @@ class RegistryClient:
         except urllib.error.URLError as exc:
             raise RegistryError(
                 "registry_unavailable",
-                f"cannot reach registry: {exc.reason}",
+                f"cannot reach registry at {self.base_url}: {exc.reason}",
             ) from exc
 
     def _put_multipart(
@@ -144,7 +144,7 @@ class RegistryClient:
             tmp.unlink(missing_ok=True)
             raise RegistryError(
                 "registry_unavailable",
-                f"cannot reach registry: {exc.reason}",
+                f"cannot reach registry at {self.base_url}: {exc.reason}",
             ) from exc
         except Exception:
             tmp.unlink(missing_ok=True)
@@ -535,6 +535,64 @@ class RegistryClient:
                 "upload_failed", f"unexpected status {http_status}", status=http_status
             )
         return json.loads(raw.decode("utf-8"))
+
+    def create_snapshot_share(
+        self,
+        *,
+        suite_run_id: str,
+        dataset_id: str,
+        dataset_version: str,
+        blob_digest: str,
+        size: int,
+        archive: Path,
+        run_id: str = "",
+    ) -> dict[str, Any]:
+        """Upload a snapshot-share blob. Does not create a catalog suite."""
+        meta = {
+            "kind": "snapshot-share",
+            "suite_run_id": suite_run_id,
+            "dataset_id": dataset_id,
+            "dataset_version": dataset_version,
+            "blob_digest": blob_digest,
+            "size": size,
+        }
+        if run_id:
+            meta["run_id"] = run_id
+        http_status, raw, _ = self._put_multipart(
+            "/v1/shares",
+            meta=meta,
+            archive=archive,
+            filename="snapshot.tar.gz",
+            boundary_prefix="ageval-share",
+        )
+        if http_status not in {200, 201}:
+            raise RegistryError(
+                "upload_failed", f"unexpected status {http_status}", status=http_status
+            )
+        return json.loads(raw.decode("utf-8"))
+
+    def find_snapshot_share(self, *, suite_run_id: str, run_id: str = "") -> dict[str, Any]:
+        from urllib.parse import urlencode
+
+        query = urlencode({"suite_run_id": suite_run_id, "run_id": run_id})
+        status, raw, _ = self._request("GET", f"/v1/shares?{query}", auth=True)
+        if status != 200:
+            raise RegistryError("lookup_failed", f"unexpected status {status}", status=status)
+        return json.loads(raw.decode("utf-8"))
+
+    def get_snapshot_share(self, token: str) -> dict[str, Any]:
+        path = f"/v1/shares/{quote(token, safe='')}"
+        status, raw, _ = self._request("GET", path, auth=False)
+        if status != 200:
+            raise RegistryError("not_found", f"snapshot share not found ({status})", status=status)
+        return json.loads(raw.decode("utf-8"))
+
+    def delete_snapshot_share(self, token: str) -> dict[str, Any]:
+        path = f"/v1/shares/{quote(token, safe='')}"
+        status, raw, _ = self._request("DELETE", path, auth=True)
+        if status != 200:
+            raise RegistryError("revoke_failed", f"unexpected status {status}", status=status)
+        return json.loads(raw.decode("utf-8")) if raw else {"ok": True}
 
     def append_suite_slot(
         self,

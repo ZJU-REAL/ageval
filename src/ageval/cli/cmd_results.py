@@ -474,6 +474,95 @@ def register(app: typer.Typer) -> None:
             raise typer.Exit(code=2) from exc
         emit(summary)
 
+    @sub.command("share-snapshot")
+    def results_share_snapshot_command(
+        dataset: Annotated[
+            str,
+            typer.Argument(
+                help="Local Dataset root with .ageval/suite-runs or .ageval/runs.",
+            ),
+        ],
+        suite_run: Annotated[
+            str | None,
+            typer.Option(
+                "--suite-run",
+                help="Suite run id. Omit, and pass --run, to share one Attempt.",
+            ),
+        ] = None,
+        run: Annotated[
+            str | None,
+            typer.Option(
+                "--run",
+                help="Share this one Attempt. With --suite-run, only that job.",
+            ),
+        ] = None,
+        hub_url: Annotated[
+            str | None,
+            typer.Option(
+                "--hub-url",
+                help=(
+                    "Hub origin for the /s/{token} link. "
+                    "Else AGEVAL_HUB_URL, else the registry origin."
+                ),
+            ),
+        ] = None,
+        registry_url: Annotated[
+            str | None,
+            typer.Option("--registry-url", help="Override registry / results URL."),
+        ] = None,
+    ) -> None:
+        """Upload a read-only snapshot and print its Hub link.
+
+        ``--suite-run`` shares that suite. ``--run`` shares one Attempt.
+        Both together share that one job inside the suite.
+        Does not change suite visibility, result_shares, or board_listed.
+        """
+        from ageval.application.composition import build_results_commands
+        from ageval.config.errors import ConfigError
+
+        suite_id = (suite_run or "").strip()
+        run_id = (run or "").strip()
+        if not suite_id and not run_id:
+            typer.echo("invalid_request: pass --suite-run or --run (share-snapshot)", err=True)
+            raise typer.Exit(code=2)
+        try:
+            summary = build_results_commands().share_snapshot(
+                dataset,
+                suite_run_id=suite_id or run_id,
+                run_id=run_id or None,
+                hub_url=hub_url,
+                registry_url=registry_url,
+            )
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        emit(summary)
+
+    @sub.command("revoke-snapshot")
+    def results_revoke_snapshot_command(
+        token: Annotated[
+            str,
+            typer.Argument(help="Snapshot token or https://hub/s/{token} URL."),
+        ],
+        registry_url: Annotated[
+            str | None,
+            typer.Option("--registry-url", help="Override registry / results URL."),
+        ] = None,
+    ) -> None:
+        """Delete a snapshot share. Local suite files stay in place. Owner only."""
+        from ageval.application.composition import build_results_commands
+        from ageval.config.errors import ConfigError
+
+        try:
+            summary = build_results_commands().revoke_snapshot(
+                token,
+                registry_url=registry_url,
+            )
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        emit(summary)
+
     @sub.command("delete")
     def results_delete_command(
         result_id: Annotated[

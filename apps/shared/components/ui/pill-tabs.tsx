@@ -6,6 +6,7 @@ import {
   focusWithoutScroll,
   preventTabFocusScroll,
 } from "@ageval/shared/lib/scroll-port";
+import { quietHoverClass } from "@ageval/shared/components/ui/button";
 import { cn } from "@ageval/shared/lib/utils";
 import { useRef } from "react";
 
@@ -62,7 +63,7 @@ export function PillTabs<T extends string>({
             "transition-colors duration-200 ease-smooth",
             value === item.id
               ? "font-medium text-ink"
-              : "text-mute hover:bg-liquid-hover hover:text-ink",
+              : quietHoverClass,
           )}
         >
           {item.label}

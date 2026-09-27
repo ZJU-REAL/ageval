@@ -22,6 +22,8 @@
   --color-canvas-soft-2: var(--viewer-canvas-soft-2);
   --color-link: var(--viewer-link);
   --color-link-deep: var(--viewer-link-deep);
+  --color-cta: var(--viewer-cta);
+  --color-cta-deep: var(--viewer-cta-deep);
   --color-error: var(--viewer-error);
   --color-error-soft: var(--viewer-error-soft);
   --color-warning: var(--viewer-warning);
@@ -82,6 +84,8 @@
   --viewer-canvas-soft-2: #e1e5ed;
   --viewer-link: #1b54e8;
   --viewer-link-deep: #001f73;
+  --viewer-cta: #1b54e8;
+  --viewer-cta-deep: #001f73;
   --viewer-error: #d40000;
   --viewer-error-soft: #f7d4d6;
   --viewer-warning: #f5a623;
@@ -119,6 +123,8 @@
   --viewer-canvas-soft-2: #2b3041;
   --viewer-link: #5b7bff;
   --viewer-link-deep: #8aa0ff;
+  --viewer-cta: #1b54e8;
+  --viewer-cta-deep: #001f73;
   --viewer-error: #ff5c5c;
   --viewer-error-soft: #3b1414;
   --viewer-warning: #f5a623;

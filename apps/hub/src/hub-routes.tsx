@@ -16,6 +16,8 @@ import { ModelDetailPage } from "@/pages/ModelDetailPage";
 import { ModelsPage } from "@/pages/ModelsPage";
 import { PluginDetailPage } from "@/pages/PluginDetailPage";
 import { PluginsPage } from "@/pages/PluginsPage";
+import { ShareAttemptPage } from "@/pages/ShareAttemptPage";
+import { ShareSnapshotPage } from "@/pages/ShareSnapshotPage";
 import { SuiteDetailPage } from "@/pages/SuiteDetailPage";
 import { TaskDetailPage } from "@/pages/TaskDetailPage";
 import { UserPage } from "@/pages/UserPage";
@@ -53,6 +55,8 @@ export function HubRoutes({
       <Route path="/organizations" element={<OrganizationsPage />} />
       <Route path="/organizations/:orgId" element={<OrganizationDetailPage />} />
       <Route path="/users/:login" element={<UserPage />} />
+      <Route path="/s/:token" element={<ShareSnapshotPage />} />
+      <Route path="/s/:token/attempts/:runId" element={<ShareAttemptPage />} />
       {includeWorkspace ? (
         <>
           <Route path="/login" element={<LoginPage />} />

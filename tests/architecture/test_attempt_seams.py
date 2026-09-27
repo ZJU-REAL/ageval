@@ -125,10 +125,24 @@ def test_handler_methods_do_not_touch_store() -> None:
             )
             break
     assert handler is not None
-    src = ast.get_source_segment(text, handler) or ""
-    assert "state.meta." not in src
-    assert "state.blobs." not in src
-    assert "state.stores." not in src
+    api_text = (REPO / "services" / "registry" / "http_api.py").read_text(encoding="utf-8")
+    api_tree = ast.parse(api_text)
+    http = next(
+        (
+            n
+            for n in ast.walk(api_tree)
+            if isinstance(n, ast.ClassDef) and n.name == "RegistryHttpApi"
+        ),
+        None,
+    )
+    assert http is not None
+    for src in (
+        ast.get_source_segment(text, handler) or "",
+        ast.get_source_segment(api_text, http) or "",
+    ):
+        assert "state.meta." not in src
+        assert "state.blobs." not in src
+        assert "state.stores." not in src
 
 
 def test_bearer_is_only_used_by_dispatch() -> None:

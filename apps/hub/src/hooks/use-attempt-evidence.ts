@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   availableTabsFromPaths,
@@ -19,6 +19,8 @@ import {
   getAttemptFile,
   listAttemptFiles,
   type AttemptMeta,
+  type FileContent,
+  type FileItem,
   RegistryHttpError,
 } from "@/lib/api";
 import type {
@@ -30,13 +32,19 @@ import {
   type TabId,
 } from "@ageval/shared/components/trial/tabs";
 
+export type AttemptFileSource = {
+  getMeta: () => Promise<AttemptMeta>;
+  listFiles: () => Promise<{ items?: FileItem[] }>;
+  getFile: (archivePath: string) => Promise<FileContent>;
+};
+
 async function readJsonFile(
   runId: string,
   relPath: string,
-  token: string | null,
+  readFile: (archivePath: string) => Promise<FileContent>,
 ): Promise<Record<string, unknown>> {
   try {
-    const f = await getAttemptFile(runId, toArchivePath(relPath, runId), token);
+    const f = await readFile(toArchivePath(relPath, runId));
     const text = decodeFileContent(f);
     if (!text) return {};
     const data = JSON.parse(text) as unknown;
@@ -52,7 +60,15 @@ export function useAttemptEvidence(
   runId: string,
   taskId: string,
   token: string | null,
+  source?: AttemptFileSource,
 ) {
+  const readFile = useCallback(
+    (archivePath: string) =>
+      source
+        ? source.getFile(archivePath)
+        : getAttemptFile(runId, archivePath, token),
+    [source, runId, token],
+  );
   const [meta, setMeta] = useState<AttemptMeta | null>(null);
   const [trial, setTrial] = useState<Trial | null>(null);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
@@ -112,10 +128,12 @@ export function useAttemptEvidence(
       setSelectedPath(null);
       setFileContent(null);
       try {
-        const m = await getAttempt(runId, token);
+        const m = source ? await source.getMeta() : await getAttempt(runId, token);
         if (cancelled) return;
         setMeta(m);
-        const files = await listAttemptFiles(runId, token);
+        const files = source
+          ? await source.listFiles()
+          : await listAttemptFiles(runId, token);
         if (cancelled) return;
         const items = files.items || [];
         const rel: Array<{ path: string; size?: number }> = [];
@@ -130,13 +148,13 @@ export function useAttemptEvidence(
 
         const [resultJ, summaryJ, lockJ] = await Promise.all([
           pathSet.has("result.json")
-            ? readJsonFile(runId, "result.json", token)
+            ? readJsonFile(runId, "result.json", readFile)
             : Promise.resolve({}),
           pathSet.has("summary.json")
-            ? readJsonFile(runId, "summary.json", token)
+            ? readJsonFile(runId, "summary.json", readFile)
             : Promise.resolve({}),
           pathSet.has("lock.json")
-            ? readJsonFile(runId, "lock.json", token)
+            ? readJsonFile(runId, "lock.json", readFile)
             : Promise.resolve({}),
         ]);
         if (cancelled) return;
@@ -160,7 +178,7 @@ export function useAttemptEvidence(
               profileMap.set(dirname, null);
               return;
             }
-            const meta = await readJsonFile(runId, metaPath, token);
+            const meta = await readJsonFile(runId, metaPath, readFile);
             invMetas.push({ dirname, meta });
             const pid =
               typeof meta.profile_id === "string" ? meta.profile_id : null;
@@ -173,11 +191,7 @@ export function useAttemptEvidence(
         let trajectorySteps: TrajectoryStep[] = [];
         if (pathSet.has("trajectory.jsonl")) {
           try {
-            const f = await getAttemptFile(
-              runId,
-              toArchivePath("trajectory.jsonl", runId),
-              token,
-            );
+            const f = await readFile(toArchivePath("trajectory.jsonl", runId));
             if (cancelled) return;
             trajectorySteps = parseTrajectoryJsonl(decodeFileContent(f) || "");
           } catch {
@@ -213,7 +227,7 @@ export function useAttemptEvidence(
     return () => {
       cancelled = true;
     };
-  }, [runId, taskId, token]);
+  }, [runId, taskId, token, source, readFile]);
 
   // Tab data: trajectory or scoped tree
   useEffect(() => {
@@ -228,11 +242,7 @@ export function useAttemptEvidence(
           setObsNote(null);
           (async () => {
             try {
-              const f = await getAttemptFile(
-                runId,
-                toArchivePath(OBSERVATION_REL, runId),
-                token,
-              );
+              const f = await readFile(toArchivePath(OBSERVATION_REL, runId));
               if (cancelled) return;
               const parsed = parseTrajectoryJsonl(decodeFileContent(f) || "");
               setObservationSteps(parsed);
@@ -266,11 +276,7 @@ export function useAttemptEvidence(
           for (const rel of trajPaths) {
             if (all.length >= 2000) break;
             const dirname = invDirFromTrajPath(rel);
-            const f = await getAttemptFile(
-              runId,
-              toArchivePath(rel, runId),
-              token,
-            );
+            const f = await readFile(toArchivePath(rel, runId));
             if (cancelled) return;
             const text = decodeFileContent(f) || "";
             const parsed = parseTrajectoryJsonl(text);
@@ -337,7 +343,7 @@ export function useAttemptEvidence(
     return () => {
       cancelled = true;
     };
-  }, [activeTab, runId, token, relFiles, invProfileByDir]);
+  }, [activeTab, runId, token, relFiles, invProfileByDir, readFile]);
 
   // File preview (rel path → archive path)
   useEffect(() => {
@@ -345,7 +351,7 @@ export function useAttemptEvidence(
     let cancelled = false;
     setFileLoading(true);
     setFileNote(null);
-    getAttemptFile(runId, toArchivePath(selectedPath, runId), token)
+    readFile(toArchivePath(selectedPath, runId))
       .then((f) => {
         if (cancelled) return;
         setFileContent(decodeFileContent(f));
@@ -366,7 +372,7 @@ export function useAttemptEvidence(
     return () => {
       cancelled = true;
     };
-  }, [selectedPath, runId, token]);
+  }, [selectedPath, runId, token, readFile]);
 
   const runCommand = useMemo(() => {
     const db = meta?.dataset_id;

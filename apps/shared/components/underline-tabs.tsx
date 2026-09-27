@@ -9,6 +9,7 @@ import {
   focusWithoutScroll,
   preventTabFocusScroll,
 } from "@ageval/shared/lib/scroll-port";
+import { quietHoverClass } from "@ageval/shared/components/ui/button";
 import { cn } from "@ageval/shared/lib/utils";
 
 type Item<T extends string> = {
@@ -79,10 +80,7 @@ export function UnderlineTabs<T extends string>({
               size === "sm" ? "px-2.5 py-1.5" : "px-3.5 py-1.5",
               selected
                 ? cn("font-semibold", toneIcon ? "text-body" : "text-ink")
-                : cn(
-                    "text-mute hover:bg-liquid-hover",
-                    toneIcon ? "hover:text-body" : "hover:text-ink",
-                  ),
+                : cn(quietHoverClass, toneIcon && "hover:text-body"),
             )}
           >
             {Icon ? (

@@ -41,6 +41,12 @@ class RequestService:
         agent: str | None = None,
         canonical_model: str | None = None,
     ) -> dict[str, Any]:
+        if suite_run_id and self.results.get_snapshot_share(suite_run_id) is not None:
+            raise RegistryAppError(
+                "share_not_listable",
+                "snapshot share cannot be listed on the plaza or leaderboard",
+                http_status=400,
+            )
         kind = kind.strip()
         if kind not in REQUEST_KINDS:
             raise RegistryAppError("invalid_request", "unknown request kind", http_status=400)

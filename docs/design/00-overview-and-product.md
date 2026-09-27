@@ -201,6 +201,10 @@ gold 隔离是**时间切**：不 mount，evaluate 再 upload。这是默认，�
 6. Agent 阶段磁盘上有没有 `evaluation/`？
 7. 云镜像已有 `pi` 时还会不会再装一遍？
 
+## 快照分享
+
+Hub 上另有一条只读链接 `/s/{token}`。它是一次上传当时的 suite 与 Attempt 证据，匿名可以打开。创建它不改变 suite 的公开 / 私有，不写身份 ACL，也不进入 Leaderboard。机制在 [12](12-hub-dataset-and-leaderboard.md)。
+
 ## 近端不做（不是洞）
 
 下列不是「设计漏了」：gaia / tau3 全 suite 手改；五条 ACP 全部付费 invoke；Harbor 其它云厂商；默认 CI 真打 E2B；多 group 真调度 run（lock 有 topology 即可）；Hub REST 全表。要做先改 `docs/` 再编码。
