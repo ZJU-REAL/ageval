@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import shutil
-from typing import Any
 
 from services.registry.auth.tokens import TokenInfo
 from services.registry.errors import RegistryAppError

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
 
 UPSERT_SUITE_AGENT_CONSENT = """
 INSERT INTO suite_agent_consents(

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
 
 INSERT_ORG = """
 INSERT INTO organizations(

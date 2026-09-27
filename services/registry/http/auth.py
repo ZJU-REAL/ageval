@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from services.registry.auth.tokens import TokenInfo
 from services.registry.errors import RegistryAppError
 from services.registry.http.dispatch import HttpResult, _caught, json_result
 

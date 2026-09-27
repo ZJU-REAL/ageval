@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from services.registry.clock import now
 from services.registry.results.rows import (
     AttemptResultRow,
     ResultShareRow,
