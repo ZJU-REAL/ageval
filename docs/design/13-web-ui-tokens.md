@@ -28,8 +28,10 @@ SPA 实现对照的**常量清单**在 `apps/shared/DESIGN.md` 文首 YAML(Hub /
 | ink | `#14161F` | `#EEF0F6` | 标题 / 强文字 | `ink` | `foreground` |
 | body | `#4A4E5C` | `#9AA0B4` | 正文 | `body` | `muted-foreground` |
 | mute | `#5E6376` | `#8A90A4` | 次要文字 / 图标 | `mute` | — |
-| link | `#1B54E8` | `#5B7BFF` | 链接 / 主色 / 焦点(IKB) | `link` | `primary`、`ring` |
-| link-deep | `#001F73` | `#8AA0FF` | hover(浅色加深 / 深色提亮) | `link-deep` | — |
+| link | `#1B54E8` | `#5B7BFF` | 链接 / 焦点(IKB)。深色提亮，只给文字和焦点环 | `link` | `primary`、`ring` |
+| link-deep | `#001F73` | `#8AA0FF` | 链接 hover(浅色加深 / 深色提亮) | `link-deep` | — |
+| cta | `#1B54E8` | `#1B54E8` | 主按钮填充。两套主题都是 IKB，不用深色 link | `cta` | — |
+| cta-deep | `#001F73` | `#001F73` | 主按钮 hover | `cta-deep` | — |
 | error | `#D40000` | `#FF5C5C` | 错误 | `error` | — |
 | error-soft | `#F7D4D6` | `#3B1414` | 错误次底(toast 等实色洗底,非透明) | `error-soft` | — |
 | warning | `#F5A623` | `#F5A623` | 警告 | `warning` | — |
@@ -92,7 +94,9 @@ landing 的 oklch 系(`oklch(15.4% 0.018 264)` 底等)是本表的 oklch 等值�
 
 | 语汇 | 规则 |
 | --- | --- |
-| 主按钮(SPA Button `default`) | IKB 填充 + `rounded-[8px]` + `font-mono text-[13px] font-semibold` + pop 阴影 + `focus-visible:ring-2 ring-link/70`,hover `link-deep`。`:active` 为 Squish(`scale` 0.96、80ms 按下 / spring 松开) |
+| 主按钮(SPA Button `default`) | 1px `cta` 描边 + `cta` 填充（两套主题都是 `#1B54E8`）+ `rounded-[8px]` + `font-mono text-[13px] font-semibold` + pop 阴影 + `focus-visible:ring-2 ring-link/70`，hover 描边和填充一起到 `cta-deep`。不要用深色 `link`（`#5B7BFF`）做填充。`:active` 为 Squish(`scale` 0.96、80ms 按下 / spring 松开) |
+| 次按钮(Button `outline`) | 1px `hairline` + `canvas` 底，文字 `ink`。和主按钮一样是 1px 描边。hover 背景淡入 `liquid-hover` |
+| 安静按钮(Button `ghost`) | 无可见描边。文字 / 图标 `mute`。hover 背景淡入 `liquid-hover`（`canvas-soft`），颜色 200ms `--ease-smooth`，由 Button 上的 `squish` 提供。图标动作只用这个 variant。`UnderlineTabs` 未选中项用同一条 `quietHoverClass`。不要在调用点再写一套 hover |
 | 分段 tab | `UnderlineTabs`:sans `text-sm` + Liquid Move thumb(fill `canvas-soft-2`)。一页一条。不要再画 IKB `border-b-2` 底条。Models plaza 模态过滤是记录例外：搜索栏下第二条 `UnderlineTabs`（All / Text / Image / Video / PDF / Transcription / Speech）。选中/hover 只给图标上色，走现有 `nav-*`（text=`nav-models`，image=`nav-agents`，video=`nav-inbox`，pdf=`nav-orgs`，transcription=`nav-datasets`，speech=`nav-plugins`），标签走 `body`，不要新 hex 族；thumb 仍是 `canvas-soft-2`。行名右侧可叠多枚徽章（纯 text 才出 text 标；PDF 用 `FileText`，色走 `nav-orgs`）。徽章 hover 走共用 tooltip。次底用该色与 canvas 的 `color-mix`，禁止 `/15` 透明度拼色 |
 | 紧凑 pill | `PillTabs`:同上,11px。只用于面板内紧凑分段。同页再出现互斥选择用 `Select` |
 | 按钮组 | 并列选项收进**一个** hairline 容器(8px 圆角)。选中 `canvas-soft-2` + `ink`,hover `canvas-soft`。字号 `body-sm`。不要 IKB 填充 |

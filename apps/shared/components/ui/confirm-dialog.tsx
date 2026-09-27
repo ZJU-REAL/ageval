@@ -41,11 +41,11 @@ function useDialogFocus(
     const panel = panelRef.current;
     const active = document.activeElement;
     if (panel && !(active instanceof Node && panel.contains(active))) {
-      panel.focus();
+      panel.focus({ preventScroll: true });
     }
     return () => {
       const node = restoreRef.current;
-      if (node?.isConnected) node.focus();
+      if (node?.isConnected) node.focus({ preventScroll: true });
     };
   }, [open]);
 
