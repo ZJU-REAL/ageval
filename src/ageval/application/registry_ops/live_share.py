@@ -74,11 +74,8 @@ def push_suite_share(
     *,
     include_files: bool,
 ) -> None:
-    """Suite boundary. A push failure does not change the suite result."""
-    try:
-        push_bound_live_share(dataset_root, suite_run_id, include_files=include_files)
-    except (RegistryError, ConfigError, OSError):
-        return
+    """Suite boundary. A recorded push failure leaves the suite result alone."""
+    push_bound_live_share(dataset_root, suite_run_id, include_files=include_files)
 
 
 def start_live_share_heartbeat(
@@ -129,8 +126,7 @@ def _push_locked(dataset_root: Path, suite_run_id: str, *, include_files: bool) 
         new_sources: dict[str, str] = {str(key): str(value) for key, value in sources.items()}
         tmp_dir: tempfile.TemporaryDirectory[str] | None = None
         if include_files:
-            _changed, new_sources = _changed_members(root, suite_run_id, sources)
-            changed = _changed
+            changed, new_sources = _changed_members(root, suite_run_id, sources)
             if changed:
                 tmp_dir = tempfile.TemporaryDirectory(prefix="ageval-live-patch-")
                 archive = _pack_patch(Path(tmp_dir.name), suite_run_id, changed)

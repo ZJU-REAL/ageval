@@ -247,6 +247,7 @@ class ShareService:
         summary = self._merged_summary(row, incoming)
         members: list[_LiveMember] = []
         new_size = row.size
+        existing: dict[str, SnapshotShareFileRow] = {}
         if archive is not None:
             archive_size = archive.stat().st_size
             if archive_size > self.max_upload:
@@ -269,15 +270,11 @@ class ShareService:
                 )
         try:
             if members:
-                previous = {
-                    item.path: item.blob_digest
-                    for item in self.shares.list_snapshot_share_files(token)
-                }
                 self._put_live_members(token, members)
                 for member in members:
-                    old_digest = previous.get(member.path)
-                    if old_digest and old_digest != member.digest:
-                        self._gc_share_blob(old_digest)
+                    old = existing.get(member.path)
+                    if old is not None and old.blob_digest != member.digest:
+                        self._gc_share_blob(old.blob_digest)
             names = {item.path for item in self.shares.list_snapshot_share_files(token)}
             _stamp_attempt_content(summary, names)
             self.shares.update_snapshot_share(
