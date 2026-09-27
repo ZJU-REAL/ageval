@@ -895,6 +895,66 @@ export async function getAttemptFile(
   );
 }
 
+export type SnapshotShare = {
+  token: string;
+  path: string;
+  kind: string;
+  suite_run_id: string;
+  dataset_id?: string;
+  dataset_version?: string;
+  pass_rate?: number | null;
+  mean_score?: number | null;
+  metrics?: Record<string, unknown>;
+  task_refs?: SuiteRow["task_refs"];
+  agent_label?: string;
+  model_label?: string;
+  job_overlay?: SuiteRow["job_overlay"];
+  actors_summary?: SuiteRow["actors_summary"];
+  exit_code?: number;
+  note?: string;
+};
+
+function sharePath(token: string, rest = ""): string {
+  return `/v1/shares/${encodeURIComponent(token)}${rest}`;
+}
+
+/** Anonymous read. Do not send a Hub session. */
+export function getSnapshotShare(token: string): Promise<SnapshotShare> {
+  return requestJson(sharePath(token));
+}
+
+export function getSnapshotAttempt(
+  token: string,
+  runId: string,
+): Promise<AttemptMeta> {
+  return requestJson(
+    sharePath(token, `/attempts/${encodeURIComponent(runId)}`),
+  );
+}
+
+export function listSnapshotAttemptFiles(
+  token: string,
+  runId: string,
+): Promise<{ run_id: string; items: FileItem[]; digest?: string }> {
+  return requestJson(
+    sharePath(token, `/attempts/${encodeURIComponent(runId)}/files`),
+  );
+}
+
+export function getSnapshotAttemptFile(
+  token: string,
+  runId: string,
+  filePath: string,
+): Promise<FileContent> {
+  const fp = filePath
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return requestJson(
+    sharePath(token, `/attempts/${encodeURIComponent(runId)}/files/${fp}`),
+  );
+}
+
 export async function getUser(userId: string): Promise<UserPublic> {
   return requestJson(`/v1/users/${encodeURIComponent(userId)}`);
 }
