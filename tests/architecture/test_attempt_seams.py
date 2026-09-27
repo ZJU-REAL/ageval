@@ -108,7 +108,7 @@ def test_queries_own_single_releases_ddl() -> None:
 
 
 def test_handler_calls_all_domain_services() -> None:
-    api = (REPO / "services" / "registry" / "http_api.py").read_text(encoding="utf-8")
+    api = (REPO / "services" / "registry" / "http" / "dispatch.py").read_text(encoding="utf-8")
     for needle in ("state.packages.", "state.results.", "state.orgs.", "state.auth."):
         assert needle in api, needle
 
@@ -125,7 +125,7 @@ def test_handler_methods_do_not_touch_store() -> None:
             )
             break
     assert handler is not None
-    api_text = (REPO / "services" / "registry" / "http_api.py").read_text(encoding="utf-8")
+    api_text = (REPO / "services" / "registry" / "http" / "dispatch.py").read_text(encoding="utf-8")
     api_tree = ast.parse(api_text)
     http = next(
         (
@@ -146,8 +146,13 @@ def test_handler_methods_do_not_touch_store() -> None:
 
 
 def test_bearer_is_only_used_by_dispatch() -> None:
-    text = (REPO / "services" / "registry" / "http_api.py").read_text(encoding="utf-8")
-    assert text.count("_bearer(") == 2
+    hits: list[tuple[str, int]] = []
+    root = REPO / "services" / "registry"
+    for path in sorted(root.rglob("*.py")):
+        count = path.read_text(encoding="utf-8").count("_bearer(")
+        if count:
+            hits.append((path.relative_to(root).as_posix(), count))
+    assert hits == [("http/dispatch.py", 2)]
 
 
 def test_store_has_no_sql_literals() -> None:

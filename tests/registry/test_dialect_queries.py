@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from services.registry import queries as Q
 from services.registry.db.dialect import pg_sql
-from services.registry.routes import match_route
+from services.registry.http.routes import match_route
 
 
 def test_pg_sql_translates_placeholders() -> None:

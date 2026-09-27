@@ -170,7 +170,8 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   ├── viewer/                      # `ageval view` SPA
 │   └── hub/                         # Registry Dataset / Plugin / Agent / Leaderboard
 ├── services/registry/               # standalone HTTP: Route.access + *Service
-│   ├── app.py / http_api.py / asgi.py / backend.py
+│   ├── app.py / asgi.py / backend.py
+│   ├── http/                        # dispatch + routes; handlers stay on RegistryHttpApi
 │   ├── auth_service.py / package_service.py / result_service.py / org_service.py
 │   ├── request_service.py           # listing + performance requests; Inbox
 │   ├── share_service.py             # snapshot share link; not catalog ACL
@@ -179,8 +180,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   ├── queries.py / dataset.py
 │   ├── store_package.py / store_result.py / store_org.py / store_inbox.py
 │   ├── tokens.py / rows.py / protocols.py   # narrow store protocols
-│   ├── store.py                     # row/DTO vocabulary + token re-exports
-│   └── routes.py                    # ROUTES must declare access
+│   └── store.py                     # row/DTO vocabulary + token re-exports
 ├── examples/
 │   ├── datasets/
 │   │   ├── minimal-demo/            # terminal-jsonl-agg / tau2-dialog-min / multiagent-env-min

@@ -20,8 +20,8 @@ from typing import Any, BinaryIO
 from urllib.parse import parse_qs, unquote, urlparse
 
 from services.registry.errors import RegistryAppError
+from services.registry.http.routes import match_route
 from services.registry.paging import parse_limit, parse_offset
-from services.registry.routes import match_route
 from services.registry.spool import extract_multipart_archive, spool_body
 from services.registry.store import TokenInfo
 

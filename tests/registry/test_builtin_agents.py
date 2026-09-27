@@ -14,7 +14,7 @@ from services.registry.builtin_agents import builtin_harness_ids
 from services.registry.content.blobs import MemoryBlobStore
 from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
-from services.registry.http_api import RegistryHttpApi
+from services.registry.http.dispatch import RegistryHttpApi
 from services.registry.package_service import PackageService
 from services.registry.store import TokenInfo
 

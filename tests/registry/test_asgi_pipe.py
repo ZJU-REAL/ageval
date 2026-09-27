@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from services.registry.app import build_default_state
 from services.registry.asgi import build_asgi_app
-from services.registry.http_api import RegistryHttpApi
+from services.registry.http.dispatch import RegistryHttpApi
 
 from ageval.registry.archive import MEDIA_TYPE, build_archive
 from ageval.registry.client import RegistryClient

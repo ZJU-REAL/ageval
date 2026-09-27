@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 from services.registry.access import AccessPolicy
-from services.registry.routes import ROUTES, Route
+from services.registry.http.routes import ROUTES, Route
 from services.registry.store import TokenInfo
 
 
@@ -49,6 +49,6 @@ def test_bearer_helper_is_only_used_by_dispatch() -> None:
     from pathlib import Path
 
     text = (
-        Path(__file__).resolve().parents[2] / "services" / "registry" / "http_api.py"
+        Path(__file__).resolve().parents[2] / "services" / "registry" / "http" / "dispatch.py"
     ).read_text(encoding="utf-8")
     assert text.count("_bearer(") == 2

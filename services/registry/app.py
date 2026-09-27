@@ -91,7 +91,7 @@ from services.registry.db.schema import (  # noqa: E402
     open_stores,
 )
 from services.registry.envload import load_env_file  # noqa: E402
-from services.registry.http_api import RegistryHttpApi, write_http_result  # noqa: E402
+from services.registry.http.dispatch import RegistryHttpApi, write_http_result  # noqa: E402
 from services.registry.store import (  # noqa: E402
     ADMIN_SCOPES,
     PostgresTokenStore,
@@ -182,7 +182,7 @@ class RegistryState:
 
 def _parse_multipart(body: bytes, content_type: str) -> dict[str, bytes]:
     """Compatibility alias for tests that import the stdlib parser."""
-    from services.registry.http_api import parse_multipart
+    from services.registry.http.dispatch import parse_multipart
 
     return parse_multipart(body, content_type)
 
