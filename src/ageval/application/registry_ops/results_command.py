@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -163,6 +164,21 @@ def _local_suite_item(summary: dict[str, Any], *, suite_dir: Path) -> dict[str, 
     }
     item.update(_config_fields_from_summary(summary))
     return item
+
+
+def _snapshot_token(token_or_url: str) -> str:
+    text = token_or_url.strip()
+    marker = "/s/"
+    if marker in text:
+        text = text.split(marker, 1)[1]
+    text = text.split("?", 1)[0].split("#", 1)[0].strip().strip("/")
+    if not text:
+        raise ConfigError(
+            "invalid_request",
+            "snapshot token is required",
+            location="token",
+        )
+    return text
 
 
 def _run_ids_from_task_refs(task_refs: list[dict[str, Any]]) -> list[str]:
@@ -1002,6 +1018,88 @@ class ResultsCommands:
             "result_id": result_id,
             "unshared": removed,
             "count": len(removed),
+        }
+
+    def share_snapshot(
+        self,
+        dataset_root: Path | str,
+        *,
+        suite_run_id: str,
+        hub_url: str | None = None,
+        registry_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Upload a read-only snapshot. Does not create or relabel a catalog suite."""
+        from ageval.application.registry_ops.snapshot_share import build_snapshot_share_archive
+        from ageval.registry.share_snapshot import SNAPSHOT_SHARE_KIND
+
+        root = resolve_dataset_root(dataset_root)
+        suite_dir = _resolve_suite_dir(root, suite_run_id)
+        summary = _load_suite_summary(suite_dir)
+        dataset_id, dataset_version = dataset_identity(
+            summary, location=str(suite_dir / "summary.json")
+        )
+        archive_bytes, blob_digest, size = build_snapshot_share_archive(root, suite_run_id)
+        client = self._client_factory(
+            registry_url=registry_url, require_token=True, accept_results_url=True
+        )
+        hub = (
+            (hub_url or os.environ.get("AGEVAL_HUB_URL") or client.base_url or "")
+            .strip()
+            .rstrip("/")
+        )
+        if not hub:
+            raise ConfigError(
+                "invalid_request",
+                "set --hub-url or AGEVAL_HUB_URL",
+                location="hub",
+            )
+        import tempfile
+
+        with tempfile.TemporaryDirectory(prefix="ageval-share-up-") as tmp_name:
+            archive = Path(tmp_name) / "snapshot.tar.gz"
+            archive.write_bytes(archive_bytes)
+            try:
+                info = client.create_snapshot_share(
+                    suite_run_id=suite_run_id,
+                    dataset_id=dataset_id,
+                    dataset_version=dataset_version,
+                    blob_digest=blob_digest,
+                    size=size,
+                    archive=archive,
+                )
+            except RegistryError as exc:
+                raise ConfigError(exc.code, exc.message, location="registry") from exc
+        token = str(info.get("token") or "")
+        return {
+            "ok": True,
+            "kind": SNAPSHOT_SHARE_KIND,
+            "token": token,
+            "path": info.get("path") or f"/s/{token}",
+            "url": f"{hub}/s/{token}",
+            "suite_run_id": suite_run_id,
+            "dataset_id": dataset_id,
+        }
+
+    def revoke_snapshot(
+        self,
+        token_or_url: str,
+        *,
+        registry_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Delete a snapshot share blob. Local suite files are not touched."""
+        token = _snapshot_token(token_or_url)
+        client = self._client_factory(
+            registry_url=registry_url, require_token=True, accept_results_url=True
+        )
+        try:
+            info = client.delete_snapshot_share(token)
+        except RegistryError as exc:
+            raise ConfigError(exc.code, exc.message, location="registry") from exc
+        return {
+            "ok": True,
+            "kind": "snapshot-share",
+            "token": str(info.get("token") or token),
+            "revoked": True,
         }
 
     def delete_result(

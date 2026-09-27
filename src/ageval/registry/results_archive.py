@@ -138,6 +138,11 @@ def _pack_tree(members: list[tuple[str, Path]]) -> tuple[bytes, str, int]:
     return archive, digest, len(archive)
 
 
+def pack_members(members: list[tuple[str, Path]]) -> tuple[bytes, str, int]:
+    """Pack ``(archive name, file)`` pairs into a deterministic gzip tar."""
+    return _pack_tree(members)
+
+
 def build_suite_archive(suite_dir: Path, *, suite_run_id: str) -> tuple[bytes, str, int]:
     """Pack ``suite_dir`` as ``.ageval/suite-runs/<suite_run_id>/…``.
 
