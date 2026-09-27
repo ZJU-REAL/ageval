@@ -143,9 +143,9 @@ def _caught(exc: RegistryAppError) -> HttpResult:
 from services.registry.http.auth import AuthHandlers
 from services.registry.http.orgs import OrgHandlers
 from services.registry.http.packages import PackageHandlers
+from services.registry.http.requests import InboxHandlers
 from services.registry.http.results import ResultHandlers
 from services.registry.http.shares import ShareHandlers
-from services.registry.http.inbox import InboxHandlers
 from services.registry.http.runtimes import RuntimeHandlers
 
 

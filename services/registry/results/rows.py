@@ -1,4 +1,4 @@
-"""Attempt, suite, result-share, and snapshot-share rows."""
+"""Attempt, suite, and result-share rows."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Attempt, suite, result-share, and snapshot-share SQL."""
+"""Attempt, suite, and result-share SQL."""
 
 from __future__ import annotations
 

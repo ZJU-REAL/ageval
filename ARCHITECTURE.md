@@ -401,7 +401,7 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | Other Agent backends | `openai-http` / `anthropic-http` / external `nooa` `dsh` | Not vendor stdout scrape |
 | Official base image | `plugins/contrib/docker/attempt/` | GHCR `ageval-attempt:<cli-ver>` then local `ageval-attempt:base`; miss → packaged Dockerfile. Bake ACP entries at image build; no `npm i` at invoke |
 | ACP task image layer | `plugins/contrib/acp` | `config.image_layers` bakes the bound `options.entry` onto the task recipe |
-| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is five aggregate stores (packages, results, shares, orgs, inbox) behind narrow protocols, one schema init in `db/schema.open_stores`, SQL in each aggregate `queries.py`, dialect only in `db/sql_adapter.py` |
+| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is five aggregate stores (packages, results, shares, orgs, inbox) behind narrow protocols, one schema init in `db/schema.open_stores`, SQL in each aggregate `queries.py`, dialect only in `db/sql_adapter.py`. `api_tokens` DDL stays in `auth/tokens.py`. |
 
 ## Failure and Privacy Boundary
 
