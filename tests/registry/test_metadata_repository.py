@@ -10,6 +10,7 @@ from services.registry.auth.tokens import (
     PostgresTokenStore,
     SqliteTokenStore,
 )
+from services.registry.clock import now
 from services.registry.db.schema import (
     RegistryStores,
     open_sqlite_stores,
@@ -21,9 +22,6 @@ from services.registry.packages.rows import (
 )
 from services.registry.results.rows import (
     AttemptResultRow,
-)
-from services.registry.store import (
-    now,
 )
 
 

@@ -105,10 +105,7 @@ def test_queries_own_single_releases_ddl() -> None:
         encoding="utf-8"
     )
     assert queries.count("CREATE TABLE IF NOT EXISTS releases") == 1
-    root_queries = (REPO / "services" / "registry" / "queries.py").read_text(
-        encoding="utf-8"
-    )
-    assert "CREATE TABLE IF NOT EXISTS releases" not in root_queries
+    assert not (REPO / "services" / "registry" / "queries.py").exists()
     adapter = (REPO / "services" / "registry" / "db" / "sql_adapter.py").read_text(encoding="utf-8")
     assert "CREATE TABLE IF NOT EXISTS releases" not in adapter
 
@@ -166,7 +163,6 @@ def test_store_has_no_sql_literals() -> None:
     store_files = sorted(set(store_files))
     rels = {p.relative_to(root).as_posix() for p in store_files}
     assert {
-        "store.py",
         "packages/store.py",
         "results/store.py",
         "shares/store.py",

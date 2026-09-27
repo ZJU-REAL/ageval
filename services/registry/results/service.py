@@ -40,9 +40,7 @@ from services.registry.results.dto import (
     share_to_dict,
     suite_to_dict,
 )
-from services.registry.store import (
-    now,
-)
+from services.registry.clock import now
 
 _SECRET_PATTERNS = (
     re.compile(rb"(?i)-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----"),

@@ -35,9 +35,7 @@ from services.registry.packages.dto import (
     package_kind_for_media_type,
     release_to_dict,
 )
-from services.registry.store import (
-    now,
-)
+from services.registry.clock import now
 
 
 def overlay_kind(dataset_id: str, package_kind: str | None) -> str | None:

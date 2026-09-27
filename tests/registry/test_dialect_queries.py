@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.registry import queries as Q
+from services.registry.auth.tokens import UPSERT_TOKEN
 from services.registry.db.dialect import pg_sql
 from services.registry.http.routes import match_route
 from services.registry.packages import queries as package_queries
@@ -59,7 +59,7 @@ def test_match_route_package_version_meta() -> None:
 
 def test_upsert_token_does_not_bind_created_at() -> None:
     # Live Postgres api_tokens.created_at is timestamptz; epoch floats fail.
-    assert "created_at" not in Q.UPSERT_TOKEN
+    assert "created_at" not in UPSERT_TOKEN
 
 
 def test_sqlite_align_integer_flag_is_noop(tmp_path) -> None:

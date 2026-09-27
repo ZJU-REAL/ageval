@@ -1,8 +1,7 @@
 """The one place that bootstraps the Registry metadata schema.
 
 ``open_stores`` runs it once per database; aggregate stores never create
-tables themselves. ``api_tokens`` stays owned by ``PersistentTokenStore``
-(the one statement group skipped here).
+tables themselves. ``api_tokens`` is created by ``PersistentTokenStore``.
 """
 
 from __future__ import annotations
@@ -11,7 +10,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from services.registry import queries as Q
 from services.registry.orgs import queries as org_queries
 from services.registry.packages import queries as package_queries
 from services.registry.results import queries as result_queries
@@ -28,18 +26,14 @@ def init_schema(adapter: Any) -> None:
     with adapter.connect() as conn:
         adapter.lock_schema(conn)
         for stmt in (
-            *Q.SCHEMA_STATEMENTS,
             *org_queries.SCHEMA_STATEMENTS,
             *package_queries.SCHEMA_STATEMENTS,
             *result_queries.SCHEMA_STATEMENTS,
             *share_queries.SCHEMA_STATEMENTS,
             *inbox_queries.SCHEMA_STATEMENTS,
         ):
-            if "api_tokens" in stmt:
-                continue
             adapter.execute(conn, stmt)
         for table, column, decl in (
-            *Q.SCHEMA_MIGRATIONS,
             *org_queries.SCHEMA_MIGRATIONS,
             *package_queries.SCHEMA_MIGRATIONS,
             *result_queries.SCHEMA_MIGRATIONS,
@@ -47,7 +41,11 @@ def init_schema(adapter: Any) -> None:
             *inbox_queries.SCHEMA_MIGRATIONS,
         ):
             adapter.add_column(conn, table, column, decl)
-        for table, column in (*Q.SCHEMA_INTEGER_FLAGS, *org_queries.SCHEMA_INTEGER_FLAGS, *package_queries.SCHEMA_INTEGER_FLAGS, *result_queries.SCHEMA_INTEGER_FLAGS):
+        for table, column in (
+            *org_queries.SCHEMA_INTEGER_FLAGS,
+            *package_queries.SCHEMA_INTEGER_FLAGS,
+            *result_queries.SCHEMA_INTEGER_FLAGS,
+        ):
             adapter.align_integer_flag(conn, table, column)
         conn.commit()
 

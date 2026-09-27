@@ -1,8 +1,7 @@
 """API token stores: in-memory (tests) and persistent SQLite / Postgres.
 
-Raw tokens are never stored — only sha256 digests. Schema bootstrap for
-``api_tokens`` lives here (``PersistentTokenStore._init``), the one statement
-group the metadata schema init skips.
+Raw tokens are never stored — only sha256 digests. ``api_tokens`` DDL and
+writes live here; aggregate schema init does not create that table.
 """
 
 from __future__ import annotations
@@ -12,11 +11,33 @@ import json
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
-from services.registry import queries as Q
-from services.registry.protocols import TokenStoreProtocol
 from services.registry.orgs.rows import normalize_user_id
+
+# Do not bind created_at. Pre-unification Postgres token tables are
+# TIMESTAMPTZ DEFAULT now(); an epoch float fails to insert. New tables
+# use REAL DEFAULT 0. Token created_at is never read.
+API_TOKENS_DDL = """
+CREATE TABLE IF NOT EXISTS api_tokens (
+    token_hash TEXT PRIMARY KEY,
+    scopes TEXT NOT NULL,
+    github_user TEXT,
+    created_at REAL NOT NULL DEFAULT 0,
+    revoked_at REAL
+)
+"""
+
+UPSERT_TOKEN = """
+INSERT INTO api_tokens(token_hash, scopes, github_user)
+VALUES (?, ?, ?)
+ON CONFLICT(token_hash) DO UPDATE SET
+    scopes=excluded.scopes,
+    github_user=excluded.github_user,
+    revoked_at=NULL
+"""
+
+SELECT_TOKEN = "SELECT scopes, github_user, revoked_at FROM api_tokens WHERE token_hash=?"
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +72,23 @@ ADMIN_SCOPES: frozenset[str] = frozenset(
     }
 )
 
+
+
+@runtime_checkable
+class TokenStoreProtocol(Protocol):
+    def hash_token(self, raw: str) -> str: ...
+
+    def add(
+        self,
+        raw_token: str,
+        scopes: frozenset[str] | set[str],
+        *,
+        github_user: str | None = None,
+    ) -> None: ...
+
+    def auth_for(self, raw_token: str | None) -> TokenInfo: ...
+
+    def scopes_for(self, raw_token: str | None) -> frozenset[str]: ...
 
 
 class TokenStore(TokenStoreProtocol):
@@ -103,9 +141,7 @@ class PersistentTokenStore(TokenStoreProtocol):
     def _init(self) -> None:
         with self._connect() as conn:
             self._adapter.lock_schema(conn)
-            for stmt in Q.SCHEMA_STATEMENTS:
-                if "api_tokens" in stmt:
-                    self._exec(conn, stmt)
+            self._exec(conn, API_TOKENS_DDL)
             conn.commit()
 
     def hash_token(self, raw: str) -> str:
@@ -122,7 +158,7 @@ class PersistentTokenStore(TokenStoreProtocol):
         with self._connect() as conn:
             self._exec(
                 conn,
-                Q.UPSERT_TOKEN,
+                UPSERT_TOKEN,
                 (self.hash_token(raw_token), scopes_json, github_user),
             )
             conn.commit()
@@ -131,7 +167,7 @@ class PersistentTokenStore(TokenStoreProtocol):
         if not raw_token:
             return TokenInfo(scopes=frozenset())
         with self._connect() as conn:
-            cur = self._exec(conn, Q.SELECT_TOKEN, (self.hash_token(raw_token),))
+            cur = self._exec(conn, SELECT_TOKEN, (self.hash_token(raw_token),))
             row = cur.fetchone()
             if row is None or row.get("revoked_at") is not None:
                 return TokenInfo(scopes=frozenset())
