@@ -16,7 +16,8 @@ from services.registry.orgs import queries as org_queries
 from services.registry.packages import queries as package_queries
 from services.registry.results import queries as result_queries
 from services.registry.shares import queries as share_queries
-from services.registry.store_inbox import InboxStore
+from services.registry.inbox import queries as inbox_queries
+from services.registry.inbox.store import InboxStore
 from services.registry.orgs.store import OrgStore
 from services.registry.packages.store import PackageStore
 from services.registry.results.store import ResultStore
@@ -32,6 +33,7 @@ def init_schema(adapter: Any) -> None:
             *package_queries.SCHEMA_STATEMENTS,
             *result_queries.SCHEMA_STATEMENTS,
             *share_queries.SCHEMA_STATEMENTS,
+            *inbox_queries.SCHEMA_STATEMENTS,
         ):
             if "api_tokens" in stmt:
                 continue
@@ -42,6 +44,7 @@ def init_schema(adapter: Any) -> None:
             *package_queries.SCHEMA_MIGRATIONS,
             *result_queries.SCHEMA_MIGRATIONS,
             *share_queries.SCHEMA_MIGRATIONS,
+            *inbox_queries.SCHEMA_MIGRATIONS,
         ):
             adapter.add_column(conn, table, column, decl)
         for table, column in (*Q.SCHEMA_INTEGER_FLAGS, *org_queries.SCHEMA_INTEGER_FLAGS, *package_queries.SCHEMA_INTEGER_FLAGS, *result_queries.SCHEMA_INTEGER_FLAGS):

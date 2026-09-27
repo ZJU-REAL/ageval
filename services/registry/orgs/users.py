@@ -6,7 +6,7 @@ from typing import Any
 
 from services.registry.auth.tokens import TokenInfo
 from services.registry.errors import RegistryAppError
-from services.registry.maintainers import is_maintainer
+from services.registry.inbox.maintainers import is_maintainer
 from services.registry.orgs.official import is_official_upload_org
 from services.registry.orgs.rows import normalize_user_id
 from services.registry.orgs.service import normalize_description, org_to_dict

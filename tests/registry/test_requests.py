@@ -11,8 +11,8 @@ from services.registry.auth.tokens import TokenInfo
 from services.registry.content.blobs import MemoryBlobStore
 from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
+from services.registry.inbox.service import RequestService
 from services.registry.packages.service import PackageService
-from services.registry.request_service import RequestService
 from services.registry.results.service import ResultService
 from services.registry.runtimes.service import RuntimeService
 

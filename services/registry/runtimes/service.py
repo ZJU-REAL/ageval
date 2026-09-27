@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from typing import Any, NamedTuple
 
 from services.registry.dataset import BOUND_RELEASE
-from services.registry.maintainers import (
+from services.registry.inbox.maintainers import (
     COLLECT_MODES,
     COLLECT_OFFICIAL,
     COLLECT_OFFICIAL_AND_PERSONAL,

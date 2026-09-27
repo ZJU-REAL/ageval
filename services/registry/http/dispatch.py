@@ -149,10 +149,19 @@ from services.registry.http.orgs import OrgHandlers
 from services.registry.http.packages import PackageHandlers
 from services.registry.http.results import ResultHandlers
 from services.registry.http.shares import ShareHandlers
+from services.registry.http.inbox import InboxHandlers
 from services.registry.http.runtimes import RuntimeHandlers
 
 
-class RegistryHttpApi(AuthHandlers, OrgHandlers, PackageHandlers, ResultHandlers, ShareHandlers, RuntimeHandlers):
+class RegistryHttpApi(
+    AuthHandlers,
+    OrgHandlers,
+    PackageHandlers,
+    ResultHandlers,
+    ShareHandlers,
+    InboxHandlers,
+    RuntimeHandlers,
+):
     def __init__(self, state: Any) -> None:
         self.state = state
 
@@ -268,103 +277,6 @@ class RegistryHttpApi(AuthHandlers, OrgHandlers, PackageHandlers, ResultHandlers
 
     def _health(self) -> HttpResult:
         return json_result(200, {"ok": True, "service": "ageval-registry"})
-
-    def _list_requests(self, *, auth: TokenInfo, qs: dict[str, list[str]]) -> HttpResult:
-        inbox = str((qs.get("inbox") or [""])[0]).strip().lower() in {"1", "true", "yes"}
-        suite_run_id = str((qs.get("suite_run_id") or [""])[0]).strip()
-        try:
-            if inbox:
-                payload = self.state.requests.inbox(auth=auth)
-            elif suite_run_id:
-                payload = self.state.requests.list_for_suite(suite_run_id=suite_run_id, auth=auth)
-            else:
-                payload = self.state.requests.inbox(auth=auth)
-        except RegistryAppError as exc:
-            return _caught(exc)
-        return json_result(200, payload)
-
-    def _apply_request(self, *, auth: TokenInfo) -> HttpResult:
-        body = self._read_json_body()
-        if isinstance(body, HttpResult):
-            return body
-        extra = set(body) - {"kind", "suite_run_id", "agent", "canonical_model"}
-        if extra:
-            return json_result(
-                400,
-                {
-                    "error": "invalid_request",
-                    "message": "unknown keys: " + ", ".join(sorted(extra)),
-                },
-            )
-        kind = str(body.get("kind") or "").strip()
-        suite_run_id = str(body.get("suite_run_id") or "").strip()
-        agent_raw = body.get("agent")
-        agent = str(agent_raw).strip() if isinstance(agent_raw, str) else None
-        canonical_raw = body.get("canonical_model")
-        canonical_model = str(canonical_raw).strip() if isinstance(canonical_raw, str) else None
-        try:
-            payload = self.state.requests.apply(
-                kind=kind,
-                suite_run_id=suite_run_id,
-                auth=auth,
-                agent=agent,
-                canonical_model=canonical_model,
-            )
-        except RegistryAppError as exc:
-            return _caught(exc)
-        return json_result(200, payload)
-
-    def _decide_requests(self, *, auth: TokenInfo) -> HttpResult:
-        body = self._read_json_body()
-        if isinstance(body, HttpResult):
-            return body
-        extra = set(body) - {"ids", "action", "canonical_model"}
-        if extra:
-            return json_result(
-                400,
-                {
-                    "error": "invalid_request",
-                    "message": "unknown keys: " + ", ".join(sorted(extra)),
-                },
-            )
-        ids = body.get("ids")
-        if not isinstance(ids, list):
-            return json_result(400, {"error": "invalid_request", "message": "ids required"})
-        action = str(body.get("action") or "").strip()
-        canonical_raw = body.get("canonical_model")
-        canonical_model = str(canonical_raw).strip() if isinstance(canonical_raw, str) else None
-        try:
-            payload = self.state.requests.decide(
-                request_ids=[str(i) for i in ids],
-                action=action,
-                auth=auth,
-                canonical_model=canonical_model,
-            )
-        except RegistryAppError as exc:
-            return _caught(exc)
-        return json_result(200, payload)
-
-    def _hide_requests(self, *, auth: TokenInfo) -> HttpResult:
-        body = self._read_json_body()
-        if isinstance(body, HttpResult):
-            return body
-        extra = set(body) - {"ids"}
-        if extra:
-            return json_result(
-                400,
-                {
-                    "error": "invalid_request",
-                    "message": "unknown keys: " + ", ".join(sorted(extra)),
-                },
-            )
-        ids = body.get("ids")
-        if not isinstance(ids, list):
-            return json_result(400, {"error": "invalid_request", "message": "ids required"})
-        try:
-            payload = self.state.requests.hide(request_ids=[str(i) for i in ids], auth=auth)
-        except RegistryAppError as exc:
-            return _caught(exc)
-        return json_result(200, payload)
 
 
 def write_http_result(handler: Any, result: HttpResult) -> None:

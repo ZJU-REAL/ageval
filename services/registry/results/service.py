@@ -779,7 +779,7 @@ class ResultService:
             raise RegistryAppError(exc.error_code, exc.message, http_status=400) from exc
         release_org_id: str | None = None
         if builtin is not None:
-            from services.registry.maintainers import auth_is_maintainer
+            from services.registry.inbox.maintainers import auth_is_maintainer
 
             if not skip_owner_check and not auth_is_maintainer(auth):
                 raise RegistryAppError(

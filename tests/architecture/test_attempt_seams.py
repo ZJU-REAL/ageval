@@ -170,7 +170,7 @@ def test_store_has_no_sql_literals() -> None:
         "packages/store.py",
         "results/store.py",
         "shares/store.py",
-        "store_inbox.py",
+        "inbox/store.py",
         "orgs/store.py",
     } <= rels
     for path in store_files:

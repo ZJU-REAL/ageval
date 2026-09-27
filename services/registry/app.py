@@ -144,7 +144,7 @@ class RegistryState:
         from services.registry.orgs.service import OrgService
         from services.registry.orgs.users import UserService
         from services.registry.packages.service import PackageService
-        from services.registry.request_service import RequestService
+        from services.registry.inbox.service import RequestService
         from services.registry.results.service import ResultService
         from services.registry.runtimes.service import RuntimeService
         from services.registry.shares.service import ShareService
