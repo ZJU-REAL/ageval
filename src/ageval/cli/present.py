@@ -101,6 +101,9 @@ def humanize(payload: Mapping[str, Any], *, width: int | None = None) -> str:
         suite_id = payload.get("suite_run_id")
         if suite_id:
             lines.append(_kv("suite", str(suite_id)))
+        run_id = payload.get("run_id")
+        if run_id:
+            lines.append(_kv("run", str(run_id)))
         return "\n".join(lines) + "\n"
     if payload.get("revoked") is True and payload.get("token"):
         return _kv("revoked", str(payload["token"])) + "\n"
