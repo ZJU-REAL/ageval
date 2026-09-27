@@ -10,7 +10,7 @@ from services.registry.packages.dto import (
 from services.registry.packages.rows import (
     ReleaseRow,
 )
-from services.registry.runtime_service import is_plaza_source_suite
+from services.registry.runtimes.service import is_plaza_source_suite
 
 from ageval.registry.media_types import DATASET_MEDIA_TYPE, PLUGIN_MEDIA_TYPE
 

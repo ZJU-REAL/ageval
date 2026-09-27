@@ -17,7 +17,7 @@ from services.registry.errors import RegistryAppError
 from services.registry.http.dispatch import RegistryHttpApi
 from services.registry.packages.service import PackageService
 from services.registry.result_service import ResultService
-from services.registry.runtime_service import RuntimeService
+from services.registry.runtimes.service import RuntimeService
 
 from ageval.registry.archive import MEDIA_TYPE, build_archive
 from ageval.registry.digest import compute_package_digest

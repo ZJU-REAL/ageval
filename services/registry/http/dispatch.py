@@ -147,9 +147,10 @@ def _caught(exc: RegistryAppError) -> HttpResult:
 from services.registry.http.auth import AuthHandlers
 from services.registry.http.orgs import OrgHandlers
 from services.registry.http.packages import PackageHandlers
+from services.registry.http.runtimes import RuntimeHandlers
 
 
-class RegistryHttpApi(AuthHandlers, OrgHandlers, PackageHandlers):
+class RegistryHttpApi(AuthHandlers, OrgHandlers, PackageHandlers, RuntimeHandlers):
     def __init__(self, state: Any) -> None:
         self.state = state
 
@@ -457,45 +458,6 @@ class RegistryHttpApi(AuthHandlers, OrgHandlers, PackageHandlers):
             return _caught(exc)
         return json_result(200, payload)
 
-    def _detach_performance(self, *, dataset_id: str, auth: TokenInfo) -> HttpResult:
-        body = self._read_json_body()
-        if isinstance(body, HttpResult):
-            return body
-        extra = set(body) - {"suite_run_id", "role"}
-        if extra:
-            return json_result(
-                400,
-                {
-                    "error": "invalid_request",
-                    "message": "unknown keys: " + ", ".join(sorted(extra)),
-                },
-            )
-        try:
-            payload = self.state.runtimes.detach_performance(
-                package_id=dataset_id,
-                suite_run_id=str(body.get("suite_run_id") or ""),
-                role=str(body.get("role") or ""),
-                auth=auth,
-            )
-        except RegistryAppError as exc:
-            return _caught(exc)
-        return json_result(200, payload)
-
-    def _list_performances(self, *, auth: TokenInfo, qs: dict[str, list[str]]) -> HttpResult:
-        if qs:
-            return json_result(
-                400,
-                {
-                    "error": "invalid_request",
-                    "message": "unknown keys: " + ", ".join(sorted(qs)),
-                },
-            )
-        try:
-            items = self.state.runtimes.list_performances(auth)
-        except RegistryAppError as exc:
-            return _caught(exc)
-        return json_result(200, {"items": items})
-
     def _list_suites(self, *, auth: TokenInfo, qs: dict[str, list[str]]) -> HttpResult:
         try:
             board_raw = (qs.get("board") or [""])[0]
@@ -535,28 +497,6 @@ class RegistryHttpApi(AuthHandlers, OrgHandlers, PackageHandlers):
             stream=fh,
             size=size,
         )
-
-    def _patch_performance_collect(self, *, dataset_id: str, auth: TokenInfo) -> HttpResult:
-        body = self._read_json_body()
-        if isinstance(body, HttpResult):
-            return body
-        extra = set(body) - {"mode"}
-        if extra:
-            return json_result(
-                400,
-                {
-                    "error": "invalid_request",
-                    "message": "unknown keys: " + ", ".join(sorted(extra)),
-                },
-            )
-        mode = str(body.get("mode") or "").strip()
-        try:
-            payload = self.state.runtimes.set_collect_mode(
-                package_id=dataset_id, mode=mode, auth=auth
-            )
-        except RegistryAppError as exc:
-            return _caught(exc)
-        return json_result(200, payload)
 
     def _list_result_shares(
         self, *, result_kind: str, result_id: str, auth: TokenInfo

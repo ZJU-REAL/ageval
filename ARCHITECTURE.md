@@ -171,10 +171,11 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   └── hub/                         # Registry Dataset / Plugin / Agent / Leaderboard
 ├── services/registry/               # standalone HTTP: Route.access + *Service
 │   ├── app.py / asgi.py / backend.py
-│   ├── http/                        # dispatch, routes; auth, org, and package handlers
+│   ├── http/                        # dispatch, routes; auth, org, package, runtime handlers
 │   ├── auth/                        # AuthService, GitHub OAuth, token stores
 │   ├── orgs/                        # service, users, store, protocol, rows, queries, official
 │   ├── packages/                    # service, store, protocol, rows, queries, dto, builtins
+│   ├── runtimes/                    # derived agent performance
 │   ├── result_service.py
 │   ├── request_service.py           # listing + performance requests; Inbox
 │   ├── share_service.py             # snapshot share link; not catalog ACL

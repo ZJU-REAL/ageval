@@ -23,7 +23,7 @@ from services.registry.dataset import (
 from services.registry.errors import RegistryAppError
 from services.registry.orgs.official import official_dataset_ids
 from services.registry.paging import page_slice
-from services.registry.runtime_service import attach_agent_refs
+from services.registry.runtimes.service import attach_agent_refs
 from services.registry.orgs.rows import (
     normalize_user_id,
 )

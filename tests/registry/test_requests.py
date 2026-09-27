@@ -14,7 +14,7 @@ from services.registry.errors import RegistryAppError
 from services.registry.packages.service import PackageService
 from services.registry.request_service import RequestService
 from services.registry.result_service import ResultService
-from services.registry.runtime_service import RuntimeService
+from services.registry.runtimes.service import RuntimeService
 
 from ageval.registry.agent_package import (
     AGENT_MEDIA_TYPE,
