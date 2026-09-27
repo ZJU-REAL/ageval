@@ -298,6 +298,54 @@ export function fetchJobOverlayFile(jobId: string, filePath: string) {
   }>(`/api/jobs/${encodeURIComponent(jobId)}/overlays/file?${q.toString()}`);
 }
 
+export type SnapshotShareState = {
+  ok: boolean;
+  shared: boolean;
+  url?: string;
+  token?: string;
+  path?: string;
+  suite_run_id?: string;
+  run_id?: string;
+};
+
+function sharePath(jobId: string, runId?: string): string {
+  const params = new URLSearchParams();
+  if (runId) params.set("run_id", runId);
+  const query = params.toString();
+  const path = `/api/jobs/${encodeURIComponent(jobId)}/share`;
+  return query ? `${path}?${query}` : path;
+}
+
+async function shareRequest(
+  path: string,
+  method: "GET" | "POST" | "DELETE",
+): Promise<SnapshotShareState> {
+  const res = await fetch(withDataset(path), {
+    method,
+    headers: { Accept: "application/json" },
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    message?: string;
+  } & SnapshotShareState;
+  if (!res.ok) {
+    throw new Error(data.message || data.error || `HTTP ${res.status}`);
+  }
+  return data;
+}
+
+export function fetchSnapshotShare(jobId: string, runId?: string) {
+  return shareRequest(sharePath(jobId, runId), "GET");
+}
+
+export function createSnapshotShare(jobId: string, runId?: string) {
+  return shareRequest(sharePath(jobId, runId), "POST");
+}
+
+export function revokeSnapshotShare(jobId: string, runId?: string) {
+  return shareRequest(sharePath(jobId, runId), "DELETE");
+}
+
 export function fetchJob(jobId: string) {
   return getJson<{
     ok: boolean;

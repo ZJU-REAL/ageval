@@ -132,7 +132,7 @@ export function TrialHeader({
         </p>
       </div>
       {actions || onSlotSelect || siblingNav ? (
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-start gap-1">
           {actions}
           {onSlotSelect ? (
             <SlotHistorySelect

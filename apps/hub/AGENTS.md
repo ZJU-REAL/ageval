@@ -53,6 +53,10 @@ Stack is Vite + React + Tailwind + **shadcn/ui**. Overlap primitives live in
    the page. Do not open a vacant band for a single control. Operator
    labels use body-sm. How a primitive is drawn: [DESIGN.md](./DESIGN.md)
    plus Viewer Taste **Composition**.
+8. **Action failure is a toast.** `toastError` in `src/lib/toast-error.ts`.
+   Do not dump `code: message` into the page. Inline error is a field, or
+   a row whose result is an error. A control that already shows success
+   does not also toast (docs/13). Confirmations stay in the dialog.
 
 New overlap chrome requires a new `apps/shared/components/ui/` primitive first, used by both
 Hub and Viewer. Do not one-off style a native element.

@@ -131,6 +131,10 @@ Same stack as Hub: overlap primitives in `apps/shared/components/ui/`. Role → 
    `patch N` + `formatDate` / `formatDay`. Do **not** put `run_id` or sha256
    in the trigger or the menu. Digests stay on the trial heading / breadcrumb.
 5. Do not add a second component library or a one-off styled native control.
+6. A failed write uses `toast(message, { tone: "error" })`. Do not write that
+   message into the page. Inline `text-error` is for a field, or for a row
+   whose result is an error. Confirmations stay in the existing dialog.
+   Docs/13: do not also toast when the control already shows success.
 
 ## Backend contract
 
