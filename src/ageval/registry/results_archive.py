@@ -19,6 +19,7 @@ from typing import Any
 from ageval.evidence.locators import default_suite_runs_root, run_locator, suite_run_locator
 from ageval.evidence.slim import is_vendor_raw_rel
 from ageval.registry.media_types import ATTEMPT_RESULT_MEDIA_TYPE, SUITE_RESULT_MEDIA_TYPE
+from ageval.registry.share_snapshot import LIVE_SHARE_SIDECAR
 
 MEDIA_TYPE = ATTEMPT_RESULT_MEDIA_TYPE
 
@@ -159,7 +160,8 @@ def build_suite_archive(suite_dir: Path, *, suite_run_id: str) -> tuple[bytes, s
         if not path.is_file():
             continue
         rel = path.relative_to(root).as_posix()
-        if _L1_WORK_ROOT in Path(rel).parts:
+        parts = Path(rel).parts
+        if _L1_WORK_ROOT in parts or LIVE_SHARE_SIDECAR in parts:
             continue
         members.append((f"{prefix}/{rel}", path))
 
