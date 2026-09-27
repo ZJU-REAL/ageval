@@ -218,6 +218,13 @@ ROUTES: tuple[Route, ...] = (
         pattern=r"/v1/shares/([^/]+)",
         groups=("token",),
     ),
+    Route(
+        "GET",
+        "find_snapshot_share",
+        access="results_upload",
+        exact="/v1/shares",
+        pass_qs=True,
+    ),
     Route("GET", "list_attempts", access="bearer", exact="/v1/results/attempts", pass_qs=True),
     Route(
         "GET",

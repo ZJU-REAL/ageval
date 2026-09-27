@@ -482,6 +482,7 @@ class ResultStore(ResultStoreProtocol):
                         row.size,
                         row.summary_json,
                         row.created_at,
+                        row.run_id,
                     ),
                 )
                 conn.commit()
@@ -491,6 +492,18 @@ class ResultStore(ResultStoreProtocol):
     def get_snapshot_share(self, token: str) -> SnapshotShareRow | None:
         with self._connect() as conn:
             cur = self._exec(conn, Q.SELECT_SNAPSHOT_SHARE, (token,))
+            found = cur.fetchone()
+            return self._snapshot_share_row(found) if found else None
+
+    def find_snapshot_share(
+        self, *, owner_user_id: str, suite_run_id: str, run_id: str
+    ) -> SnapshotShareRow | None:
+        with self._connect() as conn:
+            cur = self._exec(
+                conn,
+                Q.SELECT_SNAPSHOT_SHARE_FOR_OWNER,
+                (owner_user_id, suite_run_id, run_id),
+            )
             found = cur.fetchone()
             return self._snapshot_share_row(found) if found else None
 
@@ -525,4 +538,5 @@ class ResultStore(ResultStoreProtocol):
             size=int(record["size"]),
             summary_json=str(record["summary_json"]),
             created_at=float(record["created_at"]),
+            run_id=str(record["run_id"] or ""),
         )

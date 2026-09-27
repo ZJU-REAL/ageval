@@ -1223,6 +1223,31 @@ class RegistryHttpApi:
                 shutil.rmtree(work, ignore_errors=True)
         return json_result(201, payload)
 
+    def _find_snapshot_share(self, *, auth: TokenInfo, qs: dict[str, list[str]]) -> HttpResult:
+        unknown = set(qs) - {"suite_run_id", "run_id"}
+        if unknown:
+            return json_result(
+                400,
+                {
+                    "error": "invalid_request",
+                    "message": "unknown keys: " + ", ".join(sorted(unknown)),
+                },
+            )
+        suite_run_id = str((qs.get("suite_run_id") or [""])[0]).strip()
+        run_id = str((qs.get("run_id") or [""])[0]).strip()
+        if not suite_run_id:
+            return json_result(
+                400,
+                {"error": "invalid_request", "message": "suite_run_id is required"},
+            )
+        try:
+            payload = self.state.shares.find_owned(
+                auth=auth, suite_run_id=suite_run_id, run_id=run_id
+            )
+        except RegistryAppError as exc:
+            return _caught(exc)
+        return json_result(200, payload)
+
     def _get_snapshot_share(self, *, token: str) -> HttpResult:
         try:
             payload = self.state.shares.get(token)

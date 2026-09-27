@@ -284,6 +284,26 @@ def test_oversize_share_matches_suite_upload_error(registry_server) -> None:
     assert share_err["message"] == suite_err["message"]
 
 
+def test_owner_lookup_separates_suite_and_one_job(registry_server, tmp_path: Path) -> None:
+    owner = RegistryClient(registry_server["url"], token=registry_server["token"])
+    archive = _archive(tmp_path, name="job.tar.gz")
+    created = owner.create_snapshot_share(
+        suite_run_id="suite0001",
+        dataset_id="acme/demo",
+        dataset_version="0.1.0",
+        blob_digest=sha256_file(archive),
+        size=archive.stat().st_size,
+        archive=archive,
+        run_id="run000001",
+    )
+    assert created["run_id"] == "run000001"
+    one = owner.find_snapshot_share(suite_run_id="suite0001", run_id="run000001")
+    whole = owner.find_snapshot_share(suite_run_id="suite0001", run_id="")
+    assert one["shared"] is True
+    assert one["token"] == created["token"]
+    assert whole["shared"] is False
+
+
 def test_create_requires_upload_scope(registry_server, tmp_path: Path) -> None:
     anon = RegistryClient(registry_server["url"], token=None)
     with pytest.raises(RegistryError) as denied:

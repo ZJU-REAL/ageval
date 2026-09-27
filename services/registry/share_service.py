@@ -31,7 +31,7 @@ from ageval.registry.share_snapshot import (
 )
 
 _META_KEYS = frozenset(
-    {"suite_run_id", "dataset_id", "dataset_version", "blob_digest", "size", "kind"}
+    {"suite_run_id", "dataset_id", "dataset_version", "blob_digest", "size", "kind", "run_id"}
 )
 _ACL_KEYS = frozenset({"visibility", "result_shares", "board_listed"})
 _NOTE = "snapshot share; per-task evaluator verdicts only; no suite-level PASS"
@@ -134,6 +134,7 @@ class ShareService:
             size=size,
             summary_json=json.dumps(summary, sort_keys=True),
             created_at=now(),
+            run_id=str(meta.get("run_id") or "").strip(),
         )
         self.blobs.put_if_absent(blob_digest, archive, prefix=SHARE_BLOB_PREFIX)
         try:
@@ -148,6 +149,25 @@ class ShareService:
 
     def get(self, token: str) -> dict[str, Any]:
         return self._public(self._require(token))
+
+    def find_owned(self, *, auth: TokenInfo, suite_run_id: str, run_id: str) -> dict[str, Any]:
+        if not auth.user_id:
+            raise RegistryAppError(
+                "unauthorized",
+                "authentication required",
+                http_status=401,
+            )
+        row = self.results.find_snapshot_share(
+            owner_user_id=auth.user_id,
+            suite_run_id=suite_run_id,
+            run_id=run_id,
+        )
+        if row is None:
+            return {"ok": True, "shared": False, "suite_run_id": suite_run_id, "run_id": run_id}
+        payload = self._public(row)
+        payload["ok"] = True
+        payload["shared"] = True
+        return payload
 
     def revoke(self, token: str, *, auth: TokenInfo) -> dict[str, Any]:
         row = self._require(token)
@@ -359,6 +379,7 @@ class ShareService:
             "model_label": str(summary.get("model_label") or ""),
             "exit_code": summary.get("exit_code", 0),
             "note": _NOTE,
+            "run_id": row.run_id,
         }
         for key in (
             "job_overlay",

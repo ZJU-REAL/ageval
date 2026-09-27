@@ -187,6 +187,7 @@ class SnapshotShareRow:
     size: int
     summary_json: str
     created_at: float
+    run_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
