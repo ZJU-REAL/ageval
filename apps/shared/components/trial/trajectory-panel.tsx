@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 
 import { HoverTip } from "@ageval/shared/components/hover-tip";
+import { Button } from "@ageval/shared/components/ui/button";
 import { MarkdownBody } from "@ageval/shared/components/markdown";
 import {
   Select,
@@ -328,18 +329,20 @@ function CopyBodyButton({ text }: { text: string }) {
   }
   return (
     <HoverTip content={copied ? "Copied" : "Copy"}>
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="iconSm"
       onClick={onCopy}
       aria-label={copied ? "Copied" : "Copy step"}
-      className="shrink-0 rounded-[4px] p-0.5 text-mute hover:bg-row-hover hover:text-ink"
+      className="shrink-0"
     >
       {copied ? (
         <Check className="h-3.5 w-3.5" aria-hidden />
       ) : (
         <Copy className="h-3.5 w-3.5" aria-hidden />
       )}
-    </button>
+    </Button>
     </HoverTip>
   );
 }
@@ -576,7 +579,7 @@ function StepItem({
           "sticky top-[var(--traj-invoke-h,0px)] z-10 rounded-t-lg border-b border-hairline bg-canvas px-3 pt-3 pb-1.5 text-xs",
         )}
       >
-        <div className="flex items-start gap-3">
+        <div className="flex items-center gap-3">
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wide text-ink">
               <Icon
@@ -591,7 +594,7 @@ function StepItem({
               </span>
             ) : null}
             {s.kind && isToolCall && s.kind !== label ? (
-              <span className="rounded bg-canvas-soft border border-hairline px-1.5 py-0 text-[11px] text-mute font-normal normal-case tracking-normal">
+              <span className="rounded-[8px] bg-canvas-soft border border-hairline px-1.5 py-0 text-xs text-mute font-normal normal-case tracking-normal">
                 {s.kind}
               </span>
             ) : null}
@@ -619,12 +622,14 @@ function StepItem({
           </div>
           {body && overflows ? (
             <HoverTip content={open ? "Collapse" : "Expand"}>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="iconSm"
                 onClick={toggleOpen}
                 aria-expanded={open}
                 aria-label={open ? "Collapse step" : "Expand step"}
-                className="shrink-0 rounded-[4px] p-0.5 text-mute hover:bg-row-hover hover:text-ink"
+                className="shrink-0"
               >
                 <ChevronDown
                   className={cn(
@@ -634,7 +639,7 @@ function StepItem({
                   )}
                   aria-hidden
                 />
-              </button>
+              </Button>
             </HoverTip>
           ) : null}
           {body ? <CopyBodyButton text={body} /> : null}
@@ -881,7 +886,7 @@ export function TrajectoryPanel({
       <div className="space-y-2">
         <p className="text-sm text-mute">No trajectory.jsonl steps for this run.</p>
         {result ? (
-          <pre className="text-[12px] font-mono bg-canvas-soft rounded-[12px] p-3 overflow-auto max-h-64">
+          <pre className="text-xs font-mono bg-canvas-soft rounded-[10px] p-3 overflow-auto max-h-64">
             {JSON.stringify(result, null, 2)}
           </pre>
         ) : null}
@@ -914,21 +919,23 @@ export function TrajectoryPanel({
           Trajectory is observational only; independent evaluator owns PASS.
         </p>
         <HoverTip content={allExpanded ? "Collapse all" : "Expand all"}>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="iconSm"
           onClick={() => {
             setAllExpanded((v) => !v);
             setExpandGen((n) => n + 1);
           }}
           aria-label={allExpanded ? "Collapse all" : "Expand all"}
-          className="shrink-0 rounded-[4px] p-0.5 text-mute hover:bg-row-hover hover:text-ink"
+          className="shrink-0"
         >
           {allExpanded ? (
             <FoldVertical className="h-3.5 w-3.5" aria-hidden />
           ) : (
             <UnfoldVertical className="h-3.5 w-3.5" aria-hidden />
           )}
-        </button>
+        </Button>
         </HoverTip>
       </div>
       {shownSteps.length === 0 ? (
