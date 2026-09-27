@@ -143,25 +143,33 @@ CLI：`ageval registry set-description <dataset_id> --description "…"`（`--de
 
 ## 快照分享
 
-本地 suite 跑完，或还在跑，owner 都可以交出一条只读链接，对方打开就能看上传那一刻的 suite 和 Attempt 证据。路径是 Hub 上的 `/s/{token}`。打开不需要登录。正在跑或正在取消的 suite 也可以分享；链接定格在那一刻，之后的进度不会写进去。`upload-suite` 仍然拒绝这种未结束的 summary。
+本地 suite 跑完，或还在跑，owner 都可以交出一条只读链接。路径是 Hub 上的 `/s/{token}`。打开不需要登录。同一条链接有两种模式，省略时是 **static**。
+
+**static** 定格在创建那一刻的 suite summary 和 Attempt 证据。正在跑或正在取消的 suite 也可以这样分享，之后的进度不写进去。`upload-suite` 仍然拒绝未结束的 summary。
+
+**live** 仍是 `/s/{token}`。创建时 `mode=live`，CLI 是 `ageval results share-snapshot <dataset> --suite-run <id> --live`。owner 用 `PATCH /v1/shares/{token}` 写回这一行，token 保持不变。更新只在 owner 的 runner 或 `ageval results sync-snapshot` 在线时发生：每个 job 到达终态时补 suite summary，并放上新出现的 Attempt 文件；大约每 45 秒再补一次计数和状态，单个长 job 期间看板也能看到 suite 还在跑。job 进行中的轨迹不推送。打开某次 Attempt 时，页面读已经上传的文件。runner 断开后，链接停在最后一次成功写入的内容；`sync-snapshot` 用同一个 token 继续。static 的 PATCH 返回 `invalid_request`。
+
+static 的 blob 是一份归档，根上有 `snapshot-share.json`（`kind: snapshot-share`）。live 把可变 summary 放在 `snapshot_shares.summary_json`，Attempt 文件按路径记在 `snapshot_share_files`，对象仍在 BlobStore 前缀 `shares/`。每次补丁只上传有变化的路径。
 
 链接和目录 ACL 分开存：
 
 | 写入 | 行为 |
 | --- | --- |
-| `snapshot_shares` 行，BlobStore 前缀 `shares/` | 创建时写入。blob 是当时的 suite summary 和 Attempt 证据，根上有 `snapshot-share.json`（`kind: snapshot-share`）。 |
+| `snapshot_shares` 行，BlobStore 前缀 `shares/` | static：创建时写入一份归档。live：同一行的 summary 由 owner 更新；文件按路径另记，blob 仍在 `shares/`。 |
 | `visibility` | 保持原样。已经在目录里的 suite 不会因此变成公开；只在本地的 suite 也不会因此进目录。 |
 | `result_shares` | 不写。身份 ACL 仍是 `ageval results share --share-org` / `--share-user`。 |
 | `board_listed` | 不写。不进 plaza，不进 Leaderboard。 |
 
-没有默认 TTL，也没有持续同步。之后本地或 Hub 上的 suite 变了，链接里的内容不变。`ageval results revoke-snapshot <token 或 url>` 删掉 share blob 和这一行；本地 `.ageval/suite-runs` 与 `.ageval/runs` 不动。链接随后不再解析。
+没有默认 TTL。`ageval results revoke-snapshot <token 或 url>` 删掉 share 元数据和不再被引用的 blob。本地 `.ageval/suite-runs` 与 `.ageval/runs` 不动。链接随后不再解析。static 和 live 走同一条撤销。
 
-创建走 CLI。`ageval results share-snapshot <dataset> --suite-run <id>` 上传整份 suite。`--run <run_id>` 只上传这一次 Attempt；和 `--suite-run` 一起用时，只上传该 suite 里的这一次 job。本地 Viewer 打开对应页面后的分享图标调用同一条命令。打印或页面上的 `url` 是 `{hub}/s/{token}`。hub 取 `--hub-url`，否则 `AGEVAL_HUB_URL`，否则当次 Registry 源（compose 和公网入口上，Hub 反代 `/v1`）。点分享图标先说明这一下会把当时的内容上传到 Registry，确认后在同一个对话框里给出链接，可以复制。已有链接时再点开，可以复制，也可以取消共享。没创建过分享时，不存在这条路径。
+创建走 CLI。`ageval results share-snapshot <dataset> --suite-run <id>` 上传整份 suite。`--run <run_id>` 只上传这一次 Attempt；和 `--suite-run` 一起用时，只上传该 suite 里的这一次 job。`--live` 只配 `--suite-run`，跟随整份 suite。本地 Viewer 的分享图标仍调用 static 的同一条命令。打印或页面上的 `url` 是 `{hub}/s/{token}`。hub 取 `--hub-url`，否则 `AGEVAL_HUB_URL`，否则当次 Registry 源（compose 和公网入口上，Hub 反代 `/v1`）。点分享图标先说明这一下会把当时的内容上传到 Registry，确认后在同一个对话框里给出链接，可以复制。已有链接时再点开，可以复制，也可以取消共享。没创建过分享时，不存在这条路径。
 
-体积上限与 suite / 包上传相同：`MAX_UPLOAD_BYTES`（512 MiB）。超出返回 `payload_too_large`。
+`--live` 在本机 `.ageval/suite-runs/<id>/live-share.json` 记下 token、Registry 源和已上传文件的摘要。再执行一次 `--live` 仍用这个 token。`ageval results sync-snapshot <dataset> --suite-run <id>` 补当前 summary 和有变化的 Attempt 文件；`--heartbeat` 只补计数和状态。catalog 的 `upload-suite` 不带这个 sidecar。
 
-创建和撤销要 `results:upload`。撤销还要是该链接的 owner。持链接的人只读。把带 `snapshot-share.json` 的归档再 POST 到 `/v1/results/suites` 或 `/v1/results/attempts` 会拒绝。用 token 申请 `leaderboard_list` 或 `agent_performance` 会拒绝。`/s/{token}` 上没有导入、改公开 / 私有、或申请上榜。`upload-suite` 在不走分享时保持原样。
+体积上限与 suite / 包上传相同：`MAX_UPLOAD_BYTES`（512 MiB）。live 按已存文件加上本次补丁计算。超出返回 `payload_too_large`。
 
-上传前去掉能识别的密钥：overlay / profiles 里的 `api_key` 以及同类字段。`${NAME}` 和纯环境变量名留下。看起来像密钥值的写成 `[redacted]`。这份 blob 不是 Config format，Config Core 不读它。
+创建、补丁和撤销要 `results:upload`。补丁和撤销还要是该链接的 owner。持链接的人只读。把带 `snapshot-share.json` 的归档再 POST 到 `/v1/results/suites` 或 `/v1/results/attempts` 会拒绝。用 token 申请 `leaderboard_list` 或 `agent_performance` 会拒绝。`/s/{token}` 上没有导入、改公开 / 私有、或申请上榜。`upload-suite` 在不走分享时保持原样。
 
-页面复用 Hub / Viewer 已有组件和 [13](13-web-ui-tokens.md) 的令牌，不新增色板，因此不改 13。轨迹和 harness completed 仍然不是 PASS。
+创建时和每次补丁去掉能识别的密钥：overlay / profiles 里的 `api_key` 以及同类字段。`${NAME}` 和纯环境变量名留下。看起来像密钥值的写成 `[redacted]`。私钥块仍是 `secret_scan_failed`。这份 blob 不是 Config format，Config Core 不读它。
+
+Hub `/s/{token}` 在 `mode=live` 时短轮询 suite meta，jobs 表跟着终态补丁更新。Attempt 页只显示已经上传的文件。页面复用 Hub / Viewer 已有组件和 [13](13-web-ui-tokens.md) 的令牌，不新增色板，因此不改 13。轨迹和 harness completed 仍然不是 PASS。

@@ -69,7 +69,7 @@ public 只许出现「public」或「both」行的规范名。internal 词出现
 | checks | checks / `evaluation/checks.json` | both | 确定性 evaluator 可选返回的检查项观察；parent 写入 `evaluation/checks.json`。不是 PASS | 把 check 退出码 / stdout 当 PASS；Verifier 检查点 |
 | 投影 / Agent 能看见 | projected workspace | both | Agent 看见的文件 | 单独写「可见性」指这件事 |
 | 公开 / 私有 | public / private | both | Hub 范围。CLI 旗标仍是 `--visibility` | 单独写可见性、visibility 当正文（旗标除外） |
-| 快照分享 | snapshot share | both | 显式创建的只读链接 `/s/{token}`，内容是当时的 suite 与 Attempt 证据 | 用它指 `results share` 的身份 ACL；把它写成公开或上榜；持续同步 |
+| 快照分享 | snapshot share | both | 只读链接 `/s/{token}`。默认定格在创建时的 suite 与 Attempt 证据；`mode=live` 时 owner 按 job 终态更新同一条链接 | 用它指 `results share` 的身份 ACL；写成公开或上榜；把默认定格写成会跟着跑；把 live 写成单次 job 内的轨迹直播 |
 | PASS / FAIL / ERROR | PASS / FAIL / ERROR | both | 见下 | completed、轨迹完整当通过；用超时文本决定 FAIL |
 | 阶段 | phase | both | environment → run → evaluate → record；cleanup 始终执行 | 相位；用「步骤」指这些阶段（轨迹 tool step 除外） |
 | attach_stdio | attach_stdio | both | 已开环境里起前台进程，交回 stdin/stdout | — |

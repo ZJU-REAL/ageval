@@ -203,7 +203,7 @@ gold 隔离是**时间切**：不 mount，evaluate 再 upload。这是默认，�
 
 ## 快照分享
 
-Hub 上另有一条只读链接 `/s/{token}`。它是一次上传当时的 suite 与 Attempt 证据，匿名可以打开。创建它不改变 suite 的公开 / 私有，不写身份 ACL，也不进入 Leaderboard。机制在 [12](12-hub-dataset-and-leaderboard.md)。
+Hub 上另有一条只读链接 `/s/{token}`。匿名可以打开。默认是上传当时的 suite 与 Attempt 证据。`mode=live` 时，同一条链接由 owner 在 job 终态补丁更新，job 进行中的轨迹不推送。创建它不改变 suite 的公开 / 私有，不写身份 ACL，也不进入 Leaderboard。机制在 [12](12-hub-dataset-and-leaderboard.md)。
 
 ## 近端不做（不是洞）
 
