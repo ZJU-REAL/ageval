@@ -18,6 +18,10 @@ def sha256_file(path: Path, *, chunk: int = 1024 * 1024) -> str:
     return f"sha256:{digest.hexdigest()}"
 
 
+def sha256_bytes(data: bytes) -> str:
+    return f"sha256:{hashlib.sha256(data).hexdigest()}"
+
+
 def copy_fileobj(src: BinaryIO, dest: Path, *, chunk: int = 1024 * 1024) -> int:
     written = 0
     dest.parent.mkdir(parents=True, exist_ok=True)

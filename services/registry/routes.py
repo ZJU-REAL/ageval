@@ -366,6 +366,13 @@ ROUTES: tuple[Route, ...] = (
     ),
     Route("POST", "upload_suite", access="results_upload", exact="/v1/results/suites"),
     Route("POST", "create_snapshot_share", access="results_upload", exact="/v1/shares"),
+    Route(
+        "PATCH",
+        "patch_snapshot_share",
+        access="results_upload",
+        pattern=r"/v1/shares/([^/]+)",
+        groups=("token",),
+    ),
     Route("POST", "apply_request", access="bearer", exact="/v1/requests"),
     Route("POST", "decide_requests", access="bearer", exact="/v1/requests/decide"),
     Route("POST", "hide_requests", access="bearer", exact="/v1/requests/hide"),

@@ -1251,6 +1251,38 @@ class RegistryHttpApi:
             return _caught(exc)
         return json_result(200, payload)
 
+    def _patch_snapshot_share(self, *, token: str, auth: TokenInfo) -> HttpResult:
+        ctx = _ctx.get()
+        if ctx.content_length > self.state.max_upload:
+            return json_result(
+                413,
+                {
+                    "error": "payload_too_large",
+                    "message": f"max {self.state.max_upload} bytes",
+                },
+            )
+        ctype = _header(ctx.headers, "Content-Type").lower()
+        work: Path | None = None
+        try:
+            if "multipart/form-data" in ctype:
+                with self.state.upload_slots.hold():
+                    parsed = self._read_multipart_archive()
+                    if isinstance(parsed, HttpResult):
+                        return parsed
+                    meta, archive, work = parsed
+                    payload = self.state.shares.patch(token, meta=meta, archive=archive, auth=auth)
+            else:
+                body = self._read_json_body()
+                if isinstance(body, HttpResult):
+                    return body
+                payload = self.state.shares.patch(token, meta=body, archive=None, auth=auth)
+        except RegistryAppError as exc:
+            return _caught(exc)
+        finally:
+            if work is not None:
+                shutil.rmtree(work, ignore_errors=True)
+        return json_result(200, payload)
+
     def _revoke_snapshot_share(self, *, token: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.shares.revoke(token, auth=auth)

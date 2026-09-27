@@ -173,7 +173,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   ├── app.py / http_api.py / asgi.py / backend.py
 │   ├── auth_service.py / package_service.py / result_service.py / org_service.py
 │   ├── request_service.py           # listing + performance requests; Inbox
-│   ├── share_service.py             # snapshot share link; not catalog ACL
+│   ├── share_service.py             # static or live /s/{token}; not catalog ACL
 │   ├── queries.py / dataset.py / sql_adapter.py
 │   ├── store_schema.py              # open_stores: schema once → RegistryStores
 │   ├── store_package.py / store_result.py / store_org.py / store_inbox.py

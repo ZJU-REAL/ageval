@@ -42,6 +42,7 @@ Endpoints:
   GET  /v1/results/suites/{suite_run_id}/content
   GET|POST|DELETE /v1/results/suites/{suite_run_id}/shares
   POST /v1/shares
+  PATCH /v1/shares/{token}
   GET  /v1/shares/{token}
   GET  /v1/shares/{token}/attempts/{run_id}
   GET  /v1/shares/{token}/attempts/{run_id}/files

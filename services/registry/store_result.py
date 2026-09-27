@@ -11,6 +11,7 @@ from services.registry.protocols import ResultStoreProtocol
 from services.registry.rows import (
     AttemptResultRow,
     ResultShareRow,
+    SnapshotShareFileRow,
     SnapshotShareRow,
     SuiteResultRow,
 )
@@ -482,11 +483,26 @@ class ResultStore(ResultStoreProtocol):
                         row.size,
                         row.summary_json,
                         row.created_at,
+                        row.mode,
+                        row.updated_at,
                     ),
                 )
                 conn.commit()
             except self._adapter.integrity_error as exc:
                 raise ValueError("snapshot share already exists") from exc
+
+    def update_snapshot_share(
+        self, token: str, *, summary_json: str, size: int, updated_at: float
+    ) -> None:
+        with self._connect() as conn:
+            self._exec(
+                conn,
+                Q.UPDATE_SNAPSHOT_SHARE,
+                (summary_json, size, updated_at, token),
+            )
+            conn.commit()
+        if self.get_snapshot_share(token) is None:
+            raise LookupError("snapshot share not found")
 
     def get_snapshot_share(self, token: str) -> SnapshotShareRow | None:
         with self._connect() as conn:
@@ -513,8 +529,43 @@ class ResultStore(ResultStoreProtocol):
                 return 0
             return int(found["n"])
 
+    def list_snapshot_share_files(self, token: str) -> list[SnapshotShareFileRow]:
+        with self._connect() as conn:
+            cur = self._exec(conn, Q.LIST_SNAPSHOT_SHARE_FILES, (token,))
+            return [self._snapshot_share_file_row(row) for row in cur.fetchall()]
+
+    def get_snapshot_share_file(self, token: str, path: str) -> SnapshotShareFileRow | None:
+        with self._connect() as conn:
+            cur = self._exec(conn, Q.SELECT_SNAPSHOT_SHARE_FILE, (token, path))
+            found = cur.fetchone()
+            return self._snapshot_share_file_row(found) if found else None
+
+    def upsert_snapshot_share_file(self, row: SnapshotShareFileRow) -> None:
+        with self._connect() as conn:
+            self._exec(
+                conn,
+                Q.UPSERT_SNAPSHOT_SHARE_FILE,
+                (row.token, row.path, row.blob_digest, row.size),
+            )
+            conn.commit()
+
+    def delete_snapshot_share_files(self, token: str) -> None:
+        with self._connect() as conn:
+            self._exec(conn, Q.DELETE_SNAPSHOT_SHARE_FILES, (token,))
+            conn.commit()
+
+    def count_snapshot_share_file_blob_refs(self, blob_digest: str) -> int:
+        with self._connect() as conn:
+            cur = self._exec(conn, Q.COUNT_SNAPSHOT_SHARE_FILE_BLOB, (blob_digest,))
+            found = cur.fetchone()
+            if found is None:
+                return 0
+            return int(found["n"])
+
     @staticmethod
     def _snapshot_share_row(record: Any) -> SnapshotShareRow:
+        updated = record["updated_at"]
+        created = float(record["created_at"])
         return SnapshotShareRow(
             token=str(record["token"]),
             owner_user_id=str(record["owner_user_id"]),
@@ -524,5 +575,16 @@ class ResultStore(ResultStoreProtocol):
             blob_digest=str(record["blob_digest"]),
             size=int(record["size"]),
             summary_json=str(record["summary_json"]),
-            created_at=float(record["created_at"]),
+            created_at=created,
+            mode=str(record["mode"] or "static"),
+            updated_at=created if updated in {None, ""} else float(updated),
+        )
+
+    @staticmethod
+    def _snapshot_share_file_row(record: Any) -> SnapshotShareFileRow:
+        return SnapshotShareFileRow(
+            token=str(record["token"]),
+            path=str(record["path"]),
+            blob_digest=str(record["blob_digest"]),
+            size=int(record["size"]),
         )

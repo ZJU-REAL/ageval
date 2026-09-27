@@ -20,6 +20,7 @@ if TYPE_CHECKING:
         ReleaseRow,
         ResourceRequestRow,
         ResultShareRow,
+        SnapshotShareFileRow,
         SnapshotShareRow,
         SuiteResultRow,
         UserProfileRow,
@@ -245,9 +246,23 @@ class ResultStoreProtocol(Protocol):
 
     def get_snapshot_share(self, token: str) -> SnapshotShareRow | None: ...
 
+    def update_snapshot_share(
+        self, token: str, *, summary_json: str, size: int, updated_at: float
+    ) -> None: ...
+
     def delete_snapshot_share(self, token: str) -> SnapshotShareRow: ...
 
     def count_snapshot_share_blob_refs(self, blob_digest: str) -> int: ...
+
+    def list_snapshot_share_files(self, token: str) -> list[SnapshotShareFileRow]: ...
+
+    def get_snapshot_share_file(self, token: str, path: str) -> SnapshotShareFileRow | None: ...
+
+    def upsert_snapshot_share_file(self, row: SnapshotShareFileRow) -> None: ...
+
+    def delete_snapshot_share_files(self, token: str) -> None: ...
+
+    def count_snapshot_share_file_blob_refs(self, blob_digest: str) -> int: ...
 
 
 @runtime_checkable
