@@ -1,7 +1,7 @@
 import { Check, Copy, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { Button } from "@ageval/shared/components/ui/button";
+import { Button, SegmentedControl } from "@ageval/shared/components/ui/button";
 import { ConfirmDialog, Modal } from "@ageval/shared/components/ui/confirm-dialog";
 import { toast } from "@ageval/shared/components/ui/toast";
 import {
@@ -13,8 +13,12 @@ import {
 
 const SUITE_BODY =
   "Share uploads this suite to the registry. Anyone with the link can view that snapshot. The suite stays private and is not listed on the leaderboard.";
+const SUITE_LIVE_BODY =
+  "Share uploads this suite and keeps one link. The link updates when a job finishes. The suite stays private and is not listed on the leaderboard.";
 const JOB_BODY =
   "Share uploads this job to the registry. Anyone with the link can view that snapshot. It is not added to the catalog or the leaderboard.";
+const LIVE_LINK =
+  "Anyone with this link can view the suite. It updates when a job finishes.";
 
 /**
  * Create or revoke a snapshot link for the opened suite or one job.
@@ -31,8 +35,11 @@ export function SnapshotShareControl({
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const body = runId ? JOB_BODY : SUITE_BODY;
+  const [mode, setMode] = useState<"static" | "live">("static");
+  const suite = !runId;
+  const body = runId ? JOB_BODY : mode === "live" ? SUITE_LIVE_BODY : SUITE_BODY;
   const shared = Boolean(state?.shared && state.url);
+  const liveLink = state?.mode === "live";
 
   useEffect(() => {
     let cancelled = false;
@@ -57,7 +64,7 @@ export function SnapshotShareControl({
     setBusy(true);
     try {
       setCopied(false);
-      setState(await createSnapshotShare(jobId, runId));
+      setState(await createSnapshotShare(jobId, runId, suite && mode === "live"));
     } catch (err) {
       fail(err);
     } finally {
@@ -99,6 +106,7 @@ export function SnapshotShareControl({
         aria-label="Share"
         onClick={() => {
           setCopied(false);
+          setMode("static");
           setOpen(true);
         }}
       >
@@ -108,7 +116,7 @@ export function SnapshotShareControl({
         <Modal
           open={open}
           title="Shared link"
-          description="Anyone with this link can view the snapshot."
+          description={liveLink ? LIVE_LINK : "Anyone with this link can view the snapshot."}
           className="max-w-lg"
           onClose={() => setOpen(false)}
         >
@@ -150,11 +158,26 @@ export function SnapshotShareControl({
           confirmLabel="Share"
           confirmVariant="default"
           busy={busy}
+          className={suite ? "max-w-lg" : undefined}
           onCancel={() => {
             if (!busy) setOpen(false);
           }}
           onConfirm={() => void share()}
-        />
+        >
+          {suite ? (
+            <SegmentedControl<"static" | "live">
+              label="Share mode"
+              items={[
+                { id: "static", label: "Snapshot" },
+                { id: "live", label: "Live" },
+              ]}
+              selected={(id) => id === mode}
+              onSelect={(id) => {
+                if (!busy) setMode(id);
+              }}
+            />
+          ) : null}
+        </ConfirmDialog>
       )}
     </>
   );

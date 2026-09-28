@@ -1233,6 +1233,7 @@ class ResultsCommands:
             "url": url,
             "suite_run_id": stored_suite,
             "run_id": stored_run,
+            "mode": str(info.get("mode") or "static"),
         }
 
     def revoke_snapshot(

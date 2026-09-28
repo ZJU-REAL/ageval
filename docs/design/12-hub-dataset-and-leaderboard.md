@@ -162,7 +162,7 @@ static 的 blob 是一份归档，根上有 `snapshot-share.json`（`kind: snaps
 
 没有默认 TTL。`ageval results revoke-snapshot <token 或 url>` 删掉 share 元数据和不再被引用的 blob。本地 `.ageval/suite-runs` 与 `.ageval/runs` 不动。链接随后不再解析。static 和 live 走同一条撤销。
 
-创建走 CLI。`ageval results share-snapshot <dataset> --suite-run <id>` 上传整份 suite。`--run <run_id>` 只上传这一次 Attempt；和 `--suite-run` 一起用时，只上传该 suite 里的这一次 job。`--live` 只配 `--suite-run`，跟随整份 suite。本地 Viewer 的分享图标仍调用 static 的同一条命令。打印或页面上的 `url` 是 `{hub}/s/{token}`。hub 取 `--hub-url`，否则 `AGEVAL_HUB_URL`，否则当次 Registry 源（compose 和公网入口上，Hub 反代 `/v1`）。点分享图标先说明这一下会把当时的内容上传到 Registry，确认后在同一个对话框里给出链接，可以复制。已有链接时再点开，可以复制，也可以取消共享。没创建过分享时，不存在这条路径。
+创建走 CLI。`ageval results share-snapshot <dataset> --suite-run <id>` 上传整份 suite。`--run <run_id>` 只上传这一次 Attempt；和 `--suite-run` 一起用时，只上传该 suite 里的这一次 job。`--live` 只配 `--suite-run`，跟随整份 suite。本地 Viewer 打开一份 suite 时，分享框可以选定格或 live；打开一个 job 时仍是定格。打印或页面上的 `url` 是 `{hub}/s/{token}`。hub 取 `--hub-url`，否则 `AGEVAL_HUB_URL`，否则当次 Registry 源（compose 和公网入口上，Hub 反代 `/v1`）。点分享图标先说明这一下会把当时的内容上传到 Registry，确认后在同一个对话框里给出链接，可以复制。已有链接时再点开，可以复制，也可以取消共享。live 链接会标明 job 结束时还会更新。没创建过分享时，不存在这条路径。
 
 `--live` 在本机 `.ageval/suite-runs/<id>/live-share.json` 记下 token、Registry 源和已上传文件的摘要。再执行一次 `--live` 仍用这个 token。`ageval results sync-snapshot <dataset> --suite-run <id>` 补当前 summary 和有变化的 Attempt 文件；`--heartbeat` 只补计数和状态。catalog 的 `upload-suite` 不带这个 sidecar。
 

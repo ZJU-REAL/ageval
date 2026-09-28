@@ -6,6 +6,7 @@ import hashlib
 import json
 import shutil
 import threading
+import urllib.error
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -28,8 +29,12 @@ def _write(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
 
-def _request(url: str, *, method: str = "GET") -> dict:
-    req = Request(url, method=method, headers={"Accept": "application/json"})
+def _request(url: str, *, method: str = "GET", body: dict | None = None) -> dict:
+    data = None if body is None else json.dumps(body).encode("utf-8")
+    headers = {"Accept": "application/json"}
+    if data is not None:
+        headers["Content-Type"] = "application/json"
+    req = Request(url, data=data, method=method, headers=headers)
     with urlopen(req, timeout=10) as resp:  # noqa: S310
         return json.loads(resp.read().decode("utf-8"))
 
@@ -82,6 +87,7 @@ def servers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     try:
         yield {
             "base": base,
+            "root": db,
             "summary": summary,
             "result": result,
             "before": (_sha(summary), _sha(result)),
@@ -122,3 +128,31 @@ def test_viewer_share_and_unshare_suite_and_job(servers: dict) -> None:
     assert _request(f"{base}/api/jobs/suite0001/share")["shared"] is False
     assert _request(f"{base}/api/jobs/suite0001/share?run_id=run000001")["shared"] is True
     assert servers["before"] == (_sha(servers["summary"]), _sha(servers["result"]))
+
+
+def test_viewer_suite_share_can_be_live(servers: dict) -> None:
+    base = servers["base"]
+    created = _request(f"{base}/api/jobs/suite0001/share", method="POST", body={"live": True})
+    assert created["mode"] == "live"
+    assert created["shared"] is True
+    side = servers["root"] / ".ageval" / "suite-runs" / "suite0001" / "live-share.json"
+    saved = json.loads(side.read_text(encoding="utf-8"))
+    assert saved["token"] == created["token"]
+    status = _request(f"{base}/api/jobs/suite0001/share")
+    assert status["mode"] == "live"
+    assert status["token"] == created["token"]
+
+    req = Request(
+        f"{base}/api/jobs/suite0001/share?run_id=run000001",
+        data=json.dumps({"live": True}).encode("utf-8"),
+        method="POST",
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+    )
+    with pytest.raises(urllib.error.HTTPError) as denied:
+        urlopen(req, timeout=10)  # noqa: S310
+    assert denied.value.code == 400
+
+    revoked = _request(f"{base}/api/jobs/suite0001/share", method="DELETE")
+    assert revoked["revoked"] is True
+    assert side.is_file() is False
+    assert _request(f"{base}/api/jobs/suite0001/share")["shared"] is False

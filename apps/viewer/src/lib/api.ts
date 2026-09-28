@@ -306,6 +306,7 @@ export type SnapshotShareState = {
   path?: string;
   suite_run_id?: string;
   run_id?: string;
+  mode?: string;
 };
 
 function sharePath(jobId: string, runId?: string): string {
@@ -319,10 +320,15 @@ function sharePath(jobId: string, runId?: string): string {
 async function shareRequest(
   path: string,
   method: "GET" | "POST" | "DELETE",
+  body?: { live: boolean },
 ): Promise<SnapshotShareState> {
   const res = await fetch(withDataset(path), {
     method,
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
   });
   const data = (await res.json().catch(() => ({}))) as {
     error?: string;
@@ -338,8 +344,8 @@ export function fetchSnapshotShare(jobId: string, runId?: string) {
   return shareRequest(sharePath(jobId, runId), "GET");
 }
 
-export function createSnapshotShare(jobId: string, runId?: string) {
-  return shareRequest(sharePath(jobId, runId), "POST");
+export function createSnapshotShare(jobId: string, runId?: string, live = false) {
+  return shareRequest(sharePath(jobId, runId), "POST", live ? { live: true } : undefined);
 }
 
 export function revokeSnapshotShare(jobId: string, runId?: string) {
