@@ -58,6 +58,12 @@ export function overlayCandidates(overlay: string, prefixes: readonly string[]):
   return out;
 }
 
+/** First `a/b/c` segment. Empty when there is no slash. */
+function firstPathSegment(value: string): string {
+  const slash = value.indexOf("/");
+  return slash >= 0 ? value.slice(0, slash) : "";
+}
+
 function peelPrefix(value: string, prefixes: readonly string[]): string | null {
   for (const prefix of prefixes) {
     if (!prefix) continue;
@@ -99,10 +105,10 @@ export function directoryPrice(
   const row = pin.prices[canonical];
   if (!row) return null;
   const peeled = peelPrefix(overlay.trim(), pin.prefixes);
-  const providerFromOverlay = overlay.includes("/")
-    ? overlay.trim().split("/", 1)[0]
-    : "";
-  for (const key of [providerFromOverlay, peeled?.split("/", 1)[0] ?? ""]) {
+  // Python str.split("/", 1) keeps the first segment. JS split(limit) is a
+  // max array length, so split("/", 1) returns the whole string.
+  const providerFromOverlay = firstPathSegment(overlay.trim());
+  for (const key of [providerFromOverlay, firstPathSegment(peeled ?? "")]) {
     const hit = key ? row[key] : undefined;
     if (hit) return { provider: key, input: hit.input, output: hit.output };
   }
