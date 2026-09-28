@@ -147,7 +147,7 @@ CLI：`ageval registry set-description <dataset_id> --description "…"`（`--de
 
 **static** 定格在创建那一刻的 suite summary 和 Attempt 证据。正在跑或正在取消的 suite 也可以这样分享，之后的进度不写进去。`upload-suite` 仍然拒绝未结束的 summary。
 
-**live** 仍是 `/s/{token}`。创建时 `mode=live`，CLI 是 `ageval results share-snapshot <dataset> --suite-run <id> --live`。owner 用 `PATCH /v1/shares/{token}` 写回这一行，token 保持不变。更新只在 owner 的 runner 或 `ageval results sync-snapshot` 在线时发生：每个 job 到达终态时补 suite summary，并放上新出现的 Attempt 文件；大约每 45 秒再补一次计数和状态，单个长 job 期间看板也能看到 suite 还在跑。job 进行中的轨迹不推送。打开某次 Attempt 时，页面读已经上传的文件。runner 断开后，链接停在最后一次成功写入的内容；`sync-snapshot` 用同一个 token 继续。static 的 PATCH 返回 `invalid_request`。
+**live** 仍是 `/s/{token}`。创建时 `mode=live`，CLI 是 `ageval results share-snapshot <dataset> --suite-run <id> --live`。owner 用 `PATCH /v1/shares/{token}` 写回这一行，token 保持不变。更新只在 owner 的 runner 或 `ageval results sync-snapshot` 在线时发生：每个 job 到达终态时补 suite summary，并放上新出现的 Attempt 文件。suite 启动时若已经有 `live-share.json`，runner 大约每 45 秒再补一次计数和状态。suite 已经在跑、之后才创建 live 链接的，job 结束仍会补丁；中间的计数用 `sync-snapshot --heartbeat`。打开某次 Attempt 时，页面读已经上传的文件。runner 断开后，链接停在最后一次成功写入的内容；`sync-snapshot` 用同一个 token 继续。static 的 PATCH 返回 `invalid_request`。
 
 static 的 blob 是一份归档，根上有 `snapshot-share.json`（`kind: snapshot-share`）。live 把可变 summary 放在 `snapshot_shares.summary_json`，Attempt 文件按路径记在 `snapshot_share_files`，对象仍在 BlobStore 前缀 `shares/`。每次补丁只上传有变化的路径。
 
@@ -170,6 +170,6 @@ static 的 blob 是一份归档，根上有 `snapshot-share.json`（`kind: snaps
 
 创建、补丁和撤销要 `results:upload`。补丁和撤销还要是该链接的 owner。持链接的人只读。把带 `snapshot-share.json` 的归档再 POST 到 `/v1/results/suites` 或 `/v1/results/attempts` 会拒绝。用 token 申请 `leaderboard_list` 或 `agent_performance` 会拒绝。`/s/{token}` 上没有导入、改公开 / 私有、或申请上榜。`upload-suite` 在不走分享时保持原样。
 
-创建时和每次补丁去掉能识别的密钥：overlay / profiles 里的 `api_key` 以及同类字段。`${NAME}` 和纯环境变量名留下。看起来像密钥值的写成 `[redacted]`。私钥块仍是 `secret_scan_failed`。这份 blob 不是 Config format，Config Core 不读它。
+创建时和每次补丁去掉能识别的密钥：overlay / profiles 里的 `api_key` 以及同类字段。`${NAME}` 和纯环境变量名留下。看起来像密钥值的写成 `[redacted]`。私钥块仍是 `secret_scan_failed`。Config Core 不读这份 blob。
 
-Hub `/s/{token}` 在 `mode=live` 时短轮询 suite meta，jobs 表跟着终态补丁更新。Attempt 页只显示已经上传的文件。页面复用 Hub / Viewer 已有组件和 [13](13-web-ui-tokens.md) 的令牌，不新增色板，因此不改 13。轨迹和 harness completed 仍然不是 PASS。
+Hub `/s/{token}` 在 `mode=live` 时短轮询 suite meta，jobs 表跟着终态补丁更新。Attempt 页显示已经上传的文件。页面沿用 Hub / Viewer 已有组件和 [13](13-web-ui-tokens.md) 的令牌，不新增色板。
