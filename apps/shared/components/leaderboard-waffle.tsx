@@ -1,5 +1,5 @@
 import { HarnessLabel } from "@ageval/shared/components/harness-label";
-import { HoverTip } from "@ageval/shared/components/hover-tip";
+import { HoverTip, TruncateTip } from "@ageval/shared/components/hover-tip";
 import { ModelLabel } from "@ageval/shared/components/model-label";
 import {
   trialsForRef,
@@ -71,6 +71,8 @@ export function LeaderboardWaffle({
     onOpenSuite?.(suite.suite_run_id);
   }
 
+  const columns = `12rem repeat(${ranked.length}, max-content)`;
+
   return (
     <div className="space-y-3">
       {showCaption ? (
@@ -82,11 +84,9 @@ export function LeaderboardWaffle({
       <div className="blob-panel max-h-[min(70vh,40rem)] overflow-auto">
         <div
           className="grid w-max min-w-full"
-          style={{
-            gridTemplateColumns: `12rem repeat(${ranked.length}, minmax(4.75rem, 1fr))`,
-          }}
+          style={{ gridTemplateColumns: columns }}
         >
-          <div className="sticky top-0 left-0 z-20 min-h-20 border-b border-r border-hairline bg-canvas" />
+          <div className="sticky top-0 left-0 z-20 border-b border-r border-hairline bg-canvas" />
           {ranked.map((suite) => {
             const labels = displayLabelsFromOverlay(suite.job_overlay);
             const model = labels.model || suite.model_label || "—";
@@ -105,14 +105,23 @@ export function LeaderboardWaffle({
               >
                 <button
                   type="button"
-                  className={cn(
-                    "sticky top-0 z-10 flex min-h-20 min-w-[4.75rem] flex-col justify-end gap-0.5 border-b border-r border-hairline bg-canvas px-2 py-2 text-left text-sm hover:bg-canvas-soft",
-                  )}
+                  className="sticky top-0 z-10 flex min-w-[4.75rem] flex-col items-center justify-end gap-0.5 border-b border-r border-hairline bg-canvas px-2.5 py-2 text-left text-sm hover:bg-canvas-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/70"
                   aria-label={`${harness} ${model}. Click to open suite run`}
                   onClick={() => onOpenSuite?.(suite.suite_run_id)}
                 >
-                  <ModelLabel value={model} />
-                  <HarnessLabel value={harness} className="text-mute" empty="—" />
+                  <ModelLabel
+                    value={model}
+                    tip={false}
+                    clip={false}
+                    empty="—"
+                  />
+                  <HarnessLabel
+                    value={harness}
+                    tip={false}
+                    clip={false}
+                    className="text-mute"
+                    empty="—"
+                  />
                 </button>
               </HoverTip>
             );
@@ -162,8 +171,10 @@ function WaffleTaskRow({
 }) {
   return (
     <>
-      <div className="sticky left-0 z-[5] flex items-center border-b border-r border-hairline bg-canvas px-2.5 py-2 text-sm">
-        {taskId}
+      <div className="sticky left-0 z-10 flex min-w-0 items-center overflow-hidden border-b border-r border-hairline bg-canvas px-2.5 py-1.5 text-sm leading-5">
+        <span className="min-w-0 flex-1">
+          <TruncateTip className="block w-full" text={taskId} />
+        </span>
       </div>
       {suites.map((suite) => {
         const ref = (suite.task_refs || []).find(
@@ -173,7 +184,7 @@ function WaffleTaskRow({
         return (
           <div
             key={`${suite.suite_run_id}:${taskId}`}
-            className="flex items-center gap-0.5 border-b border-r border-hairline px-2 py-2"
+            className="flex items-center justify-center gap-1 border-b border-r border-hairline px-2.5 py-1.5"
           >
             {trials.length === 0 ? (
               <span className="text-xs text-mute">—</span>

@@ -16,6 +16,7 @@ export function ModelLabel({
   onClick,
   mark = true,
   clip = true,
+  tip = true,
 }: {
   value?: string | null;
   effort?: string | null;
@@ -31,6 +32,8 @@ export function ModelLabel({
   mark?: boolean;
   /** False keeps the full label so a wide table can scroll instead of ellipsizing. */
   clip?: boolean;
+  /** False when a parent already shows the full name on hover. */
+  tip?: boolean;
 }) {
   const { text, title } = formatModelLabel(value);
   const extra = (effort || "").trim();
@@ -40,24 +43,21 @@ export function ModelLabel({
   }
 
   const lab = mark ? overlayLab(value, loadModelPin()) : "";
+  const clipped = clip
+    ? "inline-block w-max min-w-0 max-w-full truncate"
+    : "whitespace-nowrap";
 
-  const model =
-    title && title !== shown ? (
-      <HoverTip content={title}>
-        <span
-          className={cn(
-            clip
-              ? "inline-block w-max min-w-0 max-w-full truncate"
-              : "whitespace-nowrap",
-            !to && "cursor-help",
-          )}
-        >
-          {shown}
-        </span>
-      </HoverTip>
-    ) : (
-      <TruncateTip text={shown} clip={clip} />
-    );
+  const model = !tip ? (
+    <span className={clip ? "block min-w-0 max-w-full truncate" : "whitespace-nowrap"}>
+      {shown}
+    </span>
+  ) : title && title !== shown ? (
+    <HoverTip content={title}>
+      <span className={cn(clipped, !to && "cursor-help")}>{shown}</span>
+    </HoverTip>
+  ) : (
+    <TruncateTip text={shown} clip={clip} />
+  );
 
   return (
     <span
@@ -67,7 +67,7 @@ export function ModelLabel({
         className,
       )}
     >
-      {lab ? <LabMark lab={lab} size={16} className="mr-1.5" /> : null}
+      {lab ? <LabMark lab={lab} size={16} className="mr-1.5 shrink-0" /> : null}
       {to ? (
         <Link
           to={to}

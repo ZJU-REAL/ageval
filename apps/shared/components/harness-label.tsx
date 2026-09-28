@@ -34,6 +34,7 @@ export function HarnessLabel({
   mark = true,
   pack,
   clip = true,
+  tip = true,
 }: {
   value?: string | null;
   className?: string;
@@ -49,6 +50,8 @@ export function HarnessLabel({
   pack?: PackageMarkSource | null;
   /** False keeps the full label so a wide table can scroll instead of ellipsizing. */
   clip?: boolean;
+  /** False when a parent already shows the full name on hover. */
+  tip?: boolean;
 }) {
   const { text, title } = formatAxisLabel(value);
   const extraTitle = title && title !== text ? title : "";
@@ -58,24 +61,21 @@ export function HarnessLabel({
   }
 
   const resolved = mark ? resolvedHarnessMark(value, pack) : null;
+  const clipped = clip
+    ? "inline-block w-max min-w-0 max-w-full truncate"
+    : "whitespace-nowrap";
 
-  const name =
-    extraTitle ? (
-      <HoverTip content={extraTitle}>
-        <span
-          className={cn(
-            clip
-              ? "inline-block w-max min-w-0 max-w-full truncate"
-              : "whitespace-nowrap",
-            !to && "cursor-help",
-          )}
-        >
-          {shown}
-        </span>
-      </HoverTip>
-    ) : (
-      <TruncateTip text={shown} clip={clip} />
-    );
+  const name = !tip ? (
+    <span className={clip ? "block min-w-0 max-w-full truncate" : "whitespace-nowrap"}>
+      {shown}
+    </span>
+  ) : extraTitle ? (
+    <HoverTip content={extraTitle}>
+      <span className={cn(clipped, !to && "cursor-help")}>{shown}</span>
+    </HoverTip>
+  ) : (
+    <TruncateTip text={shown} clip={clip} />
+  );
 
   return (
     <span
@@ -89,7 +89,7 @@ export function HarnessLabel({
         <BrandMark
           mark={resolved}
           size={16}
-          className="mr-1.5"
+          className="mr-1.5 shrink-0"
           title={
             resolved.kind === "catalog"
               ? BRAND_MARK_BY_ID.get(resolved.id)?.label
