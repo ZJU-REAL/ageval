@@ -16,6 +16,7 @@ from ageval.plugins.http_loopback import is_http_loopback
 from miniswe_plugin import PLUGIN_ID
 from miniswe_plugin.env import ProtocolEnv
 from miniswe_plugin.trajectory import to_ageval_trajectory_events
+from miniswe_plugin.usage import usage_from_messages
 
 _CREDENTIAL_ENV_NAMES = ("OPENAI_API_KEY", "litellm_api_key", "LITELLM_API_KEY")
 _BASE_URL_ENV_FALLBACKS = ("OPENAI_BASE_URL", "litellm_base_url", "LITELLM_BASE_URL")
@@ -311,6 +312,19 @@ class MinisweExecutorSPI:
         status = str(extra.get("exit_status") or "")
         ok = status == "Submitted"
         location = self.execution_location
+        usage = usage_from_messages(messages)
+        reported_cost = usage.get("cost_usd") if isinstance(usage, dict) else None
+        metadata: dict[str, Any] = {
+            "plugin": PLUGIN_ID,
+            "session_id": self.session_id,
+            "exit_status": status,
+            "execution_location": location,
+            "n_calls": extra.get("n_calls"),
+            "locked_reasoning_effort": self.reasoning_effort,
+            "actual_reasoning_effort": self.reasoning_effort,
+        }
+        if reported_cost is not None:
+            metadata["cost"] = reported_cost
         return AgentResult(
             model=self.model,
             text=submission,
@@ -318,16 +332,8 @@ class MinisweExecutorSPI:
             ok=ok,
             error=None if ok else (status or "miniswe_error"),
             events=mapped,
-            metadata={
-                "plugin": PLUGIN_ID,
-                "session_id": self.session_id,
-                "exit_status": status,
-                "execution_location": location,
-                "n_calls": extra.get("n_calls"),
-                "cost": extra.get("cost"),
-                "locked_reasoning_effort": self.reasoning_effort,
-                "actual_reasoning_effort": self.reasoning_effort,
-            },
+            usage=usage,
+            metadata=metadata,
         )
 
     def _make_env(self) -> ProtocolEnv:

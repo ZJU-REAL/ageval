@@ -466,3 +466,48 @@ async def test_trajectory_collect_stamps_own_source() -> None:
 
     out = await trajectory_collect(None, {"events": events, "metadata": {}}, nxt)
     assert out["metadata"]["trajectory_source"] == "miniswe"
+
+
+def test_usage_sums_response_tokens_and_skips_zero_cost() -> None:
+    from miniswe_plugin.usage import usage_from_messages
+
+    def message(prompt: int, completion: int, cached: int, cost: float) -> dict:
+        return {
+            "role": "assistant",
+            "content": "x",
+            "extra": {
+                "cost": cost,
+                "response": {
+                    "usage": {
+                        "prompt_tokens": prompt,
+                        "completion_tokens": completion,
+                        "prompt_tokens_details": {"cached_tokens": cached},
+                    }
+                },
+            },
+        }
+
+    usage = usage_from_messages([message(1000, 20, 100, 0.0), message(50, 5, 0, 0.0)])
+    assert usage == {
+        "prompt_tokens": 1050,
+        "completion_tokens": 25,
+        "cached_tokens": 100,
+    }
+
+
+def test_usage_keeps_a_positive_reported_cost() -> None:
+    from miniswe_plugin.usage import usage_from_messages
+
+    usage = usage_from_messages(
+        [
+            {
+                "role": "assistant",
+                "extra": {
+                    "cost": 0.02,
+                    "response": {"usage": {"prompt_tokens": 10, "completion_tokens": 2}},
+                },
+            }
+        ]
+    )
+    assert usage is not None
+    assert usage["cost_usd"] == 0.02
