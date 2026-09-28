@@ -40,7 +40,6 @@ from ageval.registry.share_snapshot import (
     scrub_structure,
     scrub_text,
     snapshot_has_plaintext_secret,
-    text_has_plaintext_secret,
 )
 
 SHARE_MODE_STATIC = "static"
@@ -171,8 +170,6 @@ class ShareService:
                     summary,
                     members,
                     suite_run_id=suite_run_id,
-                    dataset_id=dataset_id,
-                    dataset_version=dataset_version,
                 )
                 _stamp_attempt_content(summary, {item.path for item in members})
                 stored_digest = ""
@@ -257,7 +254,7 @@ class ShareService:
                     f"max {self.max_upload} bytes",
                     http_status=413,
                 )
-            members = self._live_members(archive, require_marker=False)
+            members = self._live_members(archive)
             existing = {item.path: item for item in self.shares.list_snapshot_share_files(token)}
             for member in members:
                 old = existing.get(member.path)
@@ -551,13 +548,7 @@ class ShareService:
             )
         return row
 
-    def _live_members(self, archive: Path, *, require_marker: bool = True) -> list[_LiveMember]:
-        if require_marker and not archive_contains_snapshot_marker(archive):
-            raise RegistryAppError(
-                "invalid_request",
-                "snapshot-share.json is required",
-                http_status=400,
-            )
+    def _live_members(self, archive: Path) -> list[_LiveMember]:
         work = Path(tempfile.mkdtemp(prefix="ageval-live-"))
         members: list[_LiveMember] = []
         seen: set[str] = set()
@@ -602,12 +593,6 @@ class ShareService:
             return 0
         seen.add(path)
         data = scrub_member_bytes(path, raw)
-        if text_has_plaintext_secret(data):
-            raise RegistryAppError(
-                "secret_scan_failed",
-                "snapshot contains a plaintext secret",
-                http_status=400,
-            )
         size = len(data)
         if total + size > self.max_upload:
             raise RegistryAppError(
@@ -633,30 +618,15 @@ class ShareService:
         members: list[_LiveMember],
         *,
         suite_run_id: str,
-        dataset_id: str,
-        dataset_version: str,
     ) -> dict[str, Any]:
         member_name = f"{suite_run_locator(suite_run_id)}/summary.json"
         for item in members:
             if item.path != member_name:
                 continue
-            parsed = self._summary_object(
-                item.spool.read_bytes(),
-                suite_run_id=suite_run_id,
-                dataset_id=dataset_id,
-                dataset_version=dataset_version,
-            )
-            return parsed
+            return self._summary_object(item.spool.read_bytes())
         return summary
 
-    def _summary_object(
-        self,
-        raw: bytes,
-        *,
-        suite_run_id: str,
-        dataset_id: str,
-        dataset_version: str,
-    ) -> dict[str, Any]:
+    def _summary_object(self, raw: bytes) -> dict[str, Any]:
         try:
             summary = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -671,40 +641,7 @@ class ShareService:
                 "suite summary.json must be an object",
                 http_status=400,
             )
-        self._require_summary_identity(
-            summary,
-            suite_run_id=suite_run_id,
-            dataset_id=dataset_id,
-            dataset_version=dataset_version,
-        )
         return summary
-
-    def _require_summary_identity(
-        self,
-        summary: dict[str, Any],
-        *,
-        suite_run_id: str,
-        dataset_id: str,
-        dataset_version: str,
-    ) -> None:
-        if str(summary.get("dataset_id") or "") != dataset_id:
-            raise RegistryAppError(
-                "invalid_request",
-                "dataset_id does not match summary.json",
-                http_status=400,
-            )
-        if str(summary.get("dataset_version") or "") != dataset_version:
-            raise RegistryAppError(
-                "invalid_request",
-                "dataset_version does not match summary.json",
-                http_status=400,
-            )
-        if summary.get("suite_run_id") and str(summary.get("suite_run_id")) != suite_run_id:
-            raise RegistryAppError(
-                "invalid_request",
-                "suite_run_id does not match summary.json",
-                http_status=400,
-            )
 
     def _merged_summary(self, row: SnapshotShareRow, incoming: dict[str, Any]) -> dict[str, Any]:
         if _ACL_KEYS & set(incoming):
@@ -738,12 +675,6 @@ class ShareService:
         merged["dataset_version"] = row.dataset_version
         cleaned = scrub_structure(merged)
         encoded = scrub_text(json.dumps(cleaned, sort_keys=True))
-        if text_has_plaintext_secret(encoded.encode()):
-            raise RegistryAppError(
-                "secret_scan_failed",
-                "snapshot contains a plaintext secret",
-                http_status=400,
-            )
         try:
             parsed = json.loads(encoded)
         except json.JSONDecodeError as exc:

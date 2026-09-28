@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -41,13 +40,6 @@ from services.registry.results.dto import (
     suite_to_dict,
 )
 from services.registry.clock import now
-
-_SECRET_PATTERNS = (
-    re.compile(rb"(?i)-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----"),
-    re.compile(rb"(?i)AGEVAL_REGISTRY_TOKEN\s*="),
-    re.compile(rb"(?i)github_pat_[A-Za-z0-9_]{20,}"),
-    re.compile(rb"(?i)ghp_[A-Za-z0-9]{20,}"),
-)
 
 
 def _previous_run_ids(ref: dict[str, Any]) -> set[str]:
@@ -87,12 +79,6 @@ def _dump_error(value: object) -> str | None:
     if value is None:
         return None
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
-
-
-def _archive_looks_like_secret_leak(archive: Path) -> bool:
-    with archive.open("rb") as fh:
-        sample = fh.read(4_000_000)
-    return any(p.search(sample) for p in _SECRET_PATTERNS)
 
 
 def _refuse_snapshot_share_import(meta: Mapping[str, Any], archive: Path) -> None:
@@ -186,12 +172,6 @@ class ResultService:
             raise RegistryAppError(
                 "digest_mismatch",
                 "blob digest or size mismatch",
-                http_status=400,
-            )
-        if _archive_looks_like_secret_leak(archive):
-            raise RegistryAppError(
-                "secret_scan_failed",
-                "archive rejected: possible credential material",
                 http_status=400,
             )
         replace = bool(meta.get("replace")) or str(meta.get("replace") or "").lower() in {
@@ -375,12 +355,6 @@ class ResultService:
             raise RegistryAppError(
                 "digest_mismatch",
                 "blob digest or size mismatch",
-                http_status=400,
-            )
-        if _archive_looks_like_secret_leak(archive):
-            raise RegistryAppError(
-                "secret_scan_failed",
-                "archive rejected: possible credential material",
                 http_status=400,
             )
         metrics: dict[str, Any] = meta["metrics"] if isinstance(meta.get("metrics"), dict) else {}

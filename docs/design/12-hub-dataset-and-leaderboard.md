@@ -170,6 +170,6 @@ static 的 blob 是一份归档，根上有 `snapshot-share.json`（`kind: snaps
 
 创建、补丁和撤销要 `results:upload`。补丁和撤销还要是该链接的 owner。持链接的人只读。把带 `snapshot-share.json` 的归档再 POST 到 `/v1/results/suites` 或 `/v1/results/attempts` 会拒绝。用 token 申请 `leaderboard_list` 或 `agent_performance` 会拒绝。`/s/{token}` 上没有导入、改公开 / 私有、或申请上榜。`upload-suite` 在不走分享时保持原样。
 
-创建时和每次补丁去掉能识别的密钥：overlay / profiles 里的 `api_key` 以及同类字段。`${NAME}` 和纯环境变量名留下。看起来像密钥值的写成 `[redacted]`。私钥块仍是 `secret_scan_failed`。Config Core 不读这份 blob。
+创建时和每次补丁去掉能识别的密钥：overlay / profiles 里的 `api_key` 以及同类字段，文本里的 `sk-` / `ghp_` / `github_pat_` / `AKIA`，还有私钥头。`${NAME}` 和纯环境变量名留下。源码里只是出现这些字段名、值却不像密钥的，不拒绝。拒绝只有创建时那一次：解压后的前 4MB 里还留着这类值，才是 `secret_scan_failed`。live 拆包和补丁只清理，不再扫第二遍。目录上传不扫压缩字节。Config Core 不读这份 blob。
 
 Hub `/s/{token}` 在 `mode=live` 时短轮询 suite meta，jobs 表跟着终态补丁更新。Attempt 页显示已经上传的文件。页面沿用 Hub / Viewer 已有组件和 [13](13-web-ui-tokens.md) 的令牌，不新增色板。

@@ -429,10 +429,21 @@ def test_live_patch_scrubs_files_and_rejects_non_owners(registry_server, tmp_pat
     assert "[redacted]" in stored
 
     key_archive = tmp_path / "key.tar.gz"
-    key_archive.write_bytes(_gzip_tar({"notes.txt": b"-----BEGIN PRIVATE KEY-----\nabc\n"}))
-    with pytest.raises(RegistryError) as leaked:
-        owner.patch_snapshot_share(token, summary=advanced, archive=key_archive)
-    assert leaked.value.code == "secret_scan_failed"
+    key_archive.write_bytes(
+        _gzip_tar(
+            {
+                ".ageval/runs/run000002/notes.txt": b"-----BEGIN PRIVATE KEY-----\nabc\n",
+            }
+        )
+    )
+    owner.patch_snapshot_share(token, summary=advanced, archive=key_archive)
+    stored_key = anon._request(
+        "GET",
+        f"/v1/shares/{token}/attempts/run000002/files/.ageval/runs/run000002/notes.txt",
+        auth=False,
+    )[1].decode()
+    assert "PRIVATE KEY" not in stored_key
+    assert "[redacted]" in stored_key
 
     mallory = RegistryClient(registry_server["url"], token="mallory-token")
     with pytest.raises(RegistryError) as denied:

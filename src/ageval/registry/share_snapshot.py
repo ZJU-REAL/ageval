@@ -50,6 +50,7 @@ _ASSIGNED_VALUE = re.compile(
 _PRIVATE_KEY = re.compile(rb"(?i)-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----")
 _LOCATOR = re.compile(rb"\$\{[A-Za-z_][A-Za-z0-9_]*\}")
 _ENV_NAME = re.compile(rb"[A-Za-z_][A-Za-z0-9_]{0,63}")
+_TOKEN_VALUE_BYTES = re.compile(rb"(?:sk-|ghp_|github_pat_|AKIA)")
 
 
 def _norm_name(name: str) -> str:
@@ -82,10 +83,13 @@ def archive_contains_snapshot_marker(archive: Path) -> bool:
 
 
 def _value_is_plaintext_secret(value: bytes) -> bool:
+    """True for a token-shaped value. Source text that merely uses the key name is not."""
     text = value.strip()
     if not text or text == b"[redacted]" or _LOCATOR.fullmatch(text):
         return False
-    return _ENV_NAME.fullmatch(text) is None
+    if _ENV_NAME.fullmatch(text) is not None:
+        return False
+    return _TOKEN_VALUE_BYTES.search(text) is not None
 
 
 def text_has_plaintext_secret(chunk: bytes) -> bool:
@@ -190,10 +194,16 @@ _TEXT_SUFFIXES = {
     ".env",
     ".cfg",
     ".ini",
+    ".patch",
+    ".diff",
 }
 _LOCATOR_TEXT = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}")
 _ENV_NAME_TEXT = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
-_TOKEN_VALUE = re.compile(r"^(?:sk-|ghp_|github_pat_|AKIA)")
+_TOKEN_VALUE = re.compile(r"(?:sk-|ghp_|github_pat_|AKIA)")
+_PRIVATE_KEY_TEXT = re.compile(
+    r"-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----",
+    re.IGNORECASE,
+)
 _TEXT_ASSIGN = re.compile(
     r"""(?ix)
     (?P<prefix>
@@ -234,6 +244,8 @@ def scrub_structure(value: Any, *, key: str = "") -> Any:
 
 
 def scrub_text(text: str) -> str:
+    text = _PRIVATE_KEY_TEXT.sub("[redacted]", text)
+
     def repl(match: re.Match[str]) -> str:
         value = match.group("value").strip()
         if _keep_secret_value(value):
@@ -264,13 +276,16 @@ def scrub_file(path: Path) -> None:
             if not line.strip():
                 lines.append(line)
                 continue
+            line = scrub_text(line)
             try:
                 parsed = json.loads(line)
             except json.JSONDecodeError:
-                lines.append(scrub_text(line))
+                lines.append(line)
             else:
                 lines.append(
-                    json.dumps(scrub_structure(parsed), sort_keys=True, ensure_ascii=False)
+                    scrub_text(
+                        json.dumps(scrub_structure(parsed), sort_keys=True, ensure_ascii=False)
+                    )
                 )
         updated = "\n".join(lines) + ("\n" if raw.endswith("\n") else "")
     elif suffix in {".yaml", ".yml"}:
