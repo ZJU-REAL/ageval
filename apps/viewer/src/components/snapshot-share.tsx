@@ -1,9 +1,11 @@
 import { Check, Copy, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { ThinkingLogo } from "@ageval/shared/components/thinking-logo";
 import { Button, SegmentedControl } from "@ageval/shared/components/ui/button";
 import { ConfirmDialog, Modal } from "@ageval/shared/components/ui/confirm-dialog";
 import { toast } from "@ageval/shared/components/ui/toast";
+import { cn } from "@ageval/shared/lib/utils";
 import {
   createSnapshotShare,
   fetchSnapshotShare,
@@ -19,6 +21,53 @@ const JOB_BODY =
   "Share uploads this job to the registry. Anyone with the link can view that snapshot. It is not added to the catalog or the leaderboard.";
 const LIVE_LINK =
   "Anyone with this link can view the suite. It updates when a job finishes.";
+const SNAPSHOT_STEPS = [
+  "Packing this snapshot",
+  "Stripping secrets from the copy",
+  "Uploading to the registry",
+  "Waiting for the link",
+] as const;
+const LIVE_STEPS = [
+  "Packing this suite",
+  "Stripping secrets from the copy",
+  "Uploading the first snapshot",
+  "Binding the live link",
+] as const;
+const UNSHARE_STEPS = ["Revoking this link", "Removing it from the registry"] as const;
+
+function ShareProgress({ lines }: { lines: readonly string[] }) {
+  const [index, setIndex] = useState(0);
+  const [shown, setShown] = useState(true);
+
+  useEffect(() => {
+    let fade = 0;
+    const tick = window.setInterval(() => {
+      setShown(false);
+      fade = window.setTimeout(() => {
+        setIndex((current) => (current + 1) % lines.length);
+        setShown(true);
+      }, 320);
+    }, 2600);
+    return () => {
+      window.clearInterval(tick);
+      window.clearTimeout(fade);
+    };
+  }, [lines]);
+
+  return (
+    <div className="flex items-center justify-start gap-3" role="status" aria-live="polite">
+      <ThinkingLogo size={36} />
+      <p
+        className={cn(
+          "text-sm text-mute motion-safe:transition-opacity motion-safe:duration-300",
+          shown ? "opacity-100" : "motion-safe:opacity-0",
+        )}
+      >
+        {lines[index]}
+      </p>
+    </div>
+  );
+}
 
 /**
  * Create or revoke a snapshot link for the opened suite or one job.
@@ -64,7 +113,9 @@ export function SnapshotShareControl({
     setBusy(true);
     try {
       setCopied(false);
-      setState(await createSnapshotShare(jobId, runId, suite && mode === "live"));
+      const live = suite && mode === "live";
+      setState(await createSnapshotShare(jobId, runId, live));
+      toast(live ? "Live link created" : "Snapshot link created");
     } catch (err) {
       fail(err);
     } finally {
@@ -78,6 +129,7 @@ export function SnapshotShareControl({
       const row = await revokeSnapshotShare(jobId, runId);
       setState({ ...row, shared: false, url: undefined });
       setOpen(false);
+      toast("Share link removed");
     } catch (err) {
       fail(err);
     } finally {
@@ -137,6 +189,7 @@ export function SnapshotShareControl({
                 {copied ? "Copied" : "Copy"}
               </Button>
             </div>
+            {busy ? <ShareProgress lines={UNSHARE_STEPS} /> : null}
             <div className="flex justify-end">
               <Button
                 type="button"
@@ -158,6 +211,8 @@ export function SnapshotShareControl({
           confirmLabel="Share"
           confirmVariant="default"
           busy={busy}
+          keepConfirmLabel
+          busyStatus={<ShareProgress lines={suite && mode === "live" ? LIVE_STEPS : SNAPSHOT_STEPS} />}
           className={suite ? "max-w-lg" : undefined}
           onCancel={() => {
             if (!busy) setOpen(false);
