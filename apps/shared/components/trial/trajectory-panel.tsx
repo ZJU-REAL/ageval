@@ -41,7 +41,7 @@ import {
 } from "@ageval/shared/components/ui/select";
 import type { TrajectoryStep } from "@ageval/shared/lib/trial-types";
 import { CodeHighlight } from "@ageval/shared/lib/code-highlight";
-import { findScrollParent } from "@ageval/shared/lib/scroll-port";
+import { OUTLINE_SMOOTH_PX, findScrollParent } from "@ageval/shared/lib/scroll-port";
 import { cn } from "@ageval/shared/lib/utils";
 
 import { TrajectoryOutline } from "./trajectory-outline";
@@ -92,6 +92,25 @@ export type TrajectoryKind = "all" | StepMajor;
 
 const TRAJ_PORT_CLASS =
   "h-[70vh] overflow-y-auto pr-1 [overflow-anchor:none]";
+
+/** Matches the rail's `top-3` once the port can slide under the shell. */
+const OUTLINE_DOCK_PX = 12;
+/**
+ * The port is 70vh, so its top usually cannot reach the shell.
+ * Show the rail once that top has crossed into the upper part of the scrollport.
+ */
+const OUTLINE_REVEAL_AT = 0.4;
+
+function syncOutlineDock(host: HTMLElement, scroller: HTMLElement): boolean {
+  const hostBox = host.getBoundingClientRect();
+  const view = scroller.getBoundingClientRect();
+  const dock = view.top + OUTLINE_DOCK_PX;
+  const top = Math.max(hostBox.top, dock);
+  const room = Math.max(0, Math.min(hostBox.bottom, view.bottom) - top);
+  host.style.setProperty("--traj-outline-max", `${Math.floor(room)}px`);
+  const revealLine = view.top + view.height * OUTLINE_REVEAL_AT;
+  return hostBox.top <= revealLine && hostBox.bottom > dock + 24 && room >= 24;
+}
 
 function TrajectorySkeleton() {
   return (
@@ -743,6 +762,8 @@ export function TrajectoryPanel({
   const [activeStepId, setActiveStepId] = useState<string | null>(null);
   const invokeHeaderRef = useRef<HTMLHeadingElement>(null);
   const trajScrollRef = useRef<HTMLDivElement>(null);
+  const outlineHostRef = useRef<HTMLDivElement>(null);
+  const [outlineDocked, setOutlineDocked] = useState(false);
   const outlineItems = useMemo(
     () =>
       shownSteps.map((s, i) => {
@@ -814,6 +835,26 @@ export function TrajectoryPanel({
     return () => io.disconnect();
   }, [outlineItems]);
 
+  useLayoutEffect(() => {
+    const host = outlineHostRef.current;
+    if (!host || outlineItems.length < 2) return;
+    const scroller = findScrollParent(host);
+    const apply = () => {
+      const docked = syncOutlineDock(host, scroller);
+      setOutlineDocked((prev) => (prev === docked ? prev : docked));
+    };
+    apply();
+    scroller.addEventListener("scroll", apply, { passive: true });
+    window.addEventListener("resize", apply);
+    const ro = new ResizeObserver(apply);
+    ro.observe(host);
+    return () => {
+      scroller.removeEventListener("scroll", apply);
+      window.removeEventListener("resize", apply);
+      ro.disconnect();
+    };
+  }, [outlineItems]);
+
   function jumpToStep(id: string) {
     const root = trajScrollRef.current;
     const el = root?.querySelector<HTMLElement>(`[data-traj-step="${id}"]`);
@@ -826,17 +867,29 @@ export function TrajectoryPanel({
       root.getBoundingClientRect().top +
       root.scrollTop -
       offset;
+    const dest = Math.max(0, top);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    root.scrollTo({ top: Math.max(0, top), behavior: reduced ? "auto" : "smooth" });
+    const smooth = !reduced && Math.abs(dest - root.scrollTop) < OUTLINE_SMOOTH_PX;
+    root.scrollTo({ top: dest, behavior: smooth ? "smooth" : "auto" });
   }
 
   function withOutline(body: ReactNode) {
     if (outlineItems.length < 2) return body;
     return (
-      <div className="relative lg:pr-10 xl:pr-0">
+      <div ref={outlineHostRef} className="relative lg:pr-10 xl:pr-0">
         {body}
         <div className="pointer-events-none absolute inset-y-0 right-0 z-30 hidden w-10 lg:block xl:left-full xl:right-auto xl:w-[12.5%] xl:pl-3">
-          <div className="flex h-full items-start justify-end overflow-visible">
+          <div
+            inert={outlineDocked ? undefined : true}
+            aria-hidden={outlineDocked ? undefined : true}
+            className={cn(
+              "sticky top-3 z-10 flex justify-end overflow-visible",
+              "motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-smooth",
+              outlineDocked
+                ? "pointer-events-auto opacity-100"
+                : "pointer-events-none opacity-0",
+            )}
+          >
             <TrajectoryOutline
               items={outlineItems}
               activeId={activeStepId}

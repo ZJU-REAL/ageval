@@ -39,6 +39,9 @@ export function TrajectoryOutline({
   const maxWeight = Math.max(...weights);
 
   useEffect(() => {
+    // Opening grows every row. Scrolling the active one into view then
+    // pulls the bar out from under the pointer and the rail collapses.
+    if (pointerOpen) return;
     const list = listRef.current;
     if (!list || !activeId) return;
     const btn = list.querySelector<HTMLElement>(`[data-outline-id="${activeId}"]`);
@@ -49,7 +52,7 @@ export function TrajectoryOutline({
     else if (bottom > list.scrollTop + list.clientHeight) {
       list.scrollTop = bottom - list.clientHeight;
     }
-  }, [activeId, open]);
+  }, [activeId, open, pointerOpen]);
 
   if (items.length < 2) return null;
 
@@ -66,9 +69,13 @@ export function TrajectoryOutline({
         }
       }}
       className={cn(
-        "pointer-events-auto max-h-full w-max shrink-0 overflow-y-auto overscroll-contain rounded-[10px] p-1",
+        "pointer-events-auto max-h-[var(--traj-outline-max,100%)] w-max shrink-0 overflow-x-hidden overflow-y-auto overscroll-contain rounded-[10px] [overflow-anchor:none]",
         "motion-safe:transition-[background-color,box-shadow] motion-safe:duration-200 motion-safe:ease-smooth",
-        open && "bg-canvas shadow-[var(--viewer-shadow-pop)]",
+        // The label slides out to the left. A little extra box, mostly to the
+        // right, keeps the pointer inside while the hairlines give way.
+        open
+          ? "min-w-[16rem] py-1.5 pl-1.5 pr-3 -my-0.5 -ml-0.5 -mr-2 bg-canvas shadow-[var(--viewer-shadow-pop)]"
+          : "p-1",
         "motion-reduce:transition-none",
       )}
     >

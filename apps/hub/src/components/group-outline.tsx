@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 
+import { OUTLINE_SMOOTH_PX } from "@ageval/shared/lib/scroll-port";
 import { cn } from "@ageval/shared/lib/utils";
 
 export type GroupOutlineItem = {
@@ -62,7 +63,7 @@ export function GroupOutline({
       return Math.max(0, target.getBoundingClientRect().top - line + main.scrollTop);
     };
     const top = align();
-    const smooth = !reduced && Math.abs(top - main.scrollTop) < 1600;
+    const smooth = !reduced && Math.abs(top - main.scrollTop) < OUTLINE_SMOOTH_PX;
     let follow = !smooth;
     const correct = () => {
       if (!follow) return;

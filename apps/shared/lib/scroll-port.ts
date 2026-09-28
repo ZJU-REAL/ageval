@@ -1,3 +1,6 @@
+/** Outline jumps shorter than this scroll. Longer ones appear at once. */
+export const OUTLINE_SMOOTH_PX = 1600;
+
 /** Nearest overflow scroller, then the document. */
 export function findScrollParent(el: HTMLElement): HTMLElement {
   let p = el.parentElement;
