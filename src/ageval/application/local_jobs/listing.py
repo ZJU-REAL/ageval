@@ -261,6 +261,44 @@ def _in_progress_suite_row(
     }
 
 
+def _chart_task_refs(refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Trial squares for the suite waffle. No overlay, no error text."""
+    out: list[dict[str, Any]] = []
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        task_id = str(ref.get("task_id") or "").strip()
+        if not task_id:
+            continue
+        row: dict[str, Any] = {"task_id": task_id}
+        for key in ("status", "score", "run_id", "n", "c", "attempt_run_ids"):
+            if key in ref:
+                row[key] = ref[key]
+        previous = ref.get("previous")
+        if isinstance(previous, list):
+            prev_out: list[dict[str, Any]] = []
+            for item in previous:
+                if not isinstance(item, dict):
+                    continue
+                prev = {
+                    key: item[key]
+                    for key in ("run_id", "status", "score", "attempt_index")
+                    if key in item
+                }
+                if prev:
+                    prev_out.append(prev)
+            if prev_out:
+                row["previous"] = prev_out
+        run_ids = [str(row.get("run_id") or "").strip()]
+        extra = row.get("attempt_run_ids")
+        if isinstance(extra, list):
+            run_ids.extend(str(item or "").strip() for item in extra)
+        if any(run_ids):
+            row["has_attempt_content"] = True
+        out.append(row)
+    return out
+
+
 def _job_row(
     summary: dict[str, Any],
     *,
@@ -314,6 +352,7 @@ def _job_row(
         "pass_rate": metrics.get("pass_rate"),
         "mean_score": metrics.get("mean_score"),
         "metrics": metrics,
+        "task_refs": _chart_task_refs(refs),
         "started": summary.get("created_at"),
         "duration": summary.get("duration"),
         "n_attempts": summary.get("n_attempts"),

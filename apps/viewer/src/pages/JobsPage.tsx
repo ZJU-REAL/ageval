@@ -25,8 +25,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@ageval/shared/components/ui/select";
+import { BoardChartControls } from "@ageval/shared/components/board-chart-controls";
+import { LeaderboardPareto } from "@ageval/shared/components/leaderboard-pareto";
+import {
+  LeaderboardWaffle,
+  WaffleLegend,
+} from "@ageval/shared/components/leaderboard-waffle";
 import { Button } from "@ageval/shared/components/ui/button";
 import { TableColumnPicker } from "@ageval/shared/components/ui/table-column-picker";
+import type { BoardChart, ChartSuite, ParetoAxis } from "@ageval/shared/lib/leaderboard-charts";
 import { useTableColumns } from "@ageval/shared/hooks/use-table-columns";
 import {
   Table,
@@ -43,7 +50,7 @@ import {
   saveJobPrefs,
   type JobPref,
 } from "@/lib/job-prefs";
-import { jobDisplayName, jobHref, jobsHome } from "@/lib/routes";
+import { jobDisplayName, jobHref, jobPath, jobsHome, trialPath } from "@/lib/routes";
 import { useReadySession } from "@/lib/session";
 import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { HarnessLabel } from "@ageval/shared/components/harness-label";
@@ -101,6 +108,8 @@ export function JobsPage() {
     JOB_OPTIONAL_IDS,
     JOB_OPTIONAL_DEFAULT,
   );
+  const [boardChart, setBoardChart] = useState<BoardChart>("table");
+  const [paretoAxis, setParetoAxis] = useState<ParetoAxis>("cost");
 
   useEffect(() => {
     if (!datasetKey) {
@@ -249,6 +258,26 @@ export function JobsPage() {
     return rows;
   }, [jobs, q, kind, source, showSourceFilter, agent, model, sortKey, sortDir, prefs]);
 
+  const suiteChart = kind === "suite" && boardChart !== "table";
+  const chartSuites = useMemo<ChartSuite[]>(
+    () =>
+      filtered.map((job) => ({
+        suite_run_id: job.job_id,
+        pass_rate: job.pass_rate,
+        mean_score: job.mean_score,
+        model_label: job.model_label,
+        agent_label: job.agent_label,
+        metrics: job.metrics,
+        task_refs: job.task_refs,
+      })),
+    [filtered],
+  );
+
+  function openSuite(id: string | null) {
+    if (!id) return;
+    navigate(jobPath(datasetKey, id));
+  }
+
   const selectedVisible = filtered.filter((j) => selected[j.job_id]);
   const selectedCount = selectedVisible.length;
   const allVisibleSelected =
@@ -334,12 +363,14 @@ export function JobsPage() {
               aria-label="Search jobs"
             />
           </div>
+          {suiteChart ? null : (
           <TableColumnPicker
             options={JOB_OPTIONAL_COLUMNS}
             value={columns}
             onChange={setColumns}
             ariaLabel="Optional job columns"
           />
+          )}
         </div>
 
         <div className="flex flex-wrap gap-2 items-center">
@@ -426,6 +457,15 @@ export function JobsPage() {
             </SelectContent>
           </Select>
           <div className="flex-1" />
+          {kind === "suite" ? (
+            <BoardChartControls
+              chart={boardChart}
+              axis={paretoAxis}
+              onChart={setBoardChart}
+              onAxis={setParetoAxis}
+              triggerClassName="h-10"
+            />
+          ) : null}
           {selectedCount > 0 ? (
             <Button
               type="button"
@@ -445,6 +485,16 @@ export function JobsPage() {
             </span>
           )}
         </div>
+        {suiteChart ? (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-mute">
+            <span>
+              {boardChart === "waffle"
+                ? "Each square is one trial. Click a square to open that trial. Observational, not PASS."
+                : "Pass rate versus suite cost, tokens, or time. Observational, not PASS."}
+            </span>
+            {boardChart === "waffle" ? <WaffleLegend /> : null}
+          </div>
+        ) : null}
         </StickyChrome>
 
         {!datasetKey && !loading ? (
@@ -491,6 +541,38 @@ export function JobsPage() {
               </Button>
             }
           />
+        ) : suiteChart ? (
+          boardChart === "waffle" ? (
+            <LeaderboardWaffle
+              suites={chartSuites}
+              showCaption={false}
+              onOpenSuite={openSuite}
+              onOpenTrial={(suite, trial) => {
+                if (trial.hasAttempt && trial.runId) {
+                  navigate(
+                    trialPath(
+                      datasetKey,
+                      suite.suite_run_id,
+                      trial.taskId,
+                      trial.runId,
+                    ),
+                  );
+                  return;
+                }
+                openSuite(suite.suite_run_id);
+              }}
+              emptyTitle="No suite jobs"
+              emptyBody="Suite jobs on this dataset show up here. Metrics are observational, not PASS."
+            />
+          ) : (
+            <LeaderboardPareto
+              suites={chartSuites}
+              axis={paretoAxis}
+              onOpenSuite={openSuite}
+              emptyTitle="No suite jobs"
+              emptyBody="Suite jobs on this dataset show up here. Metrics are observational, not PASS."
+            />
+          )
         ) : (
           <div className="blob-panel min-h-0 flex-1 overflow-auto">
           <Table

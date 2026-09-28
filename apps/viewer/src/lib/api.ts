@@ -17,6 +17,25 @@ export type Job = {
   result?: number | null;
   pass_rate?: number | null;
   mean_score?: number | null;
+  /** Observational suite metrics, including usage when the summary stored it. */
+  metrics?: Record<string, unknown> | null;
+  /** Per-task trial squares for the suite waffle. Suite rows only. */
+  task_refs?: Array<{
+    task_id?: string;
+    status?: string | null;
+    score?: number | null;
+    run_id?: string | null;
+    n?: number | null;
+    c?: number | null;
+    attempt_run_ids?: string[];
+    has_attempt_content?: boolean;
+    previous?: Array<{
+      run_id?: string | null;
+      status?: string | null;
+      score?: number | null;
+      attempt_index?: number | null;
+    }>;
+  }> | null;
   started?: string | null;
   duration?: string | null;
   trials_done?: number;

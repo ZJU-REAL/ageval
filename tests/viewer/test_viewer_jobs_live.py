@@ -243,3 +243,70 @@ def test_final_suite_row_keeps_finished_shape(tmp_path: Path) -> None:
     assert row["trials_done"] == 1
     assert row["trials_total"] == 1
     assert "progress" not in row
+    assert row["task_refs"] == [
+        {
+            "task_id": "alpha",
+            "status": "PASS",
+            "score": 1.0,
+            "run_id": "run_done_a",
+            "n": 1,
+            "c": 1,
+            "attempt_run_ids": ["run_done_a"],
+            "has_attempt_content": True,
+        }
+    ]
+
+
+def test_list_jobs_reads_stored_usage_without_scanning_runs(tmp_path: Path) -> None:
+    db = _clean_db(tmp_path)
+    job_id = "suite_priced"
+    run_id = "run_priced"
+    suite_dir = db / ".ageval" / "suite-runs" / job_id
+    suite_dir.mkdir(parents=True)
+    run_dir = db / ".ageval" / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "trajectory.jsonl").write_text(
+        json.dumps(
+            {
+                "type": "terminal",
+                "usage": {"prompt_tokens": 1_000_000, "completion_tokens": 500_000},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    summary = {
+        "schema": "ageval.suite.summary/1",
+        "suite_run_id": job_id,
+        "dataset_id": "test/suite-min",
+        "dataset_version": "0.1.0",
+        "created_at": "2026-08-30T09:00:00Z",
+        "task_ids": ["alpha"],
+        "attempts": [{"task_id": "alpha", "attempt_index": 0, "status": "PASS", "run_id": run_id}],
+        "tasks": [{"task_id": "alpha", "status": "PASS", "score": 1.0, "run_id": run_id}],
+        "task_refs": [{"task_id": "alpha", "status": "PASS", "score": 1.0, "run_id": run_id}],
+        "job_overlay": {
+            "agent_profiles": {"solver": {"model": "deepseek/deepseek-v4-pro"}},
+        },
+        "metrics": {
+            "pass_rate": 1.0,
+            "mean_score": 1.0,
+            "n_tasks": 1,
+            "n_pass": 1,
+            "n_fail": 0,
+            "n_error": 0,
+            "usage": {
+                "prompt_tokens": 12,
+                "completion_tokens": 3,
+                "cost_source": "estimated",
+                "cost_usd_estimated": 0.02,
+            },
+        },
+        "exit_code": 0,
+        "status": "complete",
+    }
+    (suite_dir / "summary.json").write_text(json.dumps(summary) + "\n", encoding="utf-8")
+
+    payload = jobs.list_jobs(db)
+    row = next(i for i in payload["items"] if i["job_id"] == job_id)
+    assert row["metrics"]["usage"] == summary["metrics"]["usage"]
