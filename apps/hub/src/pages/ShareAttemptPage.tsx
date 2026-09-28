@@ -23,7 +23,8 @@ import { harnessHref, modelCatalogHref } from "@/lib/links";
 import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 
 /**
- * Attempt evidence inside one snapshot. Read-only; no catalog upload.
+ * Attempt evidence already uploaded for this snapshot. Read-only; no catalog
+ * upload and no stream of a job that is still running.
  */
 export function ShareAttemptPage() {
   const { token: rawToken = "", runId: rawRun = "" } = useParams();

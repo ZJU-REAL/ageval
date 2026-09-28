@@ -74,6 +74,8 @@ export function ConfirmDialog({
   confirmDisabled = false,
   error = null,
   children,
+  busyStatus = null,
+  keepConfirmLabel = false,
   className,
   onCancel,
   onConfirm,
@@ -88,6 +90,10 @@ export function ConfirmDialog({
   confirmDisabled?: boolean;
   error?: string | null;
   children?: ReactNode;
+  /** Shown under the buttons while `busy`. */
+  busyStatus?: ReactNode;
+  /** Leave the confirm label in place instead of replacing it with an ellipsis. */
+  keepConfirmLabel?: boolean;
   className?: string;
   onCancel: () => void;
   onConfirm: () => void;
@@ -141,6 +147,9 @@ export function ConfirmDialog({
         {error ? (
           <p className="mt-3 text-sm font-mono text-error">{error}</p>
         ) : null}
+        {busy && busyStatus ? (
+          <div className="mt-5">{busyStatus}</div>
+        ) : null}
         <div className="mt-5 flex justify-end gap-2">
           <Button
             type="button"
@@ -156,7 +165,7 @@ export function ConfirmDialog({
             disabled={busy || confirmDisabled}
             onClick={onConfirm}
           >
-            {busy ? "…" : confirmLabel}
+            {busy && !keepConfirmLabel ? "…" : confirmLabel}
           </Button>
         </div>
       </div>

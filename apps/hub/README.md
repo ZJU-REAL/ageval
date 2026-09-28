@@ -88,8 +88,8 @@ modal; the list only shows a prefix. Members join from **Organizations → Join*
 | `/organizations/:orgId` | Overview (members · datasets · plugins · agents) · Settings |
 | `/users/:login` | Public user profile (official orgs only; signed-out OK) |
 | `/datasets/:id/tasks/:task/attempts/:runId` | Remote Attempt detail (Timing / Tokens when present, tabs + trajectory) |
-| `/s/:token` | Anonymous read-only snapshot of one suite (Jobs / Profiles). Signed-out OK. No catalog import or leaderboard listing |
-| `/s/:token/attempts/:runId` | Attempt evidence inside that snapshot |
+| `/s/:token` | Anonymous read-only snapshot of one suite (Jobs / Profiles). `mode=live` polls suite meta. Signed-out OK. No catalog import or leaderboard listing |
+| `/s/:token/attempts/:runId` | Attempt evidence already uploaded for that snapshot |
 | `/login` | Starts browser OAuth |
 | `/login/callback` | OAuth redirect target |
 

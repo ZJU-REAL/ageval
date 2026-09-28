@@ -101,6 +101,9 @@ def humanize(payload: Mapping[str, Any], *, width: int | None = None) -> str:
         suite_id = payload.get("suite_run_id")
         if suite_id:
             lines.append(_kv("suite", str(suite_id)))
+        mode = payload.get("mode")
+        if mode:
+            lines.append(_kv("mode", str(mode)))
         run_id = payload.get("run_id")
         if run_id:
             lines.append(_kv("run", str(run_id)))

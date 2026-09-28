@@ -23,11 +23,12 @@ from ageval.evidence.locators import (
 )
 from ageval.evidence.slim import is_vendor_raw_rel
 from ageval.registry.results_archive import pack_members
-from ageval.registry.share_snapshot import SNAPSHOT_SHARE_KIND, scrub_tree
+from ageval.registry.share_snapshot import LIVE_SHARE_SIDECAR, SNAPSHOT_SHARE_KIND, scrub_tree
 
 
 def _skip_rel(rel: str) -> bool:
-    return "l1-work" in Path(rel).parts or is_vendor_raw_rel(rel)
+    parts = Path(rel).parts
+    return "l1-work" in parts or LIVE_SHARE_SIDECAR in parts or is_vendor_raw_rel(rel)
 
 
 def _copy_files(src: Path, dest: Path) -> None:
@@ -133,6 +134,69 @@ def _pack_tree(temp: Path, suite_run_id: str) -> tuple[bytes, str, int]:
         if path.is_file()
     ]
     return pack_members(members)
+
+
+def snapshot_member_paths(
+    dataset_root: Path,
+    suite_run_id: str,
+    *,
+    allow_missing_runs: bool = False,
+) -> list[tuple[str, Path]]:
+    """Local suite and Attempt files that belong in a snapshot.
+
+    ``allow_missing_runs`` skips Attempt directories that are not on disk yet.
+    A static archive still requires every referenced run.
+    """
+    root = dataset_root.expanduser().resolve(strict=False)
+    suite_dir = default_suite_runs_root(root) / suite_run_id
+    if not suite_dir.is_dir():
+        raise ConfigError(
+            "invalid_package",
+            f"suite directory not found: {suite_dir}",
+            location=str(suite_dir),
+        )
+    summary = suite_document.load_summary_file(
+        suite_dir / "summary.json",
+        missing_code="invalid_package",
+        invalid_code="invalid_package",
+    )
+    dataset_identity(summary, location=str(suite_dir / "summary.json"))
+    _metrics, task_refs = suite_document.metrics_and_refs(summary)
+    missing: list[str] = []
+    run_dirs: list[tuple[str, Path]] = []
+    for one_id in _run_ids(task_refs):
+        try:
+            run_dirs.append((one_id, resolve_attempt_run_dir(root, one_id)))
+        except ConfigError:
+            if allow_missing_runs:
+                continue
+            missing.append(one_id)
+    if missing:
+        preview = ", ".join(missing[:8])
+        raise ConfigError(
+            "invalid_package",
+            f"missing local run dir(s) under .ageval/runs/ for: {preview}",
+            location=str(default_runs_root(root)),
+        )
+    members: list[tuple[str, Path]] = []
+    suite_prefix = suite_run_locator(suite_run_id)
+    for path in sorted(suite_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(suite_dir).as_posix()
+        if _skip_rel(rel):
+            continue
+        members.append((f"{suite_prefix}/{rel}", path))
+    for one_id, run_dir in run_dirs:
+        run_prefix = run_locator(one_id)
+        for path in sorted(run_dir.rglob("*")):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(run_dir).as_posix()
+            if _skip_rel(rel):
+                continue
+            members.append((f"{run_prefix}/{rel}", path))
+    return members
 
 
 def build_snapshot_share_archive(

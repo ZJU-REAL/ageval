@@ -382,7 +382,7 @@ def make_handler(
                 if not isinstance(body, dict):
                     _error(self, 400, "invalid_request", "bad JSON")
                     return
-                extra = set(body) - {"run_id"}
+                extra = set(body) - {"run_id", "live"}
                 if extra:
                     _error(
                         self,
@@ -394,12 +394,26 @@ def make_handler(
                 posted = body.get("run_id")
                 if isinstance(posted, str) and posted.strip():
                     run_id = posted.strip()
-            self._share_call("create", job_id, run_id=run_id)
+                live_raw = body.get("live", False)
+                if not isinstance(live_raw, bool):
+                    _error(self, 400, "invalid_request", "live must be a boolean")
+                    return
+                live = live_raw
+            else:
+                live = False
+            self._share_call("create", job_id, run_id=run_id, live=live)
 
         def _api_job_share_delete(self, job_id: str) -> None:
             self._share_call("revoke", job_id, run_id=self._share_run_id())
 
-        def _share_call(self, action: str, job_id: str, *, run_id: str | None) -> None:
+        def _share_call(
+            self,
+            action: str,
+            job_id: str,
+            *,
+            run_id: str | None,
+            live: bool = False,
+        ) -> None:
             from ageval.viewer.snapshot_share import create_share, revoke_share, share_status
 
             try:
@@ -411,7 +425,7 @@ def make_handler(
                 if action == "status":
                     payload = share_status(opened.root, job_id, run_id=run_id)
                 elif action == "create":
-                    payload = create_share(opened.root, job_id, run_id=run_id)
+                    payload = create_share(opened.root, job_id, run_id=run_id, live=live)
                 else:
                     payload = revoke_share(opened.root, job_id, run_id=run_id)
             except ConfigError as exc:

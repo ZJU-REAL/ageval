@@ -105,19 +105,23 @@ ageval results upload-suite <dataset|id@version> --suite-run <8-hex> --public --
 
 ## 快照分享
 
-快照分享是一条只读链接，对应本机的一份 suite，正在跑的也可以。链接定格在上传那一刻的 summary 和 Attempt 证据。`upload-suite` 仍然拒绝未结束的 summary。`ageval results share` 仍是把结果交给某个 org 或用户。上榜仍走 `upload-suite` 和 owner 批准。
+快照分享是一条只读链接，对应本机的一份 suite，正在跑的也可以。默认链接定格在上传那一刻的 summary 和 Attempt 证据。`upload-suite` 仍然拒绝未结束的 summary。`ageval results share` 仍是把结果交给某个 org 或用户。上榜仍走 `upload-suite` 和 owner 批准。
 
 ```bash
 ageval results share-snapshot <dataset> --suite-run <id> --hub-url https://hub.example
 ageval results share-snapshot <dataset> --suite-run <id> --run <run_id> --hub-url https://hub.example
 ageval results share-snapshot <dataset> --run <run_id> --hub-url https://hub.example
+ageval results share-snapshot <dataset> --suite-run <id> --live --hub-url https://hub.example
+ageval results sync-snapshot <dataset> --suite-run <id>
 ```
 
-`--suite-run` 上传整份 suite。`--run` 只上传这一次 Attempt。两个一起用，只上传该 suite 里的这一次 job。命令打印 `{hub}/s/{token}`。本地 Viewer 打开一份 suite 或一个 job 时，分享图标走的是同一条命令。点开先说明这一下会上传，确认后给出链接和复制按钮。再次点开可以看到这条链接，也可以取消共享。拿到链接的人不用登录就能打开，看到的是上传那一刻的 jobs 和 Attempt 证据。之后本机或 Hub 上的内容变了，链接里的内容不变。
+`--suite-run` 上传整份 suite。`--run` 只上传这一次 Attempt。两个一起用，只上传该 suite 里的这一次 job。命令打印 `{hub}/s/{token}`。本地 Viewer 打开一份 suite 时，分享框可以选定格或 live。打开一个 job 时仍是定格。点开先说明这一下会上传，确认后给出链接和复制按钮。再次点开可以看到这条链接，也可以取消共享。live 链接会标明 job 结束时还会更新。拿到链接的人不用登录就能打开，看到的是上传那一刻的 jobs 和 Attempt 证据。之后本机或 Hub 上的内容变了，默认链接里的内容不变。
 
-`ageval results revoke-snapshot <token 或 url>` 删掉链接。本机 `.ageval/suite-runs` 和 `.ageval/runs` 还在。suite 的公开或私有、以及已经上榜的状态，都保持原样。链接没有到期时间。
+`--live` 仍用这一条 `{hub}/s/{token}`。某个 job 结束时，链接里的 suite 进度会更新。若创建 live 链接时 suite 还没开始，runner 大约每 45 秒再送一次计数和状态。suite 已经在跑、之后才 `--live` 的，job 结束仍会更新；中间的计数用 `sync-snapshot --heartbeat`。runner 停了以后，`sync-snapshot` 用同一个 token 把当前 summary 再送一次。Hub 页面在 live 时会自己刷新。打开某次 Attempt，看到的是已经上传的文件。
 
-体积上限与 `upload-suite` 相同，512 MiB。上传前会去掉不是环境变量名的 `api_key`。这条链接不能再导入成目录里的 suite，也不能拿去申请上榜。
+`ageval results revoke-snapshot <token 或 url>` 删掉链接。定格链接和 live 链接都走这一条。本机 `.ageval/suite-runs` 和 `.ageval/runs` 还在。suite 的公开或私有、以及已经上榜的状态，都保持原样。链接没有到期时间。
+
+体积上限与 `upload-suite` 相同，512 MiB。上传前、以及每次 live 更新，都会去掉不是环境变量名的 `api_key`。这条链接不能再导入成目录里的 suite，也不能拿去申请上榜。
 
 Dataset Leaderboard 默认列出该包全部过门的整份运行。页顶版本切换只切 README / Tasks；榜上 Public 右侧的版本选择器才按这次上传的 `dataset_version` 过滤，默认 All versions。
 

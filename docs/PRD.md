@@ -52,7 +52,7 @@ ageval **统一** lock、开环境、invoke、评测、evidence、拆环境；**
 | **题包** | 业务 workflow、本地 Tool、upstream bridge、`evaluator.py` |
 | **Application** | CLI、Campaign/matrix、内置/插件接线 |
 
-## 6. 非目标（近端）
+## 6. 这轮非目标
 
 - 不把 Harbor 的全部云厂商一次搬进来。
 - 不把 vendor SDK / alias 缓存写进 Core。Core 只调 `host.start()`。
@@ -66,7 +66,7 @@ ageval **统一** lock、开环境、invoke、评测、evidence、拆环境；**
 - Core 内通用 Graph / Handoff / BranchAuthority 平台。
 - 开放插件商店。
 - 按 Benchmark 名的 Core 分支。
-- gaia / tau3 全 suite、五条 ACP 全部付费 invoke、默认 CI 真打 E2B、多 group 真调度 run：不是近端目标（见 [design/00](design/00-overview-and-product.md)「近端不做」）。
+- gaia / tau3 全 suite、五条 ACP 全部付费 invoke、默认 CI 真打 E2B、多 group 真调度 run。见 [design/00](design/00-overview-and-product.md)「这轮不包含」。
 
 ## 7. 用户故事（摘要）
 

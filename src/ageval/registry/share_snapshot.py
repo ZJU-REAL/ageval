@@ -20,6 +20,7 @@ import yaml
 SNAPSHOT_SHARE_KIND = "snapshot-share"
 SNAPSHOT_SHARE_MARKER = "snapshot-share.json"
 SHARE_BLOB_PREFIX = "shares"
+LIVE_SHARE_SIDECAR = "live-share.json"
 
 _SECRET_KEYS = (
     "api_key",
@@ -49,6 +50,7 @@ _ASSIGNED_VALUE = re.compile(
 _PRIVATE_KEY = re.compile(rb"(?i)-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----")
 _LOCATOR = re.compile(rb"\$\{[A-Za-z_][A-Za-z0-9_]*\}")
 _ENV_NAME = re.compile(rb"[A-Za-z_][A-Za-z0-9_]{0,63}")
+_TOKEN_VALUE_BYTES = re.compile(rb"(?:sk-|ghp_|github_pat_|AKIA)")
 
 
 def _norm_name(name: str) -> str:
@@ -81,14 +83,36 @@ def archive_contains_snapshot_marker(archive: Path) -> bool:
 
 
 def _value_is_plaintext_secret(value: bytes) -> bool:
+    """True for a token-shaped value. Source text that merely uses the key name is not."""
     text = value.strip()
     if not text or text == b"[redacted]" or _LOCATOR.fullmatch(text):
         return False
-    return _ENV_NAME.fullmatch(text) is None
+    if _ENV_NAME.fullmatch(text) is not None:
+        return False
+    return _TOKEN_VALUE_BYTES.search(text) is not None
+
+
+def text_has_plaintext_secret(chunk: bytes) -> bool:
+    """True when a text chunk assigns a plaintext secret or embeds a private key."""
+    if b"\x00" in chunk:
+        return False
+    if _PRIVATE_KEY.search(chunk):
+        return True
+    for match in _ASSIGNED_VALUE.finditer(chunk):
+        if _value_is_plaintext_secret(match.group("value")):
+            return True
+    return False
+
+
+class ShareArchiveTooLarge(Exception):
+    """Decompressed members exceed the caller's byte cap."""
 
 
 def snapshot_has_plaintext_secret(archive: Path) -> bool:
-    """Scan decompressed text members for a secret assigned to a known key."""
+    """Scan decompressed text members for a secret assigned to a known key.
+
+    Reads at most 4 MiB total. A later member is not loaded into memory.
+    """
     try:
         with _open_tar(archive) as tar:
             seen = 0
@@ -100,16 +124,29 @@ def snapshot_has_plaintext_secret(archive: Path) -> bool:
                     continue
                 chunk = extracted.read(min(int(info.size), 4_000_000 - seen))
                 seen += len(chunk)
-                if b"\x00" in chunk:
-                    continue
-                if _PRIVATE_KEY.search(chunk):
+                if text_has_plaintext_secret(chunk):
                     return True
-                for match in _ASSIGNED_VALUE.finditer(chunk):
-                    if _value_is_plaintext_secret(match.group("value")):
-                        return True
     except (OSError, tarfile.TarError, gzip.BadGzipFile, EOFError):
         return False
     return False
+
+
+def iter_archive_files(archive: Path, *, max_total: int) -> Iterator[tuple[str, bytes]]:
+    """Yield ``(normalized path, bytes)`` without reading past ``max_total``."""
+    seen = 0
+    with _open_tar(archive) as tar:
+        for info in tar.getmembers():
+            if not info.isfile():
+                continue
+            extracted = tar.extractfile(info)
+            if extracted is None:
+                continue
+            budget = max_total - seen
+            data = extracted.read(budget + 1)
+            if len(data) > budget:
+                raise ShareArchiveTooLarge(max_total)
+            seen += len(data)
+            yield _norm_name(info.name), data
 
 
 def read_archive_member(archive: Path, member: str, *, max_bytes: int = 2_000_000) -> bytes | None:
@@ -157,10 +194,16 @@ _TEXT_SUFFIXES = {
     ".env",
     ".cfg",
     ".ini",
+    ".patch",
+    ".diff",
 }
 _LOCATOR_TEXT = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}")
 _ENV_NAME_TEXT = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
-_TOKEN_VALUE = re.compile(r"^(?:sk-|ghp_|github_pat_|AKIA)")
+_TOKEN_VALUE = re.compile(r"(?:sk-|ghp_|github_pat_|AKIA)")
+_PRIVATE_KEY_TEXT = re.compile(
+    r"-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----",
+    re.IGNORECASE,
+)
 _TEXT_ASSIGN = re.compile(
     r"""(?ix)
     (?P<prefix>
@@ -201,6 +244,8 @@ def scrub_structure(value: Any, *, key: str = "") -> Any:
 
 
 def scrub_text(text: str) -> str:
+    text = _PRIVATE_KEY_TEXT.sub("[redacted]", text)
+
     def repl(match: re.Match[str]) -> str:
         value = match.group("value").strip()
         if _keep_secret_value(value):
@@ -231,13 +276,16 @@ def scrub_file(path: Path) -> None:
             if not line.strip():
                 lines.append(line)
                 continue
+            line = scrub_text(line)
             try:
                 parsed = json.loads(line)
             except json.JSONDecodeError:
-                lines.append(scrub_text(line))
+                lines.append(line)
             else:
                 lines.append(
-                    json.dumps(scrub_structure(parsed), sort_keys=True, ensure_ascii=False)
+                    scrub_text(
+                        json.dumps(scrub_structure(parsed), sort_keys=True, ensure_ascii=False)
+                    )
                 )
         updated = "\n".join(lines) + ("\n" if raw.endswith("\n") else "")
     elif suffix in {".yaml", ".yml"}:
@@ -260,3 +308,21 @@ def scrub_tree(root: Path) -> None:
     for path in sorted(root.rglob("*")):
         if path.is_file() and path.suffix.lower() in _TEXT_SUFFIXES:
             scrub_file(path)
+
+
+def scrub_member_bytes(name: str, data: bytes) -> bytes:
+    """Return scrubbed bytes for one archive member. Non-text members pass through."""
+    suffix = Path(name).suffix.lower()
+    if suffix not in _TEXT_SUFFIXES or b"\x00" in data:
+        return data
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="ageval-scrub-") as tmp:
+        path = Path(tmp) / f"member{suffix}"
+        path.write_text(text, encoding="utf-8")
+        scrub_file(path)
+        return path.read_bytes()

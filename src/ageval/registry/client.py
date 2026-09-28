@@ -85,6 +85,7 @@ class RegistryClient:
         archive: Path,
         filename: str,
         boundary_prefix: str,
+        method: str = "POST",
     ) -> tuple[int, bytes, dict[str, str]]:
         import secrets as _secrets
 
@@ -117,7 +118,7 @@ class RegistryClient:
             )
             headers["Content-Length"] = str(size)
             with tmp_path.open("rb") as body:
-                return self._request("POST", path, body=body, headers=headers)  # type: ignore[arg-type]
+                return self._request(method, path, body=body, headers=headers)  # type: ignore[arg-type]
         finally:
             tmp_path.unlink(missing_ok=True)
 
@@ -546,6 +547,7 @@ class RegistryClient:
         size: int,
         archive: Path,
         run_id: str = "",
+        mode: str = "static",
     ) -> dict[str, Any]:
         """Upload a snapshot-share blob. Does not create a catalog suite."""
         meta = {
@@ -558,6 +560,8 @@ class RegistryClient:
         }
         if run_id:
             meta["run_id"] = run_id
+        if mode != "static":
+            meta["mode"] = mode
         http_status, raw, _ = self._put_multipart(
             "/v1/shares",
             meta=meta,
@@ -569,6 +573,37 @@ class RegistryClient:
             raise RegistryError(
                 "upload_failed", f"unexpected status {http_status}", status=http_status
             )
+        return json.loads(raw.decode("utf-8"))
+
+    def patch_snapshot_share(
+        self,
+        token: str,
+        *,
+        summary: dict[str, Any],
+        archive: Path | None = None,
+        heartbeat: bool = False,
+    ) -> dict[str, Any]:
+        """Update one live share in place. Does not mint a new token."""
+        meta: dict[str, Any] = {"summary": summary}
+        if heartbeat:
+            meta["heartbeat"] = True
+        path = f"/v1/shares/{quote(token, safe='')}"
+        if archive is None:
+            body = json.dumps(meta, sort_keys=True).encode("utf-8")
+            headers = self._headers(content_type="application/json")
+            headers["Content-Length"] = str(len(body))
+            status, raw, _ = self._request("PATCH", path, body=body, headers=headers)
+        else:
+            status, raw, _ = self._put_multipart(
+                path,
+                meta=meta,
+                archive=archive,
+                filename="patch.tar.gz",
+                boundary_prefix="ageval-share",
+                method="PATCH",
+            )
+        if status not in {200, 201}:
+            raise RegistryError("upload_failed", f"unexpected status {status}", status=status)
         return json.loads(raw.decode("utf-8"))
 
     def find_snapshot_share(self, *, suite_run_id: str, run_id: str = "") -> dict[str, Any]:
