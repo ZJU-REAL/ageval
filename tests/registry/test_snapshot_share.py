@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 from services.registry.app import build_default_state, make_handler
-from services.registry.blob_io import sha256_file
-from services.registry.tokens import DEFAULT_LOGIN_SCOPES
+from services.registry.auth.tokens import DEFAULT_LOGIN_SCOPES
+from services.registry.content.blob_io import sha256_file
 
 from ageval.registry.client import RegistryClient, RegistryError
 from ageval.registry.share_snapshot import snapshot_has_plaintext_secret

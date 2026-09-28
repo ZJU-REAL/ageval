@@ -7,15 +7,14 @@ from pathlib import Path
 
 import pytest
 from services.registry.access import AccessPolicy
+from services.registry.auth.tokens import TokenInfo
+from services.registry.content.blobs import MemoryBlobStore
+from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
-from services.registry.package_service import PackageService
-from services.registry.request_service import RequestService
-from services.registry.result_service import ResultService
-from services.registry.runtime_service import RuntimeService
-from services.registry.store import MemoryBlobStore, TokenInfo
-from services.registry.store_schema import (
-    open_sqlite_stores,
-)
+from services.registry.inbox.service import RequestService
+from services.registry.packages.service import PackageService
+from services.registry.results.service import ResultService
+from services.registry.runtimes.service import RuntimeService
 
 from ageval.registry.agent_package import (
     AGENT_MEDIA_TYPE,
@@ -49,7 +48,9 @@ def _svcs(tmp_path: Path) -> tuple[PackageService, ResultService, RequestService
         access,
         max_upload=64 * 1024 * 1024,
     )
-    requests = RequestService(meta.inbox, meta.orgs, meta.packages, meta.results, access, results)
+    requests = RequestService(
+        meta.inbox, meta.orgs, meta.packages, meta.results, meta.shares, access, results
+    )
     return packages, results, requests, RuntimeService(meta.inbox, meta.packages, results)
 
 

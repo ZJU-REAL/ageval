@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from services.registry.http_api import RegistryHttpApi, json_result
+from services.registry.http.dispatch import RegistryHttpApi, json_result
 
 
 def build_asgi_app(state: Any) -> Any:

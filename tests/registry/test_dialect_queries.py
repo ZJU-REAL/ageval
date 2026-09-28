@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
-from services.registry import queries as Q
-from services.registry.dialect import pg_sql
-from services.registry.routes import match_route
+from services.registry.auth.tokens import UPSERT_TOKEN
+from services.registry.db.dialect import pg_sql
+from services.registry.http.routes import match_route
+from services.registry.packages import queries as package_queries
 
 
 def test_pg_sql_translates_placeholders() -> None:
     assert pg_sql("SELECT * FROM t WHERE a=? AND b=?") == "SELECT * FROM t WHERE a=%s AND b=%s"
-    assert "?" not in pg_sql(Q.INSERT_RELEASE)
+    assert "?" not in pg_sql(package_queries.INSERT_RELEASE)
 
 
 def test_list_releases_query_public_default() -> None:
-    sql, params = Q.list_releases_query()
+    sql, params = package_queries.list_releases_query()
     assert "visibility = 'public'" in sql
     assert params == []
 
 
 def test_list_releases_query_private_filter() -> None:
-    sql, params = Q.list_releases_query(include_private=True, visibility="private")
+    sql, params = package_queries.list_releases_query(include_private=True, visibility="private")
     assert "visibility = ?" in sql
     assert params == ["private"]
     assert "visibility = %s" in pg_sql(sql)
@@ -58,11 +59,11 @@ def test_match_route_package_version_meta() -> None:
 
 def test_upsert_token_does_not_bind_created_at() -> None:
     # Live Postgres api_tokens.created_at is timestamptz; epoch floats fail.
-    assert "created_at" not in Q.UPSERT_TOKEN
+    assert "created_at" not in UPSERT_TOKEN
 
 
 def test_sqlite_align_integer_flag_is_noop(tmp_path) -> None:
-    from services.registry.sql_adapter import SqliteAdapter
+    from services.registry.db.sql_adapter import SqliteAdapter
 
     adapter = SqliteAdapter(tmp_path / "meta.sqlite3")
     with adapter.connect() as conn:
@@ -70,7 +71,7 @@ def test_sqlite_align_integer_flag_is_noop(tmp_path) -> None:
 
 
 def test_sqlite_lock_schema_is_noop(tmp_path) -> None:
-    from services.registry.sql_adapter import SqliteAdapter
+    from services.registry.db.sql_adapter import SqliteAdapter
 
     adapter = SqliteAdapter(tmp_path / "meta.sqlite3")
     with adapter.connect() as conn:
@@ -78,7 +79,7 @@ def test_sqlite_lock_schema_is_noop(tmp_path) -> None:
 
 
 def test_postgres_lock_schema_uses_xact_advisory_lock() -> None:
-    from services.registry.sql_adapter import (
+    from services.registry.db.sql_adapter import (
         _SCHEMA_LOCK_ID,
         _SCHEMA_LOCK_NS,
         PostgresAdapter,
@@ -98,7 +99,7 @@ def test_postgres_lock_schema_uses_xact_advisory_lock() -> None:
 
 
 def test_postgres_add_column_skips_when_present() -> None:
-    from services.registry.sql_adapter import PostgresAdapter
+    from services.registry.db.sql_adapter import PostgresAdapter
 
     executed: list[str] = []
 
@@ -113,9 +114,9 @@ def test_postgres_add_column_skips_when_present() -> None:
 
 
 def test_metadata_and_token_init_take_schema_lock(tmp_path, monkeypatch) -> None:
-    from services.registry.sql_adapter import SqliteAdapter
-    from services.registry.store import SqliteTokenStore
-    from services.registry.store_schema import open_sqlite_stores
+    from services.registry.auth.tokens import SqliteTokenStore
+    from services.registry.db.schema import open_sqlite_stores
+    from services.registry.db.sql_adapter import SqliteAdapter
 
     calls: list[str] = []
     orig = SqliteAdapter.lock_schema
@@ -133,7 +134,7 @@ def test_metadata_and_token_init_take_schema_lock(tmp_path, monkeypatch) -> None
 
 def test_align_integer_flag_rejects_bad_ident() -> None:
     import pytest
-    from services.registry.sql_adapter import PostgresAdapter
+    from services.registry.db.sql_adapter import PostgresAdapter
 
     fake = object.__new__(PostgresAdapter)
     with pytest.raises(ValueError, match="identifier"):

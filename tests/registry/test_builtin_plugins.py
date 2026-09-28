@@ -7,13 +7,12 @@ from pathlib import Path
 
 import pytest
 from services.registry.access import AccessPolicy
-from services.registry.builtin_plugins import builtin_plugin_ids, catalog_rows
+from services.registry.auth.tokens import TokenInfo
+from services.registry.content.blobs import MemoryBlobStore
+from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
-from services.registry.package_service import PackageService
-from services.registry.store import MemoryBlobStore, TokenInfo
-from services.registry.store_schema import (
-    open_sqlite_stores,
-)
+from services.registry.packages.builtin_plugins import builtin_plugin_ids, catalog_rows
+from services.registry.packages.service import PackageService
 
 from ageval.registry.plugin_package import (
     PLUGIN_MEDIA_TYPE,

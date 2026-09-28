@@ -77,24 +77,26 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from services.registry.access import AccessPolicy  # noqa: E402
+from services.registry.auth.tokens import (  # noqa: E402
+    ADMIN_SCOPES,
+    PostgresTokenStore,
+    SqliteTokenStore,
+)
 from services.registry.backend import (  # noqa: E402
     PublicBackendError,
     require_public_backend,
 )
-from services.registry.envload import load_env_file  # noqa: E402
-from services.registry.http_api import RegistryHttpApi, write_http_result  # noqa: E402
-from services.registry.store import (  # noqa: E402
-    ADMIN_SCOPES,
+from services.registry.content.blobs import (  # noqa: E402
     FilesystemBlobStore,
     MemoryBlobStore,
-    PostgresTokenStore,
     S3BlobStore,
-    SqliteTokenStore,
 )
-from services.registry.store_schema import (  # noqa: E402
+from services.registry.db.schema import (  # noqa: E402
     open_sqlite_stores,
     open_stores,
 )
+from services.registry.envload import load_env_file  # noqa: E402
+from services.registry.http.dispatch import RegistryHttpApi, write_http_result  # noqa: E402
 from services.registry.upload_slots import (  # noqa: E402
     UploadSlotPool,
     slots_from_env,
@@ -138,14 +140,14 @@ class RegistryState:
             self.upload_slots = UploadSlotPool(
                 slots_from_env() if upload_slots is None else upload_slots
             )
-        from services.registry.auth_service import AuthService
-        from services.registry.org_service import OrgService
-        from services.registry.package_service import PackageService
-        from services.registry.request_service import RequestService
-        from services.registry.result_service import ResultService
-        from services.registry.runtime_service import RuntimeService
-        from services.registry.share_service import ShareService
-        from services.registry.user_service import UserService
+        from services.registry.auth.service import AuthService
+        from services.registry.orgs.service import OrgService
+        from services.registry.orgs.users import UserService
+        from services.registry.packages.service import PackageService
+        from services.registry.inbox.service import RequestService
+        from services.registry.results.service import ResultService
+        from services.registry.runtimes.service import RuntimeService
+        from services.registry.shares.service import ShareService
 
         self.auth = AuthService(
             tokens,
@@ -166,10 +168,16 @@ class RegistryState:
             self.access,
             max_upload=max_upload,
         )
-        self.shares = ShareService(stores.results, blobs, max_upload=max_upload)
+        self.shares = ShareService(stores.shares, blobs, max_upload=max_upload)
         self.runtimes = RuntimeService(stores.inbox, stores.packages, self.results)
         self.requests = RequestService(
-            stores.inbox, stores.orgs, stores.packages, stores.results, self.access, self.results
+            stores.inbox,
+            stores.orgs,
+            stores.packages,
+            stores.results,
+            stores.shares,
+            self.access,
+            self.results,
         )
         self.orgs = OrgService(stores.orgs, self.access)
         self.users = UserService(stores.orgs)
@@ -180,7 +188,7 @@ class RegistryState:
 
 def _parse_multipart(body: bytes, content_type: str) -> dict[str, bytes]:
     """Compatibility alias for tests that import the stdlib parser."""
-    from services.registry.http_api import parse_multipart
+    from services.registry.http.dispatch import parse_multipart
 
     return parse_multipart(body, content_type)
 
@@ -288,7 +296,7 @@ def build_state_from_env(
         )
 
     database_url, s3_endpoint = require_public_backend()
-    from services.registry.sql_adapter import PostgresAdapter
+    from services.registry.db.sql_adapter import PostgresAdapter
 
     stores = open_stores(adapter=PostgresAdapter(database_url))
     tokens = PostgresTokenStore(database_url)

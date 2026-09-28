@@ -6,16 +6,12 @@ from pathlib import Path
 
 import pytest
 from services.registry.access import AccessPolicy
-from services.registry.blob_io import read_blob
+from services.registry.auth.tokens import TokenInfo
+from services.registry.content.blob_io import read_blob
+from services.registry.content.blobs import MemoryBlobStore
+from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
-from services.registry.package_service import PackageService
-from services.registry.store import (
-    MemoryBlobStore,
-    TokenInfo,
-)
-from services.registry.store_schema import (
-    open_sqlite_stores,
-)
+from services.registry.packages.service import PackageService
 
 from ageval.registry.archive import MEDIA_TYPE, build_archive
 from ageval.registry.digest import compute_package_digest
@@ -516,7 +512,7 @@ def test_favorite_rejects_dataset_and_anonymous(tmp_path: Path) -> None:
 
 
 def test_list_tasks_pages_and_flags(tmp_path: Path) -> None:
-    from services.registry.package_files import FileEntry, PackageFileIndex
+    from services.registry.content.files import FileEntry, PackageFileIndex
 
     index = PackageFileIndex(
         package_digest="sha256:abc",
@@ -594,7 +590,7 @@ def test_list_tasks_skips_blob_after_publish(
     def _no_blob(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("list_tasks must not read the package blob")
 
-    monkeypatch.setattr("services.registry.package_service.read_blob", _no_blob)
+    monkeypatch.setattr("services.registry.packages.service.read_blob", _no_blob)
     listed = svc.list_tasks(
         dataset_id="test/publish-min",
         auth=auth,
@@ -609,7 +605,7 @@ def test_list_tasks_skips_blob_after_publish(
 def test_list_tasks_reads_variant_profile_overlays(tmp_path: Path) -> None:
     import shutil
 
-    from services.registry.package_files import (
+    from services.registry.content.files import (
         build_index_from_archive,
         is_profiles_document,
         overlay_paths_from_profiles_yaml,

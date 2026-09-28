@@ -223,7 +223,12 @@ def test_hub_install_registers_index_id(tmp_path: Path, monkeypatch: pytest.Monk
 
 
 def test_release_dict_marks_official_from_allowlist() -> None:
-    from services.registry.store import ReleaseRow, release_to_dict
+    from services.registry.packages.dto import (
+        release_to_dict,
+    )
+    from services.registry.packages.rows import (
+        ReleaseRow,
+    )
 
     from ageval.registry.plugin_package import PLUGIN_MEDIA_TYPE
 
@@ -258,7 +263,7 @@ def test_release_dict_marks_official_from_allowlist() -> None:
 
 
 def test_official_org_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.registry.official import is_official_upload_org, official_orgs
+    from services.registry.orgs.official import is_official_upload_org, official_orgs
 
     monkeypatch.delenv("AGEVAL_OFFICIAL_ORGS", raising=False)
     assert "official" in official_orgs()

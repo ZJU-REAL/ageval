@@ -170,16 +170,18 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   ├── viewer/                      # `ageval view` SPA
 │   └── hub/                         # Registry Dataset / Plugin / Agent / Leaderboard
 ├── services/registry/               # standalone HTTP: Route.access + *Service
-│   ├── app.py / http_api.py / asgi.py / backend.py
-│   ├── auth_service.py / package_service.py / result_service.py / org_service.py
-│   ├── request_service.py           # listing + performance requests; Inbox
-│   ├── share_service.py             # snapshot share link; not catalog ACL
-│   ├── queries.py / dataset.py / sql_adapter.py
-│   ├── store_schema.py              # open_stores: schema once → RegistryStores
-│   ├── store_package.py / store_result.py / store_org.py / store_inbox.py
-│   ├── blobs.py / tokens.py / rows.py / protocols.py   # narrow store protocols
-│   ├── store.py                     # row/DTO vocabulary + re-exports
-│   └── routes.py                    # ROUTES must declare access
+│   ├── app.py / asgi.py / backend.py
+│   ├── http/                        # dispatch + one module per aggregate
+│   ├── auth/                        # AuthService, GitHub OAuth, token stores
+│   ├── orgs/                        # service, users, store, protocol, rows, queries, official
+│   ├── packages/                    # service, store, protocol, rows, queries, dto, builtins
+│   ├── runtimes/                    # derived agent performance
+│   ├── results/                     # service, store, protocol, rows, queries, dto
+│   ├── shares/                      # snapshot share service and store
+│   ├── inbox/                       # requests, maintainers, store
+│   ├── content/                     # files, blob_io, blobs
+│   ├── db/                          # dialect, sql_adapter, schema (open_stores)
+│   └── dataset.py / access.py / errors.py / paging.py / clock.py / envload.py / upload_slots.py / spool.py
 ├── examples/
 │   ├── datasets/
 │   │   ├── minimal-demo/            # terminal-jsonl-agg / tau2-dialog-min / multiagent-env-min
@@ -399,7 +401,7 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | Other Agent backends | `openai-http` / `anthropic-http` / external `nooa` `dsh` | Not vendor stdout scrape |
 | Official base image | `plugins/contrib/docker/attempt/` | GHCR `ageval-attempt:<cli-ver>` then local `ageval-attempt:base`; miss → packaged Dockerfile. Bake ACP entries at image build; no `npm i` at invoke |
 | ACP task image layer | `plugins/contrib/acp` | `config.image_layers` bakes the bound `options.entry` onto the task recipe |
-| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is four aggregate stores (`store_*.py`) behind narrow protocols, one schema init in `store_schema.open_stores`, SQL only in `queries.py`, dialect only in `sql_adapter.py` |
+| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is five aggregate stores (packages, results, shares, orgs, inbox) behind narrow protocols, one schema init in `db/schema.open_stores`, SQL in each aggregate `queries.py`, dialect only in `db/sql_adapter.py`. `api_tokens` DDL stays in `auth/tokens.py`. |
 
 ## Failure and Privacy Boundary
 

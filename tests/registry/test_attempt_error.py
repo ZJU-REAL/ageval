@@ -6,15 +6,17 @@ import hashlib
 from pathlib import Path
 
 from services.registry.access import AccessPolicy
-from services.registry.result_service import ResultService
-from services.registry.store import (
-    AttemptResultRow,
-    MemoryBlobStore,
-    TokenInfo,
+from services.registry.auth.tokens import TokenInfo
+from services.registry.clock import now
+from services.registry.content.blobs import MemoryBlobStore
+from services.registry.db.schema import open_sqlite_stores
+from services.registry.results.dto import (
     attempt_to_dict,
-    now,
 )
-from services.registry.store_schema import open_sqlite_stores
+from services.registry.results.rows import (
+    AttemptResultRow,
+)
+from services.registry.results.service import ResultService
 
 _ERROR = {"phase": "evaluate", "title": "Judge response empty", "message": "judge returned no text"}
 

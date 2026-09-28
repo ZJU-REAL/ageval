@@ -29,7 +29,9 @@ def test_media_types_aligned() -> None:
 
 
 def test_package_kind_from_current_media_types_only() -> None:
-    from services.registry.store import package_kind_for_media_type
+    from services.registry.packages.dto import (
+        package_kind_for_media_type,
+    )
 
     assert package_kind_for_media_type(DATASET_MEDIA_TYPE) == "dataset"
     assert package_kind_for_media_type(PLUGIN_MEDIA_TYPE) == "plugin"

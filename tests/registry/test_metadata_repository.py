@@ -6,18 +6,22 @@ import os
 from pathlib import Path
 
 import pytest
-from services.registry.sql_adapter import PostgresAdapter
-from services.registry.store import (
-    AttemptResultRow,
+from services.registry.auth.tokens import (
     PostgresTokenStore,
-    ReleaseRow,
     SqliteTokenStore,
-    now,
 )
-from services.registry.store_schema import (
+from services.registry.clock import now
+from services.registry.db.schema import (
     RegistryStores,
     open_sqlite_stores,
     open_stores,
+)
+from services.registry.db.sql_adapter import PostgresAdapter
+from services.registry.packages.rows import (
+    ReleaseRow,
+)
+from services.registry.results.rows import (
+    AttemptResultRow,
 )
 
 
@@ -104,9 +108,13 @@ def test_attempt_row_stores_environment(tmp_path: Path) -> None:
 
 
 def test_schema_owned_by_queries() -> None:
-    from services.registry import queries as Q
+    from services.registry.packages import queries as package_queries
 
-    creates = [s for s in Q.SCHEMA_STATEMENTS if "CREATE TABLE IF NOT EXISTS releases" in s]
+    creates = [
+        stmt
+        for stmt in package_queries.SCHEMA_STATEMENTS
+        if "CREATE TABLE IF NOT EXISTS releases" in stmt
+    ]
     assert len(creates) == 1
 
 

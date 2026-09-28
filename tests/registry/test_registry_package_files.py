@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 from services.registry.app import build_default_state, make_handler
-from services.registry.package_files import (
+from services.registry.content.files import (
     MAX_FILE_BYTES,
     PackageFileTooLarge,
     PackagePathError,

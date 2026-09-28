@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parent.parent
-CATALOG = REPO / "services/registry/builtin_plugins.json"
+CATALOG = REPO / "services/registry/packages/builtin_plugins.json"
 ROW_KEYS = frozenset({"plugin_id", "description", "host_requires", "exclusive", "chain"})
 
 
