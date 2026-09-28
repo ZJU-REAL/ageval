@@ -14,6 +14,7 @@ function HarnessItem({ harness }: { harness: Harness }) {
             height={24}
             draggable={false}
             className="hero-rotate-mark"
+            data-mark={harness.id}
           />
         ) : (
           <harness.Mark className="hero-rotate-mark" />

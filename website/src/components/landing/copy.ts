@@ -2,7 +2,7 @@ import type { SiteLocale } from "@/lib/i18n";
 
 export const landingCopy = {
   "zh-CN": {
-    metaTitle: "ageval · 配置一次 Agent Eval，任意切换运行",
+    metaTitle: "ageval · 可配置可插拔的智能体评测统一框架",
     metaDescription:
       "一键切换待评测 Agent；装上 CLI 和 skill，让 Agent 学会自动评测；在 ageval Hub 上分享或复用 dataset、插件和 Agent 配置。",
     skip: "跳到正文",
@@ -19,12 +19,14 @@ export const landingCopy = {
       menu: "目录",
       repo: "仓库",
       lang: "EN",
+      themeToDark: "切换到深色",
+      themeToLight: "切换到浅色",
     },
     hero: {
-      titleA: "配置一次 Agent Eval，",
-      accentA: "一次",
-      titleB: "任意切换运行",
-      accentB: "任意",
+      titleA: "可配置可插拔的",
+      accentA: ["可配置", "可插拔"],
+      titleB: "智能体评测统一框架",
+      accentB: [],
       note: "装插件换待评测 Agent。装上 CLI 和 skill，Agent 能自己跑评测。",
       primary: "打开仓库",
       hub: "前往 Hub",
@@ -34,23 +36,20 @@ export const landingCopy = {
       copy: "复制",
       copied: "已复制",
       demo: "查看演示",
-      demoAria: "产品演示视频：配置一次评测，切换待评测 Agent，自动跑完看结果",
+      demoAria: "产品演示视频：可配置可插拔的智能体评测，切换待评测 Agent，自动跑完看结果",
       demoClose: "关闭",
     },
     pactAria: "三个特点",
     pact: [
       [
-        "SWITCH",
         "一键切换待评测 Agent",
         "换 Agent 不改 ageval：装插件，在配置里切一行，同一份 dataset 原样跑。",
       ],
       [
-        "TEACH",
         "让 Agent 学会自动评测",
         "装上 CLI 和 skill，让 Agent 能设计、转化 benchmark，并自动跑评测。",
       ],
       [
-        "HUB",
         "在 Hub 上分享与复用",
         "在 ageval Hub 上分享或复用 dataset、插件和 Agent 配置，并上传评测结果。",
       ],
@@ -304,7 +303,7 @@ ageval run <dataset> --task <task-id> \\
     },
   },
   en: {
-    metaTitle: "ageval · Configure Agent Eval Once. Run It Anywhere.",
+    metaTitle: "ageval · Configurable and pluggable agent evaluation framework",
     metaDescription:
       "Switch the agent under test with plugins. Teach the Agent automated evaluation with the CLI and skills. Share datasets, plugins, and agent configs on ageval Hub.",
     skip: "Skip to content",
@@ -321,12 +320,14 @@ ageval run <dataset> --task <task-id> \\
       menu: "Menu",
       repo: "Repo",
       lang: "中文",
+      themeToDark: "Switch to dark",
+      themeToLight: "Switch to light",
     },
     hero: {
-      titleA: "Configure Agent Eval Once,",
-      accentA: "Once",
-      titleB: "Run It Anywhere.",
-      accentB: "Anywhere",
+      titleA: "Configurable and pluggable",
+      accentA: ["Configurable", "pluggable"],
+      titleB: "agent evaluation framework",
+      accentB: [],
       note: "Swap the agent under test with plugins. Teach the Agent to run evals with the CLI and skills.",
       primary: "Open repo",
       hub: "Go to Hub",
@@ -337,23 +338,20 @@ ageval run <dataset> --task <task-id> \\
       copied: "Copied",
       demo: "Watch demo",
       demoAria:
-        "Product demo: configure the eval once, swap the agent under test, and run it end to end",
+        "Product demo: a configurable, pluggable agent evaluation framework — swap the agent under test and run it end to end",
       demoClose: "Close",
     },
     pactAria: "Three things you can do",
     pact: [
       [
-        "SWITCH",
         "Swap the agent under test in one line",
         "No changes to ageval: install a plugin, flip one line of config, and the same dataset runs as-is.",
       ],
       [
-        "TEACH",
         "Teach the Agent automated evaluation",
         "Install the CLI and skills so the Agent can design, convert benchmarks, and run evaluations.",
       ],
       [
-        "HUB",
         "Share and reuse on Hub",
         "Share or reuse datasets, plugins, and agent configs on ageval Hub, and upload evaluation results.",
       ],

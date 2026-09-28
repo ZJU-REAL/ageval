@@ -1,6 +1,6 @@
 <div align="center"><a name="readme-top"></a>
 
-<img src="docs/assets/hero.png" alt="ageval: Write your agent eval once. Run it anywhere." width="100%">
+<img src="docs/assets/hero.png" alt="ageval: Configurable and pluggable agent evaluation framework" width="100%">
 
 # ageval
 

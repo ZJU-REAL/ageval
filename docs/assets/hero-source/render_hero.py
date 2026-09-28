@@ -100,7 +100,6 @@ TITLE_TRACK = -0.02
 TITLE_GAP_1X = 16  # space between the two title lines (was 8)
 NOTE_1X = 19
 NOTE_MAX_W = 720
-PACT_KICKER = 11
 PACT_TITLE = 18
 PACT_BODY = 13
 MARK_1X = 28
@@ -166,7 +165,6 @@ _README_PROFILE = {
     "title_gap_1x": 16,
     "note_1x": 19,
     "note_max_w": 720,
-    "pact_kicker": 11,
     "pact_title": 18,
     "pact_body": 13,
     "pact_show_body": True,
@@ -188,7 +186,6 @@ _SOCIAL_PROFILE = {
     "title_gap_1x": 12,
     "note_1x": 18,
     "note_max_w": 720,
-    "pact_kicker": 11,
     "pact_title": 17,
     "pact_body": 12,
     "pact_show_body": False,
@@ -209,7 +206,7 @@ def apply_profile(name: str) -> None:
     """Switch canvas. `readme` = README poster; `social` = GitHub OG 1280×640."""
     global W1, H1, W, H, PROFILE, PACT_SHOW_BODY, HERO_NAME
     global TITLE_1X, TITLE_GAP_1X, NOTE_1X, NOTE_MAX_W
-    global PACT_KICKER, PACT_TITLE, PACT_BODY
+    global PACT_TITLE, PACT_BODY
     global MARK_1X, PLATE_1X, OWL_PLATE_1X, PAD_1X, OWL_W_1X, OWL_RIGHT_PCT
     global MARQUEE_GAP_1X, MARQUEE_GROUP_1X, HEADLINE_BIAS
     if name == "social":
@@ -225,7 +222,6 @@ def apply_profile(name: str) -> None:
     TITLE_GAP_1X = p["title_gap_1x"]
     NOTE_1X = p["note_1x"]
     NOTE_MAX_W = p["note_max_w"]
-    PACT_KICKER = p["pact_kicker"]
     PACT_TITLE = p["pact_title"]
     PACT_BODY = p["pact_body"]
     PACT_SHOW_BODY = p["pact_show_body"]
@@ -608,34 +604,34 @@ SC_INDEX = 0
 
 COPY = {
     "en": {
-        "titleA": "Configure Agent Eval Once,",
-        "accentA": "Once",
-        "titleB": "Run It Anywhere.",
-        "accentB": "Anywhere",
+        "titleA": "Configurable and pluggable",
+        "accentA": ["Configurable", "pluggable"],
+        "titleB": "agent evaluation framework",
+        "accentB": [],
         "note": "Swap the agent under test with plugins. Teach the Agent to run evals with the CLI and skills.",
         "plugins": "+ via plugins",
         "pacts": [
-            ("SWITCH", "Swap the agent under test in one line",
+            ("Swap the agent under test in one line",
              "No changes to ageval: install a plugin, flip one line of config, and the same dataset runs as-is."),
-            ("TEACH", "Teach the Agent automated evaluation",
+            ("Teach the Agent automated evaluation",
              "Install the CLI and skills so the Agent can design, convert benchmarks, and run evaluations."),
-            ("HUB", "Share and reuse on Hub",
+            ("Share and reuse on Hub",
              "Share or reuse datasets, plugins, and agent configs on ageval Hub, and upload evaluation results."),
         ],
     },
     "zh": {
-        "titleA": "配置一次 Agent Eval，",
-        "accentA": "一次",
-        "titleB": "任意切换运行",
-        "accentB": "任意",
+        "titleA": "可配置可插拔的",
+        "accentA": ["可配置", "可插拔"],
+        "titleB": "智能体评测统一框架",
+        "accentB": [],
         "note": "装插件换待评测 Agent。装上 CLI 和 skill，Agent 能自己跑评测。",
         "plugins": "+ 经插件",
         "pacts": [
-            ("SWITCH", "一键切换待评测 Agent",
+            ("一键切换待评测 Agent",
              "换 Agent 不改 ageval：装插件，在配置里切一行，同一份 dataset 原样跑。"),
-            ("TEACH", "让 Agent 学会自动评测",
+            ("让 Agent 学会自动评测",
              "装上 CLI 和 skill，让 Agent 能设计、转化 benchmark，并自动跑评测。"),
-            ("HUB", "在 Hub 上分享与复用",
+            ("在 Hub 上分享与复用",
              "在 ageval Hub 上分享或复用 dataset、插件和 Agent 配置，并上传评测结果。"),
         ],
     },
@@ -733,13 +729,9 @@ def pact_y1() -> int:
 
 
 def measure_pact_h(locale: str) -> int:
-    d = ImageDraw.Draw(Image.new("RGBA", (16, 16)))
     cell_pad = s(14)
-    kf = font(MONO_REG, s(PACT_KICKER))
     tf = pact_title_font(locale)
     bf = pact_body_font(locale)
-    k_h = d.textbbox((0, 0), "H", font=kf)
-    k_h = k_h[3] - k_h[1]
     pad_x = s(PAD_1X)
     col_w = (W - pad_x * 2) // 3
     body_max = col_w - cell_pad * 2
@@ -747,12 +739,12 @@ def measure_pact_h(locale: str) -> int:
     b_lh = int(round(s(PACT_BODY) * 1.4))
     title_lines = 1
     body_lines = 0
-    for _k, title, body in COPY[locale]["pacts"]:
+    for title, body in COPY[locale]["pacts"]:
         title_lines = max(title_lines, len(wrap_mixed(title, tf, body_max)))
         if PACT_SHOW_BODY:
             body_lines = max(body_lines, len(wrap_mixed(body, bf, body_max)))
     body_block = (s(6) + body_lines * b_lh) if PACT_SHOW_BODY else 0
-    return cell_pad + k_h + s(6) + title_lines * t_lh + body_block + cell_pad
+    return cell_pad + title_lines * t_lh + body_block + cell_pad
 
 
 def measure_headline_h(locale: str) -> int:
@@ -793,20 +785,35 @@ def draw_lockup(im: Image.Image) -> Image.Image:
     return im
 
 
-def draw_accent_line(draw, y, line: str, accent: str, fnt, tracking: float) -> None:
-    i = line.find(accent)
+def accent_spans(line: str, accents: list[str]) -> list[tuple[str, bool]]:
+    spans: list[tuple[str, bool]] = []
+    cursor = 0
+    for accent in accents:
+        if not accent:
+            continue
+        i = line.find(accent, cursor)
+        if i < 0:
+            continue
+        if i > cursor:
+            spans.append((line[cursor:i], False))
+        spans.append((accent, True))
+        cursor = i + len(accent)
+    if cursor < len(line):
+        spans.append((line[cursor:], False))
+    return spans or [(line, False)]
+
+
+def draw_accent_line(draw, y, line: str, accents: list[str], fnt, tracking: float) -> None:
+    spans = accent_spans(line, accents)
     w = tracked_width(line, fnt, tracking)
     x = (W - w) / 2
-    if i < 0:
-        draw_tracked(draw, (x, y), line, fnt, CREAM + (255,), tracking)
-        return
-    before, acc, after = line[:i], accent, line[i + len(accent):]
     extra = tracking * fnt.size
-    if before:
-        x = draw_tracked(draw, (x, y), before, fnt, CREAM + (255,), tracking) + extra
-    x = draw_tracked(draw, (x, y), acc, fnt, ACCENT + (255,), tracking)
-    if after:
-        draw_tracked(draw, (x + extra, y), after, fnt, CREAM + (255,), tracking)
+    last = len(spans) - 1
+    for i, (text, hot) in enumerate(spans):
+        fill = (ACCENT if hot else CREAM) + (255,)
+        x = draw_tracked(draw, (x, y), text, fnt, fill, tracking)
+        if i < last:
+            x += extra
 
 
 def draw_headline(im: Image.Image, locale: str, title_y: int) -> Image.Image:
@@ -838,23 +845,20 @@ def draw_pact(im: Image.Image, locale: str, y1: int) -> Image.Image:
     cols = 3
     col_w = inner_w // cols
     cell_pad = s(14)
-    kf = font(MONO_REG, s(PACT_KICKER))
     tf = pact_title_font(locale)
     bf = pact_body_font(locale)
-    k_bb = d.textbbox((0, 0), "H", font=kf)
     t_bb = d.textbbox((0, 0), "Hg", font=tf)
     b_bb = d.textbbox((0, 0), "Hg", font=bf)
-    k_h = k_bb[3] - k_bb[1]
     t_lh = int(round(s(PACT_TITLE) * 1.25))
     b_lh = int(round(s(PACT_BODY) * 1.4))
     body_max = col_w - cell_pad * 2
     pacts = COPY[locale]["pacts"]
-    wrapped_t = [wrap_mixed(p[1], tf, body_max) for p in pacts]
-    wrapped_b = [wrap_mixed(p[2], bf, body_max) for p in pacts] if PACT_SHOW_BODY else [[] for _ in pacts]
+    wrapped_t = [wrap_mixed(p[0], tf, body_max) for p in pacts]
+    wrapped_b = [wrap_mixed(p[1], bf, body_max) for p in pacts] if PACT_SHOW_BODY else [[] for _ in pacts]
     title_lines = max(len(w) for w in wrapped_t)
     body_lines = max((len(w) for w in wrapped_b), default=0) if PACT_SHOW_BODY else 0
     body_block = (s(6) + body_lines * b_lh) if PACT_SHOW_BODY else 0
-    strip_h = cell_pad + k_h + s(6) + title_lines * t_lh + body_block + cell_pad
+    strip_h = cell_pad + title_lines * t_lh + body_block + cell_pad
     y0 = y1 - strip_h
     border = CREAM + (BORDER_A,)
     lw = max(1, s(1))
@@ -863,11 +867,9 @@ def draw_pact(im: Image.Image, locale: str, y1: int) -> Image.Image:
     for i in range(1, cols):
         x = pad_x + i * col_w
         d.line([(x, y0), (x, y1)], fill=border, width=lw)
-    for i, (kicker, _title, _body) in enumerate(pacts):
+    for i, (_title, _body) in enumerate(pacts):
         x0 = pad_x + i * col_w + cell_pad
         y = y0 + cell_pad
-        draw_tracked(d, (x0, y), kicker, kf, MUTED + (255,), 0.14)
-        y += k_h + s(6)
         for ln in wrapped_t[i]:
             d.text((x0 - t_bb[0], y), ln, font=tf, fill=CREAM + (255,))
             y += t_lh

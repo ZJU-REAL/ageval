@@ -11,7 +11,7 @@
 ### 产品气质
 
 - 面向 benchmark 作者、研究工程师和 Agent infrastructure 团队。
-- **Landing** 使用深色冷墨 + Anton 字标 + Geist / Noto Sans SC + 圆角按钮。
+- **Landing** 跟整站同一套亮暗色：浅色是冷纸，深色是冷墨海报。字标 Anton，正文 Geist / Noto Sans SC，按钮圆角。导航里语言切换右侧是亮暗色按钮。
 - **文档阅读层** 使用同一套克莱因蓝与冷墨中性色；壳与 SPA 一样左右分区（侧栏 `canvas-soft`、阅读列 `canvas`）。标题与正文都走 Geist / Noto Sans SC，不再用衬线。不引入 `liquid-gooey`。
 - 装饰服从信息，不使用生成插画、拟真场景图或无语义的发光背景。
 

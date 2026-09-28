@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Languages } from "lucide-react";
+import { Languages, Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
 import { OwlFlatIcon } from "@/components/owl-flat";
 import type { SiteLocale } from "@/lib/i18n";
 import { sitePath } from "@/lib/shared";
@@ -26,6 +27,23 @@ const sections = [
 ] as const;
 
 const sectionIds = sections.map(([id]) => id);
+
+function ThemeToggle({ toDark, toLight }: { toDark: string; toLight: string }) {
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const dark = mounted && resolvedTheme === "dark";
+  return (
+    <button
+      type="button"
+      className="nav-theme"
+      aria-label={dark ? toLight : toDark}
+      onClick={() => setTheme(dark ? "light" : "dark")}
+    >
+      {dark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+    </button>
+  );
+}
 
 export function LandingNav({
   lang,
@@ -146,6 +164,7 @@ export function LandingNav({
             <Languages aria-hidden="true" />
             {copy.lang}
           </a>
+          <ThemeToggle toDark={copy.themeToDark} toLight={copy.themeToLight} />
         </div>
       </div>
     </nav>

@@ -1,6 +1,6 @@
 <div align="center"><a name="readme-top"></a>
 
-<img src="docs/assets/hero.zh-CN.png" alt="ageval：Agent 评测写一次，到处都能跑。" width="100%">
+<img src="docs/assets/hero.zh-CN.png" alt="ageval：可配置可插拔的智能体评测统一框架" width="100%">
 
 # ageval
 

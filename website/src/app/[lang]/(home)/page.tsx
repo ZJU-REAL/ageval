@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { BookOpen, Copyright, Orbit } from "lucide-react";
@@ -90,17 +91,25 @@ function HeroCtas({
 }
 
 
-/** Render one hero title line, highlighting its first `accent` occurrence. */
-function AccentLine({ line, accent }: { line: string; accent: string }) {
-  const i = line.indexOf(accent);
-  if (i < 0) return line;
-  return (
-    <>
-      {line.slice(0, i)}
-      <span className="hero-title-accent">{accent}</span>
-      {line.slice(i + accent.length)}
-    </>
-  );
+/** Render one hero title line, highlighting each accent in order. */
+function AccentLine({ line, accents }: { line: string; accents: readonly string[] }) {
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  accents.forEach((accent, key) => {
+    if (!accent) return;
+    const i = line.indexOf(accent, cursor);
+    if (i < 0) return;
+    if (i > cursor) nodes.push(line.slice(cursor, i));
+    nodes.push(
+      <span className="hero-title-accent" key={key}>
+        {accent}
+      </span>,
+    );
+    cursor = i + accent.length;
+  });
+  if (cursor < line.length) nodes.push(line.slice(cursor));
+  if (nodes.length === 0) return line;
+  return <>{nodes}</>;
 }
 
 type HomeParams = { lang: string };
@@ -147,10 +156,10 @@ export default async function HomePage({ params }: { params: Promise<HomeParams>
             <div className="hero-center">
               <h1 className="hero-title">
                 <span className="hero-title-a">
-                  <AccentLine line={text.hero.titleA} accent={text.hero.accentA} />
+                  <AccentLine line={text.hero.titleA} accents={text.hero.accentA} />
                 </span>
                 <span className="hero-title-b">
-                  <AccentLine line={text.hero.titleB} accent={text.hero.accentB} />
+                  <AccentLine line={text.hero.titleB} accents={text.hero.accentB} />
                 </span>
                 <HeroRotate />
               </h1>
@@ -184,10 +193,9 @@ export default async function HomePage({ params }: { params: Promise<HomeParams>
 
         <section className="pact" aria-label={text.pactAria}>
           <div className="wrap pact-inner">
-            {text.pact.map(([en, zh, body]) => (
-              <article key={en}>
-                <p className="en">{en}</p>
-                <p className="zh">{zh}</p>
+            {text.pact.map(([title, body]) => (
+              <article key={title}>
+                <p className="zh">{title}</p>
                 <p>{body}</p>
               </article>
             ))}
