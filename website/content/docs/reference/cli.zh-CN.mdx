@@ -35,9 +35,14 @@ ageval release <dataset_id> [--public] [--replace]
 ageval registry list|show|set-visibility|delete|org-create|org-list|org-add-member|org-set-role|org-transfer|org-remove-member …
 ageval results upload-suite <dataset|id@version> --suite-run <8-hex>
 ageval results upload|attach-agent|request|inbox|decide|share|unshare|set-visibility|delete …
+ageval results share-snapshot <dataset> --suite-run <id> [--run <run_id>] [--live]
+ageval results sync-snapshot <dataset> --suite-run <id> [--heartbeat]
+ageval results revoke-snapshot <token-or-url>
 ```
 
 路径 = dataset 根（含 `ageval.yaml`）。`run` / `lock` / `view` / `upload-suite` 也可是 Hub ref（`id@version`）；`--dir` 只配合 Hub ref。`tasks` / `campaign` 仍是本地目录。`--agent` 与 `--profiles` 互斥。`--model` 须配合 `--agent`。`ageval agent install` 还会安装包声明的非 contrib 插件。删除类命令须显式 `--yes`；同 identity 覆盖须显式 `--replace`（默认 409）。`AGEVAL_REGISTRY_URL` / `--registry-url` 覆盖 Registry 源；省略则连公开 Hub（`https://ageval.zjureal.com`）。
+
+`share-snapshot` 打印 `{hub}/s/{token}`，不改这份 suite 的公开或私有，也不会把它放上榜。`sync-snapshot` 用来更新 live 链接。详见 [Hub](../share/hub.mdx)。
 
 ## `ageval run` 常用选项
 

@@ -5,7 +5,7 @@
 
 This file does **not** inventory routes or page chrome. Product scope lives in [AGENTS.md](./AGENTS.md).
 
-This SPA is a **local results console** for datasets, plugins, and Agent packages on this machine (no Registry write). It is not the Hub catalog and not a marketing site.
+This SPA is a **local results console** for datasets, plugins, and Agent packages on this machine. Browsing does not read Registry. The share control on an opened suite or job uploads a read-only snapshot. It is not the Hub catalog and not a marketing site.
 
 One dataset root and a directory of dataset roots share the same header: Datasets, Jobs, Agents, Plugins. No sidebar. On Jobs, the dataset is a Select, not a second tab strip. List search and filters stay pinned. Dataset tables group by the organization in `dataset_id`. Package files are a read-only tree (README first), not a catalog card. Plugin detail reuses the Hub slot timeline.
 

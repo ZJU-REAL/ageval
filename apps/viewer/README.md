@@ -82,5 +82,6 @@ Python serves **`apps/viewer/dist/`** only (no separate `static/` tree). `dist/`
 | `GET .../trials/{run_id}/tree?scope=` | Evidence file tree (`agent` / `verifier` / `artifacts` / `lock` / `runtime` / …) |
 | `GET .../trials/{run_id}/file?path=` | File preview (size-capped). Names containing `env` and ending in `.example` / `.sample` / `.template` / `.dist` are text. `.env` and other `.env.*` stay redacted |
 | `GET .../trials/{run_id}/trajectory` | Parsed `trajectory.jsonl` steps (observational; steps carry `profile_id` when known) |
+| `GET\|POST\|DELETE /api/jobs/{id}/share` | Snapshot share for that suite, or one job when `run_id` is set. POST JSON may set `live` |
 
-All ids are single path segments; file paths reject paths that contain `..`. No Registry required for local browse.
+All ids are single path segments; file paths reject paths that contain `..`. Browsing does not call Registry. Sharing an opened suite or job does.

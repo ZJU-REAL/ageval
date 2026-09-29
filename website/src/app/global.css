@@ -133,6 +133,23 @@ html > body[data-scroll-locked] {
   padding: 0.1em 0.35em;
 }
 
+.prose figure {
+  margin: 1.5rem 0 1.75rem;
+}
+
+.prose figure img {
+  width: 100%;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 10px;
+}
+
+.prose figcaption {
+  margin-top: 0.45rem;
+  font-size: 0.875rem;
+  color: var(--color-fd-muted-foreground);
+  text-align: center;
+}
+
 /* Left/right shell: sidebar canvas-soft, reading column canvas. */
 #nd-sidebar {
   background-color: var(--color-fd-muted);

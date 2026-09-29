@@ -125,7 +125,7 @@ Only a separate `evaluator.py` can return PASS:
 
 **Share and reuse on Hub**
 
-Upload datasets, plugins, Agent packages, and results to [ageval Hub](https://ageval.zjureal.com). Leaderboard scores name the Agent and environment used; pull a published Agent with `--agent`; compare models side by side.
+Upload datasets, plugins, Agent packages, and results to [ageval Hub](https://ageval.zjureal.com). A local suite, including one still running, or a single Attempt can also be sent as a read-only link `/s/{token}`. Opening that link does not require a sign-in, and it does not list the suite. Leaderboard scores name the Agent and environment used; pull a published Agent with `--agent`; compare models side by side.
 
 ### Screenshots
 

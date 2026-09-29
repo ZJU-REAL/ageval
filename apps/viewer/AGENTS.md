@@ -67,11 +67,15 @@ Landing: more than one dataset → Datasets. Exactly one (including
    size-capped preview. The table shows description; source stays a filter.
 10. **Agents** — same for `$AGEVAL_HOME/agents` and the builtin Agent catalog
     (`agent.yaml`).
+11. **Snapshot share** — from an opened suite or one job, upload a read-only
+    Hub link `/s/{token}`. A suite can be frozen or live. A job stays frozen.
+    Does not change visibility or `board_listed`. Browsing still reads only
+    local files.
 
 **Out of scope unless user asks:**
 
 - Public catalog, OAuth, Postgres, Leaderboard SPA (#22)
-- Hub / Registry write (publish, upload, release, remote delete)
+- Catalog publish, `upload-suite`, release, and remote delete
 - Viewer sidebar, catalog-card lists, install / uninstall / editing yaml
 - Scanning more than one directory level, opening `$AGEVAL_HOME` as a file tree,
   reading `credentials`, or merging the cwd Registry cache into Datasets
@@ -171,6 +175,9 @@ Python API under `/api/*` (see `src/ageval/viewer/`):
 | `GET .../trials/{run_id}/tree?scope=` | File tree under evidence (`agent`/`verifier`/`runtime`/…) |
 | `GET .../trials/{run_id}/file?path=` | File preview (size-capped; secret-like names redacted) |
 | `GET .../trials/{run_id}/trajectory` | Parsed `trajectory.jsonl` steps (observational) |
+| `GET /api/jobs/{id}/share` | Snapshot share status for that suite, or one job when `run_id` is set |
+| `POST /api/jobs/{id}/share` | Create the link. JSON may set `run_id` and `live` (boolean) |
+| `DELETE /api/jobs/{id}/share` | Revoke that link. Optional `run_id` query |
 
 Trial meta returns `framework` / `docker` / `upstream_url` (and related provenance
 fields) plus `actors[]` from lock + invocation metadata: role · agent · model ·
@@ -187,7 +194,7 @@ usage). Cache hit rate uses inclusion/disjoint heuristics; never treat
 
 SPA file preview: JSON/JSONL pretty-print + lightweight syntax highlight (no extra deps).
 
-Job and evidence paths stay inside the dataset chosen by `?dataset=` (or the only opened dataset). `job_id` / `task_id` / `run_id` are single-segment; file paths reject `..`. Package preview roots are only: that dataset directory, an indexed plugin or Agent package under `$AGEVAL_HOME`, or a builtin tree shipped in the CLI. Never `credentials`. Never the whole `$AGEVAL_HOME`. A basename that contains `env` and ends in `.example`, `.sample`, `.template`, or `.dist` previews as text. `.env`, `.env.local`, `.env.production`, and other `.env.*` basenames stay redacted. No Registry required.  
+Job and evidence paths stay inside the dataset chosen by `?dataset=` (or the only opened dataset). `job_id` / `task_id` / `run_id` are single-segment; file paths reject `..`. Package preview roots are only: that dataset directory, an indexed plugin or Agent package under `$AGEVAL_HOME`, or a builtin tree shipped in the CLI. Never `credentials`. Never the whole `$AGEVAL_HOME`. A basename that contains `env` and ends in `.example`, `.sample`, `.template`, or `.dist` previews as text. `.env`, `.env.local`, `.env.production`, and other `.env.*` basenames stay redacted. Browsing does not call Registry. Snapshot share does, through `/api/jobs/{id}/share`.  
 Evidence roots: `{dataset}/.ageval/runs/{run_id}` or task-local `.ageval/runs/`; lock `task_id` must match when present.  
 Old `/api/dataset` and `/api/tasks/...` browse routes stay absent.
 

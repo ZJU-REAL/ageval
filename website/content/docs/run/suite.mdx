@@ -71,7 +71,12 @@ ageval cancel <suite_run_id> --dataset examples/datasets/minimal-demo
 
 Running the whole dataset is the **task axis**; campaign sweeps **parameters on one task**. Always-k is **not** the campaign matrix axis.
 
-Results land under `.ageval/suite-runs/`. Open the dataset in the local viewer to see Timing bars.
+Results land under `.ageval/suite-runs/`. Open the dataset in the local viewer to see Timing bars. With Kind set to suite, those jobs can also switch to a waffle: one square is one trial.
+
+<figure>
+  <img src="/images/docs/viewer-waffle.png" alt="Local suite jobs as a waffle" />
+  <figcaption>The same jobs as a waffle. One square is one trial. The column title is the model, with the harness under it.</figcaption>
+</figure>
 
 ## Upload to Hub (Leaderboard / Jobs)
 

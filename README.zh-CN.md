@@ -125,7 +125,7 @@ PASS 只由独立的 `evaluator.py` 给出:
 
 **在 Hub 上分享与复用**
 
-把 dataset、插件、Agent 包和评测结果上传到 [ageval Hub](https://ageval.zjureal.com)。榜单上的成绩会标明用的 Agent 和环境；已发布的 Agent 可用 `--agent` 直接拉取；也可以按模型横向对比。
+把 dataset、插件、Agent 包和评测结果上传到 [ageval Hub](https://ageval.zjureal.com)。本机一份 suite，正在跑的也行，或者单独一次 Attempt，可以发出只读链接 `/s/{token}`。对方不用登录就能打开，也不会出现在 Leaderboard 上。榜单上的成绩会标明用的 Agent 和环境；已发布的 Agent 可用 `--agent` 直接拉取；也可以按模型横向对比。
 
 ### 截图
 
