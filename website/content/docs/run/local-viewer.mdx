@@ -47,18 +47,12 @@ On Datasets, Jobs, Agents, and Plugins, search and filters stay at the top of th
 | Tasks | Per-task status / score, and average duration from each attempt's phase timing. A task that has not run leaves duration blank. A suite task with one run opens that run directly |
 | Attempt | Outcome, **Timing** (and **Tokens** when present), actors, evidence tabs |
 
-<figure>
-  <img src="/images/docs/viewer-jobs.png" alt="Local Jobs list filtered to suite runs" />
-  <figcaption>Jobs, with Kind set to suite.</figcaption>
-</figure>
+<DocFigure src="/images/docs/viewer-jobs.png" alt="Local Jobs list filtered to suite runs" caption="Jobs, with Kind set to suite." />
 
 Timing comes from Attempt `phase_timing` (`environment` / `run` / `evaluate` / `record` / `cleanup`); hover bar segments for durations.  
 Trajectory steps follow the sealed file order: a thought, then the tools that thought invoked, then the next thought. When a sealed step (thought, `tool_call`, or final assistant) carries `elapsed_ms`, the step header shows that duration. Missing timing is omitted — Viewer does not invent it from file mtimes or the page clock. The Trajectory tab can filter steps by kind. Once the trajectory has scrolled into view, a rail on the right jumps to a step.
 
-<figure>
-  <img src="/images/docs/viewer-trajectory.png" alt="Trajectory tab with the step rail open" />
-  <figcaption>Trajectory. The rail on the right jumps to a step.</figcaption>
-</figure>  
+<DocFigure src="/images/docs/viewer-trajectory.png" alt="Trajectory tab with the step rail open" caption="Trajectory. The rail on the right jumps to a step." />  
 Each **tool-call** row (and other long rows) can collapse; the observational PASS note has expand-all / collapse-all, same as the Hub Attempt page.
 
 **Verifier:** When both `evaluation/observation.jsonl` and `evaluation/checks.json` are present, a Trajectory / Files toggle sits on the far right of the tab row (trajectory first). Otherwise the tab shows the one surface that exists. Selecting `checks.json` in the file tree renders the checkpoints in the preview (counts, expandable rows, stdout/stderr, package script). There is no separate Checks panel. The Agent Trajectory tab still reads only root `trajectory.jsonl`.

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "next build && node scripts/post-export.mjs",
+    "build": "next build --webpack && node scripts/post-export.mjs",
     "dev": "next dev",
     "start": "npx --yes serve@14 out -p 3000",
     "typecheck": "fumadocs-mdx && next typegen && tsc --noEmit",

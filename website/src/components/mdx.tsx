@@ -12,10 +12,20 @@ function DocImage({ src, alt, ...rest }: ImgHTMLAttributes<HTMLImageElement>) {
   return <img {...rest} src={resolved} alt={alt ?? ""} />;
 }
 
+function DocFigure({ src, alt, caption }: { src: string; alt: string; caption: string }) {
+  return (
+    <figure>
+      <img src={assetPath(src)} alt={alt} />
+      <figcaption>{caption}</figcaption>
+    </figure>
+  );
+}
+
 export function getMDXComponents(components?: MDXComponents) {
   return {
     ...defaultMdxComponents,
     img: DocImage,
+    DocFigure,
     Mermaid,
     ...components,
   } satisfies MDXComponents;
