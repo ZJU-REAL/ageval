@@ -7,6 +7,7 @@ evidence that an Agent path works — that is what the public smoke is for.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from ageval.plugins.agent_result import AgentResult
@@ -28,6 +29,7 @@ class ScriptedExecutor:
         raises: BaseException | None = None,
         ok: bool = True,
         tool_calls: tuple[dict[str, Any], ...] | None = None,
+        script: Sequence[AgentResult] | None = None,
     ) -> None:
         self.prompts: list[str] = []
         self.timeouts: list[float] = []
@@ -37,6 +39,7 @@ class ScriptedExecutor:
         self._raises = raises
         self._ok = ok
         self._tool_calls = tool_calls or ()
+        self._script: list[AgentResult] | None = None if script is None else list(script)
 
     def invoke(
         self,
@@ -55,6 +58,10 @@ class ScriptedExecutor:
         self.messages.append(messages)
         if self._raises is not None:
             raise self._raises
+        if self._script is not None:
+            if not self._script:
+                raise RuntimeError("scripted executor has no remaining result")
+            return self._script.pop(0)
         turn = len(self.prompts)
         return AgentResult(
             model="scripted-model",
@@ -79,8 +86,12 @@ class ScriptedBinder(AgentBinder):
         *,
         profile_id: str = "solver",
         extra_profiles: tuple[str, ...] = (),
+        options: dict[str, Any] | None = None,
     ) -> None:
-        rows = ({"id": profile_id, "executor": ScriptedExecutor.kind},) + tuple(
+        primary: dict[str, Any] = {"id": profile_id, "executor": ScriptedExecutor.kind}
+        if options:
+            primary["options"] = dict(options)
+        rows = (primary,) + tuple(
             {"id": name, "executor": ScriptedExecutor.kind} for name in extra_profiles
         )
         super().__init__(

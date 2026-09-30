@@ -77,6 +77,8 @@ class AttemptCtx:
     phase: str = "created"
     evaluation_result: Any = None
     _writers_stopped: bool = False
+    _phase_clock_frozen: bool = False
+    _frozen_remaining: float | None = None
 
     # --- verdict -------------------------------------------------------------
 
@@ -112,6 +114,31 @@ class AttemptCtx:
             self.deadline_monotonic = time.monotonic() + float(raw)
         self._push_agent_deadline()
 
+    def freeze_phase_clock(self) -> None:
+        """Hold the current phase's remaining time while an upstream stall waits.
+
+        ``remaining_seconds`` stays at the snapshot taken here. The task worker
+        and the eval worker re-read that snapshot, so the original deadline does
+        not kill them during the stall.
+        """
+        if self._phase_clock_frozen:
+            return
+        self._frozen_remaining = self.remaining_seconds()
+        self._phase_clock_frozen = True
+
+    def thaw_phase_clock(self) -> None:
+        """Resume the phase clock from the snapshot ``freeze_phase_clock`` took."""
+        if not self._phase_clock_frozen:
+            return
+        remaining = self._frozen_remaining
+        self._phase_clock_frozen = False
+        self._frozen_remaining = None
+        if remaining is None:
+            self.deadline_monotonic = None
+        else:
+            self.deadline_monotonic = time.monotonic() + remaining
+        self._push_agent_deadline()
+
     def _push_agent_deadline(self) -> None:
         service = self.agent_service
         if service is None:
@@ -121,7 +148,13 @@ class AttemptCtx:
             parent.deadline_monotonic = self.deadline_monotonic
 
     def remaining_seconds(self) -> float | None:
-        """Seconds left on the current phase clock, or None when unbounded."""
+        """Seconds left on the current phase clock, or None when unbounded.
+
+        While the clock is frozen, this is the snapshot from ``freeze_phase_clock``
+        and does not decrease.
+        """
+        if self._phase_clock_frozen:
+            return self._frozen_remaining
         if self.deadline_monotonic is None:
             return None
         return max(0.0, self.deadline_monotonic - time.monotonic())

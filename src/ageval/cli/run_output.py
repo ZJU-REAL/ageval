@@ -286,6 +286,8 @@ class RunProgress:
             self._on_unit_start(ev)
         elif kind == "unit_phase":
             self._on_unit_phase(ev)
+        elif kind == "upstream_stall":
+            self._on_upstream_stall(ev)
         elif kind == "unit_done":
             self._on_unit_done(ev)
         elif kind == "suite_complete":
@@ -336,6 +338,20 @@ class RunProgress:
         self._running[key] = phase or None
         if self._progress is not None and self._bar_task is not None:
             self._progress.update(self._bar_task, description=self._bar_description())
+
+    def _on_upstream_stall(self, ev: Mapping[str, Any]) -> None:
+        key = _unit_key(ev)
+        outcome = str(ev.get("outcome") or "")
+        phase = str(ev.get("phase") or "")
+        if outcome in {"started", "wait"}:
+            self._running[key] = "upstream_stall"
+        else:
+            self._running[key] = phase or None
+        if self._use_bar:
+            if self._progress is not None and self._bar_task is not None:
+                self._progress.update(self._bar_task, description=self._bar_description())
+            return
+        self._emit(format_upstream_stall_line(ev))
 
     def _on_unit_done(self, ev: Mapping[str, Any]) -> None:
         key = _unit_key(ev)
@@ -476,11 +492,44 @@ class AttemptSpinner:
             self._bar_task, description=f"{escape(self._task_id)} ({escape(name)})"
         )
 
+    def stall(self, ev: Mapping[str, Any]) -> None:
+        """One upstream-stall progress event. The bar reuses ``phase``; a pipe prints fields."""
+        if str(ev.get("type") or "") != "upstream_stall":
+            return
+        outcome = str(ev.get("outcome") or "")
+        if self._use_bar:
+            if self._progress is None or self._bar_task is None:
+                return
+            name = (
+                "upstream_stall" if outcome in {"started", "wait"} else str(ev.get("phase") or "")
+            )
+            if name:
+                self._progress.update(
+                    self._bar_task,
+                    description=f"{escape(self._task_id)} ({escape(name)})",
+                )
+            return
+        self._stderr.write(format_upstream_stall_line(ev) + "\n")
+        self._stderr.flush()
+
     def close(self) -> None:
         if self._progress is not None:
             self._progress.stop()
             self._progress = None
             self._bar_task = None
+
+
+def format_upstream_stall_line(ev: Mapping[str, Any]) -> str:
+    """Field line for a non-TTY stall event. Not a sentence."""
+    task_id = str(ev.get("task_id") or "")
+    state = str(ev.get("state") or "upstream_stall")
+    outcome = str(ev.get("outcome") or "")
+    nxt = int(ev.get("seconds_until_next") or 0)
+    remaining = int(ev.get("remaining_budget") or 0)
+    return (
+        f"upstream_stall task={task_id} state={state} "
+        f"next={nxt} remaining={remaining} outcome={outcome}"
+    )
 
 
 def _unit_key(ev: Mapping[str, Any]) -> tuple[str, int]:
