@@ -113,14 +113,18 @@ class UpstreamStall:
         self._finish("resumed")
 
     def mark_not_repeatable(self, reason: str) -> None:
-        """One line, no sleep, and no time on the stall budget."""
-        if self.disabled or self._open:
+        """Close with ``not_repeatable``. Do not sleep, even if a wait already happened."""
+        if self.disabled:
             return
-        self._reason = (reason or "")[:_REASON_LIMIT]
+        if reason:
+            self._reason = reason[:_REASON_LIMIT]
+        if self._open:
+            self._try_count += 1
+            self._finish("not_repeatable")
+            return
         self._started_at = self._iso()
         self._try_count = 1
-        self._emit("not_repeatable", seconds_until_next=0)
-        self._on_fact("upstream_stall", self._detail("not_repeatable"))
+        self._finish("not_repeatable")
 
     def abort(self) -> None:
         """Drop an open episode after a crash. Thaw the phase clock, write no fact."""

@@ -195,7 +195,8 @@ def test_stall_does_not_spend_the_phase_clock(
     assert backend.timeouts[1] == pytest.approx(30.0)
     assert backend.remaining is not None and backend.remaining > 50
     assert ctx.phase_budget_exhausted() is False
-    assert ctx.remaining_seconds() is not None and ctx.remaining_seconds() > 50
+    left = ctx.remaining_seconds()
+    assert left is not None and left > 50
     assert service.deadline_monotonic is not None
     assert service.deadline_monotonic > time.monotonic()
 
@@ -251,6 +252,28 @@ def test_not_repeatable_emits_one_event_and_does_not_sleep(tmp_path: Path) -> No
     assert labels == ["run"]
     assert facts[0][1]["outcome"] == "not_repeatable"
     assert facts[0][1]["try_count"] == 1
+
+
+def test_later_not_repeatable_closes_the_open_stall(tmp_path: Path) -> None:
+    backend = ScriptedExecutor(
+        script=[
+            _result(ok=False, error="HTTPError:503"),
+            _result(ok=False, error="acp_timeout", repeatable=False),
+        ]
+    )
+    service, clock, events, labels, facts = _service(tmp_path, backend)
+
+    answer = service.invoke(session_id=_open(service), prompt="edited")
+
+    assert answer["ok"] is False
+    assert answer["error"] == "acp_timeout"
+    assert backend.prompts == ["edited", "edited"]
+    assert clock.sleeps == [60.0]
+    assert [event["outcome"] for event in events] == ["started", "wait", "not_repeatable"]
+    assert labels == ["upstream_stall", "upstream_stall", "run"]
+    assert facts[0][1]["outcome"] == "not_repeatable"
+    assert facts[0][1]["try_count"] == 2
+    assert facts[0][1]["reason"] == "acp_timeout"
 
 
 def test_zero_budget_hides_not_repeatable(tmp_path: Path) -> None:

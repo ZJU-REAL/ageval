@@ -104,6 +104,28 @@ def test_format_error_is_not_a_stall() -> None:
     assert events == []
 
 
+def test_format_error_after_a_wait_closes_the_stall() -> None:
+    class FormatError(Exception):
+        pass
+
+    stall, clock, events = _stall(3600)
+    calls = {"n": 0}
+
+    def query(_messages: object, **_kwargs: object) -> dict[str, str]:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("HTTPError:503")
+        raise FormatError("bad actions")
+
+    with pytest.raises(FormatError):
+        wrap_model_query(query, stall)([{"role": "user", "content": "x"}])
+    assert calls["n"] == 2
+    assert clock.sleeps == [60.0]
+    assert [event["outcome"] for event in events] == ["started", "wait", "resumed"]
+    assert stall.episode_open is False
+    assert stall.is_frozen is False
+
+
 def test_spent_budget_raises_without_another_query() -> None:
     stall, clock, _events = _stall(30)
     calls = {"n": 0}

@@ -53,6 +53,7 @@ def wrap_model_query(query: Callable[..., Any], stall: Any) -> Callable[..., Any
                 result = query(messages, **kwargs)
             except Exception as exc:
                 if exc.__class__.__name__ == "FormatError":
+                    stall.end_resumed()
                     raise
                 reason = f"{type(exc).__name__}:{exc}"
                 if stall.note_failure(reason):
