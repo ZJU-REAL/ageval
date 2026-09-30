@@ -50,6 +50,37 @@ class _IdleTimeout(Exception):
     """No ACP session/update or permission for idle_timeout_seconds."""
 
 
+# ACP tool kinds that do not write the workspace. edit / delete / move /
+# execute / other, and a call with no kind, may have changed it.
+_READONLY_TOOL_KINDS = frozenset({"read", "search", "think", "fetch"})
+
+
+def _workspace_unchanged(events: tuple[dict[str, Any], ...] | list[dict[str, Any]]) -> bool:
+    """True when this prompt's tool events did not change the workspace.
+
+    Kinds are collected per tool call. An update that omits ``tool_kind`` does
+    not erase a kind already seen on that call. A call with no kind at all is
+    treated as a change.
+    """
+    seen: dict[str, set[str]] = {}
+    anon = 0
+    for ev in events:
+        if not isinstance(ev, dict) or ev.get("kind") != "tool":
+            continue
+        raw_kind = ev.get("tool_kind")
+        name = raw_kind.strip().lower() if isinstance(raw_kind, str) else ""
+        call_id = ev.get("tool_call_id")
+        if isinstance(call_id, str) and call_id:
+            key = call_id
+        else:
+            key = f"#{anon}"
+            anon += 1
+        bucket = seen.setdefault(key, set())
+        if name:
+            bucket.add(name)
+    return all(kinds and kinds <= _READONLY_TOOL_KINDS for kinds in seen.values())
+
+
 class AcpExecutor(AgentExecutor):
     """Descriptor-driven ACP executor; one entry process per ageval session."""
 
@@ -374,14 +405,16 @@ class AcpExecutor(AgentExecutor):
         text = ""
         if error == "acp_idle_timeout" and self._client is not None:
             text = "".join(self._client.text_chunks)
+        mapped = self._mapped_events()
         return AgentResult(
             model=self.model,
             text=text,
             structured=None,
             ok=False,
             error=error,
-            events=(*self._mapped_events(), timeout_ev),
+            events=(*mapped, timeout_ev),
             metadata=meta,
+            repeatable=_workspace_unchanged(mapped),
         )
 
     def _result(
@@ -438,6 +471,7 @@ class AcpExecutor(AgentExecutor):
             usage=usage,
             extra=extra,
             metadata=meta,
+            repeatable=_workspace_unchanged(mapped),
         )
 
     def _ensure_session(self, *, timeout: float) -> str | None:
@@ -539,6 +573,7 @@ class AcpExecutor(AgentExecutor):
         except TimeoutError:
             return self._timeout_result(started, collect_dir)
         except Exception as exc:  # noqa: BLE001
+            mapped = self._mapped_events()
             return AgentResult(
                 model=self.model,
                 text="",
@@ -547,6 +582,7 @@ class AcpExecutor(AgentExecutor):
                 error="acp_protocol_error",
                 stderr=str(exc)[:500],
                 events=(
+                    *mapped,
                     {
                         "type": "lifecycle",
                         "phase": "failed",
@@ -558,6 +594,7 @@ class AcpExecutor(AgentExecutor):
                     "executor_kind": "acp",
                     "acp_entry_id": self.entry_id,
                 },
+                repeatable=_workspace_unchanged(mapped),
             )
         self._write_vendor(collect_dir)
         return result

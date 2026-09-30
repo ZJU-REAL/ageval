@@ -41,6 +41,7 @@ def _executor(**kwargs: object) -> AcpExecutor:
 def _timeout_run(
     ex: AcpExecutor, client: _AgevalAcpClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.delenv("AGEVAL_OFFLINE_AGENT", raising=False)
     monkeypatch.setattr(ex, "_ensure_session", lambda **_k: None)
     n = {"i": 0}
 
@@ -63,6 +64,7 @@ def test_timeout_returns_mapped_tool_events(monkeypatch: pytest.MonkeyPatch) -> 
     result = ex.invoke("hi", timeout=1)
     assert result.ok is False
     assert result.error == "acp_timeout"
+    assert result.repeatable is False
     assert any(ev.get("kind") == "tool" for ev in result.events)
     assert any(ev.get("phase") == "timeout" for ev in result.events)
 
@@ -121,6 +123,7 @@ def test_idle_timeout_ends_a_silent_prompt(monkeypatch: pytest.MonkeyPatch) -> N
     elapsed = time.monotonic() - started
     assert result.ok is False
     assert result.error == "acp_idle_timeout"
+    assert result.repeatable is True
     assert elapsed < 2.0
     assert conn.cancelled >= 1
     assert any(
