@@ -13,8 +13,15 @@ from typing import Any
 from ageval.plugins.agent_result import AgentResult, parse_validated_text_structured
 from ageval.plugins.errors import ExtensionMaterializeError
 from ageval.plugins.http_loopback import is_http_loopback
+from ageval.runtime.upstream_stall import current_stall
 from miniswe_plugin import PLUGIN_ID
 from miniswe_plugin.env import ProtocolEnv
+from miniswe_plugin.stall import (
+    StallExhausted,
+    install_single_package_attempt,
+    wait_excluding_stall,
+    wrap_model_query,
+)
 from miniswe_plugin.trajectory import to_ageval_trajectory_events
 from miniswe_plugin.usage import usage_from_messages
 
@@ -278,6 +285,20 @@ class MinisweExecutorSPI:
             )
         try:
             extra = self._run_agent(prompt, timeout=timeout)
+        except StallExhausted as exc:
+            return AgentResult(
+                model=self.model,
+                text="",
+                structured=None,
+                ok=False,
+                error="stall_exhausted",
+                metadata={
+                    "plugin": PLUGIN_ID,
+                    "session_id": self.session_id,
+                    "stall_exhausted": True,
+                    "reason": str(exc),
+                },
+            )
         except ExtensionMaterializeError as exc:
             return AgentResult(
                 model=self.model,
@@ -389,6 +410,7 @@ class MinisweExecutorSPI:
                 "miniswe_config_missing: official mini.yaml has no agent templates",
                 kind="extension_materialize_failed",
             )
+        stall = current_stall()
         agent = DefaultAgent(
             model,
             env,
@@ -396,12 +418,19 @@ class MinisweExecutorSPI:
             instance_template=instance_template,
             step_limit=self.step_limit,
             cost_limit=self.cost_limit,
-            wall_time_limit_seconds=max(0, int(timeout)),
+            wall_time_limit_seconds=0 if stall is not None else max(0, int(timeout)),
         )
+        model.query = wrap_model_query(model.query, stall)
         wait = max(1.0, float(timeout))
 
         def _go() -> dict[str, Any]:
-            result = agent.run(prompt)
+            if stall is not None:
+                stall.claim()
+            restore_retry = install_single_package_attempt()
+            try:
+                result = agent.run(prompt)
+            finally:
+                restore_retry()
             payload = {
                 "exit_status": result.get("exit_status") if isinstance(result, dict) else "",
                 "submission": result.get("submission") if isinstance(result, dict) else "",
@@ -418,7 +447,9 @@ class MinisweExecutorSPI:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             fut = pool.submit(_go)
             try:
-                return fut.result(timeout=wait)
+                if stall is None:
+                    return fut.result(timeout=wait)
+                return wait_excluding_stall(fut, stall, wait)
             except concurrent.futures.TimeoutError as exc:
                 raise TimeoutError("miniswe_timeout") from exc
 
