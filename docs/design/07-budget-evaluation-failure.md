@@ -10,7 +10,35 @@
 | `limits.environment_seconds` | 600 | environment：box start、seed upload、`after_environment_ready`、`environment_setup` | ERROR，phase `environment`，token `environment_timeout`。run 不开始 |
 | `limits.evaluate_seconds` | 600 | evaluate：打分 Host 的 start 与 upload、evaluate 相位的 `after_environment_ready`、evaluator worker、`scoring.exec`、evaluate 相位的 invoke | ERROR，phase `evaluate`，token `evaluate_timeout` |
 
-`limits.agent_invocations` 只计 run 相位的 invoke。`seal_run` 之后才打开的 profile（evaluate 的 judge）不占这只额度，由 `evaluate_seconds` 封顶。写出 `0` 时，run 相位每一次 invoke 都被拒绝。
+`limits.agent_invocations` 只计 run 相位的 invoke。`seal_run` 之后才打开的 profile（evaluate 的 judge）不占这只额度，由 `evaluate_seconds` 封顶。写出 `0` 时，run 相位每一次 invoke 都被拒绝。同一次 parent invoke 里的上游 stall 只扣这一次额度，中间的重试不另扣。
+
+## 上游 stall
+
+executor invoke 的 `ok` 不是 true 时，Parent 进入 upstream stall，而不是第一次失败就结束 Attempt。stall 停在 `ParentAgentService.invoke`。`before_agent_invoke` 与 `after_agent_invoke` 仍各跑一次，自己不转重试。没有名为 `invoke` 的槽。
+
+`options.upstream_stall_seconds` 写在该 executor 已经在读的 profile `options` 上（与 miniswe 的 `options.step_limit` 同一处）。省略等于 `3600`。`0` 关掉 stall，第一次失败立刻返回，进度上不出现 `upstream_stall`。负数或非整数拒绝。重试间隔固定 60 秒，不是字段。
+
+stall 期间当前相位的时钟不走。run 冻住 `limits.wall_time_seconds`，evaluate 里的 judge invoke 冻住 `limits.evaluate_seconds`。task worker 和 eval worker 的等待按同一段时间延长。只把 `deadline_monotonic` 往后推不够：这两处若在入口把剩余秒数抓住一次，原到期仍会杀掉 worker。环境启动不 stall。
+
+睡眠之后用同一份 prompt、tools、messages 再调 `executor.invoke`，直到 `ok` 或 stall 预算用尽。成功后，实时进度回到该相位的名字（`run` 或 `evaluate`）。
+
+executor 运行之前的拒绝立刻返回，不进入 stall，也不显示 `upstream_stall`：wall 已经到期、invoke 额度已经用完、redaction 失败、offline forced。
+
+`repeatable: false` 不再调 `executor.invoke`。打一条 `upstream_stall`，outcome 为 `not_repeatable`，不在预算里空等。
+
+三种 executor 的一次 invoke 大小不同：
+
+- `openai-http` 与 `anthropic-http`：一次 invoke 是一次请求。任何非 ok 都可重试。状态码留在结果上，给证据事实用，不决定等不等。
+- ACP：仅当这条 prompt 还没有改过 workspace 时，在同一 session 上重发。已经改过则 `repeatable: false`。
+- miniswe：一次 invoke 是整段 agent。stall 包住进程内当前这一次模型查询。消息留在进程里，恢复后重发这一次查询，不新开 agent。这个集成关掉 mini-swe-agent 自己的 10 次、4–60 秒 tenacity，两段等待不叠。预算属于这一次 parent invoke。内层把预算用完时带 `stall_exhausted`，外层不再开一轮。
+
+预算用尽：invoke 按失败 invoke 返回，Attempt 照今天的失败收场，cleanup 照跑。不给半成品 workspace 打分。最终 CLI 行仍是 PASS / FAIL / ERROR。
+
+证据记一条 `upstream_stall` 事实：executor 的 reason 字符串、`started_at`、try count、outcome（`resumed`、`budget_exhausted` 或 `not_repeatable`）。它不是 `result.json` 的 status，也不是 PASS。
+
+CLI 复用现有相位槽，不另做进度渲染。suite 的 `unit_phase` 与单题 `AttemptSpinner.phase` 在 stall 期间显示 `upstream_stall`。stderr 不是 TTY 时，stall 开始一行、每次等待一行、结束一行。行上有 task id、state `upstream_stall`、距下次尝试的秒数、剩余预算。没有新的 `--json` 事件流。
+
+启动 probe、`--probe`、`after_environment_ready` 不因这段等待改动。响应正文里的 `token-limit` 不单列成一种原因。
 
 run 相位强制一只 limit 时记一条 `limit_reached` 事实 `{"name": "<limits 键>"}`，先到的那条为准：
 

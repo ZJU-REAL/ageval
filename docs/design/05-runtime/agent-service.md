@@ -71,18 +71,27 @@ agent_profiles:
 run.py / evaluator.py  Agent.session(profile).invoke
   → unix socket AGEVAL_AGENT_SERVICE_SOCK
   → ParentAgentService
-       按该 profile 的 executor 赢家 invoke
-       before_agent_invoke
+       before_agent_invoke（一次，不重试）
        executor.invoke → host.attach_stdio(entry argv) 或 host.exec（环境内 worker）
                         或 openai-http POST /chat/completions
                         或 anthropic-http POST /messages
-       after_agent_invoke
+       非 ok → upstream stall（相位时钟停、固定 60 秒、同一 prompt / tools / messages）
+       after_agent_invoke（最终结果一次）
        normalize_agent_result
   → 轨迹文件：run 相位 → trajectory.jsonl
            evaluate 相位 → evaluation/observation.jsonl（省略 user）
 ```
 
 `ParentAgentService.invoke` 只回 `AgentResult`（含可选 `tool_calls`）。**不**在每次 invoke 后 `download` 环境内 workspace。轨迹来自 executor events。publishable 在 **solver writer 停后** 由 run 相位 harvest 一次（Protocol `download`；tree 按 exclude 做快照），evaluate 再把快照 upload 进 **打分 Host**。
+
+executor 返回的 `ok` 不是 true 时，这次 invoke 进入 upstream stall，而不是第一次失败就结束 Attempt。规则、预算和 CLI 见 [07](../07-budget-evaluation-failure.md)。要点：
+
+- 预算是 profile `options.upstream_stall_seconds`（省略 `3600`，`0` 关掉）。间隔固定 60 秒。同一次 invoke 只扣一次 `agent_invocations`。
+- stall 期间 run 的 `wall_time_seconds` 或 evaluate 的 `evaluate_seconds` 不走，worker 等待跟着延长。
+- wall 已到期、额度已用完、redaction 失败、offline forced 这些发生在 executor 之前，立刻拒绝，不显示 `upstream_stall`。
+- `openai-http` / `anthropic-http` 的任何非 ok 都可重试。ACP 只在这条 prompt 还没改 workspace 时，于同一 session 重发；改过则 `repeatable: false`，一行 `not_repeatable`，不等待。
+- miniswe 的 stall 包住进程内当前模型查询，不新开 agent，并关掉该包自己的短 tenacity。内层预算用尽（`stall_exhausted`）时外层不再开一轮。
+- 证据是一条 `upstream_stall` 事实。stall 不是 PASS，也不是 `result.json` 的 status。
 
 Agent Service **跨 evaluate 保持**（或 reopen）：`evaluator.py` 才能 `Agent.session`。run 结束停的是 **solver writer**（该相位已打开的 profile 不得再 invoke），不是把整段服务拆掉再打分。gold 已经在打分 Host；solver 不得在 gold 之后 invoke。Attempt 结束（cleanup / `run_attempt` finally）才停服务。
 
