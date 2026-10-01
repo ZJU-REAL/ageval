@@ -35,6 +35,8 @@ EVAL_WORKER_MODULE = "ageval.runtime.eval_worker"
 EVALUATE_TIMEOUT = "evaluate_timeout"
 # stderr is diagnostics; keep the tail that fits in one evidence fact.
 _STDERR_TAIL_BYTES = 4000
+# Re-read the phase clock often enough that a stall freeze extends this wait.
+_PHASE_CLOCK_POLL_SECONDS = 0.25
 
 
 async def launch_task_worker(ctx: AttemptCtx) -> dict[str, Any]:
@@ -60,7 +62,7 @@ async def launch_task_worker(ctx: AttemptCtx) -> dict[str, Any]:
     await process.stdin.drain()
     process.stdin.close()
 
-    envelope = await _collect(process, timeout=ctx.remaining_seconds())
+    envelope = await _collect(process, timeout=ctx.remaining_seconds(), ctx=ctx)
     if envelope.get("error") == "task_run_timeout":
         note = getattr(ctx, "note_limit_reached", None)
         if callable(note):
@@ -380,12 +382,16 @@ async def _serve_eval_worker(
     started = time.monotonic()
     try:
         while True:
-            remaining = (
-                None if timeout is None else max(0.1, timeout - (time.monotonic() - started))
-            )
+            read_task = asyncio.ensure_future(_read_frame(process.stdout))
             try:
-                frame = await asyncio.wait_for(_read_frame(process.stdout), timeout=remaining)
+                frame = await _await_until_phase_clock(
+                    read_task, ctx=ctx, timeout=timeout, started=started
+                )
             except TimeoutError:
+                if not read_task.done():
+                    read_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await read_task
                 process.kill()
                 await process.wait()
                 envelope: dict[str, Any] = {
@@ -439,18 +445,70 @@ async def _serve_eval_worker(
         raise
 
 
+def _clock_left(ctx: Any, *, timeout: float | None, started: float) -> float | None:
+    """Seconds left to wait. A live ``remaining_seconds`` wins over the captured timeout.
+
+    ``None`` from that method means the phase is unbounded. A missing method falls
+    back to the timeout captured when the worker was launched.
+    """
+    fn = getattr(ctx, "remaining_seconds", None) if ctx is not None else None
+    if callable(fn):
+        raw = fn()
+        if raw is None:
+            return None
+        if not isinstance(raw, bool) and isinstance(raw, int | float):
+            return max(0.0, float(raw))
+    if timeout is None:
+        return None
+    return max(0.0, float(timeout) - (time.monotonic() - started))
+
+
+async def _await_until_phase_clock(
+    task: asyncio.Future[Any],
+    *,
+    ctx: Any,
+    timeout: float | None,
+    started: float,
+) -> Any:
+    """Wait for ``task``, re-reading the phase clock so a stall can extend it."""
+    while True:
+        left = _clock_left(ctx, timeout=timeout, started=started)
+        if left is not None and left <= 0:
+            raise TimeoutError
+        slice_s = (
+            _PHASE_CLOCK_POLL_SECONDS if left is None else min(_PHASE_CLOCK_POLL_SECONDS, left)
+        )
+        if slice_s <= 0:
+            raise TimeoutError
+        try:
+            return await asyncio.wait_for(asyncio.shield(task), timeout=slice_s)
+        except TimeoutError:
+            continue
+
+
 async def _collect(
     process: asyncio.subprocess.Process,
     *,
     timeout: float | None,
+    ctx: Any = None,
 ) -> dict[str, Any]:
     """Read the envelope, keep the stderr tail, and reap the child."""
     assert process.stdout is not None
+    started = time.monotonic()
+    task = asyncio.ensure_future(process.communicate())
     try:
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout)
+        stdout, stderr = await _await_until_phase_clock(
+            task, ctx=ctx, timeout=timeout, started=started
+        )
     except TimeoutError:
-        process.kill()
-        await process.wait()
+        if process.returncode is None:
+            process.kill()
+        with contextlib.suppress(ProcessLookupError):
+            await process.wait()
+        if not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
         return {"ok": False, "error": "task_run_timeout", "exit_code": process.returncode}
 
     envelope = _parse(stdout)

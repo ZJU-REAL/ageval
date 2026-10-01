@@ -257,6 +257,7 @@ def parse_job_mapping(raw: Mapping[str, Any], *, location: str = "profiles.yaml"
                 location=f"{location}:/agent_profiles/{rid}",
             )
         out[rid] = copy.deepcopy(profile)
+        _reject_bad_stall_option(out[rid], location=f"{location}:/agent_profiles/{rid}")
     return JobDocument(
         environment=env_raw.strip(),
         environment_options=copy.deepcopy(env_options_raw),
@@ -498,7 +499,10 @@ def apply_profile_override(job: JobDocument, pointer: str, value: Any) -> None:
                 "profile options must be a mapping",
                 location=pointer,
             )
-        options[field[len("options/") :]] = value
+        key = field[len("options/") :]
+        if key == "upstream_stall_seconds":
+            require_upstream_stall_seconds(value, location=pointer)
+        options[key] = value
         return
     target[field] = value
 
@@ -545,6 +549,41 @@ def _secret_free_extension_row(item: Mapping[str, Any]) -> dict[str, Any]:
     if cleaned:
         out["options"] = cleaned
     return out
+
+
+def require_upstream_stall_seconds(raw: Any, *, location: str) -> int:
+    """Reject a bool, a non-integer, or a negative stall budget."""
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "options.upstream_stall_seconds must be a non-negative integer",
+            location=location,
+        )
+    return raw
+
+
+def _reject_bad_stall_option(profile: Mapping[str, Any], *, location: str) -> None:
+    options = profile.get("options")
+    if isinstance(options, Mapping) and "upstream_stall_seconds" in options:
+        require_upstream_stall_seconds(
+            options["upstream_stall_seconds"],
+            location=f"{location}/options/upstream_stall_seconds",
+        )
+    rows = profile.get("extensions")
+    if isinstance(rows, Sequence) and not isinstance(rows, (str, bytes)):
+        for index, item in enumerate(rows):
+            if not isinstance(item, Mapping):
+                continue
+            item_options = item.get("options")
+            if (
+                not isinstance(item_options, Mapping)
+                or "upstream_stall_seconds" not in item_options
+            ):
+                continue
+            require_upstream_stall_seconds(
+                item_options["upstream_stall_seconds"],
+                location=f"{location}/extensions/{index}/options/upstream_stall_seconds",
+            )
 
 
 def plugin_row_options(profile: Mapping[str, Any], plugin_id: str) -> dict[str, Any]:

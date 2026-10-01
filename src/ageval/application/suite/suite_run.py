@@ -270,6 +270,7 @@ async def _run_one(
     keep_workspace: bool = False,
     keep_vendor_raw: bool = False,
     on_phase: PhaseObserver | None = None,
+    on_progress: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     """Run one (task_id, attempt_index) unit. Concurrency is owned by the claim pool."""
     global _inflight_current, _inflight_peak
@@ -285,6 +286,8 @@ async def _run_one(
             keep_workspace=keep_workspace,
             keep_vendor_raw=keep_vendor_raw,
             on_phase=on_phase,
+            on_progress=on_progress,
+            attempt_index=attempt_index,
         )
         status = getattr(result, "status", None) or "ERROR"
         run_id = extract_run_id(
@@ -999,6 +1002,7 @@ async def _execute_suite_run(
                 keep_workspace=keep_workspace,
                 keep_vendor_raw=keep_vendor_raw,
                 on_phase=_phase_forwarder(on_progress, tid, idx),
+                on_progress=on_progress,
             )
             async with progress_lock:
                 new_results.append(row)

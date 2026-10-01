@@ -121,6 +121,8 @@ async def run_attempt(
     force_build: bool = False,
     identity_factory: IdentityFactory | None = None,
     on_phase: PhaseObserver | None = None,
+    on_progress: Any = None,
+    attempt_index: int = 0,
 ) -> tuple[int, AttemptResult]:
     """Run one foreground Attempt and return its exit code and result."""
     from ageval.application.composition import build_lock_command
@@ -219,7 +221,16 @@ async def run_attempt(
         on_phase=on_phase,
     )
     _bind_evaluate_session_target(ctx, agent_service)
-    agent_service.service.on_limit_reached = ctx.note_limit_reached
+    parent = agent_service.service
+    parent.on_limit_reached = ctx.note_limit_reached
+    parent.on_phase_clock = lambda frozen: (
+        ctx.freeze_phase_clock() if frozen else ctx.thaw_phase_clock()
+    )
+    parent.record_stall_fact = ctx.record_fact
+    parent.on_phase = on_phase
+    parent.on_progress = on_progress
+    parent.task_id = lock.task_id
+    parent.attempt_index = attempt_index
 
     try:
         await run_attempt_pipeline(ctx)

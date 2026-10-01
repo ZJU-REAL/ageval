@@ -152,6 +152,32 @@ def test_unknown_profile_key_fails_closed(tmp_path: Path) -> None:
     assert "unknown profile keys" in str(caught.value)
 
 
+def test_upstream_stall_seconds_rejects_a_bad_budget() -> None:
+    for bad in (-1, 1.5, True, "60"):
+        with pytest.raises(ConfigError):
+            _job({"solver": {**ACP_SOLVER, "options": {"upstream_stall_seconds": bad}}})
+    with pytest.raises(ConfigError):
+        _job(
+            {
+                "solver": {
+                    **ACP_SOLVER,
+                    "extensions": [
+                        {"plugin": "acp", "options": {"entry": "pi", "upstream_stall_seconds": -3}}
+                    ],
+                }
+            }
+        )
+
+
+def test_upstream_stall_seconds_accepts_zero_and_an_override() -> None:
+    job = _job({"solver": {**ACP_SOLVER, "options": {"upstream_stall_seconds": 0}}})
+    assert job.profiles["solver"]["options"]["upstream_stall_seconds"] == 0
+    apply_profile_override(job, "/agent_profiles/solver/options/upstream_stall_seconds", 120)
+    assert job.profiles["solver"]["options"]["upstream_stall_seconds"] == 120
+    with pytest.raises(ConfigError):
+        apply_profile_override(job, "/agent_profiles/solver/options/upstream_stall_seconds", False)
+
+
 def test_unknown_top_level_key_fails_closed() -> None:
     with pytest.raises(ConfigError):
         parse_job_mapping(

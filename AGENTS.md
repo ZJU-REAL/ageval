@@ -109,8 +109,8 @@ Write the straight path. A failure fails.
 
 - Do not build a friendly error-code table for every old field. An unknown key is rejected, with one message.
 - Do not catch `Exception` and continue as `{"status":"ERROR"}` (the evaluate boundary records a phase failure; that case is the exception).
-- Do not add an unproven probe, retry, or compatibility layer.
-- Missing quota, capability, credentials, or `attach_stdio`: lock or invoke fails **once**.
+- Do not add an unproven probe or a compatibility layer. A non-ok executor invoke stalls until `options.upstream_stall_seconds` (omitted means 3600; `0` disables), then fails once. The retry interval is 60 seconds and is not a field.
+- Missing capability or `attach_stdio`: lock fails once. A parent refusal before the executor runs (wall clock already exhausted, invocation quota already exhausted, redaction failure, offline forced) fails that invoke once and does not stall.
 
 ## Project boundaries (agents must not cross)
 

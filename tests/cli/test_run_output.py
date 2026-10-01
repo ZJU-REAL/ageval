@@ -282,6 +282,98 @@ def test_run_progress_unit_phase_silent_without_tty() -> None:
     assert err.getvalue() == before
 
 
+def _stall_event(
+    *, outcome: str, nxt: int, remaining: int, phase: str = "run"
+) -> dict[str, object]:
+    return {
+        "type": "upstream_stall",
+        "task_id": "alpha",
+        "attempt_index": 0,
+        "state": "upstream_stall",
+        "outcome": outcome,
+        "seconds_until_next": nxt,
+        "remaining_budget": remaining,
+        "phase": phase,
+    }
+
+
+def test_upstream_stall_prints_field_lines_when_the_bar_is_off() -> None:
+    err = io.StringIO()
+    progress = RunProgress(
+        suite_run_id="s",
+        dataset_label="d",
+        stderr=err,
+        use_bar=False,
+        use_color=False,
+    )
+    progress.handle({"type": "unit_start", "task_id": "alpha", "attempt_index": 0})
+    progress.handle(_stall_event(outcome="started", nxt=60, remaining=3600))
+    progress.handle(_stall_event(outcome="wait", nxt=60, remaining=3540))
+    progress.handle(_stall_event(outcome="resumed", nxt=0, remaining=3480))
+    progress.handle(
+        {
+            "type": "unit_done",
+            "task_id": "alpha",
+            "attempt_index": 0,
+            "status": "ERROR",
+            "duration": "1s",
+        }
+    )
+    lines = err.getvalue().strip().splitlines()
+    stall = [line for line in lines if line.startswith("upstream_stall")]
+    assert [line.split("outcome=")[-1] for line in stall] == ["started", "wait", "resumed"]
+    assert "task=alpha" in stall[0]
+    assert "state=upstream_stall" in stall[0]
+    assert "next=60" in stall[1]
+    assert "remaining=3540" in stall[1]
+    assert "ERROR" in lines[-1]
+    assert "outcome=" not in lines[-1]
+
+
+def test_upstream_stall_bar_uses_the_phase_slot() -> None:
+    err = io.StringIO()
+    progress = RunProgress(
+        suite_run_id="s",
+        dataset_label="d",
+        stderr=err,
+        use_bar=True,
+        use_color=False,
+    )
+    progress.handle({"type": "suite_start", "total": 1, "done": 0})
+    progress.handle({"type": "unit_start", "task_id": "alpha", "attempt_index": 0})
+    progress.handle(
+        {"type": "unit_phase", "task_id": "alpha", "attempt_index": 0, "phase": "upstream_stall"}
+    )
+    assert progress._progress is not None and progress._bar_task is not None
+    assert progress._progress.tasks[progress._bar_task].description == "alpha (upstream_stall)"
+    progress.handle(_stall_event(outcome="resumed", nxt=0, remaining=3000, phase="run"))
+    assert progress._progress.tasks[progress._bar_task].description == "alpha (run)"
+    assert "upstream_stall task=" not in err.getvalue()
+    progress.close()
+
+
+def test_attempt_spinner_stall_updates_the_bar_and_prints_fields_without_one() -> None:
+    err = io.StringIO()
+    spinner = AttemptSpinner(task_id="alpha", stderr=err, use_bar=True, use_color=False)
+    with spinner:
+        assert spinner._progress is not None and spinner._bar_task is not None
+        spinner.stall(_stall_event(outcome="started", nxt=60, remaining=3600))
+        assert spinner._progress.tasks[spinner._bar_task].description == "alpha (upstream_stall)"
+        spinner.stall(_stall_event(outcome="resumed", nxt=0, remaining=3480, phase="evaluate"))
+        assert spinner._progress.tasks[spinner._bar_task].description == "alpha (evaluate)"
+    assert "upstream_stall task=" not in err.getvalue()
+
+    plain = io.StringIO()
+    quiet = AttemptSpinner(task_id="alpha", stderr=plain, use_bar=False)
+    quiet.stall(_stall_event(outcome="budget_exhausted", nxt=0, remaining=0))
+    text = plain.getvalue().strip()
+    assert text.startswith("upstream_stall task=alpha")
+    assert "state=upstream_stall" in text
+    assert "outcome=budget_exhausted" in text
+    assert "next=0" in text
+    assert "remaining=0" in text
+
+
 def test_attempt_spinner_phase_updates_description() -> None:
     err = io.StringIO()
     spinner = AttemptSpinner(task_id="alpha", stderr=err, use_bar=True, use_color=False)

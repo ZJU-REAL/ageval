@@ -25,6 +25,8 @@ class AgentResult:
     metadata: dict[str, Any] | None = None
     # Native tool channel (openai-http / anthropic-http). Empty when text-only.
     tool_calls: tuple[dict[str, Any], ...] = ()
+    # False when this prompt must not be sent again (the workspace already changed).
+    repeatable: bool = True
 
 
 class AgentExecutor(Protocol):

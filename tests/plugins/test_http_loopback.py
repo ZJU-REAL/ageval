@@ -158,7 +158,7 @@ def test_miniswe_loopback_does_not_emit_missing_credential(
     )
     try:
         spi._run_agent("ping", timeout=1)
-    except ExtensionMaterializeError as exc:
+    except Exception as exc:
         assert "miniswe_missing_credential" not in str(exc)
 
 

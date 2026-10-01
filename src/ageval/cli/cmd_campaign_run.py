@@ -352,6 +352,7 @@ def register(app: typer.Typer) -> None:
                             keep_workspace=keep_workspace,
                             keep_vendor_raw=keep_vendor_raw,
                             on_phase=spinner.phase,
+                            on_progress=spinner.stall,
                         )
                     )
                 summary = result.as_dict()

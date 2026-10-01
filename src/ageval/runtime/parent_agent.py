@@ -16,7 +16,9 @@ import os
 import threading
 import time
 import uuid
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 from ageval.evidence.redaction import RedactionError
@@ -38,6 +40,12 @@ from ageval.runtime.agent_service_evidence import (
     write_invoke_request,
 )
 from ageval.runtime.offline import is_offline_agent
+from ageval.runtime.upstream_stall import UpstreamStall, bind_stall, budget_seconds, reset_stall
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
 
 _LOG = logging.getLogger(__name__)
 _THREAD_LOOPS = threading.local()
@@ -131,6 +139,18 @@ class ParentAgentService:
     _run_profile_ids: set[str] = field(default_factory=set, repr=False)
     evaluate_environment_names: frozenset[str] | None = None
     evaluate_environment_binder: Any = None
+    # Live progress for one stall. The CLI reuses the phase slot; this event is
+    # the non-TTY line and the evidence the tests assert.
+    on_progress: Any = None
+    on_phase: Any = None
+    on_phase_clock: Callable[[bool], None] | None = None
+    record_stall_fact: Callable[[str, dict[str, Any]], None] | None = None
+    task_id: str = ""
+    attempt_index: int = 0
+    _phase_clock_frozen: bool = field(default=False, repr=False)
+    _monotonic: Any = field(default=time.monotonic, repr=False)
+    _sleep: Any = field(default=time.sleep, repr=False)
+    _now: Any = field(default=_utc_now, repr=False)
 
     def __post_init__(self) -> None:
         if self.invoke_quota is None:
@@ -360,18 +380,37 @@ class ParentAgentService:
             collect_dir.mkdir(parents=True, exist_ok=True)
         sentinels = tuple(self.evidence_store.sentinels) if self.evidence_store else ()
 
+        stall: UpstreamStall | None = None
+        token: Any = None
         try:
             sent = self._chain(binding, BEFORE_AGENT_INVOKE, prompt)
-            invoke_kwargs: dict[str, Any] = {
-                "timeout": self._invoke_timeout(),
-                "collect_dir": collect_dir,
-                "redaction_sentinels": sentinels,
-            }
-            if tools is not None:
-                invoke_kwargs["tools"] = tools
-            if messages is not None:
-                invoke_kwargs["messages"] = messages
-            result = binding.executor.invoke(sent, **invoke_kwargs)
+            stall = self._make_stall(binding)
+            token = bind_stall(stall)
+            while True:
+                invoke_kwargs: dict[str, Any] = {
+                    "timeout": self._invoke_timeout(),
+                    "collect_dir": collect_dir,
+                    "redaction_sentinels": sentinels,
+                }
+                if tools is not None:
+                    invoke_kwargs["tools"] = tools
+                if messages is not None:
+                    invoke_kwargs["messages"] = messages
+                result = binding.executor.invoke(sent, **invoke_kwargs)
+                if _result_ok(result):
+                    stall.end_resumed()
+                    break
+                if stall.claimed or _result_stall_exhausted(result):
+                    break
+                if stall.disabled:
+                    break
+                if not _result_repeatable(result):
+                    stall.mark_not_repeatable(_result_reason(result))
+                    break
+                if stall.note_failure(_result_reason(result)):
+                    stall.wait()
+                    continue
+                break
             result = self._chain(binding, AFTER_AGENT_INVOKE, result)
             result = self._chain(binding, NORMALIZE_AGENT_RESULT, result)
         except Exception as exc:  # noqa: BLE001 — a crash still leaves evidence
@@ -391,6 +430,11 @@ class ParentAgentService:
                 handle.append_event(event)
                 seal_failure(handle, status="crash", error=kind, latency_ms=latency)
             return self._failed(binding, handle, error=kind)
+        finally:
+            if token is not None:
+                reset_stall(token)
+            if stall is not None and (stall.episode_open or stall.is_frozen):
+                stall.abort()
 
         latency = (time.monotonic() - started) * 1000.0
         if handle is not None:
@@ -484,6 +528,8 @@ class ParentAgentService:
         return None
 
     def _wall_expired(self) -> bool:
+        if self._phase_clock_frozen:
+            return False
         return self.deadline_monotonic is not None and time.monotonic() >= self.deadline_monotonic
 
     def _note_run_limit(self, name: str) -> None:
@@ -508,10 +554,72 @@ class ParentAgentService:
                 if parsed > 0:
                     timeout = parsed
         timeout = max(1.0, timeout)
-        if self.deadline_monotonic is None:
+        if self._phase_clock_frozen or self.deadline_monotonic is None:
             return timeout
         remaining = self.deadline_monotonic - time.monotonic()
         return 0.1 if remaining <= 0 else min(timeout, remaining)
+
+    def _make_stall(self, binding: SessionBinding) -> UpstreamStall:
+        from ageval.config.profiles import executor_plugin_options
+
+        options: Mapping[str, Any] = {}
+        try:
+            row = self.binder.profile(binding.profile_id)
+        except UnknownProfileError:
+            row = {}
+        if isinstance(row, Mapping):
+            options = executor_plugin_options(row)
+        raw = options.get("upstream_stall_seconds")
+        phase = "evaluate" if self._run_sealed else "run"
+        return UpstreamStall(
+            budget_seconds=budget_seconds(raw),
+            phase=phase,
+            monotonic=self._monotonic,
+            sleep=self._sleep,
+            now=self._now,
+            on_event=self._emit_stall,
+            on_freeze=lambda: self._set_phase_clock_frozen(True),
+            on_thaw=lambda: self._set_phase_clock_frozen(False),
+            on_fact=self._record_stall_fact,
+        )
+
+    def _set_phase_clock_frozen(self, frozen: bool) -> None:
+        """Freeze before the ctx snapshot; thaw the deadline before clearing the flag."""
+        hook = self.on_phase_clock
+        if frozen:
+            self._phase_clock_frozen = True
+            if callable(hook):
+                hook(True)
+            return
+        if callable(hook):
+            hook(False)
+        self._phase_clock_frozen = False
+
+    def _record_stall_fact(self, name: str, detail: dict[str, Any]) -> None:
+        callback = self.record_stall_fact
+        if callable(callback):
+            callback(name, detail)
+
+    def _emit_stall(self, payload: Mapping[str, Any]) -> None:
+        outcome = str(payload.get("outcome") or "")
+        phase = str(payload.get("phase") or ("evaluate" if self._run_sealed else "run"))
+        event = {
+            "type": "upstream_stall",
+            "task_id": self.task_id,
+            "attempt_index": self.attempt_index,
+            "state": "upstream_stall",
+            "outcome": outcome,
+            "seconds_until_next": int(payload.get("seconds_until_next") or 0),
+            "remaining_budget": int(payload.get("remaining_budget") or 0),
+            "phase": phase,
+        }
+        label = "upstream_stall" if outcome in {"started", "wait"} else phase
+        phase_cb = self.on_phase
+        if callable(phase_cb) and label:
+            phase_cb("started", label)
+        progress = self.on_progress
+        if callable(progress):
+            progress(event)
 
     # --- evidence ------------------------------------------------------------
 
@@ -595,6 +703,26 @@ def _public_tool_calls(result: Any) -> list[dict[str, Any]]:
                 }
             )
     return out
+
+
+def _result_ok(result: Any) -> bool:
+    return bool(getattr(result, "ok", False))
+
+
+def _result_repeatable(result: Any) -> bool:
+    return bool(getattr(result, "repeatable", True))
+
+
+def _result_reason(result: Any) -> str:
+    error = getattr(result, "error", None)
+    return "" if error is None else str(error)
+
+
+def _result_stall_exhausted(result: Any) -> bool:
+    if str(getattr(result, "error", "") or "") == "stall_exhausted":
+        return True
+    meta = getattr(result, "metadata", None)
+    return isinstance(meta, dict) and bool(meta.get("stall_exhausted"))
 
 
 def _refusal(error: str) -> dict[str, Any]:
