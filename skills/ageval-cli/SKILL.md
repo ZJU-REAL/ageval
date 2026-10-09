@@ -28,7 +28,7 @@ uv run ageval executors -v
 uv run ageval plugin install plugins/nooa
 ```
 
-`--profiles` replaces the dataset job document. `--agent` and `--profiles` are mutually exclusive. `--agent pi` (and other shipped short ids) needs no `agent install`. `--model` requires `--agent` and overrides this run’s `binding.model` (not `ageval results --model`). `--set` allowlist: `/parameters/seed`, `/parameters/active_profile`, `/bindings/<role>/{model,executor,api_key,base_url,options/<key>}`. Not `limits.*`.
+`--profiles` replaces the dataset job document. `--agent` and `--profiles` are mutually exclusive. `--agent pi` (and other shipped short ids) needs no `agent install`. `--model` requires `--agent` and overrides this run’s `binding.model` (not `ageval results upload-suite --model`). `ageval results analyze` is separate: default analyzer `stats`; `hack` and `review` take `--agent` plus `--model` for an `openai-http` or `anthropic-http` package. Analysis does not change PASS or `evaluation/checks.json`. `--set` allowlist: `/parameters/seed`, `/parameters/active_profile`, `/bindings/<role>/{model,executor,api_key,base_url,options/<key>}`. Not `limits.*`.
 
 TTY prints a short recap (no digest / sha256). A pipe keeps JSON. `ageval run --json` forces the run document.
 
