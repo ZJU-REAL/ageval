@@ -108,6 +108,16 @@ def test_single_task_tty_recap(monkeypatch) -> None:
     assert "actors_summary" not in result.stdout
 
 
+def test_retry_errors_requires_resume() -> None:
+    r = _ageval("run", str(SUITE), "--task", "alpha", "--retry-errors")
+    assert r.returncode == 2
+    assert "suite_retry_errors_requires_resume" in r.stderr
+
+    help_run = _ageval("run", "--help")
+    assert help_run.returncode == 0
+    assert "--retry-errors" in help_run.stdout
+
+
 def test_replace_slot_requires_resume_and_task() -> None:
     r = _ageval("run", str(SUITE), "--task", "alpha", "--replace-slot")
     assert r.returncode == 2
