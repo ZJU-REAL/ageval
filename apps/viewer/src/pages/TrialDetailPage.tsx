@@ -6,11 +6,21 @@ import { CommandStrip } from "@ageval/shared/components/command-strip";
 import { LoadingState } from "@ageval/shared/components/empty-state";
 import { Shell } from "@/components/layout";
 import { SnapshotShareControl } from "@/components/snapshot-share";
+import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { ActorsTable } from "@ageval/shared/components/trial/actors-table";
 import { EvidenceTabs } from "@ageval/shared/components/trial/evidence-tabs";
+import { Outcome } from "@ageval/shared/components/trial/outcome";
 import { OutcomeStrip } from "@ageval/shared/components/trial/outcome-strip";
 import { PhaseTimingBar } from "@ageval/shared/components/trial/phase-timing-bar";
 import { TrialHeader } from "@ageval/shared/components/trial/trial-header";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@ageval/shared/components/ui/table";
 import { useTrialDetail } from "@/hooks/use-trial-detail";
 import type { Trial } from "@/lib/api";
 import { jobPath, jobsHome, taskPath, trialPath } from "@/lib/routes";
@@ -222,6 +232,11 @@ function AnalysisBody({ item }: { item: AnalysisReport }) {
   );
 }
 
+const GAP_LABEL: Record<string, string> = {
+  phase_timing: "phase timing",
+  upstream_stall_count: "upstream stall count",
+};
+
 function analyzerTitle(name: string): string {
   if (name === "stats") return "Stats";
   if (name === "hack") return "Hack";
@@ -239,27 +254,112 @@ function analysisKind(item: AnalysisReport): "stats" | "hack" | "review" | "othe
 }
 
 function StatsBody({ metrics }: { metrics: Record<string, unknown> }) {
-  const rows: Array<[string, unknown]> = [
-    ["invoke_count", metrics.invoke_count],
-    ["tool_call_count", metrics.tool_call_count],
-    ["tool_failure_count", metrics.tool_failure_count],
-    ["tool_failure_rate", metrics.tool_failure_rate],
-    ["upstream_stall_count", metrics.upstream_stall_count],
-  ];
-  const gaps = Array.isArray(metrics.gaps) ? metrics.gaps.filter((item) => typeof item === "string") : [];
+  const calls = repeatedCalls(metrics);
+  const codes = errorCodeRows(metrics);
+  const gaps = gapCaption(metrics);
+  const showArgs = calls.some((row) => row.args);
   return (
-    <div className="space-y-2">
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-        {rows.map(([label, value]) => (
-          <div key={label} className="contents">
-            <dt className="text-mute">{label}</dt>
-            <dd className="font-mono text-ink tabular-nums">{metricText(value)}</dd>
-          </div>
-        ))}
-      </dl>
-      {gaps.length > 0 ? (
-        <p className="text-sm text-mute">gaps {gaps.join(", ")}</p>
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+        <Stat label="Invokes" value={formatCount(metrics.invoke_count)} />
+        <Stat label="Tool calls" value={formatCount(metrics.tool_call_count)} />
+        <Stat label="Tool failures" value={formatCount(metrics.tool_failure_count)} />
+        <Stat label="Failure rate" value={formatRate(metrics.tool_failure_rate)} />
+        <Stat label="Upstream stalls" value={formatCount(metrics.upstream_stall_count)} />
+      </div>
+      {calls.length > 0 ? (
+        <CountTable
+          label="Repeated tool calls"
+          columns={
+            showArgs
+              ? [
+                  { id: "tool", label: "Tool", kind: "text" },
+                  { id: "arguments", label: "Arguments", kind: "text" },
+                  { id: "repeats", label: "Repeats", kind: "count" },
+                ]
+              : [
+                  { id: "tool", label: "Tool", kind: "text" },
+                  { id: "repeats", label: "Repeats", kind: "count" },
+                ]
+          }
+          rows={calls.map((row, index) => ({
+            key: `${row.name}-${index}`,
+            cells: {
+              tool: row.name,
+              arguments: row.args || "-",
+              repeats: String(row.count),
+            },
+          }))}
+        />
       ) : null}
+      {codes.length > 0 ? (
+        <CountTable
+          label="Error codes"
+          columns={[
+            { id: "code", label: "Code", kind: "text" },
+            { id: "count", label: "Count", kind: "count" },
+          ]}
+          rows={codes.map((row, index) => ({
+            key: `${row.code}-${index}`,
+            cells: { code: row.code, count: String(row.count) },
+          }))}
+        />
+      ) : null}
+      {gaps ? <p className="text-xs text-mute">{gaps}</p> : null}
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <Outcome label={label}>
+      <span className="font-mono tabular-nums">{value}</span>
+    </Outcome>
+  );
+}
+
+function CountTable({
+  label,
+  columns,
+  rows,
+}: {
+  label: string;
+  columns: Array<{ id: string; label: string; kind: "text" | "count" }>;
+  rows: Array<{ key: string; cells: Record<string, string> }>;
+}) {
+  const lead = columns[0]?.id;
+  return (
+    <div className="-mx-4 space-y-2 border-t border-hairline pt-3">
+      <p className="px-4 text-xs text-mute">{label}</p>
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            {columns.map((column) => (
+              <TableHead key={column.id}>{column.label}</TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={row.key}>
+              {columns.map((column) =>
+                column.kind === "count" ? (
+                  <TableCell key={column.id} className="tabular-nums text-body">
+                    {row.cells[column.id]}
+                  </TableCell>
+                ) : (
+                  <TableCell
+                    key={column.id}
+                    className={column.id === lead ? "font-medium" : "text-body"}
+                  >
+                    <TruncateTip className="block w-full" text={row.cells[column.id] || "-"} />
+                  </TableCell>
+                ),
+              )}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -480,12 +580,76 @@ function phraseLabel(value: string, known: Record<string, string>): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-function metricText(value: unknown): string {
-  if (value === null || value === undefined) return "null";
-  if (typeof value === "number" || typeof value === "string" || typeof value === "boolean") {
-    return String(value);
+function formatCount(value: unknown): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return String(value);
+}
+
+function formatRate(value: unknown): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function gapCaption(metrics: Record<string, unknown>): string | null {
+  if (!Array.isArray(metrics.gaps)) return null;
+  const labels = metrics.gaps
+    .filter((item): item is string => typeof item === "string" && item.trim() !== "")
+    .map((item) => GAP_LABEL[item] ?? item.replaceAll("_", " "));
+  if (labels.length === 0) return null;
+  return `Missing ${labels.join(", ")}.`;
+}
+
+function repeatedCalls(
+  metrics: Record<string, unknown>,
+): Array<{ name: string; args: string | null; count: number }> {
+  if (!Array.isArray(metrics.repeated_tool_calls)) return [];
+  const rows: Array<{ name: string; args: string | null; count: number }> = [];
+  for (const item of metrics.repeated_tool_calls) {
+    if (!isRecord(item) || typeof item.count !== "number" || !Number.isFinite(item.count)) {
+      continue;
+    }
+    const name =
+      typeof item.function_name === "string" && item.function_name.trim()
+        ? item.function_name.trim()
+        : "-";
+    rows.push({ name, args: formatArgs(item.args), count: item.count });
   }
-  return "null";
+  return rows;
+}
+
+function errorCodeRows(
+  metrics: Record<string, unknown>,
+): Array<{ code: string; count: number }> {
+  if (!isRecord(metrics.error_codes)) return [];
+  const rows: Array<{ code: string; count: number }> = [];
+  for (const [code, count] of Object.entries(metrics.error_codes)) {
+    if (!code.trim() || typeof count !== "number" || !Number.isFinite(count)) continue;
+    rows.push({ code, count });
+  }
+  return rows;
+}
+
+function formatArgs(args: unknown): string | null {
+  if (typeof args === "string") return clip(args);
+  if (typeof args === "number" || typeof args === "boolean") return String(args);
+  if (Array.isArray(args)) {
+    const text = args
+      .map((item) => (typeof item === "string" ? item : JSON.stringify(item)))
+      .join(" ");
+    return clip(text);
+  }
+  if (!isRecord(args)) return null;
+  const parts = Object.entries(args).map(([key, value]) => {
+    const rendered = typeof value === "string" ? value : value == null ? "-" : JSON.stringify(value);
+    return `${key}=${rendered}`;
+  });
+  return parts.length > 0 ? clip(parts.join(", ")) : null;
+}
+
+function clip(text: string): string | null {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return null;
+  return clean.length > 240 ? `${clean.slice(0, 240)}...` : clean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
