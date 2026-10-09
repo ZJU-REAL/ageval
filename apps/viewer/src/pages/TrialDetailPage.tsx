@@ -170,16 +170,36 @@ export function TrialDetailPage() {
 
 type AnalysisReport = NonNullable<Trial["analysis"]>[number];
 
+const ANALYZER_LABELS: Record<string, string> = {
+  stats: "Stats",
+  hack: "Hack",
+  review: "Review",
+};
+
+function analyzerLabel(id: string): string {
+  return ANALYZER_LABELS[id] ?? id;
+}
+
 function AnalysisSection({ reports }: { reports: AnalysisReport[] }) {
+  const single = reports.length === 1;
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-medium text-ink">Analysis</h2>
-      {reports.map((item) => (
-        <article key={item.analyzer} className="blob-panel space-y-2 p-4">
-          <h3 className="text-sm font-medium text-ink">{item.analyzer}</h3>
-          <AnalysisBody item={item} />
-        </article>
-      ))}
+      <h2 className="flex items-baseline gap-2 border-b border-hairline pb-2 text-sm font-medium text-ink">
+        Analysis
+        {single ? (
+          <span className="font-normal text-body">{analyzerLabel(reports[0].analyzer)}</span>
+        ) : null}
+      </h2>
+      <ul className="divide-y divide-hairline">
+        {reports.map((item) => (
+          <li key={item.analyzer} className="min-w-0 space-y-2 py-3 first:pt-0 last:pb-0">
+            {single ? null : (
+              <h3 className="text-sm font-medium text-ink">{analyzerLabel(item.analyzer)}</h3>
+            )}
+            <AnalysisBody item={item} />
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
