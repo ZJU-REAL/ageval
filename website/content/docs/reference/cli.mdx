@@ -16,6 +16,8 @@ ageval run official/demo@0.1.0 --dir tmp --task <id>
 ageval run <dataset> --max-concurrent-tasks 2
 ageval run <dataset> -k 5
 ageval run <dataset> --resume-suite <suite_run_id> --task <id> -k 5
+ageval run <dataset> --resume-suite <suite_run_id> --retry-errors
+ageval results regrade <dataset> --run <attempt_id>
 ageval campaign <dataset> --task <id> ...
 ageval status <suite_run_id> --dataset <dataset>
 ageval cancel <suite_run_id> --dataset <dataset>
@@ -54,11 +56,12 @@ Path = dataset root. `run` / `lock` / `view` / `upload-suite` also accept a Hub 
 | `--task <id>` | One member; omit = run the whole dataset |
 | `--max-concurrent-tasks N` | Max concurrent units; **speeds wall time only** |
 | `--n-attempts` / `-k N` | Always-k: N independent Attempts per task (default 1); **CLI/job only** |
-| `--resume-suite <suite_run_id>` | Resume job: skip finished units, append Attempts, recompute pass@k / pass^k |
+| `--resume-suite <suite_run_id>` | Resume job: skip finished units (PASS / FAIL / ERROR), append Attempts, recompute pass@k / pass^k |
+| `--retry-errors` | With `--resume-suite`: re-run finished ERROR rows in this filter. PASS / FAIL stay skipped. New Attempt; old row stays in `previous[]` |
 | `--replace-slot` | With `--resume-suite --task`: re-run that finished slot; new Attempt; old row stays in `previous[]` |
 | `--attempt-index N` | Always-k slot to replace (default 0). Only with `--replace-slot` |
 | `--keep-workspace` | Keep the environment work root after cleanup (default: delete). Uploads never pack it. Docker volumes are still removed |
-| `--keep-vendor-raw` | After seal, keep vendor raw / layer B. Default: drop. Independent of `--keep-workspace` |
+| `--keep-vendor-raw` | After seal, keep vendor raw / layer B. Default: drop. `task-artifacts/` stays either way. Independent of `--keep-workspace` |
 | `--dir <path>` | Hub ref only. Looks at `<path>/<dataset_id>/`; reuses a matching child |
 | `--agent` | Bind an `ageval.agent/1` Agent package (`pi`, `org/name@version`, or a local path); mutually exclusive with `--profiles` |
 | `--model` | Override this run’s `binding.model` on roles `--agent` bound. Requires `--agent`. Not `results upload-suite --model`. `results analyze --model` is a separate flag and still requires `--agent` |

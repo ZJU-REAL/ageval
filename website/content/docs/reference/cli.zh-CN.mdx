@@ -16,6 +16,8 @@ ageval run official/demo@0.1.0 --dir tmp --task <id>
 ageval run <dataset> --max-concurrent-tasks 2
 ageval run <dataset> -k 5                    # Always-k（每题 k 次）
 ageval run <dataset> --resume-suite <suite_run_id> --task <id> -k 5
+ageval run <dataset> --resume-suite <suite_run_id> --retry-errors
+ageval results regrade <dataset> --run <attempt_id>
 ageval campaign <dataset> --task <id> ...
 ageval status <suite_run_id> --dataset <dataset>
 ageval cancel <suite_run_id> --dataset <dataset>
@@ -54,11 +56,12 @@ ageval results revoke-snapshot <token-or-url>
 | `--task <id>` | 只跑该成员；省略 = 整份 dataset 跑完 |
 | `--max-concurrent-tasks N` | 并行上限；**只加速**，不改 k / PASS |
 | `--n-attempts` / `-k N` | Always-k：每题 N 次独立运行（默认 1）；只写在 CLI / job 上 |
-| `--resume-suite <suite_run_id>` | 并进已有 job：跳过已完成的，追加一次运行，重算 pass@k / pass^k |
+| `--resume-suite <suite_run_id>` | 并进已有 job：跳过已完成的（PASS / FAIL / ERROR），追加一次运行，重算 pass@k / pass^k |
+| `--retry-errors` | 配合 `--resume-suite`：重跑本次过滤里的 ERROR 格。PASS / FAIL 仍跳过。新的一次运行；旧行进 `previous[]` |
 | `--replace-slot` | 配合 `--resume-suite --task`：重跑那一行；新的一次运行；旧行进 `previous[]` |
 | `--attempt-index N` | Always-k 要换的格（默认 0）。只与 `--replace-slot` 一起用 |
 | `--keep-workspace` | 清理后保留环境工作根（默认删除）。 |
-| `--keep-vendor-raw` | 写入成功后保留 vendor raw / layer B；默认丢掉。与 `--keep-workspace` 独立 |
+| `--keep-vendor-raw` | 写入成功后保留 vendor raw / layer B；默认丢掉。`task-artifacts/` 两种情况下都留下。与 `--keep-workspace` 独立 |
 | `--dir <path>` | 只配合 Hub ref：在 `<path>/<dataset_id>/` 找包；已匹配则复用 |
 | `--agent` | 绑定 `ageval.agent/1` Agent 包（`pi`、`org/name@version` 或本地路径）；与 `--profiles` 互斥 |
 | `--model` | 改这次 run 已绑角色的 `binding.model`；须配合 `--agent`。不是 `results upload-suite --model`。`results analyze --model` 是另一条旗标，同样必须配合 `--agent` |

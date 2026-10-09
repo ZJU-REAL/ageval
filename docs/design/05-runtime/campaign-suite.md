@@ -32,4 +32,25 @@ Viewer Jobs 对进行中的 suite 显示 **一行**（suite_run_id 唯一），p
 
 Hub Leaderboard 吃的是 **suite** 上传（`ageval results upload-suite`），不是单 Attempt `results upload`。公开榜还要完备且绑定 release。draft / 不完备只上 Jobs。
 
-`--agent` 与 `--profiles` 互斥。`--model` 须配合 `--agent`（`lock` / `run` / `campaign`）。Campaign 不与 `run.py` 内 scheduler 合并。
+`--agent` 与 `--profiles` 互斥。`--model` 须配合 `--agent`（`lock` / `run` / `campaign` / `results regrade`）。Campaign 不与 `run.py` 内 scheduler 合并。
+
+## Resume、换格、重评分
+
+Suite 可以沿用同一个 `suite_run_id`。Attempt 目录不改写。
+
+- **`--resume-suite`**：跳过已完成格（默认含 PASS / FAIL / ERROR），追加还没有的 index，重算 pass@k / pass^k。取消占位会再跑。`created_at` 保持首次写入。
+- **`--retry-errors`**：必须和 `--resume-suite` 一起用。本次过滤里的 ERROR 格再跑，不必写 `--replace-slot`。PASS / FAIL 仍跳过。新 Attempt；旧行进 `previous[]`；指标只看现行指针。
+- **`--replace-slot`**：点名换一格已完成的 PASS / FAIL / ERROR。仍要求 `--resume-suite` 与 `--task`。可以和 `--retry-errors` 同用。fingerprint 不一致时这一格拒绝换。
+- resume 的 `progress.json` / 结束摘要带 `skipped` 与 `retried` 计数（跳过的已完成格、这次重跑的 ERROR 格）。
+
+**`ageval results regrade <dataset> --run <attempt_id>`**（`--run` 可重复）是另一条入口，不进 suite 调度：
+
+- 铸造新 Attempt。来源 `result.json` 与来源目录不改。
+- 不跑 agent / `run.py`。把来源 `task-artifacts/` 拷进打分 Host，只 evaluate。
+- gold 与 evaluator 读**当前 dataset**，不读来源 Attempt 里冻住的那份脚本。
+- harvest 缺失或对不上当前 `artifacts.publishable` → 新 Attempt 为 ERROR，不从轨迹编 PASS / FAIL。
+- 没有题包字段声明「这题能否 regrade」。
+
+`task-artifacts/` 在 `slim_sealed_attempt` 之后默认仍在。`--keep-workspace` 只影响活的 work root。
+
+不做：把一次进行中的 agent 对话接着跑；session resume token；原地覆盖 Attempt。
