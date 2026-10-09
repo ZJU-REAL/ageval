@@ -63,6 +63,18 @@ def test_is_vendor_raw_rel() -> None:
     assert is_vendor_raw_rel("evaluation/invocations/001/backend_raw/raw.json")
 
 
+def test_slim_keeps_task_artifacts(tmp_path: Path) -> None:
+    root = tmp_path / "run"
+    root.mkdir()
+    art = root / "task-artifacts"
+    art.mkdir()
+    (art / "result.json").write_text('{"ok": true}\n', encoding="utf-8")
+    _seed_invocation(root)
+    slim_sealed_attempt(root)
+    assert (art / "result.json").read_text(encoding="utf-8") == '{"ok": true}\n'
+    assert not (root / "agent" / "invocations" / "001" / "request.json").exists()
+
+
 def test_slim_deletes_vendor_raw_keeps_jsonl(tmp_path: Path) -> None:
     root = tmp_path / "run"
     root.mkdir()
