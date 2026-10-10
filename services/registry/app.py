@@ -12,6 +12,9 @@ Endpoints:
   POST /v1/orgs/{id}/claim | GET|POST /v1/orgs/{id}/members | PATCH .../members/{user}
   POST /v1/orgs/{id}/transfer | DELETE .../members/{user}
   GET|POST /v1/orgs/{id}/invite-keys | DELETE /v1/orgs/{id}/invite-keys/{key_id}
+  GET|POST /v1/orgs/{id}/secrets | DELETE /v1/orgs/{id}/secrets/{secret_id}
+  POST /v1/hosted/jobs | GET /v1/hosted/jobs | GET /v1/hosted/jobs/{id}
+  POST /v1/hosted/jobs/{id}/cancel
   POST /v1/packages
   GET  /v1/packages
   GET  /v1/packages/{id}
@@ -142,10 +145,11 @@ class RegistryState:
                 slots_from_env() if upload_slots is None else upload_slots
             )
         from services.registry.auth.service import AuthService
+        from services.registry.hosted.service import HostedService
+        from services.registry.inbox.service import RequestService
         from services.registry.orgs.service import OrgService
         from services.registry.orgs.users import UserService
         from services.registry.packages.service import PackageService
-        from services.registry.inbox.service import RequestService
         from services.registry.results.service import ResultService
         from services.registry.runtimes.service import RuntimeService
         from services.registry.shares.service import ShareService
@@ -182,6 +186,7 @@ class RegistryState:
         )
         self.orgs = OrgService(stores.orgs, self.access)
         self.users = UserService(stores.orgs)
+        self.hosted = HostedService(stores.hosted, stores.orgs, stores.packages, self.access)
         self.max_upload = max_upload
         self.spool_dir = Path(tempfile.gettempdir()) / "ageval-registry-spool"
         self.spool_dir.mkdir(parents=True, exist_ok=True)
@@ -251,14 +256,20 @@ def build_default_state(
     *,
     bootstrap_token: str | None = None,
     memory_blob: bool = False,
+    mint_bootstrap: bool = True,
 ) -> tuple[RegistryState, str]:
-    """Zero-dep path: SQLite meta + filesystem (or memory) blob + SQLite tokens."""
+    """Zero-dep path: SQLite meta + filesystem (or memory) blob + SQLite tokens.
+
+    ``mint_bootstrap=False`` skips the admin token. The hosted worker uses that
+    so a queue process does not create a new operator credential.
+    """
     db_path = data_dir / "meta.sqlite3"
     stores = open_sqlite_stores(db_path)
     tokens: Any = SqliteTokenStore(db_path)
     blobs: Any = MemoryBlobStore() if memory_blob else FilesystemBlobStore(data_dir / "blobs")
     token = bootstrap_token or secrets.token_urlsafe(24)
-    tokens.add(token, ADMIN_SCOPES, github_user="bootstrap")
+    if mint_bootstrap:
+        tokens.add(token, ADMIN_SCOPES, github_user="bootstrap")
     return (
         RegistryState(
             stores=stores,
@@ -282,6 +293,7 @@ def build_state_from_env(
     bootstrap_token: str | None = None,
     force_local: bool = False,
     memory_blob: bool = False,
+    mint_bootstrap: bool = True,
 ) -> tuple[RegistryState, str]:
     """Public path is Postgres + S3. Local/test path is explicit."""
     load_env_file()
@@ -293,7 +305,10 @@ def build_state_from_env(
         )
         data_dir.mkdir(parents=True, exist_ok=True)
         return build_default_state(
-            data_dir, bootstrap_token=bootstrap_token, memory_blob=memory_blob
+            data_dir,
+            bootstrap_token=bootstrap_token,
+            memory_blob=memory_blob,
+            mint_bootstrap=mint_bootstrap,
         )
 
     database_url, s3_endpoint = require_public_backend()
@@ -309,7 +324,8 @@ def build_state_from_env(
         region=os.environ.get("AGEVAL_REGISTRY_S3_REGION") or "us-east-1",
     )
     token = bootstrap_token or secrets.token_urlsafe(24)
-    tokens.add(token, ADMIN_SCOPES, github_user="bootstrap")
+    if mint_bootstrap:
+        tokens.add(token, ADMIN_SCOPES, github_user="bootstrap")
     return (
         RegistryState(
             stores=stores,

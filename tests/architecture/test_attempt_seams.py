@@ -117,7 +117,13 @@ def test_handler_calls_all_domain_services() -> None:
         for path in sorted(http.glob("*.py"))
         if path.name != "__init__.py"
     )
-    for needle in ("state.packages.", "state.results.", "state.orgs.", "state.auth."):
+    for needle in (
+        "state.packages.",
+        "state.results.",
+        "state.orgs.",
+        "state.auth.",
+        "state.hosted.",
+    ):
         assert needle in api, needle
 
 
@@ -168,6 +174,7 @@ def test_store_has_no_sql_literals() -> None:
         "shares/store.py",
         "inbox/store.py",
         "orgs/store.py",
+        "hosted/store.py",
     } <= rels
     for path in store_files:
         for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
