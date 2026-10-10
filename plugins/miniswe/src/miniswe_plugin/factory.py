@@ -27,7 +27,14 @@ from miniswe_plugin.usage import usage_from_messages
 
 _CREDENTIAL_ENV_NAMES = ("OPENAI_API_KEY", "litellm_api_key", "LITELLM_API_KEY")
 _BASE_URL_ENV_FALLBACKS = ("OPENAI_BASE_URL", "litellm_base_url", "LITELLM_BASE_URL")
-_EXTRA_BODY_RESERVED = frozenset({"model", "api_key", "api_base", "drop_params"})
+_EXTRA_BODY_RESERVED = frozenset(
+    {"model", "api_key", "api_base", "drop_params", "timeout", "request_timeout"}
+)
+# Per-completion HTTP timeout for litellm/openai. LiteLLM's module default
+# request_timeout is 6000s; OpenAI client often lands at 600s. Either way a
+# gateway sticky hang burns the deep-swe invoke budget before stall can retry.
+# Fail-fast into wrap_model_query + upstream_stall instead.
+_DEFAULT_REQUEST_TIMEOUT = 180
 
 
 def describe_miniswe() -> dict[str, Any]:
@@ -244,6 +251,11 @@ class MinisweExecutorSPI:
         self.cmd_timeout = _as_positive_int(opts.get("cmd_timeout"), name="cmd_timeout", default=30)
         self.reasoning_effort = _as_optional_effort(opts.get("reasoning_effort"))
         self.extra_body = _as_extra_body(opts.get("extra_body"))
+        self.request_timeout = _as_nonneg_float(
+            opts.get("request_timeout"),
+            name="request_timeout",
+            default=float(_DEFAULT_REQUEST_TIMEOUT),
+        )
         self.session_id = f"ageval-{self.profile_id or 'solver'}-{uuid.uuid4().hex[:12]}"
         self.execution_location = getattr(host, "kind", None) or "box"
         self._ready = False
@@ -370,6 +382,10 @@ class MinisweExecutorSPI:
             model_kwargs["reasoning_effort"] = self.reasoning_effort
         if self.extra_body:
             model_kwargs.update(copy.deepcopy(self.extra_body))
+        # Always last: hang-hardening timeout must not be overridden by extra_body.
+        # 0 = omit (legacy litellm/openai defaults; not recommended for suite runs).
+        if self.request_timeout > 0:
+            model_kwargs["timeout"] = float(self.request_timeout)
         return model_kwargs
 
     def _run_agent(self, prompt: str, *, timeout: float) -> dict[str, Any]:
@@ -420,7 +436,9 @@ class MinisweExecutorSPI:
             cost_limit=self.cost_limit,
             wall_time_limit_seconds=0 if stall is not None else max(0, int(timeout)),
         )
-        model.query = wrap_model_query(model.query, stall)
+        model.query = wrap_model_query(
+            model.query, stall, request_timeout=self.request_timeout
+        )
         wait = max(1.0, float(timeout))
 
         def _go() -> dict[str, Any]:

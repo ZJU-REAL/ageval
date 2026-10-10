@@ -23,6 +23,7 @@ from miniswe_plugin.factory import MinisweExecutorSPI  # noqa: E402
 from miniswe_plugin.stall import (  # noqa: E402
     StallExhausted,
     disable_package_model_retry,
+    recycle_llm_clients,
     wait_excluding_stall,
     wrap_model_query,
 )
@@ -87,6 +88,81 @@ def test_wrapper_retries_the_same_messages() -> None:
     assert clock.sleeps == [60.0]
     assert [event["outcome"] for event in events] == ["started", "wait", "resumed"]
     assert stall.claimed is False
+
+
+def test_timeout_recycles_clients_before_stall_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    stall, clock, events = _stall(3600)
+    recycled = {"n": 0}
+    monkeypatch.setattr(
+        "miniswe_plugin.stall.recycle_llm_clients",
+        lambda: recycled.__setitem__("n", recycled["n"] + 1),
+    )
+    calls = {"n": 0}
+
+    def query(_messages: object, **_kwargs: object) -> dict[str, str]:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise TimeoutError("litellm.Timeout: Request timed out")
+        return {"role": "assistant", "content": "ok"}
+
+    result = wrap_model_query(query, stall, request_timeout=0)(
+        [{"role": "user", "content": "x"}]
+    )
+    assert result["content"] == "ok"
+    assert recycled["n"] == 1
+    assert calls["n"] == 2
+    assert clock.sleeps == [60.0]
+    assert [event["outcome"] for event in events] == ["started", "wait", "resumed"]
+
+
+def test_watchdog_times_out_a_pure_hang(monkeypatch: pytest.MonkeyPatch) -> None:
+    stall, clock, events = _stall(3600)
+    recycled = {"n": 0}
+    monkeypatch.setattr(
+        "miniswe_plugin.stall.recycle_llm_clients",
+        lambda: recycled.__setitem__("n", recycled["n"] + 1),
+    )
+    calls = {"n": 0}
+
+    def query(_messages: object, **_kwargs: object) -> dict[str, str]:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            time.sleep(0.45)
+            return {"role": "assistant", "content": "late"}
+        return {"role": "assistant", "content": "ok"}
+
+    started = time.monotonic()
+    result = wrap_model_query(query, stall, request_timeout=0.15)(
+        [{"role": "user", "content": "x"}]
+    )
+    elapsed = time.monotonic() - started
+    assert result["content"] == "ok"
+    assert calls["n"] == 2
+    assert recycled["n"] >= 1
+    # Must NOT block on the hung orphan thread (executor shutdown wait=False).
+    assert elapsed < 1.0, elapsed
+    assert clock.sleeps == [60.0]
+    assert [event["outcome"] for event in events] == ["started", "wait", "resumed"]
+
+
+def test_any_failure_recycles_clients_before_stall_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    stall, clock, _events = _stall(3600)
+    recycled = {"n": 0}
+    monkeypatch.setattr(
+        "miniswe_plugin.stall.recycle_llm_clients",
+        lambda: recycled.__setitem__("n", recycled["n"] + 1),
+    )
+    calls = {"n": 0}
+
+    def query(_messages: object, **_kwargs: object) -> dict[str, str]:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("HTTPError:503")
+        return {"role": "assistant", "content": "ok"}
+
+    wrap_model_query(query, stall, request_timeout=0)([])
+    assert recycled["n"] == 1
+    assert clock.sleeps == [60.0]
 
 
 def test_format_error_is_not_a_stall() -> None:

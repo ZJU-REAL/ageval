@@ -39,8 +39,9 @@ projected into the parent HTTP client; they never enter the lock.
 | `options.step_limit` | `30` | Agent step cap. `0` = unlimited. Negative / non-int values are rejected. |
 | `options.cost_limit` | `0` | Cost cap. `0` = unlimited. Negative values are rejected. |
 | `options.cmd_timeout` | `30` | Seconds per `host.exec` bash action. |
+| `options.request_timeout` | `180` | Seconds for one litellm/openai `completion` HTTP call (`timeout=`). Fail-fast into upstream_stall instead of silent multi-minute hangs. `0` = omit (legacy litellm/openai defaults). |
 | `options.reasoning_effort` | omit | Optional OpenAI-shaped Chat Completions `reasoning_effort`. Empty / omit = do not send. Non-string values are rejected. |
-| `options.extra_body` | omit | Optional mapping merged as-is into the parent completion kwargs (after `reasoning_effort`). Vendor-native keys (OpenRouter `reasoning` / `provider`, vLLM extras, …). Omit / empty = do not merge. Non-mapping values are rejected. Rejects `model` / `api_key` / `api_base` / `drop_params`. Conflicting keys: extra_body wins. |
+| `options.extra_body` | omit | Optional mapping merged as-is into the parent completion kwargs (after `reasoning_effort`). Vendor-native keys (OpenRouter `reasoning` / `provider`, vLLM extras, …). Omit / empty = do not merge. Non-mapping values are rejected. Rejects `model` / `api_key` / `api_base` / `drop_params` / `timeout` / `request_timeout`. Conflicting keys: `request_timeout` still wins for `timeout=`. |
 | `model` | `openai/gpt-4o-mini` | Upstream model id on the parent client (`openai/…`, `openrouter/…`, `anthropic/…`, or any id the `base_url` gateway accepts). |
 | `api_key` | `OPENAI_API_KEY` / `litellm_api_key` / `LITELLM_API_KEY` | Env **locator name** for the parent HTTP client. Omit on loopback `base_url` (`127.0.0.1` / `localhost` / `::1`). |
 | `base_url` | `OPENAI_BASE_URL` / `litellm_base_url` / `LITELLM_BASE_URL` | OpenAI-compatible base (`api_base`). Point at OpenRouter, DashScope, a local gateway, etc. |

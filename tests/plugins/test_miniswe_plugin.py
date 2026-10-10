@@ -126,6 +126,56 @@ def test_invalid_step_limit() -> None:
         )
 
 
+def test_request_timeout_forwarded_to_litellm_kwargs() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={"request_timeout": 120},
+        model="openai/x",
+    )
+    assert spi.request_timeout == 120.0
+    kwargs = spi._litellm_model_kwargs(key="sk-x", base="https://example.invalid/v1")
+    assert kwargs["timeout"] == 120.0
+    defaulted = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        model="openai/x",
+    )
+    assert defaulted.request_timeout == 180.0
+    assert defaulted._litellm_model_kwargs(key=None, base=None)["timeout"] == 180.0
+    omitted = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={"request_timeout": 0},
+        model="openai/x",
+    )
+    assert omitted.request_timeout == 0.0
+    assert "timeout" not in omitted._litellm_model_kwargs(key=None, base=None)
+
+
+def test_request_timeout_wins_over_extra_body() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={"request_timeout": 90},
+        model="openai/x",
+    )
+    # timeout/request_timeout are reserved in extra_body; option alone sets timeout.
+    kwargs = spi._litellm_model_kwargs(key=None, base=None)
+    assert kwargs["timeout"] == 90.0
+
+
+def test_invalid_request_timeout() -> None:
+    from ageval.plugins.errors import ExtensionMaterializeError
+
+    with pytest.raises(ExtensionMaterializeError, match="request_timeout"):
+        build_executor(
+            host=SimpleNamespace(kind="local"),
+            placement=_placement(),
+            options={"request_timeout": -1},
+        )
+
+
 def test_reasoning_effort_forwarded_to_litellm_kwargs() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
