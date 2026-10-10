@@ -67,6 +67,8 @@ def _ageval(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env["AGEVAL_OFFLINE_AGENT"] = "1"
     env["AGEVAL_SKIP_DOCKER"] = "1"
     env["AGEVAL_SKIP_REAL_ACP"] = "1"
+    env["TERM"] = "dumb"
+    env["NO_COLOR"] = "1"
     return subprocess.run(
         [sys.executable, "-m", "ageval.cli.main", *args],
         check=False,

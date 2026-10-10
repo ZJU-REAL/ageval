@@ -15,6 +15,10 @@ SUITE = REPO / "tests" / "fixtures" / "datasets" / "suite-min"
 def _ageval(*args: str) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["AGEVAL_OFFLINE_AGENT"] = "1"
+    # GITHUB_ACTIONS makes Typer/Rich colorize even with NO_COLOR; TERM=dumb
+    # keeps captured help/option text free of ANSI so substring asserts work.
+    env["TERM"] = "dumb"
+    env["NO_COLOR"] = "1"
     return subprocess.run(
         [sys.executable, "-m", "ageval.cli.main", *args],
         check=False,
