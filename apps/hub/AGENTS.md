@@ -11,6 +11,7 @@ Which component to reuse: [DESIGN.md](./DESIGN.md). This file is product scope.
 | Task Jobs **list only** | Click-through into trial trajectory |
 | Leaderboard tab (#40) | Suite-level PASS authority |
 | Agent Performance on `/agents/:id` — derived plaza / consented `agent_ref`; `?model=` is overlay invoke id on a model directory (not Chip). `/models` is the pin encyclopedia | Persist a Runtime table; invent suite or per-role PASS; keep `/runtimes`; add `/agents/:id/models/:model` or `package_kind=model` |
+| Dataset **Hosted** tab and org **Secrets** tab submit a hosted job (e2b / daytona only) | Tenant Docker on the API host; a sidebar item; MCP or CLI `--launch` |
 | Same stack as viewer (Vite/React/shadcn) | Second component library / marketing CSS |
 
 Registry API is the data plane. Token stays in browser storage only.
