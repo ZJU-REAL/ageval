@@ -179,6 +179,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   ├── results/                     # service, store, protocol, rows, queries, dto
 │   ├── shares/                      # snapshot share; static archive or live patch
 │   ├── inbox/                       # requests, maintainers, store
+│   ├── hosted/                      # org secrets + hosted job queue; worker process
 │   ├── content/                     # files, blob_io, blobs
 │   ├── db/                          # dialect, sql_adapter, schema (open_stores)
 │   └── dataset.py / access.py / errors.py / paging.py / clock.py / envload.py / upload_slots.py / spool.py
@@ -401,7 +402,7 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | Other Agent backends | `openai-http` / `anthropic-http` / external `nooa` `dsh` | Not vendor stdout scrape |
 | Official base image | `plugins/contrib/docker/attempt/` | GHCR `ageval-attempt:<cli-ver>` then local `ageval-attempt:base`; miss → packaged Dockerfile. Bake ACP entries at image build; no `npm i` at invoke |
 | ACP task image layer | `plugins/contrib/acp` | `config.image_layers` bakes the bound `options.entry` onto the task recipe |
-| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is five aggregate stores (packages, results, shares, orgs, inbox) behind narrow protocols, one schema init in `db/schema.open_stores`, SQL in each aggregate `queries.py`, dialect only in `db/sql_adapter.py`. `api_tokens` DDL stays in `auth/tokens.py`. |
+| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is six aggregate stores (packages, results, shares, orgs, inbox, hosted) behind narrow protocols, one schema init in `db/schema.open_stores`, SQL in each aggregate `queries.py`, dialect only in `db/sql_adapter.py`. `api_tokens` DDL stays in `auth/tokens.py`. Hosted jobs: Hub submit, worker process runs e2b / daytona only ([docs/design/15](docs/design/15-hosted-jobs.md)). |
 
 ## Failure and Privacy Boundary
 

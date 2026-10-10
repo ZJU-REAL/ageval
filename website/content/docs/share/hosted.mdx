@@ -1,0 +1,43 @@
+---
+title: Hosted jobs
+description: Submit a suite from Hub. A worker in the same deployment runs it on e2b or daytona.
+---
+
+A hosted job is a suite submitted in Hub. Registry stores the job. A worker process in that deployment checks out the dataset, runs `ageval run`, and uploads the suite. The laptop that submitted it can close.
+
+v1 runs on **e2b** or **daytona**. The shared Hub and Registry host does not start a tenant Docker or Podman container, and it does not accept a user-registered runner.
+
+## Submit
+
+1. Sign in on Hub.
+2. On the organization page, open **Secrets** and store a model key and a provider key. The value appears only in that create request.
+3. Open a dataset and the **Hosted** tab. Choose the organization, environment, model, and the two secrets. An optional agent is a builtin short id (`pi`) or an `id@version` already installed on the worker. Leave the agent on **Dataset profiles** to use the dataset's own profiles.
+4. Submit. The row moves through `queued`, `running`, then `succeeded`, `failed`, or `canceled`.
+5. When the suite has uploaded, the row links to the existing suite page. Task PASS and FAIL stay on that suite. `succeeded` means the suite finished and uploaded, including a run whose tasks failed without an error.
+
+Cancel while `queued` finishes immediately. Cancel while `running` asks the suite to stop; the row becomes `canceled` when that run settles.
+
+A dataset whose profiles set `evaluate_host.isolated` still requires `environment: docker`. Hosted v1 does not start Docker for that dataset, so the job fails at lock.
+
+An agent package that is not installed on the worker fails that job. Publishing the package to Hub does not install it on the worker.
+
+## Secrets
+
+| Kind | What it is |
+| --- | --- |
+| Model | The inference key. Profiles store `${NAME}` (for example `${OPENAI_API_KEY}`). The ageval process projects that value into the agent entry. |
+| Provider | The e2b or daytona key that opens the sandbox. The worker keeps it on the process that opens the sandbox. It is not written into profiles, the lock, or evidence, and it is not used as the model locator. |
+
+The provider locator is fixed: `E2B_API_KEY` or `DAYTONA_API_KEY`. A model locator cannot use those names.
+
+`AGEVAL_HOSTED_SECRET_KEY` stays on Registry and the worker. It is 32 bytes of urlsafe base64. Lists never return a secret value.
+
+The person who created a secret, or an organization owner, can delete it.
+
+## Worker
+
+Operators run `python -m services.registry.hosted.worker` beside Registry. It uses the same database and object store. It does not mount a Docker socket.
+
+If that process stops while a job is `running`, the row stays `running`. Set `AGEVAL_HOSTED_STALE_SECONDS` to a positive number of seconds to return those rows to the queue on a later poll. A row that already asked to cancel becomes `canceled`. The default `0` leaves them, so a long suite is not started twice.
+
+The Registry image can include the e2b and daytona install extras for this worker. That does not make the API process start a container.

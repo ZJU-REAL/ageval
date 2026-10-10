@@ -76,6 +76,8 @@ public 只许出现「public」或「both」行的规范名。internal 词出现
 | ACP entry | ACP entry | both | `options.entry`：`pi` / `codex` / `claude-code` / `opencode` / `grok-build` | — |
 | capabilities | capabilities | both | 环境声明能兑现什么；`requires ⊆ capabilities`，否则 lock 失败 | — |
 | BYOK / BYOA | BYOK / BYOA | internal | 密钥 / 本机 auth 投影 | public 不必教这两个缩写 |
+| 托管运行 | hosted job | both | Hub 提交、Registry 排队、部署里的 worker 在 E2B 或 Daytona 上跑完并上传的 suite | `--launch`；在共享 Hub 主机上跑 Docker；用 hosted job 的成功冒充题的 PASS |
+| 组织密钥 | org secret | both | 组织保存的模型密钥或 E2B / Daytona 提供方密钥。列表不返回明文 | vault；把提供方密钥写进 task 环境 |
 | composition root | composition root | internal | `application/composition.py` | 不必中译 |
 | 控制面 | Control Plane | internal | — | public 出现 |
 | 检查不过就不能进入运行 | the check fails; the run does not start | both | 探测或配置检查不过，就不能进入真正运行 | fail-closed、fail closed |

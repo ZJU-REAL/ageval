@@ -1,6 +1,6 @@
 # 12 — Hub 与 Registry
 
-字段是 `dataset_id`。无 `database_id` 双读。Hub / Viewer 文案用 dataset，不是 Database。无 `ageval submit`；上传走 `ageval results upload` / `upload-suite`。
+字段是 `dataset_id`。无 `database_id` 双读。Hub / Viewer 文案用 dataset，不是 Database。无 `ageval submit`；上传走 `ageval results upload` / `upload-suite`。Hub 上另有 hosted job（[15](15-hosted-jobs.md)）：登录用户提交 suite，worker 在 e2b 或 daytona 上跑，终态仍进现有 suite 页。那不是 CLI，也不在共享 API 主机上起租户 Docker。
 
 公开 Leaderboard：完备 suite + 绑定 **release** + Dataset 包所属 org 的 owner 批准 listing（`board_listed`）。官方与非官方 Dataset 同一道门。`public` 不是上榜：可见性与 listing 分开。新上传默认未列出；listing 加上去之后，库里已有的 suite 也不会自动出现在公开榜上。Internal（调用方可见的不完备 / draft-bound）不变。公开 / Internal 默认列出该 Dataset 下全部已过上榜条件的 suite，不跟页顶版本走（`?v=` 只切 README / Tasks / lock 命令）。Public 右侧另有版本 Select：默认 All versions；`?dataset_version=` 按 suite 上传时带的 `dataset_version` 过滤。过滤不是新的上榜条件，也不改 listing / fingerprint / PASS。
 

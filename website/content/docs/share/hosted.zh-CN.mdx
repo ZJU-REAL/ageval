@@ -1,0 +1,43 @@
+---
+title: 托管运行
+description: 在 Hub 提交整份 dataset。同一套部署里的 worker 在 e2b 或 daytona 上跑完并上传。
+---
+
+托管运行是在 Hub 提交的一份 suite。Registry 记下这一行。同一套部署里的 worker 取出 dataset，跑 `ageval run`，再上传 suite。提交用的笔记本可以关掉。
+
+v1 只跑 **e2b** 或 **daytona**。共享的 Hub 和 Registry 主机不启动租户的 Docker 或 Podman 容器，也不接受用户自注册的 runner。
+
+## 提交
+
+1. 在 Hub 登录。
+2. 打开组织页的 **Secrets**，保存一把模型密钥和一把提供方密钥。明文只出现在这次创建请求里。
+3. 打开 dataset 的 **Hosted**。选择组织、环境、model 和这两把密钥。Agent 可以留 **Dataset profiles**，用 dataset 自己的 profiles；也可以选内置短 id（`pi`），或 worker 上已经装好的 `id@version`。
+4. 提交。行的状态经过 `queued`、`running`，然后是 `succeeded`、`failed` 或 `canceled`。
+5. suite 上传之后，这一行链到已有的 suite 页。题的 PASS 和 FAIL 留在那份 suite 上。`succeeded` 表示 suite 跑完并已上传，包括题失败但没有 ERROR 的那一次。
+
+`queued` 时取消会马上结束。`running` 时取消只是要求这份 suite 停下，跑完后标成 `canceled`。
+
+profiles 里写了 `evaluate_host.isolated` 的 dataset 仍然要求 `environment: docker`。托管运行 v1 不为它启动 Docker，这次 job 会在 lock 失败。
+
+worker 上没有安装的 Agent 包会使这次 job 失败。把包发到 Hub 并不会把它装进 worker。
+
+## 密钥
+
+| 种类 | 是什么 |
+| --- | --- |
+| 模型 | 推理密钥。profiles 里只存 `${NAME}`（例如 `${OPENAI_API_KEY}`）。ageval 进程按这个 locator 把值投影进 Agent 入口。 |
+| 提供方 | 用来打开 e2b 或 daytona 沙箱的密钥。worker 把它留在打开沙箱的进程上。不写进 profiles、lock 或 evidence，也不当作 model locator。 |
+
+提供方 locator 是固定的：`E2B_API_KEY` 或 `DAYTONA_API_KEY`。模型 locator 不能用这两个名字。
+
+`AGEVAL_HOSTED_SECRET_KEY` 留在 Registry 和 worker 上，是 32 字节的 urlsafe base64。列表不返回密钥的值。
+
+创建这条密钥的人，或组织 owner，可以删除它。
+
+## Worker
+
+运维在 Registry 旁边跑 `python -m services.registry.hosted.worker`。它用同一份数据库和对象存储，不挂载 Docker socket。
+
+进程在 job 还是 `running` 时停掉，这一行会留在 `running`。把 `AGEVAL_HOSTED_STALE_SECONDS` 设成大于 0 的秒数后，下一次轮询把这种行退回队列。已经请求取消的改成 `canceled`。默认 `0` 不回收，避免一份还在跑的长 suite 被再次启动。
+
+Registry 镜像可以带上 e2b 和 daytona 的安装 extra，供这个 worker 使用。这不表示 API 进程会启动容器。
