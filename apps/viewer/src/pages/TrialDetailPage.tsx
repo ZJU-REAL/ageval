@@ -126,14 +126,15 @@ export function TrialDetailPage() {
               <ActorsTable actors={trial.actors} />
             ) : null}
 
-            {trial.analysis && trial.analysis.length > 0 ? (
-              <AnalysisSection reports={trial.analysis} />
-            ) : null}
-
             <EvidenceTabs
               availableTabs={availableTabs}
               activeTab={activeTab}
               onTabChange={setActiveTab}
+              analysisPanel={
+                trial.analysis && trial.analysis.length > 0 ? (
+                  <AnalysisPanel reports={trial.analysis} />
+                ) : null
+              }
               trajLoading={trajLoading}
               steps={steps}
               trajNote={trajNote}
@@ -182,14 +183,13 @@ export function TrialDetailPage() {
 
 type AnalysisReport = NonNullable<Trial["analysis"]>[number];
 
-function AnalysisSection({ reports }: { reports: AnalysisReport[] }) {
+function AnalysisPanel({ reports }: { reports: AnalysisReport[] }) {
   return (
-    <section className="space-y-3">
-      <h2 className="text-sm font-medium text-ink">Analysis</h2>
+    <div className="space-y-3">
       {reports.map((item) => (
         <AnalysisArticle key={item.analyzer} item={item} />
       ))}
-    </section>
+    </div>
   );
 }
 

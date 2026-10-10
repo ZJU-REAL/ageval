@@ -21,6 +21,14 @@ import {
   setDatasetQuery,
 } from "@/lib/api";
 
+function tabsForTrial(trial: Trial): TabId[] {
+  const normalized = (trial.available_tabs || []).map(normalizeTabId);
+  const hasAnalysis = (trial.analysis?.length ?? 0) > 0;
+  return TAB_ORDER.filter(
+    (tab) => normalized.includes(tab) || (tab === "analysis" && hasAnalysis),
+  );
+}
+
 export function useTrialDetail(
   datasetKey: string,
   jobId: string,
@@ -70,11 +78,7 @@ export function useTrialDetail(
   const trajFetchedRef = useRef(false);
   const obsFetchedRef = useRef(false);
 
-  const availableTabs = useMemo(() => {
-    const raw = (trial?.available_tabs || []) as string[];
-    const normalized = raw.map(normalizeTabId);
-    return TAB_ORDER.filter((t) => normalized.includes(t));
-  }, [trial]);
+  const availableTabs = useMemo(() => (trial ? tabsForTrial(trial) : []), [trial]);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,7 +104,7 @@ export function useTrialDetail(
         setSlotCurrentStartedAt(data.slot_current_started_at || null);
         setSlotPrevious(data.slot_previous || []);
         setError(null);
-        const tabs = (data.trial.available_tabs || []).map(normalizeTabId) as TabId[];
+        const tabs = tabsForTrial(data.trial);
         const first = FIRST_TAB_ORDER.find((t) => tabs.includes(t)) || null;
         setActiveTab(first);
       })
