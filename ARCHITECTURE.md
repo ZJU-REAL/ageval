@@ -122,7 +122,8 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   │   ├── registry_ops/            # results / publish / login / org / list
 │   │   ├── plugin_ops/
 │   │   ├── agent_ops/               # --agent (+ optional --model) projects into profiles
-│   │   └── local_jobs/              # local Job list / get / delete
+│   │   ├── local_jobs/              # local Job list / get / delete
+│   │   └── analysis/                # post-run stats / hack / review (read-only)
 │   ├── attempt/                     # deep module: one Attempt’s visible pipeline
 │   │   ├── __init__.py              # run_attempt five-phase lines
 │   │   ├── ctx.py
@@ -211,7 +212,7 @@ src/ageval/
   plugins/defaults/                 # or move to contrib/defaults — pick one, not both
   runtime/{identity,parent_agent,task_launch,task_worker}
   evaluation/{bind,package_evaluator} + runtime/eval_worker.py
-  evidence/{locators,store,trajectory}
+  evidence/{locators,store,trajectory,analysis}
 ```
 
 **Deliberately not built (deleted in Current; Target must not bring them back):**
@@ -234,7 +235,8 @@ src/ageval/
 | Path | Sole responsibility | Does not own |
 | --- | --- | --- |
 | `cli/` | argv, help, exit code | Reading task business logic, starting Docker, assembling evidence paths |
-| `application/` | lock/run/campaign/suite/registry/plugin/agent/jobs; **wiring** | Hiding business rules in global singletons outside bootstrap |
+| `application/` | lock/run/campaign/suite/registry/plugin/agent/jobs/analysis; **wiring** | Hiding business rules in global singletons outside bootstrap |
+| `application/analysis/` | Post-run `stats` / `hack` / `review` over sealed evidence | PASS, `checks.json`, Hub upload |
 | `application/composition.py` | Sole production `build_*` | Business algorithms |
 | `config/` | dataset resolve; read `task.yaml` / profiles; digest | Executing `run.py`, scoring |
 | `attempt/` | Phase order, `emit`, AttemptCtx | Vendor SDKs, `container_id` |
@@ -246,7 +248,7 @@ src/ageval/
 | `plugins/defaults/` | `environment_setup` recognizes `setup.sh`; default winners for `evaluation_runtime` / `trajectory_seal` | Fake executor; PASS |
 | `runtime/` | identity, parent Agent Service, task-worker subprocess, cancel/timeout | Box implementations, scoring |
 | `evaluation/` | Barrier order, in-environment runner, flat Result | Task scoring algorithms |
-| `evidence/` | store / redaction / layer-C `trajectory.jsonl` | Vendor protocol parsing; PASS |
+| `evidence/` | store / redaction / layer-C `trajectory.jsonl` / analysis artifact paths | Vendor protocol parsing; PASS |
 | `registry/` + `services/registry/` | PackageRef, publish, verified cache; standalone HTTP | PASS; handing store credentials to the CLI |
 | `ageval_sdk` | Task types and thin helpers | Control Plane internal types, verdict |
 | `examples/` | Trusted regression datasets | Claiming a full upstream suite |

@@ -31,4 +31,4 @@ Issues / 代码
 | [13-web-ui-tokens.md](13-web-ui-tokens.md) | UI 令牌与视觉不变量（跨面宪法；不写页面清单） |
 | [14-agent-hub.md](14-agent-hub.md) | `ageval.agent/1` |
 
-Runtime 读序：`lifecycle` → `environment`（四 kind、ssh A/B、能力表）→ `agent-service` → `evaluation`（gold 时间切）→ `evidence` → `campaign-suite`。
+Runtime 读序：`lifecycle` → `environment`（四 kind、ssh A/B、能力表）→ `agent-service` → `evaluation`（gold 时间切）→ `evidence` → `analysis`（跑完之后，只读）→ `campaign-suite`。

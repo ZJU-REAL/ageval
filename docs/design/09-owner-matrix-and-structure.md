@@ -36,6 +36,7 @@ src/ageval/
     registry_ops/
     agent_ops/              # --agent（+ 可选 --model）投影进 profiles
     local_jobs/
+    analysis/               # 跑完之后的 stats / hack / review；不改 PASS
   attempt/                  # 一次 Attempt 的流水线
     __init__.py             # run_attempt — 五行相位
     ctx.py                  # AttemptCtx：host / services / lock / bindings

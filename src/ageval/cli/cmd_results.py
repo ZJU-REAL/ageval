@@ -1,4 +1,4 @@
-"""CLI results upload/get/list and suite commands."""
+"""CLI results upload/get/list, suite commands, and post-run analyze."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ def register(app: typer.Typer) -> None:
 
     sub = typer.Typer(
         name="results",
-        help="Upload / fetch Attempt and suite/job result bundles (results store).",
+        help=("Upload / fetch Attempt and suite/job result bundles, and analyze sealed runs."),
         no_args_is_help=True,
         add_completion=False,
     )
@@ -830,6 +830,89 @@ def register(app: typer.Typer) -> None:
             )
         except ConfigError as exc:
             typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        emit(summary)
+
+    @sub.command("analyze")
+    def results_analyze_command(
+        dataset: Annotated[
+            Path,
+            typer.Argument(help="Local Dataset root containing .ageval/runs or suite-runs."),
+        ],
+        run: Annotated[
+            str | None,
+            typer.Option("--run", help="One Attempt run_id. Mutually exclusive with --suite-run."),
+        ] = None,
+        suite_run: Annotated[
+            str | None,
+            typer.Option(
+                "--suite-run",
+                help="One suite_run_id. Mutually exclusive with --run.",
+            ),
+        ] = None,
+        analyzer: Annotated[
+            str,
+            typer.Option("--analyzer", help="stats (default), hack, or review."),
+        ] = "stats",
+        no_llm: Annotated[
+            bool,
+            typer.Option("--no-llm", help="hack only: stop after the rule screen."),
+        ] = False,
+        include_all: Annotated[
+            bool,
+            typer.Option("--all", help="hack and review: do not filter by status."),
+        ] = False,
+        status: Annotated[
+            list[str] | None,
+            typer.Option(
+                "--status",
+                help="PASS, FAIL, or ERROR. Repeatable. hack and review only.",
+            ),
+        ] = None,
+        agent: Annotated[
+            str | None,
+            typer.Option(
+                "--agent",
+                help="openai-http or anthropic-http package for hack stage 2 and review.",
+            ),
+        ] = None,
+        model: Annotated[
+            str | None,
+            typer.Option("--model", help="Model for --agent. Required when the package has none."),
+        ] = None,
+        base_url: Annotated[
+            str | None,
+            typer.Option("--base-url", help="http(s) URL overriding the agent binding base_url."),
+        ] = None,
+    ) -> None:
+        """Read a sealed run and write analysis/<analyzer>/report.json.
+
+        A suite writes analysis/<analyzer>/summary.json. Reports do not change
+        PASS or evaluation/checks.json, and they are not uploaded.
+        """
+        from ageval.application.composition import build_analyze_command
+
+        analyze = build_analyze_command().analyze
+        from ageval.config.errors import ConfigError
+
+        try:
+            summary = analyze(
+                dataset,
+                run_id=run,
+                suite_run_id=suite_run,
+                analyzer=analyzer,
+                no_llm=no_llm,
+                include_all=include_all,
+                statuses=status,
+                agent=agent,
+                model=model,
+                base_url=base_url,
+            )
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        except OSError as exc:
+            typer.echo(f"invalid_package: {exc}", err=True)
             raise typer.Exit(code=2) from exc
         emit(summary)
 

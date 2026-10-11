@@ -87,6 +87,13 @@ def build_results_commands() -> Any:
     return ResultsCommands(client_factory=build_registry_client)
 
 
+def build_analyze_command() -> Any:
+    """Wire ``ageval results analyze`` (post-run stats / hack / review)."""
+    from ageval.application.analysis.command import AnalyzeCommand
+
+    return AnalyzeCommand()
+
+
 def build_local_jobs_commands() -> Any:
     """Local Job list / get / overlay / delete for Viewer / ``ageval jobs`` (no Registry)."""
     from ageval.application.local_jobs import LocalJobsCommands

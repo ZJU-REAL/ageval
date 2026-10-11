@@ -4,7 +4,8 @@ export type TabId =
   | "verifier"
   | "artifacts"
   | "lock"
-  | "runtime";
+  | "runtime"
+  | "analysis";
 
 export const TAB_LABELS: Record<TabId, string> = {
   trajectory: "Trajectory",
@@ -14,6 +15,7 @@ export const TAB_LABELS: Record<TabId, string> = {
   lock: "Lock",
   // effects / cleanup / summary / agent.json / harness.json — not “log files”
   runtime: "Runtime",
+  analysis: "Analysis",
 };
 
 export const TREE_SCOPES: Partial<Record<TabId, string>> = {
@@ -31,6 +33,7 @@ export const TAB_ORDER: TabId[] = [
   "artifacts",
   "lock",
   "runtime",
+  "analysis",
 ];
 
 /** Preferred first-tab order when opening a trial. */
@@ -41,6 +44,7 @@ export const FIRST_TAB_ORDER: TabId[] = [
   "lock",
   "runtime",
   "artifacts",
+  "analysis",
 ];
 
 export function normalizeTabId(raw: string): string {

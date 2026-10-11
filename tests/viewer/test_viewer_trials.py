@@ -239,6 +239,33 @@ def test_resolve_and_trial_detail(tmp_path: Path) -> None:
     assert actors[0].get("usage_label")
     assert "in " in actors[0]["usage_label"]
     assert detail["trial"].get("upstream_url") is None
+    assert "analysis" not in detail["trial"]
+
+
+def test_trial_detail_attaches_analysis_reports(tmp_path: Path) -> None:
+    db = _clean_db(tmp_path)
+    job_id = _seed_suite_run(db)
+    evidence = _write_evidence(db, "run_alpha_1", task_id="alpha")
+    stats = evidence / "analysis" / "stats" / "report.json"
+    stats.parent.mkdir(parents=True)
+    stats.write_text("[]\n", encoding="utf-8")
+    hack = evidence / "analysis" / "hack" / "report.json"
+    hack.parent.mkdir(parents=True)
+    hack.write_text(
+        json.dumps({"schema": "ageval.analysis.report/1", "analyzer": "hack"}) + "\n",
+        encoding="utf-8",
+    )
+
+    detail = trials.get_trial(db, job_id, "alpha", "run_alpha_1")
+    rows = detail["trial"]["analysis"]
+    assert [row["analyzer"] for row in rows] == ["stats", "hack"]
+    assert rows[0]["report"] is None
+    assert rows[0]["note"]
+    assert rows[1]["report"]["analyzer"] == "hack"
+    assert rows[1]["note"] is None
+
+    listed = trials.list_task_trials(db, job_id, "alpha")
+    assert all("analysis" not in trial for trial in listed["trials"])
 
 
 def test_trial_identity_is_lock_not_opened_yaml(tmp_path: Path) -> None:

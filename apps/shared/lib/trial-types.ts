@@ -72,6 +72,12 @@ export type Trial = {
     segments?: Array<{ id: string; label?: string; tokens?: number }>;
     total_tokens?: number;
   } | null;
+  /** Present on a trial detail when analysis/<analyzer>/report.json exists. */
+  analysis?: Array<{
+    analyzer: string;
+    report: Record<string, unknown> | null;
+    note: string | null;
+  }> | null;
 };
 
 export type TreeEntry = {

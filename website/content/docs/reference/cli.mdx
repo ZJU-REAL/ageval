@@ -34,6 +34,7 @@ ageval publish <dataset> --org <org> [--draft] [--public] [--replace]
 ageval release <dataset_id> [--public] [--replace]
 ageval registry list|show|set-visibility|delete|org-create|org-list|org-add-member|org-set-role|org-transfer|org-remove-member …
 ageval results upload-suite <dataset|id@version> --suite-run <8-hex>
+ageval results analyze <dataset> (--run <id> | --suite-run <id>) [--analyzer stats|hack|review]
 ageval results upload|attach-agent|request|inbox|decide|share|unshare|set-visibility|delete …
 ageval results share-snapshot <dataset> --suite-run <id> [--run <run_id>] [--live]
 ageval results sync-snapshot <dataset> --suite-run <id> [--heartbeat]
@@ -41,6 +42,8 @@ ageval results revoke-snapshot <token-or-url>
 ```
 
 Path = dataset root. `run` / `lock` / `view` / `upload-suite` also accept a Hub ref (`id@version`); `--dir` only with a Hub ref. `tasks` / `campaign` stay local directories. `--agent` and `--profiles` are mutually exclusive. `--model` requires `--agent`. `ageval agent install` also installs declared non-contrib plugins. Destructive commands require `--yes`; overwrite same identity requires `--replace` (default 409). `AGEVAL_REGISTRY_URL` / `--registry-url` override the Registry origin; omit them to use the public Hub (`https://ageval.zjureal.com`).
+
+`results analyze` reads one sealed run (`--run`) or one suite (`--suite-run`) and writes `analysis/<analyzer>/report.json`. A suite also writes `analysis/<analyzer>/summary.json`. The default analyzer is `stats`. `hack` and `review` can call an existing `openai-http` or `anthropic-http` agent: pass `--agent` and `--model` (required when that package has no model). `--base-url` overrides that binding and must be an `http(s)` URL. This `--model` is not `ageval run --model` and not `results upload-suite --model`. Analysis does not change PASS or `evaluation/checks.json`, and Hub does not upload it.
 
 `share-snapshot` prints `{hub}/s/{token}`. It does not change visibility or leaderboard listing. `sync-snapshot` updates a live link. See [Hub](../share/hub.mdx).
 
@@ -58,7 +61,7 @@ Path = dataset root. `run` / `lock` / `view` / `upload-suite` also accept a Hub 
 | `--keep-vendor-raw` | After seal, keep vendor raw / layer B. Default: drop. Independent of `--keep-workspace` |
 | `--dir <path>` | Hub ref only. Looks at `<path>/<dataset_id>/`; reuses a matching child |
 | `--agent` | Bind an `ageval.agent/1` Agent package (`pi`, `org/name@version`, or a local path); mutually exclusive with `--profiles` |
-| `--model` | Override this run’s `binding.model` on roles `--agent` bound. Requires `--agent`. Not `results upload-suite --model` |
+| `--model` | Override this run’s `binding.model` on roles `--agent` bound. Requires `--agent`. Not `results upload-suite --model`. `results analyze --model` is a separate flag and still requires `--agent` |
 | `--set` / `--profiles` | Overrides / alternate job binding |
 | `--probe` | Feasibility only: plan + readiness for this binding/`environment`. No Agent, no image write, no lock digest change. Exit 1 if the selected path is unsatisfied. |
 | `--json` | Write the full result document on stdout. A TTY defaults to a short recap (suite: `summary` path plus `ageval view` / `upload-suite`); a pipe still defaults to JSON. |

@@ -9,6 +9,7 @@ description: How to read Result; pass@k is a job metric, not a PASS for the whol
 2. Trajectory / tokens / agent self-report **≠** score (including `evaluation/observation.jsonl` and `evaluation/checks.json`)  
 3. PASS / FAIL comes only from the `evaluator.py` return value  
 4. Whole-dataset / job aggregates (including pass@k) **≠** a PASS for the whole dataset  
+5. A post-run analyzer report **≠** a score, and it does not rewrite `evaluation/checks.json`  
 
 ## On the terminal
 
@@ -69,7 +70,7 @@ So: to show whole-dataset results on the public board, **run the whole dataset �
 ## Local view
 
 `ageval view` opens a dataset root, a directory of dataset roots, or a cached registry ref. The header is Datasets, Jobs, Agents, and Plugins. Jobs → Tasks → Attempt is the results path for the package you pick.  
-Attempt pages may show **Timing** (and **Tokens** when present). Trajectory steps follow file order (thought next to the tools it precedes). A step may show a duration when the row has `elapsed_ms`. Verifier may show `evaluation/checks.json` as a structured preview in the file tree (and a Trajectory / Files toggle when `observation.jsonl` is also present).
+Attempt pages may show **Timing** (and **Tokens** when present). When `analysis/<analyzer>/report.json` exists, an Analysis section lists those observations; it is not a score. Trajectory steps follow file order (thought next to the tools it precedes). A step may show a duration when the row has `elapsed_ms`. Verifier may show `evaluation/checks.json` as a structured preview in the file tree (and a Trajectory / Files toggle when `observation.jsonl` is also present).
 
 ## Failure kinds
 

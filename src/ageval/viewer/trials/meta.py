@@ -9,6 +9,7 @@ from typing import Any
 
 from ageval.config.dataset import load_dataset_manifest
 from ageval.config.errors import ConfigError
+from ageval.evidence.analysis import load_attempt_reports
 from ageval.evidence.locators import safe_id_segment
 from ageval.viewer.browse import commands_for
 from ageval.viewer.jobs import get_job, get_job_task
@@ -191,6 +192,9 @@ def get_trial(
         from ageval.evidence.attempt_record import read_attempt_result
 
         result_preview = read_attempt_result(evidence)
+        reports = load_attempt_reports(evidence)
+        if reports:
+            meta["analysis"] = reports
         if result_preview and "metrics" in result_preview:
             metrics = result_preview.get("metrics")
             if isinstance(metrics, dict) and len(json.dumps(metrics)) > 8_000:

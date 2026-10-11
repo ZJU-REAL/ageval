@@ -13,6 +13,7 @@ from typing import Any
 
 from ageval.application.suite import document as suite_document
 from ageval.config.errors import ConfigError
+from ageval.evidence.analysis import is_analysis_rel
 from ageval.evidence.identity import dataset_identity
 from ageval.evidence.locators import (
     default_runs_root,
@@ -28,7 +29,12 @@ from ageval.registry.share_snapshot import LIVE_SHARE_SIDECAR, SNAPSHOT_SHARE_KI
 
 def _skip_rel(rel: str) -> bool:
     parts = Path(rel).parts
-    return "l1-work" in parts or LIVE_SHARE_SIDECAR in parts or is_vendor_raw_rel(rel)
+    return (
+        "l1-work" in parts
+        or LIVE_SHARE_SIDECAR in parts
+        or is_vendor_raw_rel(rel)
+        or is_analysis_rel(rel)
+    )
 
 
 def _copy_files(src: Path, dest: Path) -> None:
