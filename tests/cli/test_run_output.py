@@ -283,9 +283,9 @@ def test_run_progress_unit_phase_silent_without_tty() -> None:
 
 
 def _stall_event(
-    *, outcome: str, nxt: int, remaining: int, phase: str = "run"
+    *, outcome: str, nxt: int, remaining: int, phase: str = "run", reason: str = ""
 ) -> dict[str, object]:
-    return {
+    ev: dict[str, object] = {
         "type": "upstream_stall",
         "task_id": "alpha",
         "attempt_index": 0,
@@ -295,6 +295,9 @@ def _stall_event(
         "remaining_budget": remaining,
         "phase": phase,
     }
+    if reason:
+        ev["reason"] = reason
+    return ev
 
 
 def test_upstream_stall_prints_field_lines_when_the_bar_is_off() -> None:
@@ -307,9 +310,30 @@ def test_upstream_stall_prints_field_lines_when_the_bar_is_off() -> None:
         use_color=False,
     )
     progress.handle({"type": "unit_start", "task_id": "alpha", "attempt_index": 0})
-    progress.handle(_stall_event(outcome="started", nxt=60, remaining=3600))
-    progress.handle(_stall_event(outcome="wait", nxt=60, remaining=3540))
-    progress.handle(_stall_event(outcome="resumed", nxt=0, remaining=3480))
+    progress.handle(
+        _stall_event(
+            outcome="started",
+            nxt=60,
+            remaining=3600,
+            reason="TimeoutError:miniswe_request_timeout:180.0",
+        )
+    )
+    progress.handle(
+        _stall_event(
+            outcome="wait",
+            nxt=60,
+            remaining=3540,
+            reason="TimeoutError:miniswe_request_timeout:180.0",
+        )
+    )
+    progress.handle(
+        _stall_event(
+            outcome="resumed",
+            nxt=0,
+            remaining=3480,
+            reason="TimeoutError:miniswe_request_timeout:180.0",
+        )
+    )
     progress.handle(
         {
             "type": "unit_done",
@@ -321,11 +345,14 @@ def test_upstream_stall_prints_field_lines_when_the_bar_is_off() -> None:
     )
     lines = err.getvalue().strip().splitlines()
     stall = [line for line in lines if line.startswith("upstream_stall")]
-    assert [line.split("outcome=")[-1] for line in stall] == ["started", "wait", "resumed"]
+    assert [
+        line.split("outcome=")[-1].split(" reason=")[0] for line in stall
+    ] == ["started", "wait", "resumed"]
     assert "task=alpha" in stall[0]
     assert "state=upstream_stall" in stall[0]
     assert "next=60" in stall[1]
     assert "remaining=3540" in stall[1]
+    assert "reason=TimeoutError:miniswe_request_timeout:180.0" in stall[0]
     assert "ERROR" in lines[-1]
     assert "outcome=" not in lines[-1]
 

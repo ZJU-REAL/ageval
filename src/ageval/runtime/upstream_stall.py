@@ -185,6 +185,10 @@ class UpstreamStall:
                 "seconds_until_next": int(seconds_until_next),
                 "remaining_budget": int(self._remaining()),
                 "phase": self.phase,
+                # Surface note_failure reason on live suite lines (e.g.
+                # TimeoutError:miniswe_request_timeout:180). Facts already store it;
+                # without this field the suite log looked like "no TimeoutError".
+                "reason": self._reason,
             }
         )
 

@@ -7,8 +7,9 @@ for this integration, so the two waits cannot stack. A spent budget raises
 After the first ``note_failure``, UpstreamStall freezes the phase clock for the
 whole episode — including later query attempts. A sticky gateway hang then no
 longer burns ``invoke`` / ``wall_time`` budgets. Cap each attempt with an
-explicit request timeout and recycle litellm clients so retries open a fresh
-TCP connection instead of reusing a CLOSE-WAIT / idle ESTAB socket.
+explicit request timeout, ephemeral no-keepalive OpenAI/httpx clients
+(``Connection: close``), and recycle litellm's client cache so retries never
+reuse a CLOSE-WAIT / sticky ESTAB socket with a large Send-Q.
 """
 
 from __future__ import annotations
@@ -47,54 +48,14 @@ _TIMEOUT_HINTS = (
 def recycle_llm_clients() -> None:
     """Drop cached litellm HTTP clients so the next query opens a fresh connection.
 
-    Gateway hangs often leave a keep-alive socket ESTAB / CLOSE-WAIT with no
-    response bytes. Retrying on the same client reuses that sticky connection;
-    closing + flushing forces a new TCP handshake.
+    Gateway hangs often leave a keep-alive socket ESTAB / CLOSE-WAIT with a
+    large Send-Q and no response bytes. Retrying on the same client reuses that
+    sticky connection; closing nested httpx pools + flushing the LiteLLM cache
+    forces a new TCP handshake. Implementation lives in ``llm_client``.
     """
-    try:
-        import inspect
+    from miniswe_plugin.llm_client import recycle_llm_clients as _recycle
 
-        import litellm
-    except Exception:
-        return
-    cache = getattr(litellm, "in_memory_llm_clients_cache", None)
-    if cache is None:
-        return
-    cached = getattr(cache, "cache_dict", None)
-    if isinstance(cached, dict):
-        for client in list(cached.values()):
-            for target in (
-                client,
-                getattr(client, "http_client", None),
-                getattr(client, "_client", None),
-            ):
-                if target is None:
-                    continue
-                closer = getattr(target, "close", None)
-                if not callable(closer):
-                    continue
-                try:
-                    result = closer()
-                except Exception:
-                    continue
-                if inspect.isawaitable(result):
-                    try:
-                        result.close()  # drop un-awaited coroutine
-                    except Exception:
-                        pass
-    flush = getattr(cache, "flush_cache", None)
-    if callable(flush):
-        try:
-            flush()
-        except Exception:
-            pass
-        return
-    clear = getattr(cache, "clear", None)
-    if callable(clear):
-        try:
-            clear()
-        except Exception:
-            return
+    _recycle()
 
 
 def _looks_like_transport_stall(exc: BaseException) -> bool:
@@ -102,6 +63,23 @@ def _looks_like_transport_stall(exc: BaseException) -> bool:
     msg = str(exc).lower()
     blob = f"{name}:{msg}"
     return any(hint in blob for hint in _TIMEOUT_HINTS)
+
+
+def _recycle_async() -> None:
+    """Fire-and-forget recycle so abandon never blocks on ``close()``.
+
+    Suite hang attempt_1c23ff53: Future timeout + kill_in_flight were present
+    but no ``upstream_stall`` logged before SIGTERM at ~4.5 min. ``Client.close``
+    does not reliably wake ``_receive_response_headers``; if recycle ever blocks
+    on a wedged transport, the TimeoutError never reaches ``wrap_model_query``.
+    Run recycle on a daemon thread; ``SHUT_RDWR`` in ``close_llm_client`` does
+    the real unblock.
+    """
+    import threading
+
+    threading.Thread(
+        target=recycle_llm_clients, name="miniswe-recycle", daemon=True
+    ).start()
 
 
 def _call_with_request_timeout(
@@ -117,19 +95,30 @@ def _call_with_request_timeout(
     This watchdog is the failsafe that turns a pure hang into an exception the
     stall wrapper can retry after recycling clients.
 
+    Independent of upstream_stall freeze / ``wait_excluding_stall`` /
+    ``wall_time_limit_seconds=0``: those only pause the *parent* invoke/phase
+    clocks. This ``fut.result(timeout=…)`` still hard-aborts each LLM attempt.
+
     Important: do **not** use ``with ThreadPoolExecutor`` — its ``__exit__``
     calls ``shutdown(wait=True)`` and would block until the hung query finishes,
     defeating the timeout. ``shutdown(wait=False)`` lets the wrapper proceed;
-    ``recycle_llm_clients`` drops cached sockets so the orphan thread's client
-    is not reused.
+    ``_recycle_async`` + ``SHUT_RDWR`` tear down in-flight sockets without
+    letting ``close()`` wedge the abandon path.
     """
+    if request_timeout <= 0:
+        return query(messages, **kwargs)
     pool = ThreadPoolExecutor(max_workers=1)
     try:
         fut = pool.submit(query, messages, **kwargs)
         try:
             return fut.result(timeout=request_timeout)
         except FutureTimeout as exc:
-            recycle_llm_clients()
+            _recycle_async()
+            # Visible on suite stderr even when stall event lines omit reason.
+            print(
+                f"miniswe_request_timeout:{request_timeout}",
+                flush=True,
+            )
             raise TimeoutError(
                 f"miniswe_request_timeout:{request_timeout}"
             ) from exc
@@ -173,10 +162,14 @@ def wrap_model_query(
     def wrapped(messages: Any, **kwargs: Any) -> Any:
         disable_package_model_retry()
         if stall is None or stall.disabled:
+            recycle_llm_clients()
             if timeout > 0:
                 return _call_with_request_timeout(query, messages, kwargs, timeout)
             return query(messages, **kwargs)
         while True:
+            # Fresh sockets every attempt — mid-episode keep-alive stickiness
+            # (turn2+ ESTAB + large Send-Q) is the observed hang mode.
+            recycle_llm_clients()
             try:
                 if timeout > 0:
                     result = _call_with_request_timeout(query, messages, kwargs, timeout)
@@ -187,9 +180,12 @@ def wrap_model_query(
                     stall.end_resumed()
                     raise
                 reason = f"{type(exc).__name__}:{exc}"
-                # Always recycle before a stall retry: sticky sockets are the
-                # common hang mode, not only named Timeout errors.
-                recycle_llm_clients()
+                # Fire-and-forget: sync recycle here re-introduced the boa hang
+                # (attempt_06c64f5f) — FutureTimeout had fired but close() on a
+                # sticky responses recv could delay TimeoutError reaching
+                # note_failure / upstream_stall for many minutes. Daemon +
+                # SHUT_RDWR matches _call_with_request_timeout abandon.
+                _recycle_async()
                 if stall.note_failure(reason):
                     stall.wait()
                     continue

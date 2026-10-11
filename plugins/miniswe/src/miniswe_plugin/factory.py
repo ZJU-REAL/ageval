@@ -16,6 +16,11 @@ from ageval.plugins.http_loopback import is_http_loopback
 from ageval.runtime.upstream_stall import current_stall
 from miniswe_plugin import PLUGIN_ID
 from miniswe_plugin.env import ProtocolEnv
+from miniswe_plugin.llm_client import (
+    bind_direct_completion_client,
+    bind_direct_responses_client,
+    chat_model_for_openai_compat_gateway,
+)
 from miniswe_plugin.stall import (
     StallExhausted,
     install_single_package_attempt,
@@ -108,6 +113,18 @@ def _as_optional_effort(raw: Any) -> str | None:
             kind="extension_materialize_failed",
         )
     return raw.strip()
+
+
+def _as_api(raw: Any) -> str:
+    """LLM wire API: ``chat`` (Chat Completions) or ``responses`` (/v1/responses)."""
+    if raw is None or raw == "":
+        return "chat"
+    if not isinstance(raw, str) or raw.strip().lower() not in {"chat", "responses"}:
+        raise ExtensionMaterializeError(
+            f"miniswe_api_invalid:{raw!r}",
+            kind="extension_materialize_failed",
+        )
+    return raw.strip().lower()
 
 
 def _as_extra_body(raw: Any) -> dict[str, Any]:
@@ -250,6 +267,7 @@ class MinisweExecutorSPI:
         self.cost_limit = _as_nonneg_float(opts.get("cost_limit"), name="cost_limit", default=0.0)
         self.cmd_timeout = _as_positive_int(opts.get("cmd_timeout"), name="cmd_timeout", default=30)
         self.reasoning_effort = _as_optional_effort(opts.get("reasoning_effort"))
+        self.api = _as_api(opts.get("api"))
         self.extra_body = _as_extra_body(opts.get("extra_body"))
         self.request_timeout = _as_nonneg_float(
             opts.get("request_timeout"),
@@ -355,6 +373,7 @@ class MinisweExecutorSPI:
             "n_calls": extra.get("n_calls"),
             "locked_reasoning_effort": self.reasoning_effort,
             "actual_reasoning_effort": self.reasoning_effort,
+            "api": self.api,
         }
         if reported_cost is not None:
             metadata["cost"] = reported_cost
@@ -378,10 +397,30 @@ class MinisweExecutorSPI:
             model_kwargs["api_key"] = key
         if base:
             model_kwargs["api_base"] = base
-        if self.reasoning_effort:
+        # Chat Completions + function tools: gpt-6-sol (and similar) reject an
+        # implicit/default reasoning_effort. Teacher tip: prefer /v1/responses
+        # for tools, or set reasoning_effort=none on chat. When api=chat and the
+        # profile did not set effort, force "none" so the gateway does not invent
+        # a non-none default. Explicit profile effort still wins.
+        if self.api == "chat":
+            model_kwargs["reasoning_effort"] = (
+                self.reasoning_effort if self.reasoning_effort is not None else "none"
+            )
+        elif self.reasoning_effort:
             model_kwargs["reasoning_effort"] = self.reasoning_effort
         if self.extra_body:
             model_kwargs.update(copy.deepcopy(self.extra_body))
+        # Force Connection: close on the wire so gateways / httpx do not keep a
+        # sticky ESTAB that later turns hang on (_receive_response_headers +
+        # large Send-Q). Merged last over extra_body headers except we still
+        # allow callers to add other headers alongside.
+        headers = model_kwargs.get("extra_headers")
+        if not isinstance(headers, dict):
+            headers = {}
+        else:
+            headers = dict(headers)
+        headers.setdefault("Connection", "close")
+        model_kwargs["extra_headers"] = headers
         # Always last: hang-hardening timeout must not be overridden by extra_body.
         # 0 = omit (legacy litellm/openai defaults; not recommended for suite runs).
         if self.request_timeout > 0:
@@ -405,19 +444,56 @@ class MinisweExecutorSPI:
                 "uv tool install 'ageval-cli[miniswe]' (repo checkout: uv sync --extra miniswe)",
                 kind="extension_materialize_failed",
             ) from exc
+        model_cls: type = LitellmModel
+        if self.api == "responses":
+            try:
+                from minisweagent.models.litellm_response_model import LitellmResponseModel
+            except ImportError as exc:
+                raise ExtensionMaterializeError(
+                    "miniswe_package_missing: LitellmResponseModel required for options.api=responses",
+                    kind="extension_materialize_failed",
+                ) from exc
+            model_cls = LitellmResponseModel
         model_kwargs = self._litellm_model_kwargs(key=key, base=base)
         official = _load_official_mini_config()
         agent_cfg = official.get("agent") if isinstance(official.get("agent"), dict) else {}
         model_cfg = official.get("model") if isinstance(official.get("model"), dict) else {}
         obs = model_cfg.get("observation_template")
         fmt = model_cfg.get("format_error_template")
-        model = LitellmModel(
-            model_name=self.model,
+        # Chat against OpenAI-compat gateways: remap anthropic/ (etc.) so LiteLLM
+        # uses /v1/chat/completions with the original id on the wire. Raw
+        # anthropic/ makes LiteLLM take the Messages SDK path → 404 / crash →
+        # upstream_stall forever (curl chat still 200). Responses keeps profile id.
+        litellm_model = (
+            chat_model_for_openai_compat_gateway(self.model)
+            if self.api == "chat"
+            else self.model
+        )
+        model = model_cls(
+            model_name=litellm_model,
             model_kwargs=model_kwargs,
             cost_tracking="ignore_errors",
             **({} if not obs else {"observation_template": obs}),
             **({} if not fmt else {"format_error_template": fmt}),
         )
+        # Bypass litellm entirely for HTTP: sticky keep-alive + ignored timeouts
+        # left suites hung in _receive_response_headers with no upstream_stall
+        # (attempt_1c23ff53 ~4.5min). Both chat and responses use direct httpx.
+        req_timeout = float(self.request_timeout) if self.request_timeout > 0 else 180.0
+        if self.api == "responses":
+            bind_direct_responses_client(
+                model,
+                api_key=key,
+                api_base=base,
+                timeout=req_timeout,
+            )
+        else:
+            bind_direct_completion_client(
+                model,
+                api_key=key,
+                api_base=base,
+                timeout=req_timeout,
+            )
         env = self._make_env()
         system_template = str(agent_cfg.get("system_template") or "")
         instance_template = str(agent_cfg.get("instance_template") or "")
@@ -434,10 +510,20 @@ class MinisweExecutorSPI:
             instance_template=instance_template,
             step_limit=self.step_limit,
             cost_limit=self.cost_limit,
+            # Under upstream_stall the parent freezes wall/phase clocks for the
+            # episode. Zero the package wall clock so it cannot race the stall
+            # budget — but keep req_timeout as a hard per-call Future abort.
             wall_time_limit_seconds=0 if stall is not None else max(0, int(timeout)),
         )
+        # Use req_timeout (180 fallback), not raw self.request_timeout: a profile
+        # value of 0 would disable the Future watchdog entirely while the
+        # ephemeral client still gets 180s — hang forever in litellm/httpx with
+        # no TimeoutError for upstream_stall to chew on. Stall freeze /
+        # wait_excluding_stall must never imply request_timeout=0.
+        if stall is not None and req_timeout <= 0:
+            req_timeout = float(_DEFAULT_REQUEST_TIMEOUT)
         model.query = wrap_model_query(
-            model.query, stall, request_timeout=self.request_timeout
+            model.query, stall, request_timeout=req_timeout
         )
         wait = max(1.0, float(timeout))
 

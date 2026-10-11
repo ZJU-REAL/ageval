@@ -126,6 +126,62 @@ def test_invalid_step_limit() -> None:
         )
 
 
+def test_api_option_defaults_to_chat_and_forces_effort_none() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        model="openai/x",
+    )
+    assert spi.api == "chat"
+    kwargs = spi._litellm_model_kwargs(key=None, base=None)
+    assert kwargs["reasoning_effort"] == "none"
+
+
+def test_api_responses_skips_forced_none_effort() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={"api": "responses"},
+        model="openai/x",
+    )
+    assert spi.api == "responses"
+    kwargs = spi._litellm_model_kwargs(key=None, base=None)
+    assert "reasoning_effort" not in kwargs
+
+
+def test_api_chat_respects_explicit_effort() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={"api": "chat", "reasoning_effort": "max"},
+        model="openai/x",
+    )
+    assert spi._litellm_model_kwargs(key=None, base=None)["reasoning_effort"] == "max"
+
+
+def test_invalid_api_option() -> None:
+    from ageval.plugins.errors import ExtensionMaterializeError
+
+    with pytest.raises(ExtensionMaterializeError, match="api"):
+        build_executor(
+            host=SimpleNamespace(kind="local"),
+            placement=_placement(),
+            options={"api": "graphql"},
+            model="openai/x",
+        )
+
+
+
+def test_connection_close_header_always_set() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        model="openai/x",
+    )
+    kwargs = spi._litellm_model_kwargs(key="sk-x", base="https://example.invalid/v1")
+    assert kwargs["extra_headers"]["Connection"] == "close"
+
+
 def test_request_timeout_forwarded_to_litellm_kwargs() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
@@ -193,7 +249,8 @@ def test_reasoning_effort_forwarded_to_litellm_kwargs() -> None:
         model="openai/x",
     )
     assert omitted.reasoning_effort is None
-    assert "reasoning_effort" not in omitted._litellm_model_kwargs(key=None, base=None)
+    # Chat path forces none so tools do not collide with a gateway-default effort.
+    assert omitted._litellm_model_kwargs(key=None, base=None)["reasoning_effort"] == "none"
 
 
 def test_invalid_reasoning_effort() -> None:
