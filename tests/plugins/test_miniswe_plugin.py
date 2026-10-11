@@ -618,3 +618,62 @@ def test_usage_keeps_a_positive_reported_cost() -> None:
     )
     assert usage is not None
     assert usage["cost_usd"] == 0.02
+
+
+def test_usage_sums_responses_api_top_level_input_output_tokens() -> None:
+    """LitellmResponseModel stores the dumped response as the message.
+
+    Usage is top-level ``message.usage`` with ``input_tokens`` /
+    ``output_tokens`` (and ``input_tokens_details.cached_tokens``). There is no
+    nested ``extra.response``.
+    """
+    from miniswe_plugin.usage import usage_from_messages
+
+    messages = [
+        {
+            "object": "response",
+            "output": [{"type": "function_call", "name": "bash", "call_id": "c1"}],
+            "usage": {
+                "input_tokens": 1000,
+                "input_tokens_details": {"cached_tokens": 200},
+                "output_tokens": 40,
+                "total_tokens": 1040,
+            },
+            "extra": {"actions": [{"command": "ls"}], "cost": 0.0, "timestamp": 1.0},
+        },
+        {
+            "object": "response",
+            "output": [],
+            "usage": {
+                "input_tokens": 50,
+                "input_tokens_details": {"cached_tokens": 0},
+                "output_tokens": 5,
+            },
+            "extra": {"actions": [], "cost": 0.0},
+        },
+    ]
+    usage = usage_from_messages(messages)
+    assert usage == {
+        "prompt_tokens": 1050,
+        "completion_tokens": 45,
+        "cached_tokens": 200,
+    }
+
+
+def test_usage_prefers_nested_chat_over_top_level() -> None:
+    from miniswe_plugin.usage import usage_from_messages
+
+    usage = usage_from_messages(
+        [
+            {
+                "role": "assistant",
+                "usage": {"input_tokens": 999, "output_tokens": 999},
+                "extra": {
+                    "response": {
+                        "usage": {"prompt_tokens": 10, "completion_tokens": 2}
+                    }
+                },
+            }
+        ]
+    )
+    assert usage == {"prompt_tokens": 10, "completion_tokens": 2}

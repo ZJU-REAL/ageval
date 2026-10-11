@@ -1,4 +1,13 @@
-"""Sum LiteLLM chat usage across a mini-swe-agent message list.
+"""Sum token usage across a mini-swe-agent message list.
+
+Supports both shapes:
+
+* Chat Completions (``LitellmModel``): ``extra.response.usage`` with
+  ``prompt_tokens`` / ``completion_tokens``.
+* Responses API (``LitellmResponseModel``): the message *is* the response
+  object (``object=response``), so usage lives at the top-level
+  ``message.usage`` with ``input_tokens`` / ``output_tokens``. There is no
+  nested ``extra.response``.
 
 Observational. A zero ``extra.cost`` is a failed price lookup
 (``cost_tracking=ignore_errors``), not a measured bill, so it is omitted.
@@ -27,14 +36,33 @@ def _as_positive_cost(value: Any) -> float | None:
 
 
 def _usage_dict(message: dict[str, Any]) -> dict[str, Any] | None:
+    """Extract a usage blob from a chat or Responses message.
+
+    Prefer nested ``extra.response.usage`` (chat). Fall back to top-level
+    ``message.usage`` (Responses: message is the dumped response object).
+    """
     extra = message.get("extra")
-    if not isinstance(extra, dict):
-        return None
-    response = extra.get("response")
-    if not isinstance(response, dict):
-        return None
-    usage = response.get("usage")
-    return usage if isinstance(usage, dict) else None
+    if isinstance(extra, dict):
+        response = extra.get("response")
+        if isinstance(response, dict):
+            nested = response.get("usage")
+            if isinstance(nested, dict):
+                return nested
+    top = message.get("usage")
+    return top if isinstance(top, dict) else None
+
+
+def _cached_tokens(usage: dict[str, Any]) -> int | None:
+    cached_n = _as_int(usage.get("cached_tokens"))
+    if cached_n is not None:
+        return cached_n
+    for details_key in ("prompt_tokens_details", "input_tokens_details"):
+        details = usage.get(details_key)
+        if isinstance(details, dict):
+            cached_n = _as_int(details.get("cached_tokens"))
+            if cached_n is not None:
+                return cached_n
+    return None
 
 
 def usage_from_messages(messages: Any) -> dict[str, Any] | None:
@@ -56,10 +84,7 @@ def usage_from_messages(messages: Any) -> dict[str, Any] | None:
             completion_n = _as_int(usage.get("completion_tokens"))
             if completion_n is None:
                 completion_n = _as_int(usage.get("output_tokens"))
-            cached_n = _as_int(usage.get("cached_tokens"))
-            details = usage.get("prompt_tokens_details")
-            if cached_n is None and isinstance(details, dict):
-                cached_n = _as_int(details.get("cached_tokens"))
+            cached_n = _cached_tokens(usage)
             if prompt_n is not None:
                 prompt += prompt_n
                 saw_prompt = True
