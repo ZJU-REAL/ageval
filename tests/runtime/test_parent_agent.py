@@ -157,6 +157,16 @@ def test_seal_run_refuses_solver_and_keeps_judge_on_evaluate_surface(
     assert "evaluation/invocations/" in str(eval_dirs[0])
 
 
+def test_seal_profile_ids_blocks_solver_and_leaves_judge(tmp_path: Path) -> None:
+    service, _ = _service(tmp_path, extra_profiles=("judge",))
+    service.seal_profile_ids(["solver"])
+    blocked = service.open_session(profile_id="solver")
+    assert blocked["ok"] is False
+    assert blocked["error"] == "solver_writers_stopped"
+    opened = service.open_session(profile_id="judge")
+    assert opened["ok"] is True
+
+
 def test_open_session_unknown_evaluate_environment_fails_closed(tmp_path: Path) -> None:
     service, _ = _service(tmp_path)
     service.evaluate_environment_names = frozenset({"audit"})

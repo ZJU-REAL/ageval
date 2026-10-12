@@ -110,6 +110,8 @@ evaluate 开头         打分 Host.upload(evaluation_src, /attempt/evaluation)
 
 快照在不在、exclude 清没清，都不是 PASS。
 
+`ageval results regrade` 走同一条 evaluate：新 Attempt 的 evidence 里放上来源 `task-artifacts/` 的拷贝，再 upload 到打分 Host。不跑 `run`，不调用 `run.py`。gold 仍在 evaluate 开头从 **dataset** 的 `evaluation/` 送入。快照对不上当前 `artifacts.publishable` 时 Attempt 为 ERROR，轨迹不能顶上。没有按题开关。
+
 ## isolated 打分 Host
 
 job：

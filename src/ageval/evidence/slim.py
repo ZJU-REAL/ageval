@@ -38,7 +38,11 @@ def is_vendor_raw_rel(rel: str) -> bool:
 
 
 def slim_sealed_attempt(run_dir: Path) -> None:
-    """Delete vendor raw / layer B after layer C exists. Keep invocation dirs."""
+    """Delete vendor raw / layer B after layer C exists. Keep invocation dirs.
+
+    ``task-artifacts/`` stays. That snapshot is the regrade input. Cleanup of
+    the live box work root does not remove it.
+    """
     root = run_dir
     for rel in ("agent/events.jsonl", "evaluation/events.jsonl"):
         events = root / rel

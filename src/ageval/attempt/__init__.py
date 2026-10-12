@@ -75,6 +75,48 @@ async def run_attempt(ctx: AttemptCtx) -> None:
         await _timed(ctx, cleanup.PHASE, cleanup.run)
 
 
+async def run_regrade(ctx: AttemptCtx) -> None:
+    """Score a harvested snapshot. The task ``run`` phase does not run.
+
+    The box still starts so evaluate can copy ``task-artifacts/`` onto the
+    scoring host. ``environment_setup`` and the agent probe do not run.
+    """
+    should_record = False
+    try:
+        ctx.phase = environment.PHASE
+        await ctx.host.preflight()
+        await ctx.host.start(force_build=ctx.lock.force_build)
+        ctx.record_fact("environment_started", {"kind": ctx.host.kind, "regrade": True})
+        ctx.mark_writers_stopped()
+        _seal_solver_profile(ctx)
+        should_record = True
+        await _timed(ctx, evaluate.PHASE, evaluate.run)
+    except Exception as exc:  # noqa: BLE001 — the phase name is the operator's answer
+        _note_phase_failed(ctx, exc)
+    finally:
+        if should_record:
+            try:
+                await _timed(ctx, record.PHASE, record.run)
+            except Exception as exc:  # noqa: BLE001 — do not hide an earlier phase
+                if _failed_phase(ctx) is None:
+                    _note_phase_failed(ctx, exc)
+                else:
+                    ctx.record_fact(
+                        "record_warning",
+                        {"error": f"{type(exc).__name__}: {exc}"},
+                    )
+        await _timed(ctx, cleanup.PHASE, cleanup.run)
+
+
+def _seal_solver_profile(ctx: AttemptCtx) -> None:
+    """The run-phase profile stays sealed so evaluate cannot start the agent."""
+    parent = getattr(ctx.agent_service, "service", None)
+    seal = getattr(parent, "seal_profile_ids", None)
+    if not callable(seal) or not ctx.profile_id:
+        return
+    seal([ctx.profile_id])
+
+
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -101,4 +143,4 @@ async def _timed(ctx: AttemptCtx, name: str, phase: Phase) -> None:
         )
 
 
-__all__ = ["AttemptCtx", "run_attempt"]
+__all__ = ["AttemptCtx", "run_attempt", "run_regrade"]

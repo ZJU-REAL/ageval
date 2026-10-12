@@ -31,13 +31,22 @@ ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task t
 ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task terminal-jsonl-agg --replace-slot
 # Always-k：只换一格 (task_id, attempt_index)
 # ageval run examples/datasets/minimal-demo --resume-suite <id> --task terminal-jsonl-agg --replace-slot --attempt-index 1
+
+# 重跑本次过滤里已完成的 ERROR（PASS / FAIL 仍跳过）
+ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --retry-errors
+
+# 用已收获的 task-artifacts 再评分：新的一次运行，不跑 agent
+ageval results regrade examples/datasets/minimal-demo --run <attempt_id>
 ```
 
 规则：
 
 - `n_attempts` **禁止**写进 `task.yaml`；也不进 `config_fingerprint`  
-- 不加 `--replace-slot` 的补跑只**追加**缺失 index；已完成的 PASS / FAIL / ERROR 仍跳过  
+- 不加 `--replace-slot`、也不加 `--retry-errors` 的补跑只**追加**缺失 index；已完成的 PASS / FAIL / ERROR 仍跳过  
+- `--retry-errors` 配合 `--resume-suite`：重跑本次过滤里的 ERROR 格，不必逐个 `--replace-slot`。PASS / FAIL 仍跳过。每一格是新的一次运行，旧行进 `previous[]`  
 - `--replace-slot` 写**新**的一次运行；旧行留在盘上并进入 `previous[]`；指标只按现行指针重算  
+- `ageval results regrade` 铸造新的一次运行，把该次的 `task-artifacts/` 拷进打分环境，只跑评分。评分材料与 `evaluator.py` 来自当前 dataset。来源 `result.json` 保持原样。harvest 不够就是 ERROR。轨迹文本不是裁决。`task.yaml` 里没有开关字段  
+- 默认瘦身之后 `task-artifacts/` 仍在。清掉活的工作目录不会删掉这份快照  
 - Hub / Viewer 历史列表是 `patch N` + 该次运行开始时间（不是补跑时刻，也不展示 `run_id`）  
 - 因 **cancel 未真正跑过** 的占位会在 resume 时**重跑**（避免 pass@k 永久偏低）
 - 进度和取消写在下面；Hub Leaderboard 在有 `metrics.pass_at_k` 时展示 pass@k / pass^k / n_attempts；本地 summary 始终可写 metrics  

@@ -31,13 +31,22 @@ ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task t
 ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task terminal-jsonl-agg --replace-slot
 # Always-k: one (task_id, attempt_index)
 # ageval run examples/datasets/minimal-demo --resume-suite <id> --task terminal-jsonl-agg --replace-slot --attempt-index 1
+
+# Retry every finished ERROR in this filter (PASS / FAIL stay skipped)
+ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --retry-errors
+
+# Regrade one finished Attempt from its harvested artifacts (new Attempt; the agent does not run)
+ageval results regrade examples/datasets/minimal-demo --run <attempt_id>
 ```
 
 Hard rules:
 
 - `n_attempts` is **not** allowed in `task.yaml` and is **not** part of `config_fingerprint`  
-- Resume without `--replace-slot` only **appends** missing indices; finished PASS / FAIL / ERROR stay skipped  
+- Resume without `--replace-slot` or `--retry-errors` only **appends** missing indices; finished PASS / FAIL / ERROR stay skipped  
+- `--retry-errors` (with `--resume-suite`) re-runs finished ERROR rows in this filter. PASS and FAIL stay skipped. Each retry is a new Attempt; the old row stays in `previous[]`  
 - `--replace-slot` writes a **new** Attempt; the old row stays on disk and in `previous[]`; metrics use the new current only  
+- `ageval results regrade` mints a new Attempt, copies the source Attempt’s `task-artifacts/` onto the scoring host, and runs evaluate only. Gold and `evaluator.py` come from the dataset. The source `result.json` stays. A missing harvest is ERROR. Trajectory text is not a verdict. There is no task field that turns regrade on or off  
+- `task-artifacts/` stays after the default slim. Cleaning up the live workspace does not remove that snapshot  
 - Hub / Viewer history is `patch N` plus that Attempt’s start time (not the suite replace clock, not the `run_id`)  
 - Rows that only have a **suite-cancel placeholder** (never actually ran) are **retried** on resume so pass@k is not permanently deflated
 - Progress / cancel below; Hub Leaderboard shows pass@k / pass^k / n_attempts when `metrics.pass_at_k` is present; local `metrics` are always written after Always-k  

@@ -50,9 +50,9 @@ Stdout JSON (high level):
 - **Always-k** (`--n-attempts` / `-k`, integer ≥1): fixed k independent Attempts per task. CLI/job only — not `task.yaml`.
 - **Suite**: omit `--task` → all members.
 - **`--max-concurrent-tasks`**: speeds wall time only; does not change k or PASS.
-- **`--resume-suite` / `--replace-slot` / `--attempt-index`**: suite resume; see `ageval run --help`.
+- **`--resume-suite` / `--replace-slot` / `--attempt-index` / `--retry-errors`**: suite resume. Default resume skips finished PASS / FAIL / ERROR. `--retry-errors` re-runs ERROR slots in the filter without `--replace-slot` (PASS / FAIL stay skipped; each retry is a new Attempt, old row in `previous[]`). `--replace-slot` still replaces one named finished slot. See `ageval run --help`.
 - **`--keep-workspace`**: after cleanup, do not delete the box work root (host residual may still be named `l1-work/` — historical directory name, not an isolation tier). Default off. Docker volumes are still removed. Upload packs never include `l1-work/**`.
-- **`--keep-vendor-raw`**: after a successful trajectory seal, keep invocation `backend_raw/` / layer B (`request.json`, `events.jsonl`, `final-response.json`, `metadata.json`) and `evaluation/evaluator_raw.json`. Default off: those files are dropped; Hub archives skip them even if residuals remain. `evaluation/observation.jsonl` (evaluate-phase SDK invoke) and `evaluation/checks.json` (evaluator `checks`) are **kept** either way. Independent of `--keep-workspace`.
+- **`--keep-vendor-raw`**: after a successful trajectory seal, keep invocation `backend_raw/` / layer B (`request.json`, `events.jsonl`, `final-response.json`, `metadata.json`) and `evaluation/evaluator_raw.json`. Default off: those files are dropped; Hub archives skip them even if residuals remain. `task-artifacts/` (the harvest snapshot), `evaluation/observation.jsonl` (evaluate-phase SDK invoke), and `evaluation/checks.json` (evaluator `checks`) are **kept** either way. Cleanup of the live workspace does not remove `task-artifacts/`. Independent of `--keep-workspace`.
 - `--profiles` replaces the dataset job document. `--agent` and `--profiles` are mutually exclusive. `--agent pi` resolves the shipped catalog tree (no install). `--model` requires `--agent` and writes this run’s overlay model; omit it to keep the package default. Not `ageval results upload-suite --model`. `ageval results analyze --model` is a different flag and still requires `--agent` (`openai-http` or `anthropic-http` only).
 - `--dir <path>`: only with a registry ref. Looks at `<path>/<dataset_id>/` (example: `--dir tmp` + `official/demo@0.1.0` → `tmp/official/demo`). Reuse that child if it already matches; otherwise fetch into it and run. Relative paths are from cwd. Local path + `--dir` is `invalid_override`.
 - Per invocation: Core writes `trajectory.jsonl` (`ageval.trajectory.event/1`) for **run-phase** Agent turns. Evaluate-phase SDK invoke (LLM-as-judge) writes `evaluation/observation.jsonl` instead. Neither file is PASS.
@@ -93,6 +93,14 @@ ageval results analyze <dataset> (--run <id> | --suite-run <id>) [--analyzer sta
 - `review`: uploads the attempt into a fresh local environment. The agent reads that copy and writes a report. `--agent` and `--model` (when the package has no model) are required.
 - `--model` and `--base-url` require `--agent`. No API-key flag. A missing trajectory or a single run outside the status filter is an error and writes no report.
 - Suite output is `analysis/<analyzer>/summary.json`. Skipped attempts are recorded. If any selected attempt errors, the summary is still written and the command exits 2.
+
+## `ageval results regrade`
+
+- `ageval results regrade <dataset> --run <attempt_id>` (`--run` repeatable).
+- Mints a **new** Attempt. Does not rewrite the source directory or its `result.json`.
+- Does not run the agent / `run.py`. Copies source `task-artifacts/` onto the scoring host and runs evaluate only. Gold and `evaluator.py` come from the current dataset.
+- Missing or insufficient harvest (no `artifacts.publishable`, or a declared file/tree absent from `task-artifacts/`) → status ERROR (`regrade_harvest_missing`). Trajectory text is not a PASS/FAIL.
+- No task or config field selects regrade. `--profiles` / `--agent` / `--model` / `--set` are the same job overrides as `ageval run` (judge settings), not an upload label.
 
 ## `ageval results upload` / `upload-suite`
 

@@ -7,7 +7,14 @@ from typing import Annotated
 
 import typer
 
+from ageval.cli.cmd_agent import AGENT_OPTION_HELP, resolve_agent_option
 from ageval.cli.present import emit
+
+_REGRADE_MODEL_HELP = (
+    "Override binding.model for roles bound by --agent on this regrade. "
+    "Requires --agent. Evaluate uses the current dataset lock. "
+    "Not the observational --model on results upload / upload-suite."
+)
 
 
 def register(app: typer.Typer) -> None:
@@ -915,5 +922,89 @@ def register(app: typer.Typer) -> None:
             typer.echo(f"invalid_package: {exc}", err=True)
             raise typer.Exit(code=2) from exc
         emit(summary)
+
+    @sub.command("regrade")
+    def results_regrade_command(
+        dataset: Annotated[
+            Path,
+            typer.Argument(
+                help="Dataset root. Gold and the evaluator come from this lock.",
+            ),
+        ],
+        run: Annotated[
+            list[str] | None,
+            typer.Option(
+                "--run",
+                help="Source attempt id under .ageval/runs/ (repeatable).",
+            ),
+        ] = None,
+        profiles: Annotated[
+            Path | None,
+            typer.Option(
+                "--profiles",
+                help="Alternate profiles.yaml replacing Dataset-root job bindings.",
+            ),
+        ] = None,
+        agent: Annotated[
+            list[str] | None,
+            typer.Option("--agent", help=AGENT_OPTION_HELP),
+        ] = None,
+        model: Annotated[
+            str | None,
+            typer.Option("--model", help=_REGRADE_MODEL_HELP),
+        ] = None,
+        set_overrides: Annotated[
+            list[str] | None,
+            typer.Option(
+                "--set",
+                help=(
+                    "Repeatable override as <JSON Pointer>=<JSON value>. "
+                    "Allowlisted only. Applies to the new Attempt's lock."
+                ),
+            ),
+        ] = None,
+        keep_workspace: Annotated[
+            bool,
+            typer.Option(
+                "--keep-workspace",
+                help="Keep the box work root after cleanup (default: delete).",
+            ),
+        ] = False,
+        keep_vendor_raw: Annotated[
+            bool,
+            typer.Option(
+                "--keep-vendor-raw",
+                help="Keep invocation vendor raw after seal. task-artifacts/ stays either way.",
+            ),
+        ] = False,
+        json_out: Annotated[
+            bool,
+            typer.Option("--json", help="Write the full result document on stdout."),
+        ] = False,
+    ) -> None:
+        """Score finished Attempts from harvested task-artifacts. New Attempt; no agent run."""
+        import asyncio
+
+        from ageval.application.composition import build_override_parser, build_regrade_attempts
+        from ageval.config.errors import ConfigError
+
+        profiles_path = resolve_agent_option(agent, profiles, model=model)
+        try:
+            overrides = build_override_parser()(list(set_overrides or []))
+            code, summary = asyncio.run(
+                build_regrade_attempts()(
+                    dataset,
+                    list(run or []),
+                    profiles_path=profiles_path,
+                    overrides=overrides or None,
+                    keep_workspace=keep_workspace,
+                    keep_vendor_raw=keep_vendor_raw,
+                )
+            )
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        emit(summary, json_out=json_out)
+        raise typer.Exit(code=code)
 
     app.add_typer(sub, name="results")

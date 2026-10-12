@@ -59,6 +59,13 @@ def build_run_attempt() -> Callable[..., Any]:
     return run_attempt
 
 
+def build_regrade_attempts() -> Callable[..., Any]:
+    """Wire ``ageval results regrade``: a new Attempt that evaluates only."""
+    from ageval.application.regrade import regrade_attempts
+
+    return regrade_attempts
+
+
 def build_probe_attempt() -> Callable[..., Any]:
     """Wire ``ageval run --probe``: lock plus preflight, and nothing else."""
     from ageval.application.run import probe_attempt

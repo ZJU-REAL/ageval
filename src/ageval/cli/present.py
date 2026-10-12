@@ -134,6 +134,14 @@ def humanize(payload: Mapping[str, Any], *, width: int | None = None) -> str:
         return _kv("export", str(payload.get("export_path") or "")) + "\n"
     if payload.get("cancel_requested") is not None or payload.get("status") == "cancelled":
         return _cancel_block(payload)
+    results = payload.get("results")
+    if (
+        isinstance(results, list)
+        and results
+        and isinstance(results[0], Mapping)
+        and "source_run_id" in results[0]
+    ):
+        return _regrade_block(results)
     return _generic_block(payload)
 
 
@@ -183,6 +191,23 @@ def _probe_block(payload: Mapping[str, Any]) -> str:
     if err:
         lines.append(_kv("error", str(err)))
     return "\n".join(lines) + "\n"
+
+
+def _regrade_block(results: Sequence[Any]) -> str:
+    lines: list[str] = []
+    for row in results:
+        if not isinstance(row, Mapping):
+            continue
+        source = str(row.get("source_run_id") or "")
+        status = str(row.get("status") or "")
+        lines.append(_kv("regrade", f"{source}  {status}".strip()))
+        run_id = row.get("run_id")
+        if run_id:
+            lines.append(_kv("run", str(run_id)))
+        err = row.get("error")
+        if isinstance(err, Mapping) and err.get("title"):
+            lines.append(_kv("error", str(err.get("title"))))
+    return ("\n".join(lines) + "\n") if lines else ""
 
 
 def _error_block(payload: Mapping[str, Any]) -> str:

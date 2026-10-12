@@ -117,6 +117,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   │   ├── composition.py           # CLI imports builders only from here
 │   │   ├── lock.py                  # load_and_lock + capability/inject graph
 │   │   ├── run.py                   # mint identity → ctx → run_attempt
+│   │   ├── regrade.py               # mint a new Attempt → run_regrade (no run phase)
 │   │   ├── campaign.py
 │   │   ├── suite/                   # suite_run, fingerprint, suite_metrics, summary document
 │   │   ├── registry_ops/            # results / publish / login / org / list
@@ -125,7 +126,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   │   ├── local_jobs/              # local Job list / get / delete
 │   │   └── analysis/                # post-run stats / hack / review (read-only)
 │   ├── attempt/                     # deep module: one Attempt’s visible pipeline
-│   │   ├── __init__.py              # run_attempt five-phase lines
+│   │   ├── __init__.py              # run_attempt five phases; run_regrade skips run
 │   │   ├── ctx.py
 │   │   ├── emit.py                  # chain-slot next()
 │   │   └── phases/
@@ -198,7 +199,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 
 Hub Agent Performance is a **derived view** of plaza / consented `job_overlay.agent_ref` rows, not a Core object. Builtin cards default to official public suites auto-collect; Maintainers (`AGEVAL_REGISTRY_MAINTAINERS`) own that setting and builtin attach approval. There is no `/runtimes` product surface. Public Leaderboard listing is a Registry flag (`board_listed`), not visibility. Leaderboard plaza indexes those existing surfaces (`GET /v1/results/suites?board=1` without `dataset_id`, plus one derived `GET /v1/results/performances`); it is not a stored table. Delayed `agent_ref` attach and request decide share one ResultService write path; CLI `build_results_commands` is the Hub/CLI use-case root.
 
-Production Attempt: `application/run.py` mints identity once, then `attempt.run_attempt`. Cleanup is in `try/finally`. Parent Agent Service and hard ceilings share the same quota object.
+Production Attempt: `application/run.py` mints identity once, then `attempt.run_attempt`. `application/regrade.py` mints a new Attempt and calls `attempt.run_regrade`, which starts the box and runs evaluate without the `run` phase. Cleanup is in `try/finally`. Parent Agent Service and hard ceilings share the same quota object.
 
 ### Target Source Layout (not fully realized)
 
