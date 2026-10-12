@@ -87,6 +87,13 @@ worker 是部署里的另一个进程（`python -m services.registry.hosted.work
 
 Hub：dataset 页 **Hosted** 提交并轮询状态；终态有 `suite_run_id` 时链到已有 suite 页。组织页 **Secrets** 管理密钥。
 
-## 还没在真沙箱上跑通
+## 真沙箱冒烟（Hub 路径）
 
-队列、密钥、profiles 改写、认领、上传接线有自动测试。本环境没有同时拿 E2B 和 Daytona 的钥匙跑完一份 smoke suite。缺钥不能当成这两条环境已经跑通。有钥匙的部署上应各跑一份最小 dataset，再记公开 `ageval run` 的证据。
+队列、密钥、profiles 改写、认领、上传接线有自动测试（含 `upload_hosted_suite` 离线测）。Hub 真路径已用两边钥匙各跑通一份最小 hosted suite（本地发布的 `smoke/minimal-demo@0.1.3-hosted2`，不必落在本仓库树里）：
+
+| 环境 | hosted job | suite_run_id | 终态 |
+| --- | --- | --- | --- |
+| e2b | `d0d43320e45d3958` | `23967a1c` | `succeeded`（已上传） |
+| daytona | `9c4676eadf36772c` | `c3845df3` | `succeeded`（已上传） |
+
+`succeeded` 只表示 suite 跑完并上传；题的 PASS / FAIL 仍在 suite 上。云沙箱若只吃 Dockerfile、不应用 ACP `image_layers`，ACP agent（如 pi）要把 Node 等运行时 bake 进镜像，否则会 `acp_runtime_install_failed`。截图等 UI 证据挂在 PR / release 附件上，不进产品树。

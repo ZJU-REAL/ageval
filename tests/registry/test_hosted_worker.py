@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import io
 from dataclasses import replace
 from pathlib import Path
@@ -376,3 +377,59 @@ def test_hosted_sources_do_not_import_docker() -> None:
         text = (root / rel).read_text(encoding="utf-8")
         assert "hosted.worker" not in text
         assert "ageval.application" not in text
+
+
+def test_drain_real_uploader_lands_private_suite(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Default uploader path (no inject): suite is private and owned by submitter."""
+    state, alice = _state(tmp_path, monkeypatch)
+    job_id = _submit(state, alice)
+    suite_id = "suite-hosted-upload"
+
+    class WriteSuite:
+        def run(self, prepared, *, should_cancel):
+            del should_cancel
+            suite_dir = prepared.dataset_root / ".ageval" / "suite-runs" / suite_id
+            suite_dir.mkdir(parents=True, exist_ok=True)
+            # No run_id on tasks → with_attempts finds nothing to pack, still hits upload_suite.
+            summary = {
+                "schema": "ageval.suite.summary/1",
+                "suite_run_id": suite_id,
+                "dataset_id": "test/publish-min",
+                "dataset_version": "0.1.0",
+                "exit_code": 0,
+                "tasks": [
+                    {
+                        "task_id": "hello",
+                        "status": "PASS",
+                        "score": 1.0,
+                        "n": 1,
+                        "c": 1,
+                    }
+                ],
+                "metrics": {
+                    "pass_rate": 1.0,
+                    "mean_score": 1.0,
+                    "n_tasks": 1,
+                    "n_pass": 1,
+                    "n_fail": 0,
+                    "n_error": 0,
+                    "missing_score_as": 0.0,
+                },
+            }
+            (suite_dir / "summary.json").write_text(
+                json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+            )
+            return RunResult(exit_code=0, suite_run_id=suite_id)
+
+    assert drain_once(state, runner=WriteSuite())
+    done = state.stores.hosted.get_job(job_id)
+    assert done is not None
+    assert done.status == "succeeded"
+    assert done.suite_run_id == suite_id
+    row = state.results.get_suite(suite_id)
+    assert row is not None
+    assert row.visibility == "private"
+    assert row.uploaded_by == "alice"
+    assert row.dataset_id == "test/publish-min"
