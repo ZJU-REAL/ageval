@@ -7,25 +7,26 @@ for this integration, so the two waits cannot stack. A spent budget raises
 After the first ``note_failure``, UpstreamStall freezes the phase clock for the
 whole episode — including later query attempts. A sticky gateway hang then no
 longer burns ``invoke`` / ``wall_time`` budgets. Cap each attempt with an
-explicit request timeout, ephemeral no-keepalive OpenAI/httpx clients
+explicit watchdog, ephemeral no-keepalive OpenAI/httpx clients
 (``Connection: close``), and recycle litellm's client cache so retries never
 reuse a CLOSE-WAIT / sticky ESTAB socket with a large Send-Q.
 """
 
 from __future__ import annotations
 
+import math
 import os
+import sys
 import time
 from collections.abc import Callable
-from concurrent.futures import Future
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from typing import Any
 
+from miniswe_plugin.model import DEFAULT_WATCHDOG_SECONDS
+
 _RETRY_ENV = "MSWEA_MODEL_RETRY_STOP_AFTER_ATTEMPT"
 _POLL_SECONDS = 0.25
-# Fallback when the caller does not pass request_timeout (unit tests / legacy).
-_DEFAULT_QUERY_TIMEOUT = 180.0
 
 
 class StallExhausted(Exception):
@@ -77,23 +78,36 @@ def _recycle_async() -> None:
     """
     import threading
 
-    threading.Thread(
-        target=recycle_llm_clients, name="miniswe-recycle", daemon=True
-    ).start()
+    threading.Thread(target=recycle_llm_clients, name="miniswe-recycle", daemon=True).start()
 
 
-def _call_with_request_timeout(
+def _require_watchdog(watchdog: float | None) -> float:
+    """Omitted watchdog uses the default cap. Zero and non-finite values fail."""
+    if watchdog is None:
+        return DEFAULT_WATCHDOG_SECONDS
+    if isinstance(watchdog, bool):
+        raise ValueError(f"miniswe_watchdog_invalid:{watchdog!r}")
+    try:
+        cap = float(watchdog)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"miniswe_watchdog_invalid:{watchdog!r}") from exc
+    if not math.isfinite(cap) or cap <= 0:
+        raise ValueError(f"miniswe_watchdog_invalid:{watchdog!r}")
+    return cap
+
+
+def _call_with_watchdog(
     query: Callable[..., Any],
     messages: Any,
     kwargs: dict[str, Any],
-    request_timeout: float,
+    watchdog: float,
 ) -> Any:
-    """Run ``query`` with a hard wall clock. Raises TimeoutError on overrun.
+    """Run ``query`` until ``watchdog`` seconds. Raises TimeoutError on overrun.
 
     LiteLLM/OpenAI may sit on a half-dead keep-alive socket past their own
-    timeout knobs (module default request_timeout=6000; client Timeout(None)).
-    This watchdog is the failsafe that turns a pure hang into an exception the
-    stall wrapper can retry after recycling clients.
+    HTTP timeout. This Future is the failsafe that turns a pure hang into an
+    exception the stall wrapper can retry after recycling clients. It reads
+    the watchdog only, not the HTTP client timeout.
 
     Independent of upstream_stall freeze / ``wait_excluding_stall`` /
     ``wall_time_limit_seconds=0``: those only pause the *parent* invoke/phase
@@ -105,23 +119,17 @@ def _call_with_request_timeout(
     ``_recycle_async`` + ``SHUT_RDWR`` tear down in-flight sockets without
     letting ``close()`` wedge the abandon path.
     """
-    if request_timeout <= 0:
-        return query(messages, **kwargs)
+    cap = _require_watchdog(watchdog)
     pool = ThreadPoolExecutor(max_workers=1)
     try:
         fut = pool.submit(query, messages, **kwargs)
         try:
-            return fut.result(timeout=request_timeout)
+            return fut.result(timeout=cap)
         except FutureTimeout as exc:
             _recycle_async()
-            # Visible on suite stderr even when stall event lines omit reason.
-            print(
-                f"miniswe_request_timeout:{request_timeout}",
-                flush=True,
-            )
-            raise TimeoutError(
-                f"miniswe_request_timeout:{request_timeout}"
-            ) from exc
+            # stderr only: attempt stdout is the agent transcript.
+            print(f"miniswe_watchdog:{cap}", file=sys.stderr, flush=True)
+            raise TimeoutError(f"miniswe_watchdog:{cap}") from exc
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
 
@@ -149,32 +157,27 @@ def wrap_model_query(
     query: Callable[..., Any],
     stall: Any,
     *,
-    request_timeout: float | None = None,
+    watchdog: float | None = None,
 ) -> Callable[..., Any]:
     """Retry ``query`` with the same messages while the stall budget allows it.
 
-    ``request_timeout`` caps one attempt (seconds). ``None`` uses
-    ``_DEFAULT_QUERY_TIMEOUT``. ``0`` disables the watchdog (not recommended).
+    ``watchdog`` caps one attempt (seconds). ``None`` uses
+    ``DEFAULT_WATCHDOG_SECONDS``. ``0`` and non-finite values are rejected.
     """
 
-    timeout = _DEFAULT_QUERY_TIMEOUT if request_timeout is None else float(request_timeout)
+    cap = _require_watchdog(watchdog)
 
     def wrapped(messages: Any, **kwargs: Any) -> Any:
         disable_package_model_retry()
         if stall is None or stall.disabled:
             recycle_llm_clients()
-            if timeout > 0:
-                return _call_with_request_timeout(query, messages, kwargs, timeout)
-            return query(messages, **kwargs)
+            return _call_with_watchdog(query, messages, kwargs, cap)
         while True:
             # Fresh sockets every attempt — mid-episode keep-alive stickiness
             # (turn2+ ESTAB + large Send-Q) is the observed hang mode.
             recycle_llm_clients()
             try:
-                if timeout > 0:
-                    result = _call_with_request_timeout(query, messages, kwargs, timeout)
-                else:
-                    result = query(messages, **kwargs)
+                result = _call_with_watchdog(query, messages, kwargs, cap)
             except Exception as exc:
                 if exc.__class__.__name__ == "FormatError":
                     stall.end_resumed()
@@ -184,7 +187,7 @@ def wrap_model_query(
                 # (attempt_06c64f5f) — FutureTimeout had fired but close() on a
                 # sticky responses recv could delay TimeoutError reaching
                 # note_failure / upstream_stall for many minutes. Daemon +
-                # SHUT_RDWR matches _call_with_request_timeout abandon.
+                # SHUT_RDWR matches _call_with_watchdog abandon.
                 _recycle_async()
                 if stall.note_failure(reason):
                     stall.wait()

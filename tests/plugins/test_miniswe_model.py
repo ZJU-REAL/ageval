@@ -122,24 +122,63 @@ def test_watchdog_zero_and_unlimited_are_rejected() -> None:
         resolve_model("m", {"watchdog": "unlimited"})
 
 
-def test_factory_uses_nested_spec_and_keeps_chat_none_dark_default() -> None:
+def test_factory_uses_nested_spec_and_omits_unset_effort() -> None:
     spi = _executor(model=dict(_NESTED), options={"step_limit": 12})
     assert spi.spec == resolve_model(_NESTED, {})
     assert spi.model == "openai/glm-5.2"
     assert spi.api == "responses"
     assert spi.step_limit == 12
-    assert spi.request_timeout == 120.0
+    assert spi.timeout == 120.0
+    assert spi.watchdog == 300.0
     chat = _executor(model="openai/x")
     assert chat.spec.reasoning_effort is None
-    assert chat._litellm_model_kwargs(key=None, base=None)["reasoning_effort"] == "none"
-    assert chat.request_timeout == 180.0
+    assert chat.spec.watchdog is None
+    assert chat.timeout is None
+    assert chat.watchdog == 180.0
+    body = chat._litellm_model_kwargs(key=None, base=None)
+    assert "reasoning_effort" not in body
+    assert "timeout" not in body
+    assert "watchdog" not in body
 
 
-def test_explicit_zero_timeout_stays_off_the_kwargs_but_spec_omits() -> None:
+def test_timeout_and_watchdog_are_independent() -> None:
+    spi = _executor(model="openai/x", options={"timeout": 30, "watchdog": 90})
+    assert spi.timeout == 30.0
+    assert spi.watchdog == 90.0
+    body = spi._litellm_model_kwargs(key=None, base=None)
+    assert body["timeout"] == 30.0
+    assert "watchdog" not in body
+    assert "reasoning_effort" not in body
+
+
+def test_explicit_zero_timeout_omits_http_clock_and_keeps_watchdog() -> None:
     spi = _executor(model="openai/x", options={"request_timeout": 0})
     assert spi.spec.timeout is None
-    assert spi.request_timeout == 0.0
+    assert spi.timeout is None
+    assert spi.watchdog == 180.0
     assert "timeout" not in spi._litellm_model_kwargs(key=None, base=None)
+
+
+def test_client_timeout_none_does_not_become_180() -> None:
+    pytest.importorskip("httpx")
+    from miniswe_plugin.llm_client import client_timeout
+
+    http_timeout, value = client_timeout(None)
+    assert value is None
+    assert http_timeout.connect is None
+    assert http_timeout.read is None
+    assert http_timeout.write is None
+    assert http_timeout.pool is None
+    _http, positive = client_timeout(30)
+    assert positive == 30.0
+    with pytest.raises(ValueError, match="miniswe_timeout_invalid"):
+        client_timeout(0)
+
+
+def test_declared_effort_none_is_sent() -> None:
+    spi = _executor(model="openai/x", options={"reasoning_effort": "none"})
+    assert spi.spec.reasoning_effort == "none"
+    assert spi._litellm_model_kwargs(key=None, base=None)["reasoning_effort"] == "none"
 
 
 def test_example_profile_resolves() -> None:
