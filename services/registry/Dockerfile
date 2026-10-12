@@ -13,7 +13,7 @@ COPY services/registry ./services/registry
 # Cache mount keeps uv's download cache across builds; requires BuildKit
 # (DOCKER_BUILDKIT=1 — the legacy builder rejects RUN --mount).
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --extra registry --no-dev
+    uv sync --frozen --extra registry --extra e2b --extra daytona --no-dev
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

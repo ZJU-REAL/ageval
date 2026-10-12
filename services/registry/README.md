@@ -86,6 +86,22 @@ location / {
 Replace / blob GC under several workers is Postgres-authoritative. Do not run
 public mode on SQLite.
 
+## Hosted jobs
+
+Hub can queue a suite on **e2b** or **daytona**. The API stores the job and the org secrets. A second process runs it:
+
+```bash
+uv sync --extra registry --extra e2b --extra daytona
+export AGEVAL_HOSTED_SECRET_KEY="$(python -c 'import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
+uv run --extra registry --extra e2b --extra daytona python -m services.registry.hosted.worker
+```
+
+The worker uses the same database and object store as Registry (`build_state_from_env` with bootstrap minting off). It does not publish a port and does not mount a Docker socket. Compose service `hosted-worker` is that process. `AGEVAL_REGISTRY_WORKERS` above is the API process count. It is a different process.
+
+Model keys and provider keys are org secrets created in Hub. The master key stays in `AGEVAL_HOSTED_SECRET_KEY`. A missing master key rejects secret create and worker decrypt. `AGEVAL_HOSTED_STALE_SECONDS` defaults to `0`: a worker that dies leaves the row `running`. Set a positive number of seconds to return those rows to the queue.
+
+The image installs the e2b and daytona extras so this worker can open a sandbox. The API process still does not start a container.
+
 ## CLI
 
 ```bash

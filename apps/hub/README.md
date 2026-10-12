@@ -75,7 +75,7 @@ modal; the list only shows a prefix. Members join from **Organizations → Join*
 | `/home` | Personal home (uploaded jobs, orgs, maintainable datasets/tasks, uploaded plugins) |
 | `/leaderboard` | Default landing. Leaderboard plaza (Dataset / Agent / Model views). Catalog sidebar first. Dataset view groups by dataset (name + description) and reuses Table / Pareto / Waffle. Wide screens: a right-edge rail jumps to the current view's groups. Index of listed suites and collected Performance; signed-out OK. No demo fixtures |
 | `/datasets` | Dataset list (**Explore** / **Your organizations**, Explore default + search on one row). Wide screens: a right-edge rail jumps to an organization |
-| `/datasets/:id` | README (loads first) · Tasks (paginated) · Shared · Overlays (when declared) · Leaderboard. Org owner: visibility / delete version / release draft |
+| `/datasets/:id` | README (loads first) · Tasks (paginated) · Shared · Overlays (when declared) · Hosted (e2b / daytona) · Leaderboard. Org owner: visibility / delete version / release draft |
 | `/datasets/:id?tab=leaderboard&demo=1` | Leaderboard with mock pass@k rows (local smoke only) |
 | `/datasets/:id/tasks/:task` | README · Files (Local \| Shared \| Overlays) · Jobs (row opens detail when uploaded) |
 | `/plugins` | **Plugin marketplace** list (`package_kind=plugin`) |
@@ -85,7 +85,7 @@ modal; the list only shows a prefix. Members join from **Organizations → Join*
 | `/datasets/:id/suites/:suiteRunId` | Suite run detail (Profiles / Plugin / Jobs / Share). Leaderboard `?suite=` redirects here |
 | `/datasets/:id?tab=leaderboard&dataset_version=` | Leaderboard filtered to that Dataset version (omit = all versions) |
 | `/organizations` | Your orgs · Create · Join |
-| `/organizations/:orgId` | Overview (members · datasets · plugins · agents) · Settings |
+| `/organizations/:orgId` | Overview (members · datasets · plugins · agents) · Secrets (members) · Settings |
 | `/users/:login` | Public user profile (official orgs only; signed-out OK) |
 | `/datasets/:id/tasks/:task/attempts/:runId` | Remote Attempt detail (Timing / Tokens when present, tabs + trajectory) |
 | `/s/:token` | Anonymous read-only snapshot of one suite (Jobs / Profiles). `mode=live` polls suite meta. Signed-out OK. No catalog import or leaderboard listing |

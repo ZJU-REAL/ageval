@@ -9,6 +9,7 @@ import { CatalogHead } from "@/components/page-head";
 import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
 import { DisplayNameEditor } from "@/components/display-name-editor";
 import { EntityMarkControl } from "@/components/entity-mark-control";
+import { OrgSecrets } from "@/components/org-secrets";
 import { DisabledTip, HoverTip, TruncateTip } from "@ageval/shared/components/hover-tip";
 import { OfficialMark } from "@/components/official-mark";
 import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
@@ -62,7 +63,7 @@ import { getGithubUser, getToken } from "@/lib/auth";
 import { toastError } from "@/lib/toast-error";
 import { datasetRef, formatDate } from "@ageval/shared/lib/utils";
 
-type Tab = "overview" | "settings";
+type Tab = "overview" | "secrets" | "settings";
 
 type OrgDanger =
   | { kind: "leave" }
@@ -82,7 +83,6 @@ export function OrganizationDetailPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const token = getToken();
-  const tab: Tab = searchParams.get("tab") === "settings" ? "settings" : "overview";
 
   function setTab(next: Tab) {
     const nextParams = new URLSearchParams(searchParams);
@@ -91,6 +91,14 @@ export function OrganizationDetailPage() {
     setSearchParams(nextParams, { replace: true });
   }
   const [org, setOrg] = useState<OrgRow | null>(null);
+  const canSecrets = Boolean(org?.role);
+  const requestedTab = searchParams.get("tab");
+  const tab: Tab =
+    requestedTab === "settings"
+      ? "settings"
+      : requestedTab === "secrets" && canSecrets
+        ? "secrets"
+        : "overview";
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [datasets, setDatasets] = useState<PackageRelease[]>([]);
   const [plugins, setPlugins] = useState<PackageRelease[]>([]);
@@ -475,6 +483,9 @@ export function OrganizationDetailPage() {
             onChange={setTab}
             items={[
               { id: "overview", label: "Overview" },
+              ...(canSecrets
+                ? ([{ id: "secrets" as const, label: "Secrets" }] as const)
+                : []),
               { id: "settings", label: "Settings" },
             ]}
           />
@@ -705,6 +716,8 @@ export function OrganizationDetailPage() {
                 )}
               </section>
             </div>
+          ) : tab === "secrets" && canSecrets ? (
+            <OrgSecrets orgId={orgId} role={org?.role} token={token} />
           ) : (
             <div className="space-y-8">
               {(org?.role || "").toLowerCase() === "owner" ? (

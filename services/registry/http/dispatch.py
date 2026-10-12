@@ -141,16 +141,18 @@ def _caught(exc: RegistryAppError) -> HttpResult:
 
 # After the helpers above: http.orgs imports those helpers from this module.
 from services.registry.http.auth import AuthHandlers
+from services.registry.http.hosted import HostedHandlers
 from services.registry.http.orgs import OrgHandlers
 from services.registry.http.packages import PackageHandlers
 from services.registry.http.requests import InboxHandlers
 from services.registry.http.results import ResultHandlers
-from services.registry.http.shares import ShareHandlers
 from services.registry.http.runtimes import RuntimeHandlers
+from services.registry.http.shares import ShareHandlers
 
 
 class RegistryHttpApi(
     AuthHandlers,
+    HostedHandlers,
     OrgHandlers,
     PackageHandlers,
     ResultHandlers,

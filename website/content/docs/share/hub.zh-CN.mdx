@@ -26,7 +26,7 @@ pnpm dev   # http://127.0.0.1:5174
 | `/home` | 个人主页（需登录） |
 | `/leaderboard` | 默认首页。Leaderboard plaza：已上榜 Dataset suite 与 Agent / Model Performance 的索引（默认 Dataset 视图；`?view=agent` / `?view=model`） |
 | `/datasets` | 列表（Explore / Your organizations，默认 Explore） |
-| `/datasets/:id` | README · Tasks · Shared（有 shared/ 时）· Overlays（声明了 `overlays:` 时）· Leaderboard |
+| `/datasets/:id` | README · Tasks · Shared（有 shared/ 时）· Overlays（声明了 `overlays:` 时）· Hosted · Leaderboard |
 | `/datasets/:id/tasks/:task` | README · Files（Local \| Shared \| Overlays）· Jobs |
 | `/plugins` | 插件市场 |
 | `/plugins/:id` | 插件详情（声明接入点时间线 · 文件预览 · CLI 安装命令） |
@@ -36,7 +36,7 @@ pnpm dev   # http://127.0.0.1:5174
 | `/models` | Models plaza（按 lab 分组目录表 · 模态过滤 · Cmd/Ctrl+F 搜索） |
 | `/models/:canonical` | 模型百科（Overview 规格 · Performance） |
 | `/organizations` | 我的组织 · 创建 / 加入 · Dataset / 插件 / Agent 计数 |
-| `/organizations/:orgId` | 概览（成员 · Dataset · 插件 · Agent）· 设置 |
+| `/organizations/:orgId` | 概览（成员 · Dataset · 插件 · Agent）· Secrets（成员）· 设置 |
 | `/users/:login` | 公开用户页（官方组织与公开 Dataset / 插件 / Agent；未登录可看） |
 | `/datasets/:id/tasks/:task/attempts/:runId` | 远程 Attempt 详情（需已上传对应运行产物） |
 | `/datasets/:id/suites/:suiteRunId` | 整份运行详情（Profiles / Plugin / Jobs / Share） |
