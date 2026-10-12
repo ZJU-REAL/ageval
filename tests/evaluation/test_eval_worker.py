@@ -424,3 +424,63 @@ async def test_evaluate_in_box_exec_without_named_map_uses_scoring_host(tmp_path
     assert verdict["metrics"]["stdout"] == "ok-from-box"
     assert singular.started is False
     assert singular.execs == [["echo", "ok"]]
+
+
+class _FakeFrames:
+    def __init__(self, launch: dict[str, object]) -> None:
+        self.launch = launch
+        self.sent: list[dict[str, object]] = []
+
+    def recv(self) -> dict[str, object]:
+        return self.launch
+
+    def send(self, frame: dict[str, object]) -> None:
+        self.sent.append(frame)
+
+
+def _worker_launch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    task_root = tmp_path / "task"
+    task_root.mkdir()
+    (task_root / "evaluator.py").write_text(
+        "import json\n"
+        "from pathlib import Path\n"
+        "def evaluate(inputs):\n"
+        "    data = json.loads(Path(inputs['artifacts']['final-state']).read_text())\n"
+        "    return {'score': 1.0 if data.get('ok') else 0.0}\n",
+        encoding="utf-8",
+    )
+    for name in ("artifacts", "workspace", "evaluation"):
+        (tmp_path / name).mkdir()
+        monkeypatch.setenv(f"AGEVAL_{name.upper()}", str(tmp_path / name))
+    return {
+        "task_root": str(task_root),
+        "dataset_root": None,
+        "attempt_id": "attempt_x",
+        "entrypoint": "evaluator:evaluate",
+        "evaluation_inputs": [{"artifact": "final-state", "target": "artifacts/final-state.json"}],
+    }
+
+
+def test_missing_evaluation_input_fails_cleanly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ageval.runtime.eval_worker import _run
+
+    frames = _FakeFrames(_worker_launch(tmp_path, monkeypatch))
+    assert _run(frames) == 1  # type: ignore[arg-type]
+    (frame,) = frames.sent
+    assert frame["ok"] is False
+    assert frame["error"] == "missing_evaluation_input"
+    assert "final-state" in str(frame["message"])
+    assert "KeyError" not in str(frame.get("traceback"))
+
+
+def test_published_evaluation_input_still_scores(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ageval.runtime.eval_worker import _run
+
+    frames = _FakeFrames(_worker_launch(tmp_path, monkeypatch))
+    (tmp_path / "artifacts" / "final-state.json").write_text('{"ok": true}', encoding="utf-8")
+    assert _run(frames) == 0  # type: ignore[arg-type]
+    assert frames.sent[0]["verdict"] == {"score": 1.0}
