@@ -25,6 +25,41 @@ _BUILTIN_EXECUTOR_KINDS = frozenset({"acp", "openai-http", "anthropic-http"})
 _SKIP_PLUGIN_IDS = frozenset({"default", "acp", "openai-http", "anthropic-http"})
 
 
+def _nested_model_fingerprint_fields(model: Any) -> dict[str, Any]:
+    """Secret-free nested ``model:`` knobs for suite fingerprint (not only id).
+
+    Flat profiles already put ``reasoning_effort`` / timeout-like knobs into
+    ``options``. Nested profiles must fold the same axis into the digest or
+    differently tuned suites collide on Leaderboard comparability.
+    """
+    if not isinstance(model, Mapping):
+        return {}
+    out: dict[str, Any] = {}
+    api = model.get("api")
+    if isinstance(api, str) and api.strip():
+        out["api"] = api.strip()
+    reasoning = model.get("reasoning")
+    if isinstance(reasoning, Mapping):
+        effort = reasoning.get("effort")
+        if isinstance(effort, str) and effort.strip():
+            out["reasoning_effort"] = effort.strip()
+    for key in ("timeout", "watchdog"):
+        if key not in model:
+            continue
+        raw = model.get(key)
+        if raw is None or raw == "":
+            continue
+        out[key] = raw
+    extra = model.get("extra")
+    if isinstance(extra, Mapping) and extra:
+        from ageval.config.profiles import secret_free_options
+
+        cleaned = secret_free_options(extra)
+        if cleaned:
+            out["extra"] = cleaned
+    return out
+
+
 def _model_label(raw: Any) -> str:
     from ageval.config.profiles import model_id
 
@@ -82,6 +117,9 @@ def actors_summary_from_profiles(
             options_s = existing_opts.strip()
         else:
             options = _profile_options(raw)
+            nested = _nested_model_fingerprint_fields(raw.get("model"))
+            if nested:
+                options = {**options, **nested}
             options_s = (
                 json.dumps(options, sort_keys=True, separators=(",", ":"), default=str)
                 if options
@@ -249,10 +287,13 @@ def fingerprint_for_job_overlay(overlay: Mapping[str, Any] | None) -> str:
 def _binding_role_key(binding: Mapping[str, Any]) -> tuple[str, str, str, str]:
     """Suite comparability: executor, ACP entry, **model**, secret-free options."""
     opts = _profile_options(binding)
+    nested = _nested_model_fingerprint_fields(binding.get("model"))
+    if nested:
+        opts = {**opts, **nested}
     return (
         str(binding.get("executor") or "").strip(),
         _profile_entry(binding),
-        str(binding.get("model") or "").strip(),
+        _model_label(binding.get("model")),
         json.dumps(opts, sort_keys=True, separators=(",", ":"), default=str),
     )
 
