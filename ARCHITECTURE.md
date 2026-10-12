@@ -144,7 +144,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   │   ├── base.py                  # BaseEnvironment · BaseExecutor
 │   │   ├── decorators.py            # @environment_plugin / @executor_plugin
 │   │   ├── slots.py                 # exclusive / chain ids
-│   │   ├── registry.py / resolve.py / bootstrap.py
+│   │   ├── registry.py / resolve.py / bootstrap.py / builtin.py
 │   │   ├── defaults/                # environment_setup recognizes setup.sh
 │   │   └── contrib/
 │   │       ├── acp/                 # exclusive executor + attach_stdio client
@@ -273,8 +273,9 @@ cli ──────────────► application.composition
                          │
                          ├─► config / attempt / runtime / capabilities / evaluation
                          │
-                         └─► plugins.bootstrap ──► contrib/* ──► environments.protocol
-                                                    (contrib is not imported back by protocol)
+                         └─► plugins.bootstrap ──► plugins.builtin ──► contrib/* ──► environments.protocol
+                                 (builtin lists modules; it does not scan contrib/.
+                                  contrib is not imported back by protocol)
 
 plugins.base ──► ageval.model · environments.protocol
 ageval.model ──► (no plugins, no contrib, no application)

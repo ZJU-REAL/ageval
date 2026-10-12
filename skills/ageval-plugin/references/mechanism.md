@@ -18,7 +18,22 @@ Do not revive the deleted `ageval.agent_executors` entry-point bypass.
 
 ## Class registration
 
-`@environment_plugin` and `@executor_plugin` live in `ageval.plugins.decorators`. Decorating a class (the class statement, which runs on first import) checks the contract, then calls `ExtensionRegistry.exclusive` on the process registry (`get_global_registry`). There is no second candidate table. The class object is the exclusive-slot factory (`is_factory=True`), so `kind` and `capabilities` are readable before it is constructed. Existing contrib modules still register with `register_*_contrib`.
+`@environment_plugin` and `@executor_plugin` live in `ageval.plugins.decorators`. Decorating a class (the class statement, which runs on first import) checks the contract, then calls `ExtensionRegistry.exclusive` on the process registry (`get_global_registry`). There is no second candidate table. The class object is the exclusive-slot factory (`is_factory=True`), so `kind` and `capabilities` are readable before it is constructed.
+
+## Builtin loading (scheme A)
+
+First-party environments and executors load from explicit module tuples in `ageval.plugins.builtin`. `bootstrap_registry` calls `load_builtin_environments()` then `load_builtin_executors()`. Each loader imports only the names on its tuple (`importlib.import_module`). That import is what runs `@environment_plugin` / `@executor_plugin` when the class is decorated. The tuples are the builtin set. Nothing walks `contrib/` or any other directory.
+
+| Tuple | Modules |
+| --- | --- |
+| `_BUILTIN_ENVIRONMENT_MODULES` | `ageval.plugins.contrib.local.host`, `ageval.plugins.contrib.docker.host`, `ageval.plugins.contrib.e2b.host`, `ageval.plugins.contrib.daytona.host`, `ageval.plugins.contrib.ssh.host` |
+| `_BUILTIN_EXECUTOR_MODULES` | `ageval.plugins.contrib.acp.executor`, `ageval.plugins.contrib.openai_http.executor`, `ageval.plugins.contrib.anthropic_http.executor` |
+
+`miniswe` is not on `_BUILTIN_EXECUTOR_MODULES`. It stays an installed plugin: `plugins/miniswe` loaded by `load_installed_plugins` after `ageval plugin install`. Do not add it to the builtin executor tuple.
+
+Commenting out a tuple entry disables that contrib. Adding a builtin means editing the tuple. Do not add a scan or a `@builtin_*` discovery pass.
+
+Until a listed class is itself the exclusive factory, `load_builtin_*` still calls that module's `register_*_contrib` for the same list entry. A class object defined in the listed module is not replaced. ACP's `after_environment_ready`, `trajectory_collect`, and `attach_stdio` inject stay registered with the executor. Those `register_*_contrib` helpers are shims for today's undecorated contrib, not a second loader.
 
 ```python
 @environment_plugin(priority=100, source="first-party")

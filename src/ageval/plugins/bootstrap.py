@@ -1,19 +1,13 @@
 """Composition-root bootstrap for the extension registry.
 
-Order: engine defaults → first-party contribs → installed plugin cache.
-Ecosystem plugins load only after ``ageval plugin install``.
+Order: engine defaults → builtin environments → builtin executors → installed
+plugin cache. Ecosystem plugins, including miniswe, load only after
+``ageval plugin install``.
 """
 
 from __future__ import annotations
 
-from ageval.plugins.contrib.acp import register_acp_contrib
-from ageval.plugins.contrib.anthropic_http import register_anthropic_http_contrib
-from ageval.plugins.contrib.daytona import register_daytona_contrib
-from ageval.plugins.contrib.docker import register_docker_contrib
-from ageval.plugins.contrib.e2b import register_e2b_contrib
-from ageval.plugins.contrib.local import register_local_contrib
-from ageval.plugins.contrib.openai_http import register_openai_http_contrib
-from ageval.plugins.contrib.ssh import register_ssh_contrib
+from ageval.plugins.builtin import load_builtin_environments, load_builtin_executors
 from ageval.plugins.defaults import register_defaults
 from ageval.plugins.registry import ExtensionRegistry, get_global_registry, reset_global_registry
 
@@ -36,14 +30,8 @@ def bootstrap_registry(
         reg.clear()
 
     register_defaults(reg)
-    register_local_contrib(reg)
-    register_docker_contrib(reg)
-    register_e2b_contrib(reg)
-    register_daytona_contrib(reg)
-    register_ssh_contrib(reg)
-    register_acp_contrib(reg)
-    register_openai_http_contrib(reg)
-    register_anthropic_http_contrib(reg)
+    load_builtin_environments(reg)
+    load_builtin_executors(reg)
 
     from ageval.plugins.load_installed import load_installed_plugins
 
