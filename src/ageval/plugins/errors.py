@@ -40,10 +40,13 @@ class InjectUnsatisfiedError(ExtensionRegistryError):
 
 
 class PluginContractError(ExtensionRegistryError):
-    """Capability or method contract failure at registration.
+    """Class contract failure while registering an environment or executor.
 
-    Distinct from ``ModelConfigError`` (bad model profile) and from transport
-    failures that upstream stall may retry.
+    Raised when the class is the wrong base, a required method is missing,
+    a true capability has no callable method, or ``extra_allowlist`` /
+    ``supported_apis`` / ``supported_model_fields`` is undeclared. An explicit
+    empty ``extra_allowlist`` is valid. A bad model profile raises
+    ``ModelConfigError``. Transport failures stay on the upstream-stall path.
     """
 
     kind = "plugin_contract"

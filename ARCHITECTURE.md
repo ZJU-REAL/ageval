@@ -142,6 +142,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   │   └── streams.py
 │   ├── plugins/
 │   │   ├── base.py                  # BaseEnvironment · BaseExecutor
+│   │   ├── decorators.py            # @environment_plugin / @executor_plugin
 │   │   ├── slots.py                 # exclusive / chain ids
 │   │   ├── registry.py / resolve.py / bootstrap.py
 │   │   ├── defaults/                # environment_setup recognizes setup.sh
@@ -214,6 +215,7 @@ src/ageval/
   model/                            # ModelSpec · resolve_model
   environments/protocol.py          # still no vendor SDK
   plugins/base.py                   # BaseEnvironment · BaseExecutor
+  plugins/decorators.py             # @environment_plugin / @executor_plugin
   plugins/contrib/{acp,docker,local,e2b,daytona,ssh,openai_http,anthropic_http}
   plugins/defaults/                 # or move to contrib/defaults — pick one, not both
   runtime/{identity,parent_agent,task_launch,task_worker}

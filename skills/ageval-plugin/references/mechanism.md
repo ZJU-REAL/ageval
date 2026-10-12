@@ -16,6 +16,44 @@ authoring agents only; it does not own new contract.
 
 Do not revive the deleted `ageval.agent_executors` entry-point bypass.
 
+## Class registration
+
+`@environment_plugin` and `@executor_plugin` live in `ageval.plugins.decorators`. Decorating a class (the class statement, which runs on first import) checks the contract, then calls `ExtensionRegistry.exclusive` on the process registry (`get_global_registry`). There is no second candidate table. The class object is the exclusive-slot factory (`is_factory=True`), so `kind` and `capabilities` are readable before it is constructed. Existing contrib modules still register with `register_*_contrib`.
+
+```python
+@environment_plugin(priority=100, source="first-party")
+class DockerHost(BaseEnvironment):
+    kind = "docker"  # exclusive-slot plugin id
+    capabilities = EnvironmentCapabilities(
+        exec=True, upload=True, download=True, attach_stdio=True,
+        uid_gid=True, path_views=True, compose=True,
+    )
+
+@executor_plugin(priority=120, source="first-party")
+class OpenAIHttpExecutor(BaseExecutor):
+    kind = "openai-http"
+    requires_environment = False
+    supported_apis = frozenset({"chat", "responses"})
+    supported_model_fields = frozenset({
+        "id", "api", "reasoning_effort", "timeout", "watchdog", "extra",
+    })
+    extra_allowlist = frozenset({"provider"})  # required; empty frozenset() is valid
+```
+
+Decorator arguments are `priority` (default `100`) and `source` (default `"first-party"`). `kind` is the class attribute, the same id an exclusive slot uses today (`docker`, `openai-http`, …).
+
+Environment attributes read at registration: `kind`, `capabilities` (an `EnvironmentCapabilities` instance). Executor attributes: `kind`, `requires_environment` (base default `True` counts), `supported_apis`, `supported_model_fields`, `extra_allowlist`. `extra_allowlist` must be present even when empty. An empty allowlist means lock rejects every extra key. That lock check is not part of registration.
+
+Registration raises `PluginContractError` (`kind` is `plugin_contract`) and does not insert a row when:
+
+- the class is not a subclass of `BaseEnvironment` / `BaseExecutor`
+- an executor is missing a callable `invoke`, `close`, `supports_model`, or `bind_model`
+- `extra_allowlist`, `supported_apis`, or `supported_model_fields` is absent (an explicit empty `frozenset` is valid; a non-`frozenset` is not)
+- `capabilities.exec` / `upload` / `download` / `attach_stdio` is true and that method is missing or not callable
+- `preflight`, `start`, or `stop` is missing or not callable
+
+`uid_gid`, `path_views`, and `compose` have no methods. `api` outside `supported_apis`, and an extra key outside `extra_allowlist`, are lock checks. Registration does not perform them.
+
 ## Slots
 
 Ids live in `src/ageval/plugins/slots.py`. Exclusive: `environment`, `executor`, `evaluation_runtime`, `trajectory_seal`. Chain: environment ready/setup, run bookends, agent open/invoke/close, evaluate bookends, `trajectory_collect` / `trajectory_enrich`, `summary_enrich`, `cleanup_report`.

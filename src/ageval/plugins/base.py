@@ -1,10 +1,10 @@
 """Shared bases for environment and executor plugins.
 
-Registration (undeclared ``extra_allowlist``, capability true without the
-method) is not done here. Lock does not call ``supports_model`` yet.
+Registration checks live in ``ageval.plugins.decorators``. This module does
+not register anything. Lock does not call ``supports_model`` yet.
 ``exec`` / ``upload`` / ``download`` / ``attach_stdio`` are absent on
-``BaseEnvironment`` so a later registration check can see that the subclass
-did not implement them.
+``BaseEnvironment`` so a registration check can see that the subclass did
+not implement them.
 """
 
 from __future__ import annotations
