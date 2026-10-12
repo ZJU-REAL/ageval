@@ -33,21 +33,42 @@ projected into the parent HTTP client; they never enter the lock.
 ## Parameters
 
 `options` merge: profile `options` then this plugin's `extensions` row (last wins).
+These limits are agent knobs, not Model fields.
 
 | Name | Default | Purpose |
 | --- | --- | --- |
 | `options.step_limit` | `30` | Agent step cap. `0` = unlimited. Negative / non-int values are rejected. |
 | `options.cost_limit` | `0` | Cost cap. `0` = unlimited. Negative values are rejected. |
 | `options.cmd_timeout` | `30` | Seconds per `host.exec` bash action. |
-| `options.api` | `chat` | LLM wire API. `chat` = Chat Completions (default; forces `reasoning_effort=none` when unset so tools+effort do not 400 on gpt-6-sol). `responses` = `/v1/responses` via LitellmResponseModel (preferred for gpt-6-sol tool calls on this LiteLLM gateway). |
-| `options.request_timeout` | `180` | Seconds for one litellm/openai `completion` HTTP call (`timeout=`). Fail-fast into upstream_stall instead of silent multi-minute hangs. `0` = omit (legacy litellm/openai defaults). |
 
-For gpt-6-sol tool calls prefer `options.api: responses` (chat+tools hits reasoning_effort pitfalls / hangs). Chat models with an ``anthropic/`` (or bare ``claude*``) profile id are remapped to ``openai/<id>`` so LiteLLM uses OpenAI-compat ``/v1/chat/completions`` against the gateway (wire model stays ``anthropic/…``); raw Anthropic Messages routing 404s/crashes and stalls forever. Hang hardening (sticky LiteLLM keep-alive): each completion uses a fresh OpenAI/httpx client with `max_keepalive_connections=0`, sends `Connection: close`, and flushes `litellm.in_memory_llm_clients_cache` before/after the call and on stall retry. Prevents mid-episode (turn2+) hangs stuck in `_receive_response_headers` with a large Send-Q on a reused ESTAB socket.
-| `options.reasoning_effort` | omit | Optional OpenAI-shaped Chat Completions `reasoning_effort`. Empty / omit = do not send. Non-string values are rejected. |
-| `options.extra_body` | omit | Optional mapping merged as-is into the parent completion kwargs (after `reasoning_effort`). Vendor-native keys (OpenRouter `reasoning` / `provider`, vLLM extras, …). Omit / empty = do not merge. Non-mapping values are rejected. Rejects `model` / `api_key` / `api_base` / `drop_params` / `timeout` / `request_timeout`. Conflicting keys: `request_timeout` still wins for `timeout=`. |
-| `model` | `openai/gpt-4o-mini` | Upstream model id on the parent client (`openai/…`, `openrouter/…`, `anthropic/…`, or any id the `base_url` gateway accepts). |
-| `api_key` | `OPENAI_API_KEY` / `litellm_api_key` / `LITELLM_API_KEY` | Env **locator name** for the parent HTTP client. Omit on loopback `base_url` (`127.0.0.1` / `localhost` / `::1`). |
-| `base_url` | `OPENAI_BASE_URL` / `litellm_base_url` / `LITELLM_BASE_URL` | OpenAI-compatible base (`api_base`). Point at OpenRouter, DashScope, a local gateway, etc. |
+## Model
+
+One profile binds one Model. `resolve_model` accepts a nested `model:` mapping or today's flat fields. The same field set in both places is `miniswe_model_conflict`.
+
+`api_key` and `base_url` stay profile-level credential locators. They are not Model fields.
+
+| Field | Nested | Flat (compat) | Omit |
+| --- | --- | --- | --- |
+| `id` | `model.id` | `model: <string>` | `openai/gpt-4o-mini` |
+| `api` | `model.api` | `options.api` | `chat` |
+| `reasoning.effort` | `model.reasoning.effort` | `options.reasoning_effort` | do not send |
+| `timeout` | `model.timeout` | `options.timeout` | do not send an HTTP timeout. `0` means omit |
+| `watchdog` | `model.watchdog` | `options.watchdog` | `180` seconds. `0`, negative, and non-finite values are rejected |
+| `extra` | `model.extra` | `options.extra_body` | do not merge |
+
+`api` short names are `chat` (Chat Completions) and `responses` (`/v1/responses`). AgentCompass spells the same wires `openai-chat` and `openai-responses`. This plugin accepts only the short names (`miniswe_api_invalid`).
+
+`reasoning` is effort only. A declared `none` is an effort value. Other reasoning keys (`summary`, vendor budgets) belong in `extra`. `extra` cannot replace a first-class field (`id`, `api`, `reasoning.effort`, `timeout`, `watchdog`, or the deprecated `request_timeout`). That includes `extra.reasoning.effort`.
+
+`request_timeout` is deprecated. It maps to `timeout`. `0` means omit. Do not set it beside `options.timeout`.
+
+`timeout` is the HTTP client clock. `watchdog` is the Future abort clock. Stall reads the watchdog only. An omitted watchdog uses the 180 second cap. There is no unlimited watchdog.
+
+For gpt-6-sol tool calls prefer `api: responses`. Chat models with an `anthropic/` (or bare `claude*`) profile id are remapped to `openai/<id>` so the gateway still sees `anthropic/…` on `/v1/chat/completions`. Each completion uses a fresh httpx client with `max_keepalive_connections=0`, sends `Connection: close`, and flushes LiteLLM's client cache before, after, and on stall retry.
+
+Wire still applies two dark defaults that the table does not describe: an unset chat effort is sent as `reasoning_effort=none`, and an omitted timeout still uses 180 seconds for both the HTTP client and the abort clock. The omit and split change removes those defaults.
+
+`api_key` defaults to the locator names `OPENAI_API_KEY` / `litellm_api_key` / `LITELLM_API_KEY`. Omit the key on loopback `base_url` (`127.0.0.1` / `localhost` / `::1`). `base_url` defaults to `OPENAI_BASE_URL` / `litellm_base_url` / `LITELLM_BASE_URL`.
 
 ## Install
 
@@ -66,20 +87,28 @@ environment: docker
 agent_profiles:
   solver:
     executor: miniswe
+    model:
+      id: openai/glm-5.2
+      api: responses
+      reasoning:
+        effort: high
+      timeout: 120
+      watchdog: 300
+      extra:
+        reasoning:
+          summary: auto
+    api_key: ${litellm_api_key}
+    base_url: ${litellm_base_url}
     extensions:
       - plugin: miniswe
         options:
           step_limit: 30          # 0 = unlimited
           cost_limit: 0           # 0 = unlimited
           cmd_timeout: 30
-          extra_body:             # optional; vendor-native body keys
-            reasoning:
-              max_tokens: 2000
       - plugin: docker
-    model: openai/glm-5.2
-    api_key: ${litellm_api_key}
-    base_url: ${litellm_base_url}
 ```
+
+The same id still resolves from a flat profile: `model: openai/glm-5.2` plus `options.api`, `options.reasoning_effort`, `options.request_timeout`, and `options.extra_body`. A full nested file lives at `examples/agents/miniswe-default/profiles.model.yaml`.
 
 Same harness: `Agent.session(...).invoke`. Switch with `--profiles`. PASS stays
 the package evaluator.

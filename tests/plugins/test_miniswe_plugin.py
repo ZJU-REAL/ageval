@@ -171,7 +171,6 @@ def test_invalid_api_option() -> None:
         )
 
 
-
 def test_connection_close_header_always_set() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
@@ -293,18 +292,19 @@ def test_extra_body_merges_into_litellm_kwargs() -> None:
     assert "reasoning" not in omitted._litellm_model_kwargs(key=None, base=None)
 
 
-def test_extra_body_overrides_reasoning_effort() -> None:
-    spi = build_executor(
-        host=SimpleNamespace(kind="local"),
-        placement=_placement(),
-        options={
-            "reasoning_effort": "low",
-            "extra_body": {"reasoning_effort": "high"},
-        },
-        model="openai/x",
-    )
-    kwargs = spi._litellm_model_kwargs(key=None, base=None)
-    assert kwargs["reasoning_effort"] == "high"
+def test_extra_body_cannot_override_reasoning_effort() -> None:
+    from ageval.plugins.errors import ExtensionMaterializeError
+
+    with pytest.raises(ExtensionMaterializeError, match="extra_body_reserved"):
+        build_executor(
+            host=SimpleNamespace(kind="local"),
+            placement=_placement(),
+            options={
+                "reasoning_effort": "low",
+                "extra_body": {"reasoning_effort": "high"},
+            },
+            model="openai/x",
+        )
 
 
 def test_invalid_extra_body() -> None:
@@ -668,11 +668,7 @@ def test_usage_prefers_nested_chat_over_top_level() -> None:
             {
                 "role": "assistant",
                 "usage": {"input_tokens": 999, "output_tokens": 999},
-                "extra": {
-                    "response": {
-                        "usage": {"prompt_tokens": 10, "completion_tokens": 2}
-                    }
-                },
+                "extra": {"response": {"usage": {"prompt_tokens": 10, "completion_tokens": 2}}},
             }
         ]
     )
