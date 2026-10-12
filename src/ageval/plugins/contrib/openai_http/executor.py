@@ -67,6 +67,49 @@ def _normalize_tools(tools: Sequence[Mapping[str, Any]] | None) -> list[dict[str
     return out
 
 
+def _responses_tools(catalog: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Chat-shaped tool rows to the flat Responses shape."""
+    out: list[dict[str, Any]] = []
+    for row in catalog:
+        fn = row.get("function")
+        if not isinstance(fn, Mapping) or not fn.get("name"):
+            continue
+        flat: dict[str, Any] = {"type": "function", "name": str(fn["name"])}
+        if fn.get("description"):
+            flat["description"] = fn["description"]
+        if isinstance(fn.get("parameters"), Mapping):
+            flat["parameters"] = dict(fn["parameters"])
+        out.append(flat)
+    return out
+
+
+def _responses_function_calls(raw: Any) -> list[dict[str, Any]]:
+    """Chat ``tool_calls`` on an assistant turn to Responses ``function_call`` items."""
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for call in raw:
+        if not isinstance(call, Mapping):
+            continue
+        fn = call.get("function") if isinstance(call.get("function"), Mapping) else call
+        assert isinstance(fn, Mapping)
+        name = str(fn.get("name") or "")
+        if not name:
+            continue
+        args = fn.get("arguments")
+        if not isinstance(args, str):
+            args = json.dumps(args if isinstance(args, dict) else {}, ensure_ascii=False)
+        out.append(
+            {
+                "type": "function_call",
+                "call_id": str(call.get("id") or call.get("call_id") or ""),
+                "name": name,
+                "arguments": args,
+            }
+        )
+    return out
+
+
 def _parse_tool_calls(raw: Any) -> tuple[dict[str, Any], ...]:
     if not isinstance(raw, list):
         return ()
@@ -115,7 +158,12 @@ def _responses_input(
     for item in rows:
         role = str(item.get("role") or "user")
         content = item.get("content")
-        text = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+        if content is None:
+            text = ""
+        elif isinstance(content, str):
+            text = content
+        else:
+            text = json.dumps(content, ensure_ascii=False)
         if role == "tool":
             items.append(
                 {
@@ -125,13 +173,16 @@ def _responses_input(
                 }
             )
             continue
-        items.append(
-            {
-                "type": "message",
-                "role": "assistant" if role == "assistant" else "user",
-                "content": text,
-            }
-        )
+        calls = _responses_function_calls(item.get("tool_calls")) if role == "assistant" else []
+        if text or not calls:
+            items.append(
+                {
+                    "type": "message",
+                    "role": "assistant" if role == "assistant" else "user",
+                    "content": text,
+                }
+            )
+        items.extend(calls)
     return items
 
 
@@ -350,7 +401,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
                 "temperature": 0,
             }
         if catalog:
-            payload["tools"] = catalog
+            payload["tools"] = _responses_tools(catalog) if responses else catalog
         if self.extra:
             payload.update(copy.deepcopy(self.extra))
         if effort:

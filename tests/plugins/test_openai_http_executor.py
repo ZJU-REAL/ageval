@@ -547,3 +547,128 @@ def test_http_408_429_and_5xx_stay_repeatable(code: int) -> None:
     assert result.error == f"HTTPError:{code}"
     assert result.repeatable is True
     assert "error_kind" not in (result.metadata or {})
+
+
+_CATALOG = [
+    {
+        "name": "find_customer",
+        "description": "Look up a customer",
+        "parameters": {"type": "object", "properties": {"email": {"type": "string"}}},
+    }
+]
+_HISTORY = [
+    {"role": "user", "content": "exchange my headphones"},
+    {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "find_customer", "arguments": '{"email": "a@b.c"}'},
+            }
+        ],
+    },
+    {"role": "tool", "tool_call_id": "call_1", "content": '{"ok": true}'},
+]
+
+
+def _capture_body(api: str) -> dict[str, Any]:
+    captured: dict[str, Any] = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length") or 0)
+            captured["path"] = self.path
+            captured["body"] = json.loads(self.rfile.read(length).decode("utf-8"))
+            payload: dict[str, Any] = (
+                {"output_text": "ok", "output": []}
+                if api == "responses"
+                else {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
+            )
+            raw = json.dumps(payload).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    server, base = _serve(Handler)
+    try:
+        result = OpenAIHTTPExecutor(model={"id": "m", "api": api}, base_url=base).invoke(
+            "hi", tools=_CATALOG, messages=_HISTORY
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert result.ok is True
+    return captured
+
+
+def test_responses_tools_are_flat() -> None:
+    body = _capture_body("responses")["body"]
+    assert body["tools"] == [
+        {
+            "type": "function",
+            "name": "find_customer",
+            "description": "Look up a customer",
+            "parameters": {"type": "object", "properties": {"email": {"type": "string"}}},
+        }
+    ]
+
+
+def test_responses_multi_turn_uses_function_call_items() -> None:
+    body = _capture_body("responses")["body"]
+    assert body["input"] == [
+        {"type": "message", "role": "user", "content": "exchange my headphones"},
+        {
+            "type": "function_call",
+            "call_id": "call_1",
+            "name": "find_customer",
+            "arguments": '{"email": "a@b.c"}',
+        },
+        {"type": "function_call_output", "call_id": "call_1", "output": '{"ok": true}'},
+    ]
+    assert "messages" not in body
+
+
+def test_responses_assistant_text_with_calls_keeps_both() -> None:
+    from ageval.plugins.contrib.openai_http.executor import _responses_input
+
+    items = _responses_input(
+        "x",
+        [
+            {
+                "role": "assistant",
+                "content": "checking",
+                "tool_calls": [
+                    {"id": "c9", "function": {"name": "get_order", "arguments": {"id": 1}}}
+                ],
+            }
+        ],
+    )
+    assert items == [
+        {"type": "message", "role": "assistant", "content": "checking"},
+        {"type": "function_call", "call_id": "c9", "name": "get_order", "arguments": '{"id": 1}'},
+    ]
+
+
+def test_chat_tools_and_messages_unchanged() -> None:
+    captured = _capture_body("chat")
+    body = captured["body"]
+    assert captured["path"].endswith("/chat/completions")
+    assert body["tools"] == [
+        {
+            "type": "function",
+            "function": {
+                "name": "find_customer",
+                "description": "Look up a customer",
+                "parameters": {"type": "object", "properties": {"email": {"type": "string"}}},
+            },
+        }
+    ]
+    assert body["messages"] == _HISTORY
+    assert "input" not in body
