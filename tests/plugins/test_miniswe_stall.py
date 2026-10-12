@@ -217,6 +217,39 @@ def test_any_failure_recycles_clients_before_stall_wait(monkeypatch: pytest.Monk
     assert clock.sleeps == [60.0]
 
 
+def test_model_config_error_is_not_a_stall() -> None:
+    from miniswe_plugin.model import ModelConfigError
+
+    stall, clock, events = _stall(3600)
+
+    def query(_messages: object, **_kwargs: object) -> dict[str, str]:
+        raise ModelConfigError("chat_http_400:bad schema")
+
+    with pytest.raises(ModelConfigError, match="chat_http_400"):
+        wrap_model_query(query, stall)([{"role": "user", "content": "x"}])
+    assert clock.sleeps == []
+    assert events == []
+
+
+def test_http_429_still_stalls() -> None:
+    from miniswe_plugin.llm_client import raise_for_http_status
+
+    stall, clock, events = _stall(3600)
+    calls = {"n": 0}
+
+    def query(_messages: object, **_kwargs: object) -> dict[str, str]:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise_for_http_status("chat_http", 429, "slow down")
+        return {"role": "assistant", "content": "ok"}
+
+    result = wrap_model_query(query, stall)([{"role": "user", "content": "x"}])
+    assert result["content"] == "ok"
+    assert calls["n"] == 2
+    assert clock.sleeps == [60.0]
+    assert [event["outcome"] for event in events] == ["started", "wait", "resumed"]
+
+
 def test_format_error_is_not_a_stall() -> None:
     class FormatError(Exception):
         pass
@@ -675,6 +708,41 @@ def test_bind_direct_responses_client_posts_curl_shape(monkeypatch: pytest.Monke
     assert tools[0]["type"] == "function"
     assert tools[0]["name"] == "bash"
     assert "function" not in tools[0]  # flat Responses schema, not chat nested
+
+
+def test_bind_direct_responses_forwards_reasoning_object(monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("minisweagent")
+    from miniswe_plugin.llm_client import DirectResponsesResult, bind_direct_responses_client
+
+    captured: dict[str, object] = {}
+
+    class FakeConfig:
+        model_name = "openai/glm-5.2"
+        model_kwargs = {
+            "drop_params": True,
+            "reasoning": {"summary": "auto", "effort": "high"},
+            "reasoning_effort": "high",
+        }
+
+    class FakeModel:
+        config = FakeConfig()
+
+        def _query(self, messages: object, **kwargs: object) -> object:
+            raise AssertionError("litellm _query must not run")
+
+    def fake_post(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return DirectResponsesResult({"id": "resp_x", "output": []})
+
+    monkeypatch.setattr("miniswe_plugin.llm_client.post_responses_api", fake_post)
+    monkeypatch.setattr("miniswe_plugin.llm_client.recycle_llm_clients", lambda: None)
+    model = FakeModel()
+    bind_direct_responses_client(model, api_key="sk", api_base="http://arg/v1", timeout=None)
+    model._query([{"role": "user", "content": "hi"}])
+    extra = captured["extra_body"]
+    assert isinstance(extra, dict)
+    assert extra["reasoning"] == {"summary": "auto", "effort": "high"}
+    assert extra["reasoning_effort"] == "high"
 
 
 def test_sanitize_responses_input_strips_id() -> None:

@@ -137,6 +137,22 @@ def test_api_option_defaults_to_chat_and_omits_unset_effort() -> None:
     assert "reasoning_effort" not in kwargs
 
 
+def test_api_responses_maps_effort_onto_reasoning_object() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={
+            "api": "responses",
+            "reasoning_effort": "high",
+            "extra_body": {"reasoning": {"summary": "auto"}},
+        },
+        model="openai/glm-5.2",
+    )
+    kwargs = spi._litellm_model_kwargs(key=None, base=None)
+    assert kwargs["reasoning"] == {"summary": "auto", "effort": "high"}
+    assert "reasoning_effort" not in kwargs
+
+
 def test_api_responses_skips_forced_none_effort() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),

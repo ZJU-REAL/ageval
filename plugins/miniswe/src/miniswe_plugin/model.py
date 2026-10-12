@@ -49,6 +49,10 @@ _EXTRA_RESERVED = frozenset(
 )
 
 
+class ModelConfigError(Exception):
+    """The model call is misconfigured. Stall must not retry it."""
+
+
 @dataclass(frozen=True, slots=True)
 class ModelSpec:
     """One resolved model. ``None`` on ``timeout`` / ``reasoning_effort`` means omit.
@@ -80,12 +84,25 @@ def transport_clocks(spec: ModelSpec) -> tuple[float | None, float]:
 def wire_body(spec: ModelSpec) -> dict[str, Any]:
     """Body fields taken from the spec. Unset effort and timeout are absent.
 
-    Responses still receives chat-shaped ``reasoning_effort`` until the
-    responses map lands. ``extra`` is copied first so a first-class value wins.
+    Chat sends ``reasoning_effort`` only when effort is set. Responses sends
+    ``reasoning.effort``, merged over ``extra.reasoning``, with effort last.
+    An api that cannot represent a declared effort raises ``ModelConfigError``.
+    ``extra`` is copied first so a first-class value wins.
     """
     body: dict[str, Any] = copy.deepcopy(dict(spec.extra))
-    if spec.reasoning_effort is not None:
-        body["reasoning_effort"] = spec.reasoning_effort
+    if spec.api == API_CHAT:
+        if spec.reasoning_effort is not None:
+            body["reasoning_effort"] = spec.reasoning_effort
+    elif spec.api == API_RESPONSES:
+        if spec.reasoning_effort is not None:
+            current = body.get("reasoning")
+            if current is not None and not isinstance(current, Mapping):
+                raise ModelConfigError(f"miniswe_model_reasoning_invalid:{current!r}")
+            merged: dict[str, Any] = dict(current) if isinstance(current, Mapping) else {}
+            merged["effort"] = spec.reasoning_effort
+            body["reasoning"] = merged
+    else:
+        raise ModelConfigError(f"miniswe_api_invalid:{spec.api!r}")
     if spec.timeout is not None:
         body["timeout"] = float(spec.timeout)
     return body
