@@ -23,6 +23,8 @@
 
 效果是 **interface / implementation 分离**：ACP 的稳定接口是「名为 `environment`、且声明了 `attach_stdio` 的环境」；docker 把 `exec -i` 收在自己的 `attach_stdio` 里，e2b 把 SDK stdin 流收在同一方法里。换一种 kind，ACP 源码与 lock 里的 inject 行都不改。环境内部怎么实现，对 executor **不可见**（locality）。
 
+新的环境类继承 `BaseEnvironment`，新的 executor 类继承 `BaseExecutor`（`src/ageval/plugins/base.py`）。Model 字段、`supports_model` / `bind_model`、`extra_allowlist` 见 [16](16-model.md)。Current 的 contrib 与外置插件仍是各自的类，注册扫描还没改到基类上。
+
 `exec` 与 `attach_stdio` 是同一服务上的不同 capability，不是两个 service。缺 cap 在 **lock** 失败，不在 invoke 中途探测。PASS / identity / cleanup 不准 export。
 
 笛卡尔积成立的条件：每个 executor 的 `invoke` 只通过已 inject 的 `environment` 服务碰环境。本机 SDK + 碰巧能看见的 bind-mount **不算** 满足这条。dsh / nooa 必须走环境内 worker + `host.exec`，与 ACP 同一 seam。

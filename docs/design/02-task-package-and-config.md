@@ -114,7 +114,7 @@ environment: local          # 或 docker / e2b / ssh / daytona
 agent_profiles:
   solver:
     executor: acp
-    model: …
+    model: …            # 嵌套字段表见 16-model.md
     api_key: ${ZHIPU_API_KEY}
     options:
       entry: pi

@@ -167,9 +167,20 @@ export type FileContent = {
   truncated?: boolean;
 };
 
+/** Nested profile `model:`. Field table: docs/design/16-model.md. */
+export type JobOverlayModel = {
+  id: string;
+  api?: string;
+  reasoning?: { effort?: string };
+  timeout?: number;
+  watchdog?: number;
+  extra?: Record<string, unknown>;
+};
+
 export type JobOverlayProfile = {
   executor?: string;
-  model?: string;
+  /** String id on stored rows, or the nested object from the model field table. */
+  model?: string | JobOverlayModel;
   base_url?: string;
   api_key?: string;
   label?: string;
@@ -185,6 +196,25 @@ export type JobOverlay = {
   environment_options?: Record<string, unknown>;
   agent_profiles?: Record<string, JobOverlayProfile>;
 };
+
+/** Profiles preview lines for one `model` value. Strings stay a single scalar line. */
+export function formatJobOverlayModel(model: JobOverlayProfile["model"]): string[] {
+  if (typeof model === "string") return [`    model: ${model}`];
+  if (!model) return [];
+  const id = model.id.trim();
+  if (!id) return [];
+  const lines = ["    model:", `      id: ${id}`];
+  const api = model.api?.trim() ?? "";
+  if (api) lines.push(`      api: ${api}`);
+  const effort = model.reasoning?.effort?.trim() ?? "";
+  if (effort) {
+    lines.push("      reasoning:");
+    lines.push(`        effort: ${effort}`);
+  }
+  if (typeof model.timeout === "number") lines.push(`      timeout: ${model.timeout}`);
+  if (typeof model.watchdog === "number") lines.push(`      watchdog: ${model.watchdog}`);
+  return lines;
+}
 
 export function overlayAgentProfiles(
   overlay: JobOverlay | null | undefined,

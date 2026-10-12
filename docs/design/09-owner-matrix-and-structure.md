@@ -7,6 +7,7 @@
 | 谁 | 拥有 | 不拥有 |
 | --- | --- | --- |
 | Core Config | lock、digest、format 校验 | 开环境、打分 |
+| `ageval.model` | `ModelSpec`、`resolve_model` | 网关参数名单、HTTP body、PASS |
 | Attempt 宿主 | 相位序、identity、deadline、cleanup | 厂商 SDK |
 | 环境 contrib | 一种 kind 的运输 | ACP 协议、PASS |
 | ACP contrib | parent client、`attach_stdio` 消费 | `docker exec` 实现 |
@@ -48,7 +49,9 @@ src/ageval/
       record.py             # collect → 引擎写轨迹文件
       cleanup.py            # finally；host.stop
   config/                   # dataset 根 + task.yaml 缺省；无 Database 名
+  model/                    # ModelSpec · resolve_model；不含网关名单
   plugins/                  # 槽表 + 服务表 + inject；不是业务
+    base.py                 # BaseEnvironment · BaseExecutor
     slots.py                # 独占 / 链 id（宿主定名）
     registry.py / resolve.py / bootstrap.py
     contrib/                # first-party；按机制命名

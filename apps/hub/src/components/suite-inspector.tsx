@@ -20,6 +20,7 @@ import {
   encodeDatasetId,
   environmentFromOverlay,
   getAttemptFile,
+  formatJobOverlayModel,
   overlayAgentProfiles,
   pluginsUsedBySuite,
   uniqueAgentRefs,
@@ -93,7 +94,7 @@ function jobOverlayToProfilesYaml(overlay: SuiteRow["job_overlay"]): string {
       lines.push("    options:");
       lines.push(`      entry: ${String(b.options.entry)}`);
     }
-    if (b.model != null) lines.push(`    model: ${String(b.model)}`);
+    if (b.model != null) lines.push(...formatJobOverlayModel(b.model));
     if (b.base_url != null) lines.push(`    base_url: ${String(b.base_url)}`);
     if (b.api_key != null) lines.push(`    api_key: ${String(b.api_key)}`);
     const overlays = Array.isArray(b.overlays) ? b.overlays.filter(Boolean) : [];

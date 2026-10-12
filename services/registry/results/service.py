@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from services.registry.access import AccessPolicy
+from services.registry.auth.tokens import (
+    TokenInfo,
+)
+from services.registry.clock import now
 from services.registry.content.blob_io import read_blob, sha256_file
 from services.registry.dataset import (
     BOUND_DRAFT,
@@ -21,25 +25,23 @@ from services.registry.dataset import (
 )
 from services.registry.errors import RegistryAppError
 from services.registry.orgs.official import official_dataset_ids
-from services.registry.paging import page_slice
-from services.registry.runtimes.service import attach_agent_refs
 from services.registry.orgs.rows import (
     normalize_user_id,
 )
-from services.registry.auth.tokens import (
-    TokenInfo,
-)
-from services.registry.results.rows import (
-    AttemptResultRow,
-    SuiteResultRow,
-)
+from services.registry.paging import page_slice
 from services.registry.results.dto import (
     _run_ids_from_tasks_json,
     attempt_to_dict,
     share_to_dict,
     suite_to_dict,
 )
-from services.registry.clock import now
+from services.registry.results.rows import (
+    AttemptResultRow,
+    SuiteResultRow,
+)
+from services.registry.runtimes.service import attach_agent_refs
+
+from ageval.config.profiles import model_id
 
 
 def _previous_run_ids(ref: dict[str, Any]) -> set[str]:
@@ -831,8 +833,7 @@ class ResultService:
                     raw = profiles.get(role_id)
                     if not isinstance(raw, Mapping):
                         continue
-                    model = raw.get("model")
-                    overlay_model = model.strip() if isinstance(model, str) else ""
+                    overlay_model = model_id(raw.get("model"))
                     if overlay_model:
                         self.inbox.set_suite_canonical_model(
                             suite_run_id, overlay_model, chosen_canonical

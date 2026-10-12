@@ -1,5 +1,5 @@
 import type { JobOverlay } from "./api";
-import { resolveHarnessId } from "@ageval/shared/lib/utils";
+import { overlayModelId, resolveHarnessId } from "@ageval/shared/lib/utils";
 
 export const ATTACH_ROLE_ALL = "all";
 
@@ -73,7 +73,7 @@ export function overlayModelsForAttach(
   const seen = new Set<string>();
   for (const [id, raw] of Object.entries(profiles)) {
     if (want && want !== ATTACH_ROLE_ALL && id.trim() !== want) continue;
-    const model = typeof raw?.model === "string" ? raw.model.trim() : "";
+    const model = overlayModelId(raw?.model);
     if (!model || seen.has(model)) continue;
     seen.add(model);
     out.push(model);

@@ -7,6 +7,7 @@ import {
   joinOverlay,
   type ModelPin,
 } from "@ageval/shared/lib/model-pin";
+import { overlayModelId } from "@ageval/shared/lib/utils";
 
 export type ChartTaskRef = {
   task_id?: string;
@@ -39,11 +40,11 @@ export type ChartSuite = {
 
 function overlayAgentProfiles(
   overlay: unknown,
-): Record<string, { model?: string }> {
+): Record<string, { model?: unknown }> {
   if (!overlay || typeof overlay !== "object") return {};
   const profiles = (overlay as { agent_profiles?: unknown }).agent_profiles;
   if (!profiles || typeof profiles !== "object") return {};
-  return profiles as Record<string, { model?: string }>;
+  return profiles as Record<string, { model?: unknown }>;
 }
 
 export type BoardChart = "table" | "waffle" | "pareto";
@@ -152,8 +153,8 @@ export function totalTokens(usage: SuiteUsage): number | null {
 function overlayModel(suite: ChartSuite): string {
   const profiles = overlayAgentProfiles(suite.job_overlay);
   for (const profile of Object.values(profiles)) {
-    const model = profile?.model;
-    if (typeof model === "string" && model.trim()) return model.trim();
+    const model = overlayModelId(profile?.model);
+    if (model) return model;
   }
   return (suite.model_label || "").trim();
 }

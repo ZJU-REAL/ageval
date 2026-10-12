@@ -37,3 +37,13 @@ class ServiceConflictError(ExtensionRegistryError):
 
 class InjectUnsatisfiedError(ExtensionRegistryError):
     kind = "inject_unsatisfied"
+
+
+class PluginContractError(ExtensionRegistryError):
+    """Capability or method contract failure at registration.
+
+    Distinct from ``ModelConfigError`` (bad model profile) and from transport
+    failures that upstream stall may retry.
+    """
+
+    kind = "plugin_contract"

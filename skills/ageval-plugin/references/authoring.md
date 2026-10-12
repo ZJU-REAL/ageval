@@ -55,8 +55,11 @@ omits capability or parameter tables is unfinished. See **README contract** belo
 `import:` is `importlib.util.find_spec` (no spawn). Core does not map plugin-id → pip extra.
 docker kind does **not** consume `host_requires` (image bake does).
 
-An environment plugin fills exclusive slot `environment` and implements
-`src/ageval/environments/protocol.py`. Do not import docker/e2b/ssh from ACP.
+An environment plugin fills exclusive slot `environment`, subclasses
+`ageval.plugins.base.BaseEnvironment`, and implements
+`src/ageval/environments/protocol.py`. An executor subclasses `BaseExecutor`
+(`supports_model` / `bind_model`). Field table: `docs/design/16-model.md`.
+Do not import docker/e2b/ssh from ACP.
 
 ## Executor
 
@@ -119,7 +122,11 @@ agent_profiles:
         options:
           agent: "lib.agents:MyAgent"
           method: "run"
-    model: openai/glm-5.2
+    model:
+      id: openai/glm-5.2
+      api: responses
+      reasoning:
+        effort: xhigh
     api_key: ${litellm_api_key}
 ```
 
@@ -156,7 +163,7 @@ Every knob this plugin **reads**. One row per name. Columns:
 | Name | Default | Purpose |
 | --- | --- | --- |
 | `options.agent` | *(required)* | … |
-| `model` | `openai/gpt-4.1-mini` | … |
+| `model` | nested `model.id` | … |
 
 **Where the name lives** (prefix it, do not dump a second table of sources):
 
@@ -195,7 +202,7 @@ Template (executor):
 | --- | --- | --- |
 | `options.agent` | *(required)* | Package-local `module:Class`. Missing → lock `extension_materialize_failed`. |
 | `options.method` | `run` | Method invoked on that class. |
-| `model` | `openai/gpt-4.1-mini` | Model id projected into the worker. |
+| `model` | nested `model.id` | Nested model object. Field table: `docs/design/16-model.md`. |
 | `api_key` | `OPENAI_API_KEY` | Env **locator name**. Value never enters the lock. |
 | `base_url` | `OPENAI_BASE_URL` / `litellm_base_url` | OpenAI-compatible base. |
 ```
