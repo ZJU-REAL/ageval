@@ -12,6 +12,7 @@ from ageval.application.composition import build_run_attempt
 from ageval.config.errors import ConfigError
 from ageval.evidence.locators import campaign_locator
 from ageval.model.errors import ModelConfigError
+from ageval.plugins.errors import PluginContractError
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,7 +99,7 @@ async def run_campaign(
                 profiles_path=profiles_path,
                 keep_vendor_raw=keep_vendor_raw,
             )
-        except (ConfigError, ModelConfigError) as exc:
+        except (ConfigError, ModelConfigError, PluginContractError) as exc:
             row.update({"exit_code": 2, "status": "ERROR", "error": str(exc)})
             trials.append(row)
             continue

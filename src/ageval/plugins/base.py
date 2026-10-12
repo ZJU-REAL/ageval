@@ -1,7 +1,8 @@
 """Shared bases for environment and executor plugins.
 
 Registration checks live in ``ageval.plugins.decorators``. This module does
-not register anything. Lock calls ``supports_model`` for a class winner.
+not register anything. Lock calls ``supports_model`` for a class winner
+and checks ``requires_environment`` against the injected environment caps.
 ``exec`` / ``upload`` / ``download`` / ``attach_stdio`` are absent on
 ``BaseEnvironment`` so a registration check can see that the subclass did
 not implement them.

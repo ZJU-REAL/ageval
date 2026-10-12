@@ -57,7 +57,29 @@ model:
 
 `ModelConfigError` 是配置错误。lock 失败。它不是传输失败，不进入 upstream stall。
 
-Current：`resolve_model` 在 profile 解析和 lock 上拒绝字符串 id 与平铺模型键。独占 executor 赢家若是 `BaseExecutor` 子类，lock 调用 `supports_model`。一类环境与一类 executor（`local` / `docker` / `e2b` / `ssh` / `daytona` / `acp` / `openai-http` / `anthropic-http`）继承基类并带装饰器。miniswe 使用同一份 `ModelSpec`，经 `load_installed` 进入，不在 builtin 名单里。
+## Lock
+
+`load_and_lock` 在写出 lock 之前做完下面几步。配置错误停在 lock，不进入 upstream stall。
+
+```text
+resolve 独占槽赢家
+  → resolve_model(profile) → ModelSpec
+  → requires_environment 为真：环境赢家必须在，且该 executor 对 environment 的 inject caps 必须由赢家提供
+       否则 PluginContractError
+  → 赢家是 BaseExecutor 子类：executor.supports_model(spec)
+       api 不在 supported_apis、写出的一等字段不在 supported_model_fields、
+       extra 键不在 extra_allowlist（空集拒绝全部）→ ModelConfigError
+  → 通过之后才写 lock
+```
+
+没有装饰类的外置 executor（plugin.yaml 的 factory，不是 `BaseExecutor` 子类，不能声明 allowlist）：
+
+- 默认：`YamlOnlyExecutorWarning`
+- `AGEVAL_STRICT_MODEL_CONTRACT=1`（也接受 `true` / `yes` / `on` / `strict`）：`PluginContractError`
+
+allowlist 在 executor 类上，不在 `ModelSpec` 里。
+
+Current：`resolve_model` 在 profile 解析和 lock 上拒绝字符串 id 与平铺模型键。独占 executor 赢家若是 `BaseExecutor` 子类，lock 调用 `supports_model`，并在 `requires_environment` 未满足时拒绝。一类环境与一类 executor（`local` / `docker` / `e2b` / `ssh` / `daytona` / `acp` / `openai-http` / `anthropic-http`）继承基类并带装饰器。miniswe 使用同一份 `ModelSpec`，经 `load_installed` 进入，不在 builtin 名单里。nooa / dsh / acp-oneshot 仍是 factory，走上面的 yaml-only 警告。
 
 ## BaseEnvironment
 

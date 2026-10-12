@@ -69,6 +69,16 @@ Registration raises `PluginContractError` (`kind` is `plugin_contract`) and does
 
 `uid_gid`, `path_views`, and `compose` have no methods. `api` outside `supported_apis`, and an extra key outside `extra_allowlist`, are lock checks. Registration does not perform them.
 
+## Lock contract
+
+After exclusive winners resolve, and before the lock document is written:
+
+- `requires_environment` true: the environment winner must be bound, and every capability on that executor's `environment` inject must be present. Missing either raises `PluginContractError` (`kind` `plugin_contract`). This is not a stall.
+- A `BaseExecutor` winner with a nested `model:`: `resolve_model`, then `supports_model`. An `api` outside `supported_apis`, an active field outside `supported_model_fields`, or an `extra` key outside `extra_allowlist` (an empty allowlist rejects every key) raises `ModelConfigError`. The lock is not written.
+- A yaml-only executor (a factory that is not a `BaseExecutor` class, so it cannot declare an allowlist): lock warns with `YamlOnlyExecutorWarning`. `AGEVAL_STRICT_MODEL_CONTRACT=1` (also `true`, `yes`, `on`, or `strict`) raises `PluginContractError` instead. Unset warns.
+
+Registration still does not check `api` or extra keys. An omitted `model` on a class winner is not sent, so `supports_model` is skipped. `requires_environment` is still checked.
+
 ## Slots
 
 Ids live in `src/ageval/plugins/slots.py`. Exclusive: `environment`, `executor`, `evaluation_runtime`, `trajectory_seal`. Chain: environment ready/setup, run bookends, agent open/invoke/close, evaluate bookends, `trajectory_collect` / `trajectory_enrich`, `summary_enrich`, `cleanup_report`.

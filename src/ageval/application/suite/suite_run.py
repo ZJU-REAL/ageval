@@ -36,6 +36,7 @@ from ageval.config.dataset import list_tasks, load_dataset_manifest
 from ageval.config.errors import ConfigError
 from ageval.evaluation.error_record import error_record_from_exception
 from ageval.model.errors import ModelConfigError
+from ageval.plugins.errors import PluginContractError
 from ageval.registry.resolve import resolve_dataset_root
 
 # Instrumentation for tests: peaks concurrent in-flight workers.
@@ -324,7 +325,7 @@ async def _run_one(
             "error": None if code != 2 else _copy_error(getattr(result, "error", None)),
             "phase": "terminal",
         }
-    except (ConfigError, ModelConfigError) as exc:
+    except (ConfigError, ModelConfigError, PluginContractError) as exc:
         return {
             "task_id": task_id,
             "attempt_index": attempt_index,

@@ -51,7 +51,7 @@ Coding agents enter the box through the parent **ACP** client + `host.attach_std
 dataset root (ageval.yaml / ageval.dataset/1)
   → resolve_task(--task) → tasks/<id>/task.yaml
   → merge profiles.yaml (environment + agent_profiles)
-  → load_and_lock → LockedTaskConfig + extension_bindings + digest
+  → load_and_lock → model contract, then LockedTaskConfig + extension_bindings + digest
   → IdentityFactory: Run / Trial / Attempt + evidence root
   → host.preflight
   → run_attempt

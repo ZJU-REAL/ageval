@@ -78,6 +78,7 @@ def register(app: typer.Typer) -> None:
         from ageval.application.composition import build_campaign_runner
         from ageval.config.errors import ConfigError
         from ageval.model.errors import ModelConfigError
+        from ageval.plugins.errors import PluginContractError
 
         profiles = resolve_agent_option(agent, profiles, model=model)
         run_campaign = build_campaign_runner()
@@ -91,7 +92,7 @@ def register(app: typer.Typer) -> None:
                     keep_vendor_raw=keep_vendor_raw,
                 )
             )
-        except (ConfigError, ModelConfigError) as exc:
+        except (ConfigError, ModelConfigError, PluginContractError) as exc:
             typer.echo(str(exc), err=True)
             raise typer.Exit(code=2) from exc
         emit(summary)
@@ -296,6 +297,7 @@ def register(app: typer.Typer) -> None:
         from ageval.config.errors import ConfigError
         from ageval.config.overrides import parse_set_override
         from ageval.model.errors import ModelConfigError
+        from ageval.plugins.errors import PluginContractError
 
         try:
             overrides: dict[str, object] = {}
@@ -465,7 +467,7 @@ def register(app: typer.Typer) -> None:
                     )
                 )
             raise typer.Exit(code=int(suite_summary.get("exit_code", 2)))
-        except (ConfigError, ModelConfigError) as exc:
+        except (ConfigError, ModelConfigError, PluginContractError) as exc:
             typer.echo(str(exc), err=True)
             raise typer.Exit(code=2) from exc
         except typer.Exit:
@@ -489,13 +491,14 @@ def _probe_one(
     from ageval.config.errors import ConfigError
     from ageval.config.overrides import parse_set_override
     from ageval.model.errors import ModelConfigError
+    from ageval.plugins.errors import PluginContractError
 
     try:
         overrides = dict(parse_set_override(raw) for raw in set_overrides or ())
         answer = asyncio.run(
             probe_attempt(package, task, overrides=overrides or None, profiles_path=profiles)
         )
-    except (ConfigError, ModelConfigError) as exc:
+    except (ConfigError, ModelConfigError, PluginContractError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     emit(answer)

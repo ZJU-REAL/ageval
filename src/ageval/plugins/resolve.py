@@ -15,6 +15,7 @@ from ageval.plugins.errors import (
     ExtensionPluginNotFoundError,
     UnknownExtensionSlotError,
 )
+from ageval.plugins.model_contract import assert_requires_environment
 from ageval.plugins.protocol import (
     BindingIntent,
     BindingRecord,
@@ -109,6 +110,7 @@ def resolve(
 
     _collect_services(graph, registry)
     _collect_injects(graph, registry)
+    assert_requires_environment(graph, registry)
     assert_inject_satisfied(graph.injects, _declared_services(graph, registry))
     _assert_requires(intent, graph)
     return graph

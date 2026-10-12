@@ -634,38 +634,6 @@ def _model_options(profile: Mapping[str, Any]) -> dict[str, Any]:
     return opts
 
 
-def _require_bound_model(
-    profile: Mapping[str, Any],
-    graph: Any,
-    registry: Any,
-    *,
-    location: str,
-) -> None:
-    """When the executor winner is a class, reject a spec it cannot send."""
-    from ageval.model import ModelConfigError, resolve_model
-    from ageval.plugins.base import BaseExecutor
-    from ageval.plugins.slots import EXECUTOR
-
-    model = profile.get("model")
-    if not isinstance(model, Mapping):
-        return
-    winners = getattr(graph, "winners", None)
-    if not isinstance(winners, Mapping):
-        return
-    winner = winners.get(EXECUTOR)
-    if winner is None:
-        return
-    registration = registry.get_registration(EXECUTOR, winner.plugin_id)
-    impl = registration.impl if registration is not None else None
-    if not isinstance(impl, type) or not issubclass(impl, BaseExecutor):
-        return
-    try:
-        spec = resolve_model(model, _model_options(profile))
-        impl.supports_model(object.__new__(impl), spec)
-    except ModelConfigError as exc:
-        raise ConfigError("model_config", exc.message, location=location) from exc
-
-
 def _assert_nested_model(profile: Mapping[str, Any], *, location: str) -> None:
     """Reject a string ``model`` and flat model keys. Omitted model stays omitted."""
     from ageval.model import ModelConfigError, resolve_model
