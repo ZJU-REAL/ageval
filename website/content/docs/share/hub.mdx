@@ -26,7 +26,7 @@ Or `docker compose -f services/registry/docker-compose.yml up -d` for Hub at `ht
 | `/home` | Personal home (signed in) |
 | `/leaderboard` | Default landing. Leaderboard plaza: index of listed Dataset suites and Agent / Model Performance (Dataset view by default; `?view=agent` / `?view=model`) |
 | `/datasets` | List (Explore / Your organizations, Explore default) |
-| `/datasets/:id` | README · Tasks · Shared (when `shared/` present) · Overlays (when `overlays:` is declared) · Leaderboard |
+| `/datasets/:id` | README · Tasks · Shared (when `shared/` present) · Overlays (when `overlays:` is declared) · Hosted · Leaderboard |
 | `/datasets/:id/tasks/:task` | README · Files (Local \| Shared \| Overlays) · Jobs |
 | `/plugins` | Plugin marketplace |
 | `/plugins/:id` | Plugin detail (declared extension point timeline · file preview · CLI install) |
@@ -36,7 +36,7 @@ Or `docker compose -f services/registry/docker-compose.yml up -d` for Hub at `ht
 | `/models` | Models plaza (lab-grouped directory tables · modality filter · Cmd/Ctrl+F search) |
 | `/models/:canonical` | Model encyclopedia (Overview spec · Performance) |
 | `/organizations` | Your orgs · Create / Join · dataset / plugin / agent counts |
-| `/organizations/:orgId` | Overview (members · datasets · plugins · agents) · Settings |
+| `/organizations/:orgId` | Overview (members · datasets · plugins · agents) · Secrets (members) · Settings |
 | `/users/:login` | Public user profile (official orgs and public datasets / plugins / agents; signed-out OK) |
 | `/datasets/:id/tasks/:task/attempts/:runId` | Remote Attempt detail (needs uploaded run artifacts) |
 | `/datasets/:id/suites/:suiteRunId` | Suite run detail (Profiles / Plugin / Jobs / Share) |

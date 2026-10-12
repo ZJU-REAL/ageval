@@ -109,6 +109,8 @@ evaluation/checks.json         # 仅当 evaluator 返回 well-formed checks
 
 `task-artifacts/` 是 harvest 在 writer 停后写下的 **快照**。evaluate 从这里拷进打分 Host，不从 Agent 活 workspace 再读。tree 目录缺席、exclude 是否去掉 `target/`，都不是 PASS。
 
+`slim_sealed_attempt` **默认保留** `task-artifacts/`（file 与 tree）。丢掉的是 vendor raw / layer B，不是这份快照。cleanup 删除的是活的 box work root（`--keep-workspace` 才留下）；它不删除 evidence 上的 `task-artifacts/`。`ageval results regrade` 读的就是这份留下来的快照。
+
 `summary.json` 是相位墙钟，不是 vendor raw。Verifier 看 `result.json`；有 `observation.jsonl` 时 TrajectoryPanel；有 `checks.json` 时在文件树预览里渲染检查点。两种都有时 XOR toggle，默认轨迹。默认不留 `evaluation/evaluator_raw.json`。`slim_sealed_attempt` 与 Hub Attempt archive 同一套 keep/drop：留下 `observation.jsonl` 与 `checks.json`，丢掉 `evaluator_raw.json`。检查脚本路径是 dataset locator，不是归档 gold。
 
 `--keep-vendor-raw`（默认关）才保留 `backend_raw/`、per-invoke `request.json` / `events.jsonl` / `final-response.json` / `metadata.json`、失败 `stderr.txt`、`agent/events.jsonl`、`evaluator_raw.json`。`--keep-workspace` 只管宿主 work root（`l1-work`），与 vendor raw 无关。`ageval evidence` 跟可持久树走，轨迹文件 优先。只作用于新 run，不改写旧树。删文件不是 PASS。

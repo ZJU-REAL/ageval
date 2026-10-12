@@ -129,6 +129,55 @@ def _prune_excluded(root: Path, exclude: list[str]) -> None:
             path.unlink(missing_ok=True)
 
 
+def regrade_harvest_gap(lock: Any, staged: Path) -> tuple[str, tuple[str, ...]] | None:
+    """Why this snapshot cannot be regraded, or None when every declared artifact is there.
+
+    ``undeclared`` means the locked task has no ``artifacts.publishable`` rows.
+    ``missing`` lists ids whose file or tree snapshot is absent or empty.
+    Trajectory text is not an input.
+    """
+    refs = thaw(getattr(lock, "resolved_references", None) or {})
+    declared = refs.get("artifacts") if isinstance(refs, dict) else None
+    rows = (
+        [item for item in declared if isinstance(item, dict)] if isinstance(declared, list) else []
+    )
+    if not rows:
+        return ("undeclared", ())
+    missing: list[str] = []
+    for item in rows:
+        aid = str(item.get("id") or "").strip() or "?"
+        dest = _snapshot_path(staged, item)
+        if dest is None or not _snapshot_present(dest, item):
+            missing.append(aid)
+    if missing:
+        return ("missing", tuple(missing))
+    return None
+
+
+def _snapshot_path(staged: Path, item: dict[str, Any]) -> Path | None:
+    aid = str(item.get("id") or "").strip()
+    rel = str(item.get("path") or "").strip()
+    if not aid or not rel:
+        return None
+    rel_path = Path(rel)
+    if rel_path.is_absolute() or ".." in rel_path.parts:
+        return None
+    if _publishable_kind(item) == "tree":
+        return staged / aid
+    suffix = rel_path.suffix or ".json"
+    return staged / f"{aid}{suffix}"
+
+
+def _publishable_kind(item: dict[str, Any]) -> str:
+    return str(item.get("kind") or "file").strip() or "file"
+
+
+def _snapshot_present(dest: Path, item: dict[str, Any]) -> bool:
+    if _publishable_kind(item) == "tree":
+        return dest.is_dir() and any(dest.iterdir())
+    return dest.is_file() and dest.stat().st_size > 0
+
+
 def _excluded(rel: Path, patterns: list[str]) -> bool:
     posix = rel.as_posix()
     for pattern in patterns:

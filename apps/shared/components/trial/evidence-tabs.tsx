@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
 import { SegmentedControl } from "@ageval/shared/components/ui/button";
@@ -69,6 +69,7 @@ export function EvidenceTabs({
   fileNote,
   treeGroups,
   emptyNote = "No evidence tabs for this uploaded Attempt archive.",
+  analysisPanel = null,
 }: {
   availableTabs: TabId[];
   activeTab: TabId | null;
@@ -98,6 +99,8 @@ export function EvidenceTabs({
     label?: string;
   }> | null;
   emptyNote?: string;
+  /** Shown when the Analysis tab is selected. The tab is omitted when there are no reports. */
+  analysisPanel?: ReactNode;
 }) {
   const verifierSteps = observationSteps || [];
   const verifierTab = activeTab === "verifier";
@@ -218,7 +221,12 @@ export function EvidenceTabs({
 
       {showVerifierFiles ? filesPanel : null}
 
-      {activeTab && activeTab !== "trajectory" && activeTab !== "verifier" && (
+      {activeTab === "analysis" ? analysisPanel : null}
+
+      {activeTab &&
+        activeTab !== "trajectory" &&
+        activeTab !== "verifier" &&
+        activeTab !== "analysis" && (
         <FileSplitPanel
           tree={tree}
           treeLoading={treeLoading}

@@ -66,6 +66,7 @@ public 只许出现「public」或「both」行的规范名。internal 词出现
 | 参考答案 | gold | both | 评分对照的标准答案，在 `tasks/*/evaluation/`；evaluate 才 upload。zh public 写「参考答案」，EN / CLI / 路径用 gold | 金标；zh public 直接写 gold |
 | evidence | evidence | both | 目录 `.ageval/runs/<id>/` | 用 evidence 指那条 jsonl；存证 |
 | 轨迹 | trajectory | both | `trajectory.jsonl`。复盘用，不能发明 PASS | 用轨迹指整个 runs 目录 |
+| 分析 | analyzer | both | 跑完之后对一次运行的只读观察。`stats` / `hack` / `review`。不改 PASS，不改 `evaluation/checks.json` | 把 analyzer 报告当分数；本轮上传到 Hub |
 | checks | checks / `evaluation/checks.json` | both | 确定性 evaluator 可选返回的检查项观察；parent 写入 `evaluation/checks.json`。不是 PASS | 把 check 退出码 / stdout 当 PASS；Verifier 检查点 |
 | 投影 / Agent 能看见 | projected workspace | both | Agent 看见的文件 | 单独写「可见性」指这件事 |
 | 公开 / 私有 | public / private | both | Hub 范围。CLI 旗标仍是 `--visibility` | 单独写可见性、visibility 当正文（旗标除外） |
@@ -76,6 +77,8 @@ public 只许出现「public」或「both」行的规范名。internal 词出现
 | ACP entry | ACP entry | both | `options.entry`：`pi` / `codex` / `claude-code` / `opencode` / `grok-build` | — |
 | capabilities | capabilities | both | 环境声明能兑现什么；`requires ⊆ capabilities`，否则 lock 失败 | — |
 | BYOK / BYOA | BYOK / BYOA | internal | 密钥 / 本机 auth 投影 | public 不必教这两个缩写 |
+| 托管运行 | hosted job | both | Hub 提交、Registry 排队、部署里的 worker 在 E2B 或 Daytona 上跑完并上传的 suite | `--launch`；在共享 Hub 主机上跑 Docker；用 hosted job 的成功冒充题的 PASS |
+| 组织密钥 | org secret | both | 组织保存的模型密钥或 E2B / Daytona 提供方密钥。列表不返回明文 | vault；把提供方密钥写进 task 环境 |
 | composition root | composition root | internal | `application/composition.py` | 不必中译 |
 | 控制面 | Control Plane | internal | — | public 出现 |
 | 检查不过就不能进入运行 | the check fails; the run does not start | both | 探测或配置检查不过，就不能进入真正运行 | fail-closed、fail closed |

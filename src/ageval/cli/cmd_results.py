@@ -1,4 +1,4 @@
-"""CLI results upload/get/list and suite commands."""
+"""CLI results upload/get/list, suite commands, and post-run analyze."""
 
 from __future__ import annotations
 
@@ -7,7 +7,14 @@ from typing import Annotated
 
 import typer
 
+from ageval.cli.cmd_agent import AGENT_OPTION_HELP, resolve_agent_option
 from ageval.cli.present import emit
+
+_REGRADE_MODEL_HELP = (
+    "Override binding.model for roles bound by --agent on this regrade. "
+    "Requires --agent. Evaluate uses the current dataset lock. "
+    "Not the observational --model on results upload / upload-suite."
+)
 
 
 def register(app: typer.Typer) -> None:
@@ -15,7 +22,7 @@ def register(app: typer.Typer) -> None:
 
     sub = typer.Typer(
         name="results",
-        help="Upload / fetch Attempt and suite/job result bundles (results store).",
+        help=("Upload / fetch Attempt and suite/job result bundles, and analyze sealed runs."),
         no_args_is_help=True,
         add_completion=False,
     )
@@ -832,5 +839,172 @@ def register(app: typer.Typer) -> None:
             typer.echo(str(exc), err=True)
             raise typer.Exit(code=2) from exc
         emit(summary)
+
+    @sub.command("analyze")
+    def results_analyze_command(
+        dataset: Annotated[
+            Path,
+            typer.Argument(help="Local Dataset root containing .ageval/runs or suite-runs."),
+        ],
+        run: Annotated[
+            str | None,
+            typer.Option("--run", help="One Attempt run_id. Mutually exclusive with --suite-run."),
+        ] = None,
+        suite_run: Annotated[
+            str | None,
+            typer.Option(
+                "--suite-run",
+                help="One suite_run_id. Mutually exclusive with --run.",
+            ),
+        ] = None,
+        analyzer: Annotated[
+            str,
+            typer.Option("--analyzer", help="stats (default), hack, or review."),
+        ] = "stats",
+        no_llm: Annotated[
+            bool,
+            typer.Option("--no-llm", help="hack only: stop after the rule screen."),
+        ] = False,
+        include_all: Annotated[
+            bool,
+            typer.Option("--all", help="hack and review: do not filter by status."),
+        ] = False,
+        status: Annotated[
+            list[str] | None,
+            typer.Option(
+                "--status",
+                help="PASS, FAIL, or ERROR. Repeatable. hack and review only.",
+            ),
+        ] = None,
+        agent: Annotated[
+            str | None,
+            typer.Option(
+                "--agent",
+                help="openai-http or anthropic-http package for hack stage 2 and review.",
+            ),
+        ] = None,
+        model: Annotated[
+            str | None,
+            typer.Option("--model", help="Model for --agent. Required when the package has none."),
+        ] = None,
+        base_url: Annotated[
+            str | None,
+            typer.Option("--base-url", help="http(s) URL overriding the agent binding base_url."),
+        ] = None,
+    ) -> None:
+        """Read a sealed run and write analysis/<analyzer>/report.json.
+
+        A suite writes analysis/<analyzer>/summary.json. Reports do not change
+        PASS or evaluation/checks.json, and they are not uploaded.
+        """
+        from ageval.application.composition import build_analyze_command
+
+        analyze = build_analyze_command().analyze
+        from ageval.config.errors import ConfigError
+
+        try:
+            summary = analyze(
+                dataset,
+                run_id=run,
+                suite_run_id=suite_run,
+                analyzer=analyzer,
+                no_llm=no_llm,
+                include_all=include_all,
+                statuses=status,
+                agent=agent,
+                model=model,
+                base_url=base_url,
+            )
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        except OSError as exc:
+            typer.echo(f"invalid_package: {exc}", err=True)
+            raise typer.Exit(code=2) from exc
+        emit(summary)
+
+    @sub.command("regrade")
+    def results_regrade_command(
+        dataset: Annotated[
+            Path,
+            typer.Argument(
+                help="Dataset root. Gold and the evaluator come from this lock.",
+            ),
+        ],
+        run: Annotated[
+            list[str] | None,
+            typer.Option(
+                "--run",
+                help="Source attempt id under .ageval/runs/ (repeatable).",
+            ),
+        ] = None,
+        profiles: Annotated[
+            Path | None,
+            typer.Option(
+                "--profiles",
+                help="Alternate profiles.yaml replacing Dataset-root job bindings.",
+            ),
+        ] = None,
+        agent: Annotated[
+            list[str] | None,
+            typer.Option("--agent", help=AGENT_OPTION_HELP),
+        ] = None,
+        model: Annotated[
+            str | None,
+            typer.Option("--model", help=_REGRADE_MODEL_HELP),
+        ] = None,
+        set_overrides: Annotated[
+            list[str] | None,
+            typer.Option(
+                "--set",
+                help=(
+                    "Repeatable override as <JSON Pointer>=<JSON value>. "
+                    "Allowlisted only. Applies to the new Attempt's lock."
+                ),
+            ),
+        ] = None,
+        keep_workspace: Annotated[
+            bool,
+            typer.Option(
+                "--keep-workspace",
+                help="Keep the box work root after cleanup (default: delete).",
+            ),
+        ] = False,
+        keep_vendor_raw: Annotated[
+            bool,
+            typer.Option(
+                "--keep-vendor-raw",
+                help="Keep invocation vendor raw after seal. task-artifacts/ stays either way.",
+            ),
+        ] = False,
+        json_out: Annotated[
+            bool,
+            typer.Option("--json", help="Write the full result document on stdout."),
+        ] = False,
+    ) -> None:
+        """Score finished Attempts from harvested task-artifacts. New Attempt; no agent run."""
+        import asyncio
+
+        from ageval.application.composition import build_override_parser, build_regrade_attempts
+        from ageval.config.errors import ConfigError
+
+        profiles_path = resolve_agent_option(agent, profiles, model=model)
+        try:
+            overrides = build_override_parser()(list(set_overrides or []))
+            code, summary = asyncio.run(
+                build_regrade_attempts()(
+                    dataset,
+                    list(run or []),
+                    profiles_path=profiles_path,
+                    overrides=overrides or None,
+                    keep_workspace=keep_workspace,
+                    keep_vendor_raw=keep_vendor_raw,
+                )
+            )
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        emit(summary, json_out=json_out)
+        raise typer.Exit(code=code)
 
     app.add_typer(sub, name="results")

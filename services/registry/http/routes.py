@@ -552,6 +552,49 @@ ROUTES: tuple[Route, ...] = (
         groups=("dataset_id",),
         predicate=_package_id_list_ok,
     ),
+    Route(
+        "POST",
+        "create_org_secret",
+        access="bearer",
+        pattern=r"/v1/orgs/([^/]+)/secrets",
+        groups=("org_id",),
+    ),
+    Route(
+        "GET",
+        "list_org_secrets",
+        access="bearer",
+        pattern=r"/v1/orgs/([^/]+)/secrets",
+        groups=("org_id",),
+    ),
+    Route(
+        "DELETE",
+        "delete_org_secret",
+        access="bearer",
+        pattern=r"/v1/orgs/([^/]+)/secrets/([^/]+)",
+        groups=("org_id", "secret_id"),
+    ),
+    Route("POST", "create_hosted_job", access="bearer", exact="/v1/hosted/jobs"),
+    Route(
+        "GET",
+        "list_hosted_jobs",
+        access="bearer",
+        exact="/v1/hosted/jobs",
+        pass_qs=True,
+    ),
+    Route(
+        "GET",
+        "get_hosted_job",
+        access="bearer",
+        pattern=r"/v1/hosted/jobs/([^/]+)",
+        groups=("job_id",),
+    ),
+    Route(
+        "POST",
+        "cancel_hosted_job",
+        access="bearer",
+        pattern=r"/v1/hosted/jobs/([^/]+)/cancel",
+        groups=("job_id",),
+    ),
 )
 
 

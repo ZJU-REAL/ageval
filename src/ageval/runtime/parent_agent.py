@@ -16,7 +16,7 @@ import os
 import threading
 import time
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -172,6 +172,17 @@ class ParentAgentService:
             session_ids = [sid for sid, binding in self._sessions.items() if not binding.closed]
         for session_id in session_ids:
             self.close_session(session_id=session_id)
+
+    def seal_profile_ids(self, profile_ids: Iterable[str]) -> None:
+        """Seal profiles that never opened a session.
+
+        Regrade skips the run phase, so the solver has no session to close.
+        Evaluate may still open any profile that is not in this set.
+        """
+        ids = {str(profile_id).strip() for profile_id in profile_ids if str(profile_id).strip()}
+        with self._lock:
+            self._run_sealed = True
+            self._run_profile_ids.update(ids)
 
     def open_session(
         self,

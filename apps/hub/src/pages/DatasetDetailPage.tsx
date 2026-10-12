@@ -10,6 +10,7 @@ import { CommandStrip } from "@ageval/shared/components/command-strip";
 import { DescriptionEditor } from "@/components/description-editor";
 import { DisplayNameEditor } from "@/components/display-name-editor";
 import { FileSplitPanel } from "@/components/file-split-panel";
+import { HostedRunPanel } from "@/components/hosted-run-panel";
 import {
   LEADERBOARD_OPTIONAL_COLUMNS,
   LEADERBOARD_OPTIONAL_DEFAULT,
@@ -79,7 +80,7 @@ import {
 import { LEADERBOARD_K_FIXTURES } from "@/lib/leaderboard-fixtures";
 import { formatDay, formatScore } from "@ageval/shared/lib/utils";
 
-type Tab = "readme" | "tasks" | "shared" | "overlays" | "leaderboard";
+type Tab = "readme" | "tasks" | "shared" | "overlays" | "hosted" | "leaderboard";
 type BoardView = "public" | "internal";
 
 /** Sentinel for the Leaderboard version Select (omit `?dataset_version=`). */
@@ -693,6 +694,7 @@ export function DatasetDetailPage() {
           ...(overlaysPresent
             ? ([{ id: "overlays" as const, label: "Overlays" }] as const)
             : []),
+          { id: "hosted", label: "Hosted" },
           { id: "leaderboard", label: "Leaderboard" },
         ]}
       />
@@ -856,6 +858,16 @@ export function DatasetDetailPage() {
             prefixes={overlayPrefixes}
           />
         </div>
+      ) : tab === "hosted" ? (
+        release ? (
+          <HostedRunPanel
+            datasetId={datasetId}
+            version={release.version}
+            releaseOrgId={release.org_id}
+          />
+        ) : (
+          <p className="text-sm text-mute">Loading dataset…</p>
+        )
       ) : (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">

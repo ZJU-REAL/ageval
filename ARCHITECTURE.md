@@ -117,14 +117,16 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   │   ├── composition.py           # CLI imports builders only from here
 │   │   ├── lock.py                  # load_and_lock + capability/inject graph
 │   │   ├── run.py                   # mint identity → ctx → run_attempt
+│   │   ├── regrade.py               # mint a new Attempt → run_regrade (no run phase)
 │   │   ├── campaign.py
 │   │   ├── suite/                   # suite_run, fingerprint, suite_metrics, summary document
 │   │   ├── registry_ops/            # results / publish / login / org / list
 │   │   ├── plugin_ops/
 │   │   ├── agent_ops/               # --agent (+ optional --model) projects into profiles
-│   │   └── local_jobs/              # local Job list / get / delete
+│   │   ├── local_jobs/              # local Job list / get / delete
+│   │   └── analysis/                # post-run stats / hack / review (read-only)
 │   ├── attempt/                     # deep module: one Attempt’s visible pipeline
-│   │   ├── __init__.py              # run_attempt five-phase lines
+│   │   ├── __init__.py              # run_attempt five phases; run_regrade skips run
 │   │   ├── ctx.py
 │   │   ├── emit.py                  # chain-slot next()
 │   │   └── phases/
@@ -179,6 +181,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   ├── results/                     # service, store, protocol, rows, queries, dto
 │   ├── shares/                      # snapshot share; static archive or live patch
 │   ├── inbox/                       # requests, maintainers, store
+│   ├── hosted/                      # org secrets + hosted job queue; worker process
 │   ├── content/                     # files, blob_io, blobs
 │   ├── db/                          # dialect, sql_adapter, schema (open_stores)
 │   └── dataset.py / access.py / errors.py / paging.py / clock.py / envload.py / upload_slots.py / spool.py
@@ -197,7 +200,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 
 Hub Agent Performance is a **derived view** of plaza / consented `job_overlay.agent_ref` rows, not a Core object. Builtin cards default to official public suites auto-collect; Maintainers (`AGEVAL_REGISTRY_MAINTAINERS`) own that setting and builtin attach approval. There is no `/runtimes` product surface. Public Leaderboard listing is a Registry flag (`board_listed`), not visibility. Leaderboard plaza indexes those existing surfaces (`GET /v1/results/suites?board=1` without `dataset_id`, plus one derived `GET /v1/results/performances`); it is not a stored table. Delayed `agent_ref` attach and request decide share one ResultService write path; CLI `build_results_commands` is the Hub/CLI use-case root.
 
-Production Attempt: `application/run.py` mints identity once, then `attempt.run_attempt`. Cleanup is in `try/finally`. Parent Agent Service and hard ceilings share the same quota object.
+Production Attempt: `application/run.py` mints identity once, then `attempt.run_attempt`. `application/regrade.py` mints a new Attempt and calls `attempt.run_regrade`, which starts the box and runs evaluate without the `run` phase. Cleanup is in `try/finally`. Parent Agent Service and hard ceilings share the same quota object.
 
 ### Target Source Layout (not fully realized)
 
@@ -211,7 +214,7 @@ src/ageval/
   plugins/defaults/                 # or move to contrib/defaults — pick one, not both
   runtime/{identity,parent_agent,task_launch,task_worker}
   evaluation/{bind,package_evaluator} + runtime/eval_worker.py
-  evidence/{locators,store,trajectory}
+  evidence/{locators,store,trajectory,analysis}
 ```
 
 **Deliberately not built (deleted in Current; Target must not bring them back):**
@@ -234,7 +237,8 @@ src/ageval/
 | Path | Sole responsibility | Does not own |
 | --- | --- | --- |
 | `cli/` | argv, help, exit code | Reading task business logic, starting Docker, assembling evidence paths |
-| `application/` | lock/run/campaign/suite/registry/plugin/agent/jobs; **wiring** | Hiding business rules in global singletons outside bootstrap |
+| `application/` | lock/run/campaign/suite/registry/plugin/agent/jobs/analysis; **wiring** | Hiding business rules in global singletons outside bootstrap |
+| `application/analysis/` | Post-run `stats` / `hack` / `review` over sealed evidence | PASS, `checks.json`, Hub upload |
 | `application/composition.py` | Sole production `build_*` | Business algorithms |
 | `config/` | dataset resolve; read `task.yaml` / profiles; digest | Executing `run.py`, scoring |
 | `attempt/` | Phase order, `emit`, AttemptCtx | Vendor SDKs, `container_id` |
@@ -246,7 +250,7 @@ src/ageval/
 | `plugins/defaults/` | `environment_setup` recognizes `setup.sh`; default winners for `evaluation_runtime` / `trajectory_seal` | Fake executor; PASS |
 | `runtime/` | identity, parent Agent Service, task-worker subprocess, cancel/timeout | Box implementations, scoring |
 | `evaluation/` | Barrier order, in-environment runner, flat Result | Task scoring algorithms |
-| `evidence/` | store / redaction / layer-C `trajectory.jsonl` | Vendor protocol parsing; PASS |
+| `evidence/` | store / redaction / layer-C `trajectory.jsonl` / analysis artifact paths | Vendor protocol parsing; PASS |
 | `registry/` + `services/registry/` | PackageRef, publish, verified cache; standalone HTTP | PASS; handing store credentials to the CLI |
 | `ageval_sdk` | Task types and thin helpers | Control Plane internal types, verdict |
 | `examples/` | Trusted regression datasets | Claiming a full upstream suite |
@@ -401,7 +405,7 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | Other Agent backends | `openai-http` / `anthropic-http` / external `nooa` `dsh` | Not vendor stdout scrape |
 | Official base image | `plugins/contrib/docker/attempt/` | GHCR `ageval-attempt:<cli-ver>` then local `ageval-attempt:base`; miss → packaged Dockerfile. Bake ACP entries at image build; no `npm i` at invoke |
 | ACP task image layer | `plugins/contrib/acp` | `config.image_layers` bakes the bound `options.entry` onto the task recipe |
-| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is five aggregate stores (packages, results, shares, orgs, inbox) behind narrow protocols, one schema init in `db/schema.open_stores`, SQL in each aggregate `queries.py`, dialect only in `db/sql_adapter.py`. `api_tokens` DDL stays in `auth/tokens.py`. |
+| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is six aggregate stores (packages, results, shares, orgs, inbox, hosted) behind narrow protocols, one schema init in `db/schema.open_stores`, SQL in each aggregate `queries.py`, dialect only in `db/sql_adapter.py`. `api_tokens` DDL stays in `auth/tokens.py`. Hosted jobs: Hub submit, worker process runs e2b / daytona only ([docs/design/15](docs/design/15-hosted-jobs.md)). |
 
 ## Failure and Privacy Boundary
 

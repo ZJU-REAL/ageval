@@ -1,6 +1,6 @@
 # 05 — 执行链
 
-Runtime 在这里指：**环境、ACP、evaluate、evidence、campaign**。结构总图见 [ARCHITECTURE.md](../../../ARCHITECTURE.md)。产品故事 US1–US12 见 [00](../00-overview-and-product.md)。
+Runtime 在这里指：**环境、ACP、evaluate、evidence、campaign、跑完之后的 analyzer**。结构总图见 [ARCHITECTURE.md](../../../ARCHITECTURE.md)。产品故事 US1–US12 见 [00](../00-overview-and-product.md)。
 
 | 文件 | 内容 |
 | --- | --- |
@@ -9,6 +9,7 @@ Runtime 在这里指：**环境、ACP、evaluate、evidence、campaign**。结�
 | [agent-service.md](agent-service.md) | parent ACP client + `attach_stdio`；executor 按 profile 绑；openai-http / anthropic-http 原生 `tools=` |
 | [evaluation.md](evaluation.md) | 停 solver writer、upload gold、可选 judge SDK invoke、可选 `checks`、绑定 PASS |
 | [evidence.md](evidence.md) | `.ageval/runs/`；`evaluation/observation.jsonl`；`evaluation/checks.json` |
+| [analysis.md](analysis.md) | 跑完之后的 `stats` / `hack` / `review`。只读，不改 PASS |
 | [campaign-suite.md](campaign-suite.md) | campaign 与 suite |
 
 Core 保留：身份、deadline、limits、cleanup、PASS 入口。题包保留 loop。插件填槽。

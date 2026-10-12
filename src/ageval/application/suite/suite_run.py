@@ -239,6 +239,21 @@ def _existing_attempt_keys(attempts: list[dict[str, Any]]) -> set[tuple[str, int
     return keys
 
 
+def _error_attempt_keys(attempts: list[dict[str, Any]]) -> set[tuple[str, int]]:
+    """Finished ERROR slots. Cancel placeholders are not retries."""
+    keys: set[tuple[str, int]] = set()
+    for row in attempts:
+        if _is_cancelled_placeholder(row):
+            continue
+        if str(row.get("status") or "").upper() != "ERROR":
+            continue
+        tid, idx = slot_key(row)
+        if not tid:
+            continue
+        keys.add((tid, idx))
+    return keys
+
+
 def suite_is_settled(dataset_root: Path, suite_run_id: str) -> bool:
     """True when the suite is not in-flight and has no pending cancel request."""
     if is_suite_cancel_requested(dataset_root, suite_run_id):
@@ -395,6 +410,8 @@ def _write_suite_progress(
     total: int,
     running: list[dict[str, Any]],
     status: str = "running",
+    skipped: int = 0,
+    retried: int = 0,
 ) -> None:
     """Job progress snapshot for viewer / status (D2)."""
     suite_dir = suite_dir_for(plan)
@@ -407,6 +424,8 @@ def _write_suite_progress(
         "status": status,
         "done": done,
         "total": total,
+        "skipped": skipped,
+        "retried": retried,
         "n_attempts": plan.n_attempts,
         "max_concurrent_tasks": plan.max_concurrent_tasks,
         # The full planned axis so the viewer can mark unrun tasks as pending.
@@ -751,6 +770,7 @@ async def execute_suite_run(
     profiles_path: Path | str | None = None,
     resume: bool = False,
     replace_slots: set[tuple[str, int]] | None = None,
+    retry_errors: bool = False,
     on_progress: ProgressCallback | None = None,
     keep_workspace: bool = False,
     keep_vendor_raw: bool = False,
@@ -773,6 +793,7 @@ async def execute_suite_run(
             profiles_path=profiles_path,
             resume=resume,
             replace_slots=replace_slots,
+            retry_errors=retry_errors,
             on_progress=on_progress,
             keep_workspace=keep_workspace,
             keep_vendor_raw=keep_vendor_raw,
@@ -795,6 +816,7 @@ async def _execute_suite_run(
     profiles_path: Path | str | None = None,
     resume: bool = False,
     replace_slots: set[tuple[str, int]] | None = None,
+    retry_errors: bool = False,
     on_progress: ProgressCallback | None = None,
     keep_workspace: bool = False,
     keep_vendor_raw: bool = False,
@@ -811,6 +833,10 @@ async def _execute_suite_run(
     they already have a real result. The outgoing current is pushed onto that
     slot's ``previous[]``; metrics use the new current only.
 
+    ``retry_errors`` re-runs finished ERROR slots inside this plan. PASS and
+    FAIL stay skipped. It does not require a settled suite or a matching
+    fingerprint. History uses the same ``previous[]`` path as replace.
+
     Cancel (#47 D4): if ``suite-runs/<id>/cancel.requested`` appears, no new units
     start; in-flight units finish; remaining planned units get cancelled rows.
     Resume without replace-slot clears a prior cancel request so scheduling can
@@ -826,6 +852,12 @@ async def _execute_suite_run(
             "suite_replace_requires_resume",
             "replace-slot requires --resume-suite",
             location="--replace-slot",
+        )
+    if retry_errors and not resume:
+        raise ConfigError(
+            "suite_retry_errors_requires_resume",
+            "retry-errors requires --resume-suite",
+            location="--retry-errors",
         )
 
     existing: list[dict[str, Any]] = []
@@ -862,10 +894,16 @@ async def _execute_suite_run(
     for slot in replace:
         if slot[0] in plan.task_ids and slot not in units:
             units.append(slot)
+    retried_keys: set[tuple[str, int]] = set()
+    if retry_errors:
+        retried_keys = _error_attempt_keys(existing) & set(units)
+        done_keys -= retried_keys
     todo = [(tid, idx) for tid, idx in units if (tid, idx) not in done_keys]
     total_units = max(len(units), len(todo) + len(done_keys & set(units)))
     # Progress: completed existing + in-flight bookkeeping.
     completed_count = len(done_keys & set(units)) if resume else 0
+    skipped_n = completed_count
+    retried_n = len(retried_keys)
     cancelled = False
     new_results: list[dict[str, Any]] = []
     skipped_cancelled: list[dict[str, Any]] = []
@@ -909,6 +947,8 @@ async def _execute_suite_run(
         total=total_units,
         running=[],
         status="running" if todo else "complete",
+        skipped=skipped_n,
+        retried=retried_n,
     )
     _write_live_summary("running" if todo else "complete")
     _emit(
@@ -918,6 +958,8 @@ async def _execute_suite_run(
             "done": completed_count,
             "total": total_units,
             "todo": len(todo),
+            "skipped": skipped_n,
+            "retried": retried_n,
         }
     )
 
@@ -980,6 +1022,8 @@ async def _execute_suite_run(
                     done=completed_count,
                     total=total_units,
                     running=_running_snapshot(),
+                    skipped=skipped_n,
+                    retried=retried_n,
                 )
                 _emit(
                     {
@@ -1023,6 +1067,8 @@ async def _execute_suite_run(
                     total=total_units,
                     running=_running_snapshot(),
                     status=st,
+                    skipped=skipped_n,
+                    retried=retried_n,
                 )
                 _write_live_summary(st)
                 _emit(
@@ -1052,9 +1098,10 @@ async def _execute_suite_run(
     if skipped_cancelled:
         new_results.extend(skipped_cancelled)
 
-    if replace and new_results:
+    history_slots = set(replace) | retried_keys
+    if history_slots and new_results:
         replaced_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
-        outgoing = {slot_key(row): row for row in existing if slot_key(row) in replace}
+        outgoing = {slot_key(row): row for row in existing if slot_key(row) in history_slots}
         for row in new_results:
             old_row = outgoing.get(slot_key(row))
             if old_row is None:
@@ -1142,6 +1189,14 @@ async def _execute_suite_run(
         summary["resumed"] = True
         summary["new_attempts"] = len([r for r in new_results if r.get("phase") != "cancelled"])
         summary["skipped_attempts"] = len(done_keys & set(units))
+        if retry_errors:
+            summary["retried_attempts"] = len(
+                [
+                    row
+                    for row in new_results
+                    if row.get("phase") != "cancelled" and slot_key(row) in retried_keys
+                ]
+            )
     if cancelled or is_suite_cancel_requested(plan.dataset_root, plan.suite_run_id):
         summary["cancelled"] = True
         summary["status"] = "cancelled"
@@ -1154,6 +1209,8 @@ async def _execute_suite_run(
             total=total_units,
             running=[],
             status="cancelled",
+            skipped=skipped_n,
+            retried=retried_n,
         )
         _emit(
             {
@@ -1172,6 +1229,8 @@ async def _execute_suite_run(
             total=total_units,
             running=[],
             status="complete",
+            skipped=skipped_n,
+            retried=retried_n,
         )
         _emit(
             {

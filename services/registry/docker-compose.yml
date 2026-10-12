@@ -64,6 +64,29 @@ services:
       - "8700"
     restart: unless-stopped
 
+  hosted-worker:
+    image: ghcr.io/zju-real/ageval-registry:${AGEVAL_IMAGE_TAG:-0.6.3}
+    build:
+      context: ../..
+      dockerfile: services/registry/Dockerfile
+    command: [".venv/bin/python", "-m", "services.registry.hosted.worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      AGEVAL_REGISTRY_DATABASE_URL: postgresql://ageval:ageval@postgres:5432/ageval_registry
+      AGEVAL_REGISTRY_S3_ENDPOINT: http://rustfs:9000
+      AGEVAL_REGISTRY_S3_ACCESS_KEY: ageval
+      AGEVAL_REGISTRY_S3_SECRET_KEY: agevalageval
+      AGEVAL_REGISTRY_S3_BUCKET: ageval
+      AGEVAL_REGISTRY_S3_REGION: us-east-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rustfs:
+        condition: service_started
+    restart: unless-stopped
+
   hub:
     image: ghcr.io/zju-real/ageval-hub:${AGEVAL_IMAGE_TAG:-0.6.3}
     build:

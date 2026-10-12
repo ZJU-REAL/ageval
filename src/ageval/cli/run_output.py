@@ -302,6 +302,12 @@ class RunProgress:
         if not self._use_bar:
             todo = ev.get("todo")
             extra = f"  todo={todo} total={total}" if todo is not None else f"  total={total}"
+            skipped = int(ev.get("skipped") or 0)
+            retried = int(ev.get("retried") or 0)
+            if skipped:
+                extra += f"  skipped={skipped}"
+            if retried:
+                extra += f"  retried={retried}"
             header = f"{header}{extra}  cancel: ageval cancel {self.suite_run_id}"
         self._emit(header)
         if self._use_bar:

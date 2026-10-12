@@ -1666,6 +1666,127 @@ export function pluginsUsedBySuite(
   return fromStore;
 }
 
+export type OrgSecret = {
+  secret_id: string;
+  org_id: string;
+  name: string;
+  kind: string;
+  locator: string;
+  provider?: string;
+  created_by: string;
+  created_at: number;
+};
+
+export type HostedJobError = {
+  title: string;
+  message: string;
+};
+
+export type HostedJob = {
+  job_id: string;
+  org_id: string;
+  dataset_id: string;
+  version: string;
+  environment: string;
+  model: string;
+  model_secret_id: string;
+  provider_secret_id: string;
+  max_concurrent_tasks: number;
+  status: string;
+  created_by: string;
+  created_at: number;
+  cancel_requested: boolean;
+  agent_ref?: string;
+  task_id?: string;
+  suite_run_id?: string;
+  started_at?: number;
+  finished_at?: number;
+  error?: HostedJobError;
+};
+
+export async function listOrgSecrets(
+  orgId: string,
+  token: string | null,
+): Promise<OrgSecret[]> {
+  const data = await requestJson<{ items?: OrgSecret[] }>(
+    `/v1/orgs/${encodeURIComponent(orgId)}/secrets`,
+    { token },
+  );
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+export function createOrgSecret(
+  orgId: string,
+  body: {
+    name: string;
+    kind: "model" | "provider";
+    value: string;
+    locator?: string;
+    provider?: string;
+  },
+  token: string | null,
+): Promise<OrgSecret> {
+  return requestJson(`/v1/orgs/${encodeURIComponent(orgId)}/secrets`, {
+    token,
+    method: "POST",
+    body,
+  });
+}
+
+export function deleteOrgSecret(
+  orgId: string,
+  secretId: string,
+  token: string | null,
+): Promise<{ ok: boolean; secret_id: string }> {
+  return requestJson(
+    `/v1/orgs/${encodeURIComponent(orgId)}/secrets/${encodeURIComponent(secretId)}`,
+    { token, method: "DELETE" },
+  );
+}
+
+export async function listHostedJobs(
+  token: string | null,
+  filter: { orgId?: string; datasetId?: string },
+): Promise<HostedJob[]> {
+  const q = new URLSearchParams();
+  if (filter.orgId) q.set("org_id", filter.orgId);
+  if (filter.datasetId) q.set("dataset_id", filter.datasetId);
+  const suffix = q.toString();
+  const data = await requestJson<{ items?: HostedJob[] }>(
+    suffix ? `/v1/hosted/jobs?${suffix}` : "/v1/hosted/jobs",
+    { token },
+  );
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+export function createHostedJob(
+  body: {
+    org_id: string;
+    dataset_id: string;
+    version: string;
+    environment: "e2b" | "daytona";
+    model: string;
+    model_secret_id: string;
+    provider_secret_id: string;
+    max_concurrent_tasks: number;
+    agent_ref?: string;
+    task_id?: string;
+  },
+  token: string | null,
+): Promise<HostedJob> {
+  return requestJson("/v1/hosted/jobs", { token, method: "POST", body });
+}
+
+export function cancelHostedJob(
+  jobId: string,
+  token: string | null,
+): Promise<HostedJob> {
+  return requestJson(`/v1/hosted/jobs/${encodeURIComponent(jobId)}/cancel`, {
+    token,
+    method: "POST",
+  });
+}
+
 export function decodeFileContent(file: FileContent): string {
   if (file.encoding === "base64") {
     try {

@@ -147,8 +147,9 @@ def register(app: typer.Typer) -> None:
                 "--resume-suite",
                 help=(
                     "Resume an existing suite_run_id under .ageval/suite-runs/. "
-                    "Skips finished (task_id, attempt_index) units, appends new Attempts, "
+                    "Skips finished PASS / FAIL / ERROR units, appends new Attempts, "
                     "recomputes pass@k / pass^k. Combine with --task to top up one task. "
+                    "With --retry-errors, re-run ERROR slots in this filter. "
                     "With --replace-slot, re-run one named finished slot instead."
                 ),
             ),
@@ -161,6 +162,17 @@ def register(app: typer.Typer) -> None:
                     "With --resume-suite and --task: re-run that finished slot "
                     "(PASS / FAIL / ERROR). Writes a new run_id; old row stays on "
                     "disk and in previous[]. Metrics use the new current only."
+                ),
+            ),
+        ] = False,
+        retry_errors: Annotated[
+            bool,
+            typer.Option(
+                "--retry-errors",
+                help=(
+                    "With --resume-suite: re-run finished ERROR slots in this filter. "
+                    "PASS and FAIL stay skipped. Each retry is a new Attempt; "
+                    "the old row stays in previous[]. Does not require --replace-slot."
                 ),
             ),
         ] = False,
@@ -320,6 +332,12 @@ def register(app: typer.Typer) -> None:
                     "--attempt-index is only valid with --replace-slot",
                     location="--attempt-index",
                 )
+            if retry_errors and resume_id is None:
+                raise ConfigError(
+                    "suite_retry_errors_requires_resume",
+                    "retry-errors requires --resume-suite",
+                    location="--retry-errors",
+                )
 
             # Full suite when --task omitted; single task when provided.
             plan = plan_suite_run(
@@ -408,6 +426,7 @@ def register(app: typer.Typer) -> None:
                         profiles_path=profiles,
                         resume=resume_id is not None,
                         replace_slots=replace_keys,
+                        retry_errors=retry_errors,
                         on_progress=progress.handle,
                         keep_workspace=keep_workspace,
                         keep_vendor_raw=keep_vendor_raw,

@@ -59,6 +59,13 @@ def build_run_attempt() -> Callable[..., Any]:
     return run_attempt
 
 
+def build_regrade_attempts() -> Callable[..., Any]:
+    """Wire ``ageval results regrade``: a new Attempt that evaluates only."""
+    from ageval.application.regrade import regrade_attempts
+
+    return regrade_attempts
+
+
 def build_probe_attempt() -> Callable[..., Any]:
     """Wire ``ageval run --probe``: lock plus preflight, and nothing else."""
     from ageval.application.run import probe_attempt
@@ -85,6 +92,13 @@ def build_results_commands() -> Any:
     from ageval.application.registry_ops.results_command import ResultsCommands
 
     return ResultsCommands(client_factory=build_registry_client)
+
+
+def build_analyze_command() -> Any:
+    """Wire ``ageval results analyze`` (post-run stats / hack / review)."""
+    from ageval.application.analysis.command import AnalyzeCommand
+
+    return AnalyzeCommand()
 
 
 def build_local_jobs_commands() -> Any:

@@ -15,6 +15,10 @@ SUITE = REPO / "tests" / "fixtures" / "datasets" / "suite-min"
 def _ageval(*args: str) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["AGEVAL_OFFLINE_AGENT"] = "1"
+    # GITHUB_ACTIONS makes Typer/Rich colorize even with NO_COLOR; TERM=dumb
+    # keeps captured help/option text free of ANSI so substring asserts work.
+    env["TERM"] = "dumb"
+    env["NO_COLOR"] = "1"
     return subprocess.run(
         [sys.executable, "-m", "ageval.cli.main", *args],
         check=False,
@@ -106,6 +110,16 @@ def test_single_task_tty_recap(monkeypatch) -> None:
     assert "PASS" in result.stdout
     assert "ageval view " in result.stdout
     assert "actors_summary" not in result.stdout
+
+
+def test_retry_errors_requires_resume() -> None:
+    r = _ageval("run", str(SUITE), "--task", "alpha", "--retry-errors")
+    assert r.returncode == 2
+    assert "suite_retry_errors_requires_resume" in r.stderr
+
+    help_run = _ageval("run", "--help")
+    assert help_run.returncode == 0
+    assert "--retry-errors" in help_run.stdout
 
 
 def test_replace_slot_requires_resume_and_task() -> None:

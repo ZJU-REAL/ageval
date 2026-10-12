@@ -114,6 +114,42 @@ def test_attempt_recap_has_logs_and_next() -> None:
     assert "{" not in text
 
 
+def test_plain_progress_prints_skipped_and_retried_only_when_set() -> None:
+    buf = io.StringIO()
+    progress = RunProgress(
+        suite_run_id="863b8ee9",
+        dataset_label="official/demo@0.1.0",
+        stderr=buf,
+        use_bar=False,
+        use_color=False,
+        monotonic=lambda: 0.0,
+    )
+    progress.handle(
+        {"type": "suite_start", "todo": 3, "total": 4, "done": 1, "skipped": 2, "retried": 1}
+    )
+    progress.close()
+    text = buf.getvalue()
+    assert "skipped=2" in text
+    assert "retried=1" in text
+    assert "cancel: ageval cancel 863b8ee9" in text
+
+    quiet = io.StringIO()
+    progress = RunProgress(
+        suite_run_id="863b8ee9",
+        dataset_label="official/demo@0.1.0",
+        stderr=quiet,
+        use_bar=False,
+        use_color=False,
+        monotonic=lambda: 0.0,
+    )
+    progress.handle(
+        {"type": "suite_start", "todo": 1, "total": 1, "done": 0, "skipped": 0, "retried": 0}
+    )
+    progress.close()
+    assert "skipped=" not in quiet.getvalue()
+    assert "retried=" not in quiet.getvalue()
+
+
 def test_plain_progress_aligns_done_line() -> None:
     buf = io.StringIO()
     clock = iter([0.0, 1.25, 1.25])

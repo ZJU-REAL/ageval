@@ -8,7 +8,7 @@ Standing rule for files added or moved in this package. The structure map is [`A
 http/<aggregate>.py  →  <aggregate>/service.py  →  <aggregate>/store.py  →  <aggregate>/queries.py
 ```
 
-`app.py` is the composition root: `RegistryState` wires services to stores. `asgi.py` is the process adapter. `db/schema.open_stores` is the only schema init and the only constructor of the five stores (packages, results, shares, orgs, inbox).
+`app.py` is the composition root: `RegistryState` wires services to stores. `asgi.py` is the process adapter. `db/schema.open_stores` is the only schema init and the only constructor of the six stores (packages, results, shares, orgs, inbox, hosted). The hosted worker (`python -m services.registry.hosted.worker`) is a second process. It is not an HTTP handler.
 
 A handler calls `state.<service>`. A service receives stores as constructor arguments. A store runs a named statement from its own `queries.py` through `db/sql_adapter.py`.
 
@@ -104,7 +104,7 @@ A layout change does not add a repository framework, a god store protocol, a moc
 
 - `test_handler_methods_do_not_touch_store` scans `app.py` `Handler` and every `http/*.py` except `__init__.py` and `routes.py`.
 - `test_bearer_is_only_used_by_dispatch`
-- `test_store_has_no_sql_literals` scans every `store.py` under this package. The expected set is the five aggregate stores.
+- `test_store_has_no_sql_literals` scans every `store.py` under this package. The expected set is the six aggregate stores.
 - `test_queries_own_single_releases_ddl` requires `packages/queries.py` and rejects a root `queries.py`.
 
 ```bash
