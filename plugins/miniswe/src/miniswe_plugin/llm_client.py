@@ -39,8 +39,7 @@ def _iter_httpx_pools(client: Any) -> list[Any]:
     pools: list[Any] = []
     http = (
         client
-        if type(client).__name__ == "Client"
-        and getattr(client, "_transport", None) is not None
+        if type(client).__name__ == "Client" and getattr(client, "_transport", None) is not None
         else None
     )
     if http is None:
@@ -222,6 +221,28 @@ def recycle_llm_clients() -> None:
             return
 
 
+def http_timeout_seconds(timeout: float | None) -> float | None:
+    """Numeric HTTP clock. ``None`` means omit. It does not become 180.
+
+    Zero and negatives are rejected. This path does not import httpx.
+    """
+    if timeout is None:
+        return None
+    if isinstance(timeout, bool) or not isinstance(timeout, int | float) or timeout <= 0:
+        raise ValueError(f"miniswe_timeout_invalid:{timeout!r}")
+    return float(timeout)
+
+
+def client_timeout(timeout: float | None) -> tuple[Any, float | None]:
+    """httpx timeout and the numeric value passed alongside it."""
+    import httpx
+
+    value = http_timeout_seconds(timeout)
+    if value is None:
+        return httpx.Timeout(None), None
+    return httpx.Timeout(value, connect=min(30.0, value)), value
+
+
 def make_ephemeral_openai_client(
     *,
     api_key: str | None,
@@ -237,8 +258,7 @@ def make_ephemeral_openai_client(
     import httpx
     from openai import OpenAI
 
-    timeout_s = float(timeout) if timeout and timeout > 0 else 180.0
-    http_timeout = httpx.Timeout(timeout_s, connect=min(30.0, timeout_s))
+    http_timeout, timeout_s = client_timeout(timeout)
     http = httpx.Client(
         limits=httpx.Limits(max_keepalive_connections=0, max_connections=20),
         timeout=http_timeout,
@@ -376,9 +396,7 @@ def sanitize_responses_input(input_items: Any) -> Any:
             out.append(item)
             continue
         cleaned = {
-            key: value
-            for key, value in item.items()
-            if key not in drop_keys and value is not None
+            key: value for key, value in item.items() if key not in drop_keys and value is not None
         }
         out.append(cleaned)
     return out
@@ -401,9 +419,6 @@ def post_responses_api(
     ``tools`` (flat Responses function schema). No ``stream``, no LiteLLM
     client cache, ``Connection: close``.
     """
-    import httpx
-
-    timeout_s = float(timeout) if timeout and timeout > 0 else 180.0
     url = responses_url(api_base)
     wire_model = wire_model_name(model)
     payload: dict[str, Any] = {
@@ -456,7 +471,9 @@ def post_responses_api(
             encoding="utf-8",
         )
 
-    http_timeout = httpx.Timeout(timeout_s, connect=min(30.0, timeout_s))
+    import httpx
+
+    http_timeout, _timeout_s = client_timeout(timeout)
     client = httpx.Client(
         limits=httpx.Limits(max_keepalive_connections=0, max_connections=10),
         timeout=http_timeout,
@@ -476,16 +493,13 @@ def post_responses_api(
         try:
             data = response.json()
         except Exception as exc:
-            raise RuntimeError(
-                f"responses_http_bad_json:{response.text[:400]}"
-            ) from exc
+            raise RuntimeError(f"responses_http_bad_json:{response.text[:400]}") from exc
         if not isinstance(data, dict):
             raise RuntimeError(f"responses_http_not_object:{type(data).__name__}")
         return DirectResponsesResult(data)
     finally:
         unregister_in_flight_client(client)
         close_llm_client(client)
-
 
 
 def post_chat_completions(
@@ -509,7 +523,6 @@ def post_chat_completions(
     import httpx
     from openai.types.chat import ChatCompletion
 
-    timeout_s = float(timeout) if timeout and timeout > 0 else 180.0
     url = chat_completions_url(api_base)
     wire_model = wire_model_name(model)
     payload: dict[str, Any] = {
@@ -545,7 +558,7 @@ def post_chat_completions(
                 headers[key] = value
         headers.setdefault("Connection", "close")
 
-    http_timeout = httpx.Timeout(timeout_s, connect=min(30.0, timeout_s))
+    http_timeout, _timeout_s = client_timeout(timeout)
     client = httpx.Client(
         limits=httpx.Limits(max_keepalive_connections=0, max_connections=10),
         timeout=http_timeout,
@@ -554,9 +567,7 @@ def post_chat_completions(
     )
     register_in_flight_client(client)
     try:
-        response = client.post(
-            url, headers=headers, content=json.dumps(payload).encode("utf-8")
-        )
+        response = client.post(url, headers=headers, content=json.dumps(payload).encode("utf-8"))
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -567,9 +578,7 @@ def post_chat_completions(
         try:
             data = response.json()
         except Exception as exc:
-            raise RuntimeError(
-                f"chat_http_bad_json:{response.text[:400]}"
-            ) from exc
+            raise RuntimeError(f"chat_http_bad_json:{response.text[:400]}") from exc
         if not isinstance(data, dict):
             raise RuntimeError(f"chat_http_not_object:{type(data).__name__}")
         return ChatCompletion.model_validate(data)
@@ -583,7 +592,7 @@ def bind_direct_completion_client(
     *,
     api_key: str | None,
     api_base: str | None,
-    timeout: float,
+    timeout: float | None,
 ) -> None:
     """Replace ``LitellmModel._query`` with curl-equivalent httpx chat POST.
 
@@ -638,7 +647,7 @@ def bind_ephemeral_completion_client(
     *,
     api_key: str | None,
     api_base: str | None,
-    timeout: float,
+    timeout: float | None,
     pass_client: bool = True,
 ) -> None:
     """Patch ``model._query`` so each chat completion avoids sticky keep-alive.
@@ -662,15 +671,15 @@ def bind_ephemeral_completion_client(
         # ability to free the gateway socket (watchdog abandons the Future but
         # the orphan keeps ESTAB until we kill_in_flight).
         call_kwargs = dict(kwargs)
-        call_kwargs["timeout"] = float(timeout) if timeout and timeout > 0 else 180.0
+        timeout_s = http_timeout_seconds(timeout)
+        if timeout_s is not None:
+            call_kwargs["timeout"] = timeout_s
         if not pass_client:
             try:
                 return orig(messages, **call_kwargs)
             finally:
                 recycle_llm_clients()
-        client = make_ephemeral_openai_client(
-            api_key=api_key, api_base=api_base, timeout=timeout
-        )
+        client = make_ephemeral_openai_client(api_key=api_key, api_base=api_base, timeout=timeout)
         register_in_flight_client(client)
         try:
             return orig(messages, client=client, **call_kwargs)
@@ -687,7 +696,7 @@ def bind_direct_responses_client(
     *,
     api_key: str | None,
     api_base: str | None,
-    timeout: float,
+    timeout: float | None,
 ) -> None:
     """Replace ``LitellmResponseModel._query`` with curl-equivalent httpx POST.
 

@@ -177,7 +177,7 @@ Write the straight path. A failure fails.
 
 ### Model (miniswe)
 
-One miniswe profile binds one Model. Field meanings live in [plugins/miniswe/README.md](plugins/miniswe/README.md) (authority table). Target honesty — omit means not sent, `timeout` vs `watchdog` split, stall reads watchdog only — is **not on the wire yet**; chat still forces `reasoning_effort=none` when unset, and an omitted timeout still uses a combined 180s clock. Do not write those target sentences in AGENTS as if they have landed. Wire follow-up: #258.
+One miniswe profile binds one Model. Omit means the field is not sent. A declared effort `none` is a value. `timeout` is the HTTP client clock. `watchdog` is the abort clock. Stall reads the watchdog only. An omitted watchdog is a finite default cap, never unlimited. First-class reasoning is `effort` only. Anything else belongs in `extra`, and `extra` cannot replace a first-class field. The field table is [plugins/miniswe/README.md](plugins/miniswe/README.md).
 
 ### Delivery and evidence
 

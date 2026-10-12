@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import concurrent.futures
-import copy
 import json
 import os
 import uuid
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +20,7 @@ from miniswe_plugin.llm_client import (
     bind_direct_responses_client,
     chat_model_for_openai_compat_gateway,
 )
-from miniswe_plugin.model import ModelSpec, resolve_model
+from miniswe_plugin.model import resolve_model, transport_clocks, wire_body
 from miniswe_plugin.stall import (
     StallExhausted,
     install_single_package_attempt,
@@ -34,13 +32,6 @@ from miniswe_plugin.usage import usage_from_messages
 
 _CREDENTIAL_ENV_NAMES = ("OPENAI_API_KEY", "litellm_api_key", "LITELLM_API_KEY")
 _BASE_URL_ENV_FALLBACKS = ("OPENAI_BASE_URL", "litellm_base_url", "LITELLM_BASE_URL")
-# Per-completion HTTP timeout for litellm/openai. LiteLLM's module default
-# request_timeout is 6000s; OpenAI client often lands at 600s. Either way a
-# gateway sticky hang burns the deep-swe invoke budget before stall can retry.
-# Fail-fast into wrap_model_query + upstream_stall instead.
-# Dark default: omitted timeout still uses this number for both clocks until
-# the omit / watchdog split. ``ModelSpec.timeout is None`` is the honest omit.
-_DEFAULT_REQUEST_TIMEOUT = 180
 
 
 def describe_miniswe() -> dict[str, Any]:
@@ -103,45 +94,6 @@ def _as_nonneg_float(raw: Any, *, name: str, default: float) -> float:
             kind="extension_materialize_failed",
         )
     return value
-
-
-def _raw_is_zero(raw: Any) -> bool:
-    if isinstance(raw, bool) or raw is None:
-        return False
-    if isinstance(raw, int | float):
-        return float(raw) == 0.0
-    if isinstance(raw, str):
-        text = raw.strip()
-        if not text:
-            return False
-        try:
-            return float(text) == 0.0
-        except ValueError:
-            return False
-    return False
-
-
-def _explicit_timeout_zero(model: Any, options: Mapping[str, Any]) -> bool:
-    """True when the profile set timeout / request_timeout to 0 (omit on the spec)."""
-    if isinstance(model, Mapping) and "timeout" in model and _raw_is_zero(model.get("timeout")):
-        return True
-    for key in ("timeout", "request_timeout"):
-        if key in options and _raw_is_zero(options.get(key)):
-            return True
-    return False
-
-
-def _legacy_request_timeout(model: Any, options: Mapping[str, Any], spec: ModelSpec) -> float:
-    """Today's combined clock. Explicit ``0`` stays ``0``; omit stays 180.
-
-    Deleted when timeout and watchdog split. ``ModelSpec.timeout`` is already
-    honest (``0`` and omit are both ``None``).
-    """
-    if spec.timeout is not None:
-        return float(spec.timeout)
-    if _explicit_timeout_zero(model, options):
-        return 0.0
-    return float(_DEFAULT_REQUEST_TIMEOUT)
 
 
 def resolve_api_key_value(locator: str | None) -> str | None:
@@ -259,11 +211,9 @@ class MinisweExecutorSPI:
         self.reasoning_effort = spec.reasoning_effort
         self.api = spec.api
         self.extra_body = dict(spec.extra)
-        self.timeout = spec.timeout
-        self.watchdog = spec.watchdog
-        # Wire dark-default: this number still feeds both HTTP timeout and the
-        # Future watchdog. Honest omit lives on ``spec.timeout``.
-        self.request_timeout = _legacy_request_timeout(model, opts, spec)
+        # ``timeout`` is the HTTP clock (None = do not set one). ``watchdog`` is
+        # the Future abort, already filled with the default cap when omitted.
+        self.timeout, self.watchdog = transport_clocks(spec)
         self.session_id = f"ageval-{self.profile_id or 'solver'}-{uuid.uuid4().hex[:12]}"
         self.execution_location = getattr(host, "kind", None) or "box"
         self._ready = False
@@ -387,22 +337,11 @@ class MinisweExecutorSPI:
             model_kwargs["api_key"] = key
         if base:
             model_kwargs["api_base"] = base
-        # Chat Completions + function tools: gpt-6-sol (and similar) reject an
-        # implicit/default reasoning_effort. Teacher tip: prefer /v1/responses
-        # for tools, or set reasoning_effort=none on chat. When api=chat and the
-        # profile did not set effort, force "none" so the gateway does not invent
-        # a non-none default. Explicit profile effort still wins.
-        if self.api == "chat":
-            model_kwargs["reasoning_effort"] = (
-                self.reasoning_effort if self.reasoning_effort is not None else "none"
-            )
-        elif self.reasoning_effort:
-            model_kwargs["reasoning_effort"] = self.reasoning_effort
-        if self.extra_body:
-            model_kwargs.update(copy.deepcopy(self.extra_body))
+        # Unset effort and timeout stay absent. extra cannot carry those keys.
+        model_kwargs.update(wire_body(self.spec))
         # Force Connection: close on the wire so gateways / httpx do not keep a
         # sticky ESTAB that later turns hang on (_receive_response_headers +
-        # large Send-Q). Merged last over extra_body headers except we still
+        # large Send-Q). Merged last over extra headers except we still
         # allow callers to add other headers alongside.
         headers = model_kwargs.get("extra_headers")
         if not isinstance(headers, dict):
@@ -411,10 +350,6 @@ class MinisweExecutorSPI:
             headers = dict(headers)
         headers.setdefault("Connection", "close")
         model_kwargs["extra_headers"] = headers
-        # Always last: hang-hardening timeout must not be overridden by extra_body.
-        # 0 = omit (legacy litellm/openai defaults; not recommended for suite runs).
-        if self.request_timeout > 0:
-            model_kwargs["timeout"] = float(self.request_timeout)
         return model_kwargs
 
     def _run_agent(self, prompt: str, *, timeout: float) -> dict[str, Any]:
@@ -467,20 +402,20 @@ class MinisweExecutorSPI:
         # Bypass litellm entirely for HTTP: sticky keep-alive + ignored timeouts
         # left suites hung in _receive_response_headers with no upstream_stall
         # (attempt_1c23ff53 ~4.5min). Both chat and responses use direct httpx.
-        req_timeout = float(self.request_timeout) if self.request_timeout > 0 else 180.0
+        # ``self.timeout`` is the HTTP clock only (None = no client timeout).
         if self.api == "responses":
             bind_direct_responses_client(
                 model,
                 api_key=key,
                 api_base=base,
-                timeout=req_timeout,
+                timeout=self.timeout,
             )
         else:
             bind_direct_completion_client(
                 model,
                 api_key=key,
                 api_base=base,
-                timeout=req_timeout,
+                timeout=self.timeout,
             )
         env = self._make_env()
         system_template = str(agent_cfg.get("system_template") or "")
@@ -500,17 +435,10 @@ class MinisweExecutorSPI:
             cost_limit=self.cost_limit,
             # Under upstream_stall the parent freezes wall/phase clocks for the
             # episode. Zero the package wall clock so it cannot race the stall
-            # budget — but keep req_timeout as a hard per-call Future abort.
+            # budget. The Future watchdog is a separate clock (``self.watchdog``).
             wall_time_limit_seconds=0 if stall is not None else max(0, int(timeout)),
         )
-        # Use req_timeout (180 fallback), not raw self.request_timeout: a profile
-        # value of 0 would disable the Future watchdog entirely while the
-        # ephemeral client still gets 180s — hang forever in litellm/httpx with
-        # no TimeoutError for upstream_stall to chew on. Stall freeze /
-        # wait_excluding_stall must never imply request_timeout=0.
-        if stall is not None and req_timeout <= 0:
-            req_timeout = float(_DEFAULT_REQUEST_TIMEOUT)
-        model.query = wrap_model_query(model.query, stall, request_timeout=req_timeout)
+        model.query = wrap_model_query(model.query, stall, watchdog=self.watchdog)
         wait = max(1.0, float(timeout))
 
         def _go() -> dict[str, Any]:

@@ -126,7 +126,7 @@ def test_invalid_step_limit() -> None:
         )
 
 
-def test_api_option_defaults_to_chat_and_forces_effort_none() -> None:
+def test_api_option_defaults_to_chat_and_omits_unset_effort() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
@@ -134,7 +134,7 @@ def test_api_option_defaults_to_chat_and_forces_effort_none() -> None:
     )
     assert spi.api == "chat"
     kwargs = spi._litellm_model_kwargs(key=None, base=None)
-    assert kwargs["reasoning_effort"] == "none"
+    assert "reasoning_effort" not in kwargs
 
 
 def test_api_responses_skips_forced_none_effort() -> None:
@@ -188,23 +188,28 @@ def test_request_timeout_forwarded_to_litellm_kwargs() -> None:
         options={"request_timeout": 120},
         model="openai/x",
     )
-    assert spi.request_timeout == 120.0
+    assert spi.timeout == 120.0
+    assert spi.spec.watchdog is None
+    assert spi.watchdog == 180.0
     kwargs = spi._litellm_model_kwargs(key="sk-x", base="https://example.invalid/v1")
     assert kwargs["timeout"] == 120.0
+    assert "watchdog" not in kwargs
     defaulted = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
         model="openai/x",
     )
-    assert defaulted.request_timeout == 180.0
-    assert defaulted._litellm_model_kwargs(key=None, base=None)["timeout"] == 180.0
+    assert defaulted.timeout is None
+    assert defaulted.watchdog == 180.0
+    assert "timeout" not in defaulted._litellm_model_kwargs(key=None, base=None)
     omitted = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
         options={"request_timeout": 0},
         model="openai/x",
     )
-    assert omitted.request_timeout == 0.0
+    assert omitted.timeout is None
+    assert omitted.watchdog == 180.0
     assert "timeout" not in omitted._litellm_model_kwargs(key=None, base=None)
 
 
@@ -248,8 +253,7 @@ def test_reasoning_effort_forwarded_to_litellm_kwargs() -> None:
         model="openai/x",
     )
     assert omitted.reasoning_effort is None
-    # Chat path forces none so tools do not collide with a gateway-default effort.
-    assert omitted._litellm_model_kwargs(key=None, base=None)["reasoning_effort"] == "none"
+    assert "reasoning_effort" not in omitted._litellm_model_kwargs(key=None, base=None)
 
 
 def test_invalid_reasoning_effort() -> None:

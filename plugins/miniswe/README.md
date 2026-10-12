@@ -62,11 +62,9 @@ One profile binds one Model. `resolve_model` accepts a nested `model:` mapping o
 
 `request_timeout` is deprecated. It maps to `timeout`. `0` means omit. Do not set it beside `options.timeout`.
 
-`timeout` is the HTTP client clock. `watchdog` is the Future abort clock. Stall reads the watchdog only. An omitted watchdog uses the 180 second cap. There is no unlimited watchdog.
+`timeout` is the HTTP client clock. `watchdog` is the Future abort clock. Stall reads the watchdog only. An omitted watchdog uses the 180 second cap. There is no unlimited watchdog. The running process follows this table: an unset effort is absent from the request, and a declared `none` is sent. `timeout: 0` and an omitted timeout leave the HTTP client without a timeout. They do not become 180 seconds. Stall aborts on the watchdog and writes `miniswe_watchdog:` to stderr.
 
 For gpt-6-sol tool calls prefer `api: responses`. Chat models with an `anthropic/` (or bare `claude*`) profile id are remapped to `openai/<id>` so the gateway still sees `anthropic/…` on `/v1/chat/completions`. Each completion uses a fresh httpx client with `max_keepalive_connections=0`, sends `Connection: close`, and flushes LiteLLM's client cache before, after, and on stall retry.
-
-Wire still applies two dark defaults that the table does not describe: an unset chat effort is sent as `reasoning_effort=none`, and an omitted timeout still uses 180 seconds for both the HTTP client and the abort clock. The omit and split change removes those defaults.
 
 `api_key` defaults to the locator names `OPENAI_API_KEY` / `litellm_api_key` / `LITELLM_API_KEY`. Omit the key on loopback `base_url` (`127.0.0.1` / `localhost` / `::1`). `base_url` defaults to `OPENAI_BASE_URL` / `litellm_base_url` / `LITELLM_BASE_URL`.
 
