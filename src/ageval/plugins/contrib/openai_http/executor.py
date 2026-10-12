@@ -17,6 +17,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
+from ageval.model.errors import ModelConfigError, http_status_is_config_error
 from ageval.plugins.agent_result import AgentResult
 from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.openai_http.usage import normalize_openai_http_usage
@@ -281,11 +282,23 @@ class OpenAIHTTPExecutor(BaseExecutor):
             )
         if kind == "http":
             assert isinstance(found, dict)
+            code = int(found["http_code"])
+            meta: dict[str, Any] = {"http_error_body": found.get("http_body")}
+            if http_status_is_config_error(code):
+                # The gateway rejected the request itself; resending cannot help.
+                meta["error_kind"] = ModelConfigError.kind
+                return self._result(
+                    ok=False,
+                    error=f"ModelConfigError:HTTPError:{code}",
+                    effort=effort,
+                    metadata=meta,
+                    repeatable=False,
+                )
             return self._result(
                 ok=False,
-                error=f"HTTPError:{found['http_code']}",
+                error=f"HTTPError:{code}",
                 effort=effort,
-                metadata={"http_error_body": found.get("http_body")},
+                metadata=meta,
             )
         if kind == "transport":
             return self._result(ok=False, error=str(found), effort=effort)
@@ -398,6 +411,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
         error: str,
         effort: str | None,
         metadata: dict[str, Any] | None = None,
+        repeatable: bool = True,
     ) -> AgentResult:
         return AgentResult(
             model=self.model,
@@ -406,6 +420,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
             ok=ok,
             error=error,
             metadata=self._meta(effort, actual=None, extra=metadata),
+            repeatable=repeatable,
         )
 
     def _meta(

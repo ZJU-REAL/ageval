@@ -494,3 +494,56 @@ def test_watchdog_expiry_is_a_repeatable_transport_error(monkeypatch: pytest.Mon
     assert result.error is not None
     assert "openai_http_watchdog" in result.error
     assert result.repeatable is True
+
+
+def _status_server(code: int) -> tuple[ThreadingHTTPServer, str, dict[str, int]]:
+    hits = {"n": 0}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            hits["n"] += 1
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            raw = json.dumps({"error": {"message": "nope", "code": code}}).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    server, base = _serve(Handler)
+    return server, base, hits
+
+
+@pytest.mark.parametrize("code", [400, 401, 403, 404, 422])
+def test_http_4xx_is_a_model_config_error(code: int) -> None:
+    server, base, hits = _status_server(code)
+    try:
+        result = OpenAIHTTPExecutor(
+            model={"id": "dashscope/glm-5.2", "api": "responses"}, base_url=base
+        ).invoke("hi")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert hits["n"] == 1
+    assert result.ok is False
+    assert result.error == f"ModelConfigError:HTTPError:{code}"
+    assert result.repeatable is False
+    assert (result.metadata or {}).get("error_kind") == "model_config"
+    assert "nope" in str((result.metadata or {}).get("http_error_body"))
+
+
+@pytest.mark.parametrize("code", [408, 429, 500, 502, 503])
+def test_http_408_429_and_5xx_stay_repeatable(code: int) -> None:
+    server, base, _hits = _status_server(code)
+    try:
+        result = OpenAIHTTPExecutor(model={"id": "mock"}, base_url=base).invoke("hi")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert result.ok is False
+    assert result.error == f"HTTPError:{code}"
+    assert result.repeatable is True
+    assert "error_kind" not in (result.metadata or {})
