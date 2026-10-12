@@ -65,6 +65,32 @@ class ModelSpec:
     extra: Mapping[str, Any]
 
 
+def transport_clocks(spec: ModelSpec) -> tuple[float | None, float]:
+    """``(http_timeout, watchdog)``.
+
+    HTTP timeout ``None`` means the client has no timeout. Watchdog omit uses
+    ``DEFAULT_WATCHDOG_SECONDS``. Zero and non-finite watchdog values fail.
+    """
+    watchdog = DEFAULT_WATCHDOG_SECONDS if spec.watchdog is None else float(spec.watchdog)
+    if not math.isfinite(watchdog) or watchdog <= 0:
+        _fail(f"miniswe_watchdog_invalid:{watchdog!r}")
+    return spec.timeout, watchdog
+
+
+def wire_body(spec: ModelSpec) -> dict[str, Any]:
+    """Body fields taken from the spec. Unset effort and timeout are absent.
+
+    Responses still receives chat-shaped ``reasoning_effort`` until the
+    responses map lands. ``extra`` is copied first so a first-class value wins.
+    """
+    body: dict[str, Any] = copy.deepcopy(dict(spec.extra))
+    if spec.reasoning_effort is not None:
+        body["reasoning_effort"] = spec.reasoning_effort
+    if spec.timeout is not None:
+        body["timeout"] = float(spec.timeout)
+    return body
+
+
 def resolve_model(model: Any, options: Mapping[str, Any] | None = None) -> ModelSpec:
     """Resolve nested ``model:`` or flat profile fields to one ``ModelSpec``.
 
