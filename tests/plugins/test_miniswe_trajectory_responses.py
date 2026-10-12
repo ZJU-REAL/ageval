@@ -10,7 +10,7 @@ _SRC = ROOT / "plugins" / "miniswe" / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from miniswe_plugin.trajectory import to_ageval_trajectory_events
+from miniswe_plugin.trajectory import to_ageval_trajectory_events  # noqa: E402
 
 
 def test_responses_function_call_and_output_map_to_tool_events() -> None:

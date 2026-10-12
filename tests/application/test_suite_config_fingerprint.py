@@ -51,6 +51,20 @@ def test_actors_summary_sorted_and_secret_free() -> None:
     assert "api_key" not in blob
 
 
+def test_nested_model_fingerprint_uses_id() -> None:
+    actors = actors_summary_from_profiles(
+        [
+            {
+                "id": "solver",
+                "executor": "miniswe",
+                "model": {"id": "openai/glm-5.2", "api": "responses", "timeout": 30},
+                "extensions": [{"plugin": "miniswe", "options": {"step_limit": 20}}],
+            }
+        ]
+    )
+    assert actors[0]["model"] == "openai/glm-5.2"
+
+
 def test_job_overlay_axis_ignores_role_topology_diff() -> None:
     """Different role ids across tasks still share one profiles.yaml job axis (#59)."""
     suite_overlay = {

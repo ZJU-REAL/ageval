@@ -81,17 +81,17 @@ class AgentBinder:
         graph = self.graph(profile_id)
         winner = graph.winners[EXECUTOR]
         host = self.services.require(ENVIRONMENT)
-        model = str(row.get("model") or "entry-default")
         placement = host.placement()
         package_root = str(self.task_root) if self.task_root is not None else None
         from ageval.config.env_refs import resolve_locked_base_url
 
+        raw_model = row.get("model")
         executor = bind_winner(
             self.registry,
             graph,
             EXECUTOR,
             profile_id=profile_id,
-            model=model,
+            model=executor_model_argument(raw_model),
             base_url=resolve_locked_base_url(_text(row.get("base_url"))),
             api_key=_text(row.get("api_key")),
             host=host,
@@ -103,8 +103,25 @@ class AgentBinder:
             plugin_id=winner.plugin_id,
             executor=executor,
             graph=graph,
-            model=model,
+            model=executor_model_id(raw_model),
         )
+
+
+def executor_model_argument(raw: Any) -> str | dict[str, Any]:
+    """Value passed to the executor factory. A missing model stays ``entry-default``."""
+    from ageval.config.profiles import model_argument
+
+    parsed = model_argument(raw)
+    if parsed is None:
+        return "entry-default"
+    return parsed
+
+
+def executor_model_id(raw: Any) -> str:
+    """String id recorded on the session. Nested models use ``model.id``."""
+    from ageval.config.profiles import model_id
+
+    return model_id(raw) or "entry-default"
 
 
 def _text(raw: Any) -> str | None:

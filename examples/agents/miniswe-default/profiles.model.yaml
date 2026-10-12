@@ -1,0 +1,24 @@
+format: ageval.profiles/1
+environment: docker
+agent_profiles:
+  solver:
+    executor: miniswe
+    model:
+      id: openai/glm-5.2
+      api: responses
+      reasoning:
+        effort: high
+      timeout: 120
+      watchdog: 300
+      extra:
+        reasoning:
+          summary: auto
+    api_key: ${litellm_api_key}
+    base_url: ${litellm_base_url}
+    extensions:
+      - plugin: miniswe
+        options:
+          step_limit: 20
+          cost_limit: 0
+          cmd_timeout: 60
+      - plugin: docker

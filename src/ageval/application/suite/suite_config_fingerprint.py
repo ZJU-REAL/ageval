@@ -25,6 +25,12 @@ _BUILTIN_EXECUTOR_KINDS = frozenset({"acp", "openai-http", "anthropic-http"})
 _SKIP_PLUGIN_IDS = frozenset({"default", "acp", "openai-http", "anthropic-http"})
 
 
+def _model_label(raw: Any) -> str:
+    from ageval.config.profiles import model_id
+
+    return model_id(raw)
+
+
 def _profile_entry(profile: Mapping[str, Any]) -> str:
     """Display id: the ACP entry, else the executor.
 
@@ -69,7 +75,7 @@ def actors_summary_from_profiles(
             entry = str(raw.get("entry")).strip()
         else:
             entry = _profile_entry(raw)
-        model = str(raw.get("model") or "").strip()
+        model = _model_label(raw.get("model"))
         executor = str(raw.get("executor") or "").strip()
         existing_opts = raw.get("options")
         if isinstance(existing_opts, str) and existing_opts.strip():
@@ -111,8 +117,9 @@ def actors_summary_from_job_overlay(
         if not rid:
             continue
         entry = _profile_entry(raw)
-        model = str(raw.get("model") or "").strip()
-        rows.append({"id": rid, "entry": entry, "model": model, **dict(raw)})
+        projected = dict(raw)
+        projected["model"] = _model_label(raw.get("model"))
+        rows.append({"id": rid, "entry": entry, **projected})
     return actors_summary_from_profiles(rows)
 
 

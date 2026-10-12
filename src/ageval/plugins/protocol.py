@@ -107,7 +107,7 @@ class BindingIntent:
     extensions: list[ExplicitBinding] = field(default_factory=list)
     extension_selects: list[ExtensionSelect] = field(default_factory=list)
     requires: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    model: str | None = None
+    model: str | Mapping[str, Any] | None = None
     base_url: str | None = None
     api_key: str | None = None
 
@@ -208,7 +208,7 @@ def intent_from_profile(
         extensions=extensions,
         extension_selects=extension_selects,
         requires={str(k): tuple(str(v) for v in vals) for k, vals in (requires or {}).items()},
-        model=_optional_str(profile.get("model")),
+        model=_profile_model(profile.get("model")),
         base_url=_optional_str(profile.get("base_url")),
         api_key=_optional_str(profile.get("api_key")),
     )
@@ -218,6 +218,13 @@ def _optional_str(raw: Any) -> str | None:
     if isinstance(raw, str) and raw.strip():
         return raw.strip()
     return None
+
+
+def _profile_model(raw: Any) -> str | dict[str, Any] | None:
+    """String id, or a nested ``model:`` mapping. Empty / other types are absent."""
+    from ageval.config.profiles import model_argument
+
+    return model_argument(raw)
 
 
 def row_options(item: Mapping[str, Any]) -> dict[str, Any]:

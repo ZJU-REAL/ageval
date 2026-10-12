@@ -175,6 +175,10 @@ Write the straight path. A failure fails.
 - Environment variables are locators. They do not replace a production mechanism.
 - A job picks its environment from `environment:` in `profiles.yaml`, not from `provider.kind`.
 
+### Model (miniswe)
+
+One miniswe profile binds one Model. Field meanings live in [plugins/miniswe/README.md](plugins/miniswe/README.md) (authority table). Target honesty — omit means not sent, `timeout` vs `watchdog` split, stall reads watchdog only — is **not on the wire yet**; chat still forces `reasoning_effort=none` when unset, and an omitted timeout still uses a combined 180s clock. Do not write those target sentences in AGENTS as if they have landed. Wire follow-up: #258.
+
 ### Delivery and evidence
 
 - **New work opens a GitHub Issue by default** (Acceptance / non-goals / evidence). **Do not** create an in-repo Active Spec or ROADMAP.

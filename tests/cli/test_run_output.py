@@ -345,9 +345,11 @@ def test_upstream_stall_prints_field_lines_when_the_bar_is_off() -> None:
     )
     lines = err.getvalue().strip().splitlines()
     stall = [line for line in lines if line.startswith("upstream_stall")]
-    assert [
-        line.split("outcome=")[-1].split(" reason=")[0] for line in stall
-    ] == ["started", "wait", "resumed"]
+    assert [line.split("outcome=")[-1].split(" reason=")[0] for line in stall] == [
+        "started",
+        "wait",
+        "resumed",
+    ]
     assert "task=alpha" in stall[0]
     assert "state=upstream_stall" in stall[0]
     assert "next=60" in stall[1]
