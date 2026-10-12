@@ -532,10 +532,16 @@ def format_upstream_stall_line(ev: Mapping[str, Any]) -> str:
     outcome = str(ev.get("outcome") or "")
     nxt = int(ev.get("seconds_until_next") or 0)
     remaining = int(ev.get("remaining_budget") or 0)
-    return (
+    reason = str(ev.get("reason") or "").replace("\n", " ").strip()
+    if len(reason) > 160:
+        reason = reason[:157] + "..."
+    line = (
         f"upstream_stall task={task_id} state={state} "
         f"next={nxt} remaining={remaining} outcome={outcome}"
     )
+    if reason:
+        line = f"{line} reason={reason}"
+    return line
 
 
 def _unit_key(ev: Mapping[str, Any]) -> tuple[str, int]:

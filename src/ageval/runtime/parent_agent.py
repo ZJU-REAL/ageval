@@ -623,6 +623,7 @@ class ParentAgentService:
             "seconds_until_next": int(payload.get("seconds_until_next") or 0),
             "remaining_budget": int(payload.get("remaining_budget") or 0),
             "phase": phase,
+            "reason": str(payload.get("reason") or ""),
         }
         label = "upstream_stall" if outcome in {"started", "wait"} else phase
         phase_cb = self.on_phase

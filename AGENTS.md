@@ -175,6 +175,10 @@ Write the straight path. A failure fails.
 - Environment variables are locators. They do not replace a production mechanism.
 - A job picks its environment from `environment:` in `profiles.yaml`, not from `provider.kind`.
 
+### Model (miniswe)
+
+One miniswe profile binds one Model. Omit means the field is not sent. A declared effort `none` is a value. `timeout` is the HTTP client clock. `watchdog` is the abort clock. Stall reads the watchdog only. An omitted watchdog is a finite default cap, never unlimited. First-class reasoning is `effort` only. Anything else belongs in `extra`, and `extra` cannot replace a first-class field. The field table is [plugins/miniswe/README.md](plugins/miniswe/README.md).
+
 ### Delivery and evidence
 
 - **New work opens a GitHub Issue by default** (Acceptance / non-goals / evidence). **Do not** create an in-repo Active Spec or ROADMAP.

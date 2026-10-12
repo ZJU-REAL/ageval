@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import concurrent.futures
-import copy
 import json
 import os
 import uuid
@@ -16,6 +15,12 @@ from ageval.plugins.http_loopback import is_http_loopback
 from ageval.runtime.upstream_stall import current_stall
 from miniswe_plugin import PLUGIN_ID
 from miniswe_plugin.env import ProtocolEnv
+from miniswe_plugin.llm_client import (
+    bind_direct_completion_client,
+    bind_direct_responses_client,
+    chat_model_for_openai_compat_gateway,
+)
+from miniswe_plugin.model import resolve_model, transport_clocks, wire_body
 from miniswe_plugin.stall import (
     StallExhausted,
     install_single_package_attempt,
@@ -27,7 +32,6 @@ from miniswe_plugin.usage import usage_from_messages
 
 _CREDENTIAL_ENV_NAMES = ("OPENAI_API_KEY", "litellm_api_key", "LITELLM_API_KEY")
 _BASE_URL_ENV_FALLBACKS = ("OPENAI_BASE_URL", "litellm_base_url", "LITELLM_BASE_URL")
-_EXTRA_BODY_RESERVED = frozenset({"model", "api_key", "api_base", "drop_params"})
 
 
 def describe_miniswe() -> dict[str, Any]:
@@ -90,46 +94,6 @@ def _as_nonneg_float(raw: Any, *, name: str, default: float) -> float:
             kind="extension_materialize_failed",
         )
     return value
-
-
-def _as_optional_effort(raw: Any) -> str | None:
-    if raw is None or raw == "":
-        return None
-    if not isinstance(raw, str) or not raw.strip():
-        raise ExtensionMaterializeError(
-            f"miniswe_reasoning_effort_invalid:{raw!r}",
-            kind="extension_materialize_failed",
-        )
-    return raw.strip()
-
-
-def _as_extra_body(raw: Any) -> dict[str, Any]:
-    if raw is None or raw == "":
-        return {}
-    if not isinstance(raw, dict):
-        raise ExtensionMaterializeError(
-            f"miniswe_extra_body_invalid:{raw!r}",
-            kind="extension_materialize_failed",
-        )
-    out: dict[str, Any] = {}
-    reserved: list[str] = []
-    for key, value in raw.items():
-        if not isinstance(key, str) or not key.strip():
-            raise ExtensionMaterializeError(
-                f"miniswe_extra_body_invalid:{raw!r}",
-                kind="extension_materialize_failed",
-            )
-        name = key.strip()
-        if name in _EXTRA_BODY_RESERVED:
-            reserved.append(name)
-            continue
-        out[name] = copy.deepcopy(value)
-    if reserved:
-        raise ExtensionMaterializeError(
-            "miniswe_extra_body_reserved:" + ",".join(sorted(reserved)),
-            kind="extension_materialize_failed",
-        )
-    return out
 
 
 def resolve_api_key_value(locator: str | None) -> str | None:
@@ -236,14 +200,20 @@ class MinisweExecutorSPI:
         self.placement = placement
         self.options = opts
         self.profile_id = profile_id
-        self.model = (model or "").strip() or "openai/gpt-4o-mini"
+        spec = resolve_model(model, opts)
+        self.spec = spec
+        self.model = spec.id
         self.base_url = base_url if isinstance(base_url, str) else None
         self.api_key_env = api_key if isinstance(api_key, str) else None
         self.step_limit = _as_positive_int(opts.get("step_limit"), name="step_limit", default=30)
         self.cost_limit = _as_nonneg_float(opts.get("cost_limit"), name="cost_limit", default=0.0)
         self.cmd_timeout = _as_positive_int(opts.get("cmd_timeout"), name="cmd_timeout", default=30)
-        self.reasoning_effort = _as_optional_effort(opts.get("reasoning_effort"))
-        self.extra_body = _as_extra_body(opts.get("extra_body"))
+        self.reasoning_effort = spec.reasoning_effort
+        self.api = spec.api
+        self.extra_body = dict(spec.extra)
+        # ``timeout`` is the HTTP clock (None = do not set one). ``watchdog`` is
+        # the Future abort, already filled with the default cap when omitted.
+        self.timeout, self.watchdog = transport_clocks(spec)
         self.session_id = f"ageval-{self.profile_id or 'solver'}-{uuid.uuid4().hex[:12]}"
         self.execution_location = getattr(host, "kind", None) or "box"
         self._ready = False
@@ -343,6 +313,7 @@ class MinisweExecutorSPI:
             "n_calls": extra.get("n_calls"),
             "locked_reasoning_effort": self.reasoning_effort,
             "actual_reasoning_effort": self.reasoning_effort,
+            "api": self.api,
         }
         if reported_cost is not None:
             metadata["cost"] = reported_cost
@@ -366,10 +337,19 @@ class MinisweExecutorSPI:
             model_kwargs["api_key"] = key
         if base:
             model_kwargs["api_base"] = base
-        if self.reasoning_effort:
-            model_kwargs["reasoning_effort"] = self.reasoning_effort
-        if self.extra_body:
-            model_kwargs.update(copy.deepcopy(self.extra_body))
+        # Unset effort and timeout stay absent. extra cannot carry those keys.
+        model_kwargs.update(wire_body(self.spec))
+        # Force Connection: close on the wire so gateways / httpx do not keep a
+        # sticky ESTAB that later turns hang on (_receive_response_headers +
+        # large Send-Q). Merged last over extra headers except we still
+        # allow callers to add other headers alongside.
+        headers = model_kwargs.get("extra_headers")
+        if not isinstance(headers, dict):
+            headers = {}
+        else:
+            headers = dict(headers)
+        headers.setdefault("Connection", "close")
+        model_kwargs["extra_headers"] = headers
         return model_kwargs
 
     def _run_agent(self, prompt: str, *, timeout: float) -> dict[str, Any]:
@@ -389,19 +369,54 @@ class MinisweExecutorSPI:
                 "uv tool install 'ageval-cli[miniswe]' (repo checkout: uv sync --extra miniswe)",
                 kind="extension_materialize_failed",
             ) from exc
+        model_cls: type = LitellmModel
+        if self.api == "responses":
+            try:
+                from minisweagent.models.litellm_response_model import LitellmResponseModel
+            except ImportError as exc:
+                raise ExtensionMaterializeError(
+                    "miniswe_package_missing: LitellmResponseModel required for options.api=responses",
+                    kind="extension_materialize_failed",
+                ) from exc
+            model_cls = LitellmResponseModel
         model_kwargs = self._litellm_model_kwargs(key=key, base=base)
         official = _load_official_mini_config()
         agent_cfg = official.get("agent") if isinstance(official.get("agent"), dict) else {}
         model_cfg = official.get("model") if isinstance(official.get("model"), dict) else {}
         obs = model_cfg.get("observation_template")
         fmt = model_cfg.get("format_error_template")
-        model = LitellmModel(
-            model_name=self.model,
+        # Chat against OpenAI-compat gateways: remap anthropic/ (etc.) so LiteLLM
+        # uses /v1/chat/completions with the original id on the wire. Raw
+        # anthropic/ makes LiteLLM take the Messages SDK path → 404 / crash →
+        # upstream_stall forever (curl chat still 200). Responses keeps profile id.
+        litellm_model = (
+            chat_model_for_openai_compat_gateway(self.model) if self.api == "chat" else self.model
+        )
+        model = model_cls(
+            model_name=litellm_model,
             model_kwargs=model_kwargs,
             cost_tracking="ignore_errors",
             **({} if not obs else {"observation_template": obs}),
             **({} if not fmt else {"format_error_template": fmt}),
         )
+        # Bypass litellm entirely for HTTP: sticky keep-alive + ignored timeouts
+        # left suites hung in _receive_response_headers with no upstream_stall
+        # (attempt_1c23ff53 ~4.5min). Both chat and responses use direct httpx.
+        # ``self.timeout`` is the HTTP clock only (None = no client timeout).
+        if self.api == "responses":
+            bind_direct_responses_client(
+                model,
+                api_key=key,
+                api_base=base,
+                timeout=self.timeout,
+            )
+        else:
+            bind_direct_completion_client(
+                model,
+                api_key=key,
+                api_base=base,
+                timeout=self.timeout,
+            )
         env = self._make_env()
         system_template = str(agent_cfg.get("system_template") or "")
         instance_template = str(agent_cfg.get("instance_template") or "")
@@ -418,9 +433,12 @@ class MinisweExecutorSPI:
             instance_template=instance_template,
             step_limit=self.step_limit,
             cost_limit=self.cost_limit,
+            # Under upstream_stall the parent freezes wall/phase clocks for the
+            # episode. Zero the package wall clock so it cannot race the stall
+            # budget. The Future watchdog is a separate clock (``self.watchdog``).
             wall_time_limit_seconds=0 if stall is not None else max(0, int(timeout)),
         )
-        model.query = wrap_model_query(model.query, stall)
+        model.query = wrap_model_query(model.query, stall, watchdog=self.watchdog)
         wait = max(1.0, float(timeout))
 
         def _go() -> dict[str, Any]:

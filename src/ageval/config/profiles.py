@@ -667,10 +667,55 @@ def join_display_names(names: Sequence[str]) -> str:
     return "+".join(cleaned)
 
 
+def model_argument(raw: Any) -> str | dict[str, Any] | None:
+    """Profile ``model`` as a factory receives it: a string id or a nested mapping.
+
+    Locked configs freeze nested mappings to ``MappingProxyType``. ``deepcopy`` of
+    a shallow ``dict(raw)`` leaves nested proxies unpickleable; ``thaw`` returns
+    plain dict/list all the way down.
+    """
+    if isinstance(raw, str):
+        text = raw.strip()
+        return text or None
+    if isinstance(raw, Mapping):
+        from ageval.config.model import thaw
+
+        thawed = thaw(raw)
+        return thawed if isinstance(thawed, dict) else dict(thawed)
+    return None
+
+
+def model_id(raw: Any) -> str:
+    """Display / evidence id. Nested ``model.id``, otherwise the string id."""
+    parsed = model_argument(raw)
+    if isinstance(parsed, str):
+        return parsed
+    if isinstance(parsed, dict):
+        ident = parsed.get("id")
+        if isinstance(ident, str) and ident.strip():
+            return ident.strip()
+    return ""
+
+
+def _nested_reasoning_effort(model: Any) -> str:
+    if not isinstance(model, Mapping):
+        return ""
+    reasoning = model.get("reasoning")
+    if not isinstance(reasoning, Mapping):
+        return ""
+    effort = reasoning.get("effort")
+    if isinstance(effort, str) and effort.strip():
+        return effort.strip()
+    return ""
+
+
 def reasoning_effort_from_profile(profile: Mapping[str, Any] | None) -> str:
-    """``options.reasoning_effort`` on the profile or the executor plugin row."""
+    """Nested ``model.reasoning.effort``, else flat ``options.reasoning_effort``."""
     if not isinstance(profile, Mapping):
         return ""
+    nested = _nested_reasoning_effort(profile.get("model"))
+    if nested:
+        return nested
     executor = str(profile.get("executor") or "").strip()
     sources = [profile.get("options")]
     if executor:
@@ -696,8 +741,7 @@ def display_labels_from_overlay(overlay: Mapping[str, Any] | None) -> tuple[str,
         if not isinstance(raw, Mapping):
             continue
         agents.append(display_agent_name(raw))
-        model = raw.get("model")
-        models.append(model.strip() if isinstance(model, str) else "")
+        models.append(model_id(raw.get("model")))
     return join_display_names(agents), join_display_names(models)
 
 

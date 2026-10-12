@@ -126,6 +126,132 @@ def test_invalid_step_limit() -> None:
         )
 
 
+def test_api_option_defaults_to_chat_and_omits_unset_effort() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        model="openai/x",
+    )
+    assert spi.api == "chat"
+    kwargs = spi._litellm_model_kwargs(key=None, base=None)
+    assert "reasoning_effort" not in kwargs
+
+
+def test_api_responses_maps_effort_onto_reasoning_object() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={
+            "api": "responses",
+            "reasoning_effort": "high",
+            "extra_body": {"reasoning": {"summary": "auto"}},
+        },
+        model="openai/glm-5.2",
+    )
+    kwargs = spi._litellm_model_kwargs(key=None, base=None)
+    assert kwargs["reasoning"] == {"summary": "auto", "effort": "high"}
+    assert "reasoning_effort" not in kwargs
+
+
+def test_api_responses_skips_forced_none_effort() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={"api": "responses"},
+        model="openai/x",
+    )
+    assert spi.api == "responses"
+    kwargs = spi._litellm_model_kwargs(key=None, base=None)
+    assert "reasoning_effort" not in kwargs
+
+
+def test_api_chat_respects_explicit_effort() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={"api": "chat", "reasoning_effort": "max"},
+        model="openai/x",
+    )
+    assert spi._litellm_model_kwargs(key=None, base=None)["reasoning_effort"] == "max"
+
+
+def test_invalid_api_option() -> None:
+    from ageval.plugins.errors import ExtensionMaterializeError
+
+    with pytest.raises(ExtensionMaterializeError, match="api"):
+        build_executor(
+            host=SimpleNamespace(kind="local"),
+            placement=_placement(),
+            options={"api": "graphql"},
+            model="openai/x",
+        )
+
+
+def test_connection_close_header_always_set() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        model="openai/x",
+    )
+    kwargs = spi._litellm_model_kwargs(key="sk-x", base="https://example.invalid/v1")
+    assert kwargs["extra_headers"]["Connection"] == "close"
+
+
+def test_request_timeout_forwarded_to_litellm_kwargs() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={"request_timeout": 120},
+        model="openai/x",
+    )
+    assert spi.timeout == 120.0
+    assert spi.spec.watchdog is None
+    assert spi.watchdog == 180.0
+    kwargs = spi._litellm_model_kwargs(key="sk-x", base="https://example.invalid/v1")
+    assert kwargs["timeout"] == 120.0
+    assert "watchdog" not in kwargs
+    defaulted = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        model="openai/x",
+    )
+    assert defaulted.timeout is None
+    assert defaulted.watchdog == 180.0
+    assert "timeout" not in defaulted._litellm_model_kwargs(key=None, base=None)
+    omitted = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={"request_timeout": 0},
+        model="openai/x",
+    )
+    assert omitted.timeout is None
+    assert omitted.watchdog == 180.0
+    assert "timeout" not in omitted._litellm_model_kwargs(key=None, base=None)
+
+
+def test_request_timeout_wins_over_extra_body() -> None:
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={"request_timeout": 90},
+        model="openai/x",
+    )
+    # timeout/request_timeout are reserved in extra_body; option alone sets timeout.
+    kwargs = spi._litellm_model_kwargs(key=None, base=None)
+    assert kwargs["timeout"] == 90.0
+
+
+def test_invalid_request_timeout() -> None:
+    from ageval.plugins.errors import ExtensionMaterializeError
+
+    with pytest.raises(ExtensionMaterializeError, match="request_timeout"):
+        build_executor(
+            host=SimpleNamespace(kind="local"),
+            placement=_placement(),
+            options={"request_timeout": -1},
+        )
+
+
 def test_reasoning_effort_forwarded_to_litellm_kwargs() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
@@ -186,18 +312,19 @@ def test_extra_body_merges_into_litellm_kwargs() -> None:
     assert "reasoning" not in omitted._litellm_model_kwargs(key=None, base=None)
 
 
-def test_extra_body_overrides_reasoning_effort() -> None:
-    spi = build_executor(
-        host=SimpleNamespace(kind="local"),
-        placement=_placement(),
-        options={
-            "reasoning_effort": "low",
-            "extra_body": {"reasoning_effort": "high"},
-        },
-        model="openai/x",
-    )
-    kwargs = spi._litellm_model_kwargs(key=None, base=None)
-    assert kwargs["reasoning_effort"] == "high"
+def test_extra_body_cannot_override_reasoning_effort() -> None:
+    from ageval.plugins.errors import ExtensionMaterializeError
+
+    with pytest.raises(ExtensionMaterializeError, match="extra_body_reserved"):
+        build_executor(
+            host=SimpleNamespace(kind="local"),
+            placement=_placement(),
+            options={
+                "reasoning_effort": "low",
+                "extra_body": {"reasoning_effort": "high"},
+            },
+            model="openai/x",
+        )
 
 
 def test_invalid_extra_body() -> None:
@@ -511,3 +638,58 @@ def test_usage_keeps_a_positive_reported_cost() -> None:
     )
     assert usage is not None
     assert usage["cost_usd"] == 0.02
+
+
+def test_usage_sums_responses_api_top_level_input_output_tokens() -> None:
+    """LitellmResponseModel stores the dumped response as the message.
+
+    Usage is top-level ``message.usage`` with ``input_tokens`` /
+    ``output_tokens`` (and ``input_tokens_details.cached_tokens``). There is no
+    nested ``extra.response``.
+    """
+    from miniswe_plugin.usage import usage_from_messages
+
+    messages = [
+        {
+            "object": "response",
+            "output": [{"type": "function_call", "name": "bash", "call_id": "c1"}],
+            "usage": {
+                "input_tokens": 1000,
+                "input_tokens_details": {"cached_tokens": 200},
+                "output_tokens": 40,
+                "total_tokens": 1040,
+            },
+            "extra": {"actions": [{"command": "ls"}], "cost": 0.0, "timestamp": 1.0},
+        },
+        {
+            "object": "response",
+            "output": [],
+            "usage": {
+                "input_tokens": 50,
+                "input_tokens_details": {"cached_tokens": 0},
+                "output_tokens": 5,
+            },
+            "extra": {"actions": [], "cost": 0.0},
+        },
+    ]
+    usage = usage_from_messages(messages)
+    assert usage == {
+        "prompt_tokens": 1050,
+        "completion_tokens": 45,
+        "cached_tokens": 200,
+    }
+
+
+def test_usage_prefers_nested_chat_over_top_level() -> None:
+    from miniswe_plugin.usage import usage_from_messages
+
+    usage = usage_from_messages(
+        [
+            {
+                "role": "assistant",
+                "usage": {"input_tokens": 999, "output_tokens": 999},
+                "extra": {"response": {"usage": {"prompt_tokens": 10, "completion_tokens": 2}}},
+            }
+        ]
+    )
+    assert usage == {"prompt_tokens": 10, "completion_tokens": 2}

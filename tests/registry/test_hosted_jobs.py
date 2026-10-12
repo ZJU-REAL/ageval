@@ -126,7 +126,6 @@ def test_duplicate_secret_name_conflicts(tmp_path: Path, monkeypatch: pytest.Mon
     assert ei.value.error == "conflict"
 
 
-
 def test_model_locator_refuses_loader_env_names(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -84,6 +84,100 @@ def to_ageval_trajectory_events(
         role = str(raw.get("role") or "")
         extra = _as_dict(raw.get("extra"))
         rc = extra.get("returncode")
+        msg_type = str(raw.get("type") or "")
+        # Responses API observation (function_call_output) — no chat role.
+        if msg_type == "function_call_output" and rc is not None:
+            seq += 1
+            raw_id = raw.get("call_id") or raw.get("tool_call_id")
+            if isinstance(raw_id, str) and raw_id.strip():
+                call_id = raw_id.strip()
+            elif pending:
+                call_id = pending.popleft()
+            else:
+                call_id = f"miniswe_{seq}_obs"
+            try:
+                code = int(rc)
+            except (TypeError, ValueError):
+                code = 1
+            content = str(
+                raw.get("output") or raw.get("content") or extra.get("raw_output") or ""
+            )
+            raw_output = extra.get("raw_output")
+            if raw_output is None:
+                raw_output = extra.get("output")
+            event: dict[str, Any] = {
+                "schema": SCHEMA,
+                "seq": seq,
+                "session_id": session_id,
+                "source": _SOURCE,
+                "kind": "tool",
+                "phase": "update",
+                "tool_call_id": call_id,
+                "function_name": "bash",
+                "title": "bash",
+                "content": content[:8000],
+                "status": "completed" if code == 0 else "failed",
+            }
+            if raw_output is not None:
+                event["raw_output"] = raw_output if isinstance(raw_output, str) else str(raw_output)
+            out.append(event)
+            continue
+        # Responses API model turn (object=response) with extra.actions from LitellmResponseModel.
+        if raw.get("object") == "response" or (
+            isinstance(raw.get("output"), list) and isinstance(extra.get("actions"), list)
+        ):
+            thought = _thought_text(raw)
+            if not thought:
+                # Some gateways put reasoning on output message items.
+                for item in raw.get("output") or []:
+                    if not isinstance(item, dict):
+                        continue
+                    if item.get("type") == "reasoning":
+                        thought = _thought_text(item) or thought
+                    summary = item.get("summary")
+                    if isinstance(summary, list):
+                        bits = [
+                            str(s.get("text") or s)
+                            for s in summary
+                            if isinstance(s, (dict, str))
+                        ]
+                        if bits:
+                            thought = " ".join(bits).strip()[-8000:]
+            if thought:
+                seq += 1
+                out.append(
+                    {
+                        "schema": SCHEMA,
+                        "seq": seq,
+                        "session_id": session_id,
+                        "source": _SOURCE,
+                        "kind": "text",
+                        "channel": "thought",
+                        "text": thought,
+                    }
+                )
+            pending.clear()
+            for i, action in enumerate(_actions_from_message(raw, extra)):
+                seq += 1
+                call_id = _call_id(action, seq=seq, index=i)
+                pending.append(call_id)
+                cmd = str(action.get("command") or action.get("cmd") or "")
+                out.append(
+                    {
+                        "schema": SCHEMA,
+                        "seq": seq,
+                        "session_id": session_id,
+                        "source": _SOURCE,
+                        "kind": "tool",
+                        "phase": "start",
+                        "tool_call_id": call_id,
+                        "function_name": "bash",
+                        "title": "bash",
+                        "args": {"command": cmd},
+                        "status": "pending",
+                    }
+                )
+            continue
         if role in {"system", "user"} and rc is None:
             seq += 1
             out.append(

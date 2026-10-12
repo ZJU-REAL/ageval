@@ -22,8 +22,10 @@ from ageval.config.profiles import (
     join_display_names,
     load_job_document,
     merge_job_onto_slots,
+    model_id,
     parse_job_mapping,
     project_job_overlay,
+    reasoning_effort_from_profile,
     write_profiles_yaml,
 )
 
@@ -261,3 +263,19 @@ def test_labels_collapse_identical_and_join_distinct() -> None:
         {"agent_profiles": {"solver": dict(ACP_SOLVER), "critic": dict(ACP_SOLVER)}}
     )
     assert (agent, model) == ("pi", "m")
+
+
+def test_nested_model_id_and_effort_are_visible() -> None:
+    profile = {
+        "executor": "miniswe",
+        "model": {
+            "id": "openai/glm-5.2",
+            "api": "responses",
+            "reasoning": {"effort": "high"},
+        },
+    }
+    assert model_id(profile["model"]) == "openai/glm-5.2"
+    assert reasoning_effort_from_profile(profile) == "high"
+    agent, model = display_labels_from_overlay({"agent_profiles": {"solver": profile}})
+    assert model == "openai/glm-5.2"
+    assert agent == "miniswe"
