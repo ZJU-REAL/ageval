@@ -20,7 +20,7 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from miniswe_plugin.factory import build_executor  # noqa: E402
-from miniswe_plugin.model import resolve_model  # noqa: E402
+from miniswe_plugin.model import ModelConfigError, ModelSpec, resolve_model, wire_body  # noqa: E402
 
 _NESTED = {
     "id": "openai/glm-5.2",
@@ -173,6 +173,62 @@ def test_client_timeout_none_does_not_become_180() -> None:
     assert positive == 30.0
     with pytest.raises(ValueError, match="miniswe_timeout_invalid"):
         client_timeout(0)
+
+
+def test_responses_wire_maps_effort_and_keeps_extra_reasoning() -> None:
+    spec = resolve_model(
+        "openai/glm-5.2",
+        {
+            "api": "responses",
+            "reasoning_effort": "high",
+            "extra_body": {"reasoning": {"summary": "auto"}},
+        },
+    )
+    body = wire_body(spec)
+    assert body["reasoning"] == {"summary": "auto", "effort": "high"}
+    assert "reasoning_effort" not in body
+
+
+def test_responses_omits_unset_effort_and_keeps_summary() -> None:
+    spec = resolve_model(
+        "openai/x",
+        {"api": "responses", "extra_body": {"reasoning": {"summary": "auto"}}},
+    )
+    body = wire_body(spec)
+    assert body["reasoning"] == {"summary": "auto"}
+    assert "reasoning_effort" not in body
+
+
+def test_chat_wire_sends_effort_only_when_set() -> None:
+    sent = wire_body(resolve_model("m", {"reasoning_effort": "low"}))
+    assert sent["reasoning_effort"] == "low"
+    assert "reasoning" not in sent
+    omitted = wire_body(resolve_model("m", {"api": "chat"}))
+    assert "reasoning_effort" not in omitted
+
+
+def test_unmapped_api_fails_before_a_request() -> None:
+    spec = ModelSpec(
+        id="m",
+        api="openai-responses",
+        reasoning_effort="high",
+        timeout=None,
+        watchdog=None,
+        extra={},
+    )
+    with pytest.raises(ModelConfigError, match="miniswe_api_invalid"):
+        wire_body(spec)
+
+
+def test_config_http_status_is_terminal() -> None:
+    from miniswe_plugin.llm_client import raise_for_http_status
+
+    for status in (400, 401, 403, 404, 422):
+        with pytest.raises(ModelConfigError, match=f"chat_http_{status}"):
+            raise_for_http_status("chat_http", status, "bad schema")
+    for status in (408, 429, 500, 503):
+        with pytest.raises(RuntimeError, match=f"responses_http_{status}"):
+            raise_for_http_status("responses_http", status, "later")
 
 
 def test_declared_effort_none_is_sent() -> None:
