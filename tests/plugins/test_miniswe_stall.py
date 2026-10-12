@@ -869,7 +869,7 @@ def test_bind_direct_completion_client_posts_chat_shape(monkeypatch: pytest.Monk
     class FakeModel:
         config = FakeConfig()
 
-        def _query(self, messages: object, **kwargs: object) -> object:
+        def _query(self, messages: object, **kwargs: object) -> Any:
             raise AssertionError("litellm _query must not run")
 
     def fake_post(**kwargs: object) -> object:

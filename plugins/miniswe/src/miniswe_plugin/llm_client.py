@@ -236,27 +236,31 @@ def raise_for_http_status(
     """Raise a terminal config error for schema 4xx, else a transport RuntimeError."""
     code = status if status is not None else "?"
     message = f"{prefix}_{code}:{body}"
-    error: Exception
-    if status in _CONFIG_HTTP_STATUS:
-        error = ModelConfigError(message)
-    else:
-        error = RuntimeError(message)
+    error: Exception = (
+        ModelConfigError(message) if status in _CONFIG_HTTP_STATUS else RuntimeError(message)
+    )
     raise error from cause
 
 
-def client_timeout(timeout: float | None) -> tuple[Any, float | None]:
-    """httpx timeout and the numeric value passed alongside it.
+def http_timeout_seconds(timeout: float | None) -> float | None:
+    """Numeric HTTP clock. ``None`` means omit. It does not become 180.
 
-    ``None`` means no HTTP timeout. It does not become 180. Zero and negatives
-    are rejected; omit is ``None``, not ``0``.
+    Zero and negatives are rejected. This path does not import httpx.
     """
-    import httpx
-
     if timeout is None:
-        return httpx.Timeout(None), None
+        return None
     if isinstance(timeout, bool) or not isinstance(timeout, int | float) or timeout <= 0:
         raise ValueError(f"miniswe_timeout_invalid:{timeout!r}")
-    value = float(timeout)
+    return float(timeout)
+
+
+def client_timeout(timeout: float | None) -> tuple[Any, float | None]:
+    """httpx timeout and the numeric value passed alongside it."""
+    import httpx
+
+    value = http_timeout_seconds(timeout)
+    if value is None:
+        return httpx.Timeout(None), None
     return httpx.Timeout(value, connect=min(30.0, value)), value
 
 
@@ -686,8 +690,8 @@ def bind_ephemeral_completion_client(
         # ability to free the gateway socket (watchdog abandons the Future but
         # the orphan keeps ESTAB until we kill_in_flight).
         call_kwargs = dict(kwargs)
-        if timeout is not None:
-            _http, timeout_s = client_timeout(timeout)
+        timeout_s = http_timeout_seconds(timeout)
+        if timeout_s is not None:
             call_kwargs["timeout"] = timeout_s
         if not pass_client:
             try:

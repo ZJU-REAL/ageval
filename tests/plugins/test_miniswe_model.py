@@ -159,6 +159,15 @@ def test_explicit_zero_timeout_omits_http_clock_and_keeps_watchdog() -> None:
     assert "timeout" not in spi._litellm_model_kwargs(key=None, base=None)
 
 
+def test_http_timeout_seconds_omits_none_and_rejects_zero() -> None:
+    from miniswe_plugin.llm_client import http_timeout_seconds
+
+    assert http_timeout_seconds(None) is None
+    assert http_timeout_seconds(30) == 30.0
+    with pytest.raises(ValueError, match="miniswe_timeout_invalid"):
+        http_timeout_seconds(0)
+
+
 def test_client_timeout_none_does_not_become_180() -> None:
     pytest.importorskip("httpx")
     from miniswe_plugin.llm_client import client_timeout
@@ -256,7 +265,9 @@ def test_example_profile_resolves() -> None:
 def test_profile_model_reaches_intent_and_executor_argument() -> None:
     intent = intent_from_profile({"id": "solver", "executor": "miniswe", "model": dict(_NESTED)})
     assert intent.model == _NESTED
-    assert executor_model_argument(_NESTED)["id"] == "openai/glm-5.2"
+    argument = executor_model_argument(_NESTED)
+    assert isinstance(argument, dict)
+    assert argument["id"] == "openai/glm-5.2"
     assert executor_model_id(_NESTED) == "openai/glm-5.2"
     assert executor_model_argument(None) == "entry-default"
     assert executor_model_argument(" openai/x ") == "openai/x"
