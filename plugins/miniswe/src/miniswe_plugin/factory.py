@@ -7,6 +7,7 @@ import copy
 import json
 import os
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,7 @@ from miniswe_plugin.llm_client import (
     bind_direct_responses_client,
     chat_model_for_openai_compat_gateway,
 )
+from miniswe_plugin.model import ModelSpec, resolve_model
 from miniswe_plugin.stall import (
     StallExhausted,
     install_single_package_attempt,
@@ -32,13 +34,12 @@ from miniswe_plugin.usage import usage_from_messages
 
 _CREDENTIAL_ENV_NAMES = ("OPENAI_API_KEY", "litellm_api_key", "LITELLM_API_KEY")
 _BASE_URL_ENV_FALLBACKS = ("OPENAI_BASE_URL", "litellm_base_url", "LITELLM_BASE_URL")
-_EXTRA_BODY_RESERVED = frozenset(
-    {"model", "api_key", "api_base", "drop_params", "timeout", "request_timeout"}
-)
 # Per-completion HTTP timeout for litellm/openai. LiteLLM's module default
 # request_timeout is 6000s; OpenAI client often lands at 600s. Either way a
 # gateway sticky hang burns the deep-swe invoke budget before stall can retry.
 # Fail-fast into wrap_model_query + upstream_stall instead.
+# Dark default: omitted timeout still uses this number for both clocks until
+# the omit / watchdog split. ``ModelSpec.timeout is None`` is the honest omit.
 _DEFAULT_REQUEST_TIMEOUT = 180
 
 
@@ -104,56 +105,43 @@ def _as_nonneg_float(raw: Any, *, name: str, default: float) -> float:
     return value
 
 
-def _as_optional_effort(raw: Any) -> str | None:
-    if raw is None or raw == "":
-        return None
-    if not isinstance(raw, str) or not raw.strip():
-        raise ExtensionMaterializeError(
-            f"miniswe_reasoning_effort_invalid:{raw!r}",
-            kind="extension_materialize_failed",
-        )
-    return raw.strip()
+def _raw_is_zero(raw: Any) -> bool:
+    if isinstance(raw, bool) or raw is None:
+        return False
+    if isinstance(raw, int | float):
+        return float(raw) == 0.0
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return False
+        try:
+            return float(text) == 0.0
+        except ValueError:
+            return False
+    return False
 
 
-def _as_api(raw: Any) -> str:
-    """LLM wire API: ``chat`` (Chat Completions) or ``responses`` (/v1/responses)."""
-    if raw is None or raw == "":
-        return "chat"
-    if not isinstance(raw, str) or raw.strip().lower() not in {"chat", "responses"}:
-        raise ExtensionMaterializeError(
-            f"miniswe_api_invalid:{raw!r}",
-            kind="extension_materialize_failed",
-        )
-    return raw.strip().lower()
+def _explicit_timeout_zero(model: Any, options: Mapping[str, Any]) -> bool:
+    """True when the profile set timeout / request_timeout to 0 (omit on the spec)."""
+    if isinstance(model, Mapping) and "timeout" in model and _raw_is_zero(model.get("timeout")):
+        return True
+    for key in ("timeout", "request_timeout"):
+        if key in options and _raw_is_zero(options.get(key)):
+            return True
+    return False
 
 
-def _as_extra_body(raw: Any) -> dict[str, Any]:
-    if raw is None or raw == "":
-        return {}
-    if not isinstance(raw, dict):
-        raise ExtensionMaterializeError(
-            f"miniswe_extra_body_invalid:{raw!r}",
-            kind="extension_materialize_failed",
-        )
-    out: dict[str, Any] = {}
-    reserved: list[str] = []
-    for key, value in raw.items():
-        if not isinstance(key, str) or not key.strip():
-            raise ExtensionMaterializeError(
-                f"miniswe_extra_body_invalid:{raw!r}",
-                kind="extension_materialize_failed",
-            )
-        name = key.strip()
-        if name in _EXTRA_BODY_RESERVED:
-            reserved.append(name)
-            continue
-        out[name] = copy.deepcopy(value)
-    if reserved:
-        raise ExtensionMaterializeError(
-            "miniswe_extra_body_reserved:" + ",".join(sorted(reserved)),
-            kind="extension_materialize_failed",
-        )
-    return out
+def _legacy_request_timeout(model: Any, options: Mapping[str, Any], spec: ModelSpec) -> float:
+    """Today's combined clock. Explicit ``0`` stays ``0``; omit stays 180.
+
+    Deleted when timeout and watchdog split. ``ModelSpec.timeout`` is already
+    honest (``0`` and omit are both ``None``).
+    """
+    if spec.timeout is not None:
+        return float(spec.timeout)
+    if _explicit_timeout_zero(model, options):
+        return 0.0
+    return float(_DEFAULT_REQUEST_TIMEOUT)
 
 
 def resolve_api_key_value(locator: str | None) -> str | None:
@@ -260,20 +248,22 @@ class MinisweExecutorSPI:
         self.placement = placement
         self.options = opts
         self.profile_id = profile_id
-        self.model = (model or "").strip() or "openai/gpt-4o-mini"
+        spec = resolve_model(model, opts)
+        self.spec = spec
+        self.model = spec.id
         self.base_url = base_url if isinstance(base_url, str) else None
         self.api_key_env = api_key if isinstance(api_key, str) else None
         self.step_limit = _as_positive_int(opts.get("step_limit"), name="step_limit", default=30)
         self.cost_limit = _as_nonneg_float(opts.get("cost_limit"), name="cost_limit", default=0.0)
         self.cmd_timeout = _as_positive_int(opts.get("cmd_timeout"), name="cmd_timeout", default=30)
-        self.reasoning_effort = _as_optional_effort(opts.get("reasoning_effort"))
-        self.api = _as_api(opts.get("api"))
-        self.extra_body = _as_extra_body(opts.get("extra_body"))
-        self.request_timeout = _as_nonneg_float(
-            opts.get("request_timeout"),
-            name="request_timeout",
-            default=float(_DEFAULT_REQUEST_TIMEOUT),
-        )
+        self.reasoning_effort = spec.reasoning_effort
+        self.api = spec.api
+        self.extra_body = dict(spec.extra)
+        self.timeout = spec.timeout
+        self.watchdog = spec.watchdog
+        # Wire dark-default: this number still feeds both HTTP timeout and the
+        # Future watchdog. Honest omit lives on ``spec.timeout``.
+        self.request_timeout = _legacy_request_timeout(model, opts, spec)
         self.session_id = f"ageval-{self.profile_id or 'solver'}-{uuid.uuid4().hex[:12]}"
         self.execution_location = getattr(host, "kind", None) or "box"
         self._ready = False
@@ -465,9 +455,7 @@ class MinisweExecutorSPI:
         # anthropic/ makes LiteLLM take the Messages SDK path → 404 / crash →
         # upstream_stall forever (curl chat still 200). Responses keeps profile id.
         litellm_model = (
-            chat_model_for_openai_compat_gateway(self.model)
-            if self.api == "chat"
-            else self.model
+            chat_model_for_openai_compat_gateway(self.model) if self.api == "chat" else self.model
         )
         model = model_cls(
             model_name=litellm_model,
@@ -522,9 +510,7 @@ class MinisweExecutorSPI:
         # wait_excluding_stall must never imply request_timeout=0.
         if stall is not None and req_timeout <= 0:
             req_timeout = float(_DEFAULT_REQUEST_TIMEOUT)
-        model.query = wrap_model_query(
-            model.query, stall, request_timeout=req_timeout
-        )
+        model.query = wrap_model_query(model.query, stall, request_timeout=req_timeout)
         wait = max(1.0, float(timeout))
 
         def _go() -> dict[str, Any]:
