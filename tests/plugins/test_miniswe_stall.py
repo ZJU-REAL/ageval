@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 import time
@@ -23,7 +24,6 @@ from miniswe_plugin.factory import MinisweExecutorSPI  # noqa: E402
 from miniswe_plugin.stall import (  # noqa: E402
     StallExhausted,
     disable_package_model_retry,
-    recycle_llm_clients,
     wait_excluding_stall,
     wrap_model_query,
 )
@@ -105,9 +105,7 @@ def test_timeout_recycles_clients_before_stall_wait(monkeypatch: pytest.MonkeyPa
             raise TimeoutError("litellm.Timeout: Request timed out")
         return {"role": "assistant", "content": "ok"}
 
-    result = wrap_model_query(query, stall, request_timeout=0)(
-        [{"role": "user", "content": "x"}]
-    )
+    result = wrap_model_query(query, stall, request_timeout=0)([{"role": "user", "content": "x"}])
     assert result["content"] == "ok"
     # before-attempt + before-retry are sync; on-failure is _recycle_async (daemon).
     deadline = time.monotonic() + 1.0
@@ -554,17 +552,13 @@ def test_bind_ephemeral_passes_client_each_query(monkeypatch: pytest.MonkeyPatch
         return c
 
     closed: list[object] = []
-    monkeypatch.setattr(
-        "miniswe_plugin.llm_client.make_ephemeral_openai_client", fake_make
-    )
+    monkeypatch.setattr("miniswe_plugin.llm_client.make_ephemeral_openai_client", fake_make)
     monkeypatch.setattr(
         "miniswe_plugin.llm_client.close_llm_client",
         lambda c: closed.append(c),
     )
     monkeypatch.setattr("miniswe_plugin.llm_client.recycle_llm_clients", lambda: None)
-    bind_ephemeral_completion_client(
-        model, api_key="sk", api_base="http://x/v1", timeout=10.0
-    )
+    bind_ephemeral_completion_client(model, api_key="sk", api_base="http://x/v1", timeout=10.0)
     assert model._query([], stream=False) == {"ok": "1"}
     assert model._query([], stream=False) == {"ok": "1"}
     assert len(seen) == 2
@@ -595,6 +589,7 @@ def test_bind_ephemeral_pass_client_false_skips_client(monkeypatch: pytest.Monke
     assert model._query([]) == {"ok": "1"}
     assert seen == ["NO_CLIENT"]
     assert timeouts == [10.0]
+
 
 def test_wire_model_name_strips_one_provider_prefix() -> None:
     from miniswe_plugin.llm_client import wire_model_name
@@ -630,8 +625,7 @@ def test_chat_model_for_openai_compat_gateway_remaps_anthropic() -> None:
         == "openai/DeepSeek-V4.1-Flash"
     )
     assert (
-        chat_model_for_openai_compat_gateway("openai/openai/gpt-6-sol")
-        == "openai/openai/gpt-6-sol"
+        chat_model_for_openai_compat_gateway("openai/openai/gpt-6-sol") == "openai/openai/gpt-6-sol"
     )
     assert chat_model_for_openai_compat_gateway("azure/foo") == "azure/foo"
 
@@ -653,7 +647,7 @@ def test_bind_direct_responses_client_posts_curl_shape(monkeypatch: pytest.Monke
     class FakeModel:
         config = FakeConfig()
 
-        def _query(self, messages: object, **kwargs: object) -> object:
+        def _query(self, messages: object, **kwargs: object) -> Any:
             raise AssertionError("litellm _query must not run")
 
     def fake_post(**kwargs: object) -> object:
@@ -661,15 +655,17 @@ def test_bind_direct_responses_client_posts_curl_shape(monkeypatch: pytest.Monke
         from miniswe_plugin.llm_client import DirectResponsesResult
 
         return DirectResponsesResult(
-            {"id": "resp_x", "object": "response", "output": [{"type": "function_call", "name": "bash"}]}
+            {
+                "id": "resp_x",
+                "object": "response",
+                "output": [{"type": "function_call", "name": "bash"}],
+            }
         )
 
     monkeypatch.setattr("miniswe_plugin.llm_client.post_responses_api", fake_post)
     monkeypatch.setattr("miniswe_plugin.llm_client.recycle_llm_clients", lambda: None)
     model = FakeModel()
-    bind_direct_responses_client(
-        model, api_key="sk-arg", api_base="http://arg/v1", timeout=12.0
-    )
+    bind_direct_responses_client(model, api_key="sk-arg", api_base="http://arg/v1", timeout=12.0)
     out = model._query([{"role": "user", "content": "hi"}])
     assert getattr(out, "id", None) == "resp_x"
     assert captured["api_key"] == "sk-arg"
@@ -683,14 +679,30 @@ def test_bind_direct_responses_client_posts_curl_shape(monkeypatch: pytest.Monke
     assert tools[0]["name"] == "bash"
     assert "function" not in tools[0]  # flat Responses schema, not chat nested
 
+
 def test_sanitize_responses_input_strips_id() -> None:
     from miniswe_plugin.llm_client import sanitize_responses_input
 
     raw = [
         {"role": "system", "content": "x"},
         {"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "abc"},
-        {"type": "message", "id": "msg_1", "role": "assistant", "content": [], "phase": "commentary", "status": "completed"},
-        {"type": "function_call", "id": "fc_1", "call_id": "call_1", "name": "bash", "arguments": "{}", "namespace": None, "status": "completed"},
+        {
+            "type": "message",
+            "id": "msg_1",
+            "role": "assistant",
+            "content": [],
+            "phase": "commentary",
+            "status": "completed",
+        },
+        {
+            "type": "function_call",
+            "id": "fc_1",
+            "call_id": "call_1",
+            "name": "bash",
+            "arguments": "{}",
+            "namespace": None,
+            "status": "completed",
+        },
         {"type": "function_call_output", "call_id": "call_1", "output": "ok"},
     ]
     out = sanitize_responses_input(raw)
@@ -701,12 +713,14 @@ def test_sanitize_responses_input_strips_id() -> None:
     assert out[4] == {"type": "function_call_output", "call_id": "call_1", "output": "ok"}
     assert sanitize_responses_input("hi") == "hi"
 
+
 def test_close_llm_client_shutdown_unblocks_recv(monkeypatch: pytest.MonkeyPatch) -> None:
     """socket.SHUT_RDWR must wake a thread stuck in _receive_response_headers."""
     import socket
+
     import httpx
-    from openai import OpenAI
     from miniswe_plugin.llm_client import close_llm_client, register_in_flight_client
+    from openai import OpenAI
 
     srv = socket.socket()
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -727,10 +741,8 @@ def test_close_llm_client_shutdown_unblocks_recv(monkeypatch: pytest.MonkeyPatch
                 while not stop["x"]:
                     time.sleep(0.2)
             finally:
-                try:
+                with contextlib.suppress(Exception):
                     conn.close()
-                except Exception:
-                    pass
 
     import threading
 
@@ -789,7 +801,7 @@ def test_bind_direct_completion_client_posts_chat_shape(monkeypatch: pytest.Monk
     class FakeModel:
         config = FakeConfig()
 
-        def _query(self, messages: object, **kwargs: object) -> object:
+        def _query(self, messages: object, **kwargs: object) -> Any:
             raise AssertionError("litellm _query must not run")
 
     def fake_post(**kwargs: object) -> object:
@@ -807,6 +819,7 @@ def test_bind_direct_completion_client_posts_chat_shape(monkeypatch: pytest.Monk
 
         class _Resp:
             choices = [_Choice()]
+
             def model_dump(self, mode: str = "python") -> dict[str, str]:
                 return {"id": "chat_x"}
 
@@ -815,9 +828,7 @@ def test_bind_direct_completion_client_posts_chat_shape(monkeypatch: pytest.Monk
     monkeypatch.setattr("miniswe_plugin.llm_client.post_chat_completions", fake_post)
     monkeypatch.setattr("miniswe_plugin.llm_client.recycle_llm_clients", lambda: None)
     model = FakeModel()
-    bind_direct_completion_client(
-        model, api_key="sk-arg", api_base="http://arg/v1", timeout=12.0
-    )
+    bind_direct_completion_client(model, api_key="sk-arg", api_base="http://arg/v1", timeout=12.0)
     out = model._query([{"role": "user", "content": "hi"}])
     assert captured["api_key"] == "sk-arg"
     assert captured["api_base"] == "http://arg/v1"
@@ -888,7 +899,6 @@ def test_responses_blackhole_shut_rdwr_and_future_timeout() -> None:
     import threading
 
     import httpx
-
     from miniswe_plugin.llm_client import (
         close_llm_client,
         post_responses_api,
@@ -921,10 +931,8 @@ def test_responses_blackhole_shut_rdwr_and_future_timeout() -> None:
                         if not data:
                             time.sleep(0.05)
                 finally:
-                    try:
+                    with contextlib.suppress(Exception):
                         c.close()
-                    except Exception:
-                        pass
 
             threading.Thread(target=absorb, args=(conn,), daemon=True).start()
 
@@ -1010,7 +1018,6 @@ def test_responses_blackhole_shut_rdwr_and_future_timeout() -> None:
     assert raised is not None and type(raised).__name__ == "TimeoutError", raised
     assert "miniswe_request_timeout" in str(raised)
     assert 0.4 <= elapsed < 2.0, elapsed
-
 
 
 def test_request_timeout_fires_while_stall_frozen(

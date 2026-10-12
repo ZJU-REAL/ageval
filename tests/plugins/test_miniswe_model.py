@@ -161,7 +161,9 @@ def test_example_profile_resolves() -> None:
 def test_profile_model_reaches_intent_and_executor_argument() -> None:
     intent = intent_from_profile({"id": "solver", "executor": "miniswe", "model": dict(_NESTED)})
     assert intent.model == _NESTED
-    assert executor_model_argument(_NESTED)["id"] == "openai/glm-5.2"
+    argument = executor_model_argument(_NESTED)
+    assert isinstance(argument, dict)
+    assert argument["id"] == "openai/glm-5.2"
     assert executor_model_id(_NESTED) == "openai/glm-5.2"
     assert executor_model_argument(None) == "entry-default"
     assert executor_model_argument(" openai/x ") == "openai/x"
