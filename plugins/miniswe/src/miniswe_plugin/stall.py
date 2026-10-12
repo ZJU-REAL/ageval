@@ -23,7 +23,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from typing import Any
 
-from miniswe_plugin.model import DEFAULT_WATCHDOG_SECONDS
+from miniswe_plugin.model import DEFAULT_WATCHDOG_SECONDS, ModelConfigError
 
 _RETRY_ENV = "MSWEA_MODEL_RETRY_STOP_AFTER_ATTEMPT"
 _POLL_SECONDS = 0.25
@@ -179,7 +179,7 @@ def wrap_model_query(
             try:
                 result = _call_with_watchdog(query, messages, kwargs, cap)
             except Exception as exc:
-                if exc.__class__.__name__ == "FormatError":
+                if exc.__class__.__name__ == "FormatError" or isinstance(exc, ModelConfigError):
                     stall.end_resumed()
                     raise
                 reason = f"{type(exc).__name__}:{exc}"

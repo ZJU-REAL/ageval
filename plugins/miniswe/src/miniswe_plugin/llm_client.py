@@ -23,7 +23,12 @@ from __future__ import annotations
 import inspect
 import json
 import threading
-from typing import Any
+from typing import Any, NoReturn
+
+from miniswe_plugin.model import ModelConfigError
+
+# Schema / auth / not-found failures are configuration. 408, 429, and 5xx stay transport.
+_CONFIG_HTTP_STATUS = frozenset({400, 401, 403, 404, 422})
 
 # Ephemeral OpenAI/httpx clients live only in the query thread's locals. When the
 # stall watchdog fires ``Future.result(timeout=…)``, ``recycle_llm_clients`` only
@@ -219,6 +224,24 @@ def recycle_llm_clients() -> None:
             clear()
         except Exception:
             return
+
+
+def raise_for_http_status(
+    prefix: str,
+    status: int | None,
+    body: str,
+    *,
+    cause: BaseException | None = None,
+) -> NoReturn:
+    """Raise a terminal config error for schema 4xx, else a transport RuntimeError."""
+    code = status if status is not None else "?"
+    message = f"{prefix}_{code}:{body}"
+    error: Exception
+    if status in _CONFIG_HTTP_STATUS:
+        error = ModelConfigError(message)
+    else:
+        error = RuntimeError(message)
+    raise error from cause
 
 
 def http_timeout_seconds(timeout: float | None) -> float | None:
@@ -487,9 +510,8 @@ def post_responses_api(
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             body = (exc.response.text if exc.response is not None else "")[:800]
-            raise RuntimeError(
-                f"responses_http_{exc.response.status_code if exc.response else '?'}:{body}"
-            ) from exc
+            status = exc.response.status_code if exc.response is not None else None
+            raise_for_http_status("responses_http", status, body, cause=exc)
         try:
             data = response.json()
         except Exception as exc:
@@ -572,9 +594,8 @@ def post_chat_completions(
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             body = (exc.response.text if exc.response is not None else "")[:800]
-            raise RuntimeError(
-                f"chat_http_{exc.response.status_code if exc.response else '?'}:{body}"
-            ) from exc
+            status = exc.response.status_code if exc.response is not None else None
+            raise_for_http_status("chat_http", status, body, cause=exc)
         try:
             data = response.json()
         except Exception as exc:
@@ -729,7 +750,6 @@ def bind_direct_responses_client(
             "timeout",
             "request_timeout",
             "extra_headers",
-            "reasoning_effort",
         }
         extra_body = {k: v for k, v in model_kwargs.items() if k not in reserved}
         try:
