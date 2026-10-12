@@ -27,6 +27,8 @@ from ageval.registry.media_types import DATASET_MEDIA_TYPE
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _LOCATOR_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
+# Model locators become child env names after _DENY_ENV scrub — require a key-like suffix.
+_LOCATOR_SUFFIX_RE = re.compile(r"_(?:API_KEY|KEY|TOKEN)$")
 _MODEL_MAX = 200
 _VALUE_MAX = 4096
 
@@ -301,7 +303,7 @@ def _model_locator(raw: Any) -> str:
     if not isinstance(raw, str):
         raise RegistryAppError("invalid_request", "locator required", http_status=400)
     text = raw.strip()
-    if not _LOCATOR_RE.fullmatch(text):
+    if not _LOCATOR_RE.fullmatch(text) or not _LOCATOR_SUFFIX_RE.search(text):
         raise RegistryAppError("invalid_request", "bad model locator", http_status=400)
     if text in RESERVED_MODEL_LOCATORS:
         raise RegistryAppError(

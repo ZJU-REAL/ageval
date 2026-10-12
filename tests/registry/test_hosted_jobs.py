@@ -126,6 +126,22 @@ def test_duplicate_secret_name_conflicts(tmp_path: Path, monkeypatch: pytest.Mon
     assert ei.value.error == "conflict"
 
 
+
+def test_model_locator_refuses_loader_env_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _master(monkeypatch)
+    svc, _ = _svc(tmp_path)
+    for locator in ("PYTHONPATH", "LD_PRELOAD", "PATH", "HOME", "SSL_CERT_FILE"):
+        with pytest.raises(RegistryAppError) as exc:
+            _secret(svc, name=f"bad-{locator.lower()}", kind="model", value="x", locator=locator)
+        assert exc.value.error == "invalid_request"
+    ok = _secret(svc, name="ok-key", kind="model", value="sk", locator="OPENAI_API_KEY")
+    assert ok["locator"] == "OPENAI_API_KEY"
+    ok2 = _secret(svc, name="ok-token", kind="model", value="tok", locator="ANTHROPIC_TOKEN")
+    assert ok2["locator"] == "ANTHROPIC_TOKEN"
+
+
 def test_provider_locator_is_fixed_and_model_locator_is_reserved(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
