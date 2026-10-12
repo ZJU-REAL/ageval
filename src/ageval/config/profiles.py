@@ -668,12 +668,20 @@ def join_display_names(names: Sequence[str]) -> str:
 
 
 def model_argument(raw: Any) -> str | dict[str, Any] | None:
-    """Profile ``model`` as a factory receives it: a string id or a nested mapping."""
+    """Profile ``model`` as a factory receives it: a string id or a nested mapping.
+
+    Locked configs freeze nested mappings to ``MappingProxyType``. ``deepcopy`` of
+    a shallow ``dict(raw)`` leaves nested proxies unpickleable; ``thaw`` returns
+    plain dict/list all the way down.
+    """
     if isinstance(raw, str):
         text = raw.strip()
         return text or None
     if isinstance(raw, Mapping):
-        return copy.deepcopy(dict(raw))
+        from ageval.config.model import thaw
+
+        thawed = thaw(raw)
+        return thawed if isinstance(thawed, dict) else dict(thawed)
     return None
 
 

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from types import MappingProxyType
+import pickle
+
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -260,6 +263,19 @@ def test_example_profile_resolves() -> None:
     assert spec.timeout == 120.0
     assert spec.watchdog == 300.0
     assert spec.extra["reasoning"] == {"summary": "auto"}
+
+
+def test_frozen_nested_model_argument_is_pickleable() -> None:
+    """Lock freezes nested model; factory argument must thaw before pickle."""
+    from ageval.config.model import freeze
+    from ageval.config.profiles import model_argument
+
+    frozen = freeze(_NESTED)
+    argument = model_argument(frozen)
+    assert isinstance(argument, dict)
+    assert argument["id"] == "openai/glm-5.2"
+    assert argument["reasoning"]["effort"] == "high"
+    pickle.dumps(argument)
 
 
 def test_profile_model_reaches_intent_and_executor_argument() -> None:
