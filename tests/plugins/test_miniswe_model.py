@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from types import MappingProxyType
 import pickle
-
 import sys
 from pathlib import Path
 from types import SimpleNamespace
