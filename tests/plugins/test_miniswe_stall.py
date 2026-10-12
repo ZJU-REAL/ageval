@@ -631,6 +631,7 @@ def test_chat_model_for_openai_compat_gateway_remaps_anthropic() -> None:
 
 
 def test_bind_direct_responses_client_posts_curl_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("minisweagent")
     from miniswe_plugin.llm_client import bind_direct_responses_client
 
     captured: dict[str, object] = {}
@@ -716,6 +717,8 @@ def test_sanitize_responses_input_strips_id() -> None:
 
 def test_close_llm_client_shutdown_unblocks_recv(monkeypatch: pytest.MonkeyPatch) -> None:
     """socket.SHUT_RDWR must wake a thread stuck in _receive_response_headers."""
+    pytest.importorskip("httpx")
+    pytest.importorskip("openai")
     import socket
 
     import httpx
@@ -784,6 +787,7 @@ def test_close_llm_client_shutdown_unblocks_recv(monkeypatch: pytest.MonkeyPatch
 
 
 def test_bind_direct_completion_client_posts_chat_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("minisweagent")
     from miniswe_plugin.llm_client import bind_direct_completion_client
 
     captured: dict[str, object] = {}
@@ -894,6 +898,7 @@ def test_future_timeout_surfaces_when_recycle_wedges(monkeypatch: pytest.MonkeyP
 
 def test_responses_blackhole_shut_rdwr_and_future_timeout() -> None:
     """responses ``post_responses_api`` blackhole: SHUT_RDWR unblocks; FutureTimeout raises."""
+    pytest.importorskip("httpx")
     import json
     import socket
     import threading
