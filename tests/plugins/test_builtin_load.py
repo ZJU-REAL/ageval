@@ -38,13 +38,13 @@ def test_builtin_module_tuples_are_the_authoritative_membership() -> None:
 
 
 def test_load_registers_todays_contrib_factories() -> None:
-    from ageval.plugins.contrib.acp import build_acp_executor
-    from ageval.plugins.contrib.anthropic_http import build_anthropic_http_executor
+    from ageval.plugins.contrib.acp.executor import AcpExecutor
+    from ageval.plugins.contrib.anthropic_http.executor import AnthropicHTTPExecutor
     from ageval.plugins.contrib.daytona.host import DaytonaHost
     from ageval.plugins.contrib.docker.host import DockerHost
     from ageval.plugins.contrib.e2b.host import E2BHost
     from ageval.plugins.contrib.local.host import LocalHost
-    from ageval.plugins.contrib.openai_http import build_openai_http_executor
+    from ageval.plugins.contrib.openai_http.executor import OpenAIHTTPExecutor
     from ageval.plugins.contrib.ssh.host import SSHHost
 
     reg = ExtensionRegistry()
@@ -57,9 +57,9 @@ def test_load_registers_todays_contrib_factories() -> None:
         (ENVIRONMENT, "e2b"): E2BHost,
         (ENVIRONMENT, "daytona"): DaytonaHost,
         (ENVIRONMENT, "ssh"): SSHHost,
-        (EXECUTOR, "acp"): build_acp_executor,
-        (EXECUTOR, "openai-http"): build_openai_http_executor,
-        (EXECUTOR, "anthropic-http"): build_anthropic_http_executor,
+        (EXECUTOR, "acp"): AcpExecutor,
+        (EXECUTOR, "openai-http"): OpenAIHTTPExecutor,
+        (EXECUTOR, "anthropic-http"): AnthropicHTTPExecutor,
     }
     for (slot, plugin_id), impl in factories.items():
         row = reg.get_registration(slot, plugin_id)

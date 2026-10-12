@@ -368,10 +368,14 @@ class ConfigCore:
             registry = ensure_bootstrapped()
         except PluginRequiresError as exc:
             raise ConfigError(exc.kind, str(exc), location="/agent_profiles") from exc
+        from ageval.config.profiles import _assert_nested_model, _require_bound_model
+
         out: dict[str, dict[str, Any]] = {}
         rows = list(profiles_rows) or [{}]
         for profile in rows:
             pid = str(profile.get("id") or "").strip()
+            where = f"/agent_profiles/{pid}" if pid else "/agent_profiles"
+            _assert_nested_model(profile, location=where)
             intent = intent_from_profile(
                 profile,
                 environment=environment,
@@ -391,6 +395,7 @@ class ConfigCore:
                     location=where,
                 ) from exc
             out[pid] = extension_graph_to_lock(graph)
+            _require_bound_model(profile, graph, registry, location=where)
         return out or None
 
 

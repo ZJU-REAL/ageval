@@ -28,7 +28,7 @@ def test_unknown_executor_fail_closed(tmp_path: Path) -> None:
         "agent_profiles:\n"
         '  "*":\n'
         "    executor: acp\n"
-        "    model: zai-coding-cn/glm-5.3\n"
+        "    model: {id: zai-coding-cn/glm-5.3}\n"
         "    api_key: ${ZHIPU_API_KEY}\n"
         "    options:\n"
         "      entry: pi\n"
@@ -50,7 +50,7 @@ def test_unknown_executor_fail_closed(tmp_path: Path) -> None:
             "--set",
             '/agent_profiles/solver/options/entry="codex"',
             "--set",
-            '/agent_profiles/solver/model="gpt-5.4-mini"',
+            '/agent_profiles/solver/model/id="gpt-5.4-mini"',
         ],
         check=False,
         capture_output=True,

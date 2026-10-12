@@ -496,7 +496,7 @@ def _with_canonical_models(
         return rows
     out: list[dict[str, Any]] = []
     for row in rows:
-        overlay = str(row.get("model") or "").strip()
+        overlay = model_id(row.get("model"))
         canonical = stored.get(overlay, "").strip()
         if canonical:
             row = {**row, "canonical_model": canonical}

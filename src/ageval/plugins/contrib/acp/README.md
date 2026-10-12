@@ -32,9 +32,10 @@ Missing `attach_stdio` fails at **lock**, not mid-invoke.
 | Name | Default | Purpose |
 | --- | --- | --- |
 | `options.entry` | *(required)* | ACP entry id. Shipped: `codex`, `claude-code`, `pi`, `opencode`, `grok-build`. Missing → lock `acp_entry_required`. |
-| `options.reasoning_effort` | unset | Applied when the entry advertises a reasoning selector. Omit to keep the entry default. |
 | `options.idle_timeout_seconds` | unset | Stall ceiling during `session/prompt`. Any `session_update` or `request_permission` resets it. Unset / ≤0 → wall-clock invoke `timeout` only. Fires `acp_idle_timeout` (still capped by Parent wall). Non-numeric → lock `acp_idle_timeout_invalid`. |
-| `model` | `entry-default` | Session model id. Binding is entry-specific (`config-option` vs entry-default-only). After lock, a non-default id is also written into the Attempt HOME as the engine's own overlay (Pi `models.json`, OpenCode `opencode.json`, Codex `config.toml`, Claude Code `.claude/settings.json`) so an empty box can advertise it. Claude Code also gets `ANTHROPIC_MODEL` on the attach env. `entry-default` writes nothing. Host `~/.pi` is never copied. |
+| `model.id` | `entry-default` | Nested `model:` only. Session model id. Binding is entry-specific (`config-option` vs entry-default-only). After lock, a non-default id is also written into the Attempt HOME as the engine's own overlay (Pi `models.json`, OpenCode `opencode.json`, Codex `config.toml`, Claude Code `.claude/settings.json`) so an empty box can advertise it. Claude Code also gets `ANTHROPIC_MODEL` on the attach env. `entry-default` writes nothing. Host `~/.pi` is never copied. |
+| `model.reasoning.effort` | unset | Applied when the entry advertises a reasoning selector. Omit to keep the entry default. |
+| `model.api` | `chat` | Only `chat`. `responses` fails lock. |
 | `api_key` | unset | Env **locator name** projected into the attach env. Value never enters the lock or the generated overlay. |
 | `base_url` | unset | `${ENV_NAME}` (lock stores the locator; spawn reads env) or a literal `http(s)` URL (lock stores the URL). Included in the generated overlay when set. |
 

@@ -12,18 +12,20 @@ import asyncio
 import json
 import threading
 import time
+from collections.abc import Mapping, Sequence
 from contextlib import suppress as contextlib_suppress
 from pathlib import Path
 from typing import Any
 
 from ageval import __version__ as AGEVAL_VERSION
 from ageval.environments.protocol import Placement, StdioTransport
+from ageval.model import ModelSpec, require_model_support, spec_from_factory
 from ageval.plugins.agent_result import (
-    AgentExecutor,
     AgentResult,
     observational_result_health,
     parse_validated_text_structured,
 )
+from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.acp.child_env import project_credential_env
 from ageval.plugins.contrib.acp.client import (
     _AgevalAcpClient,
@@ -44,6 +46,30 @@ from ageval.plugins.contrib.acp.home import home_env
 from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, get_entry
 from ageval.plugins.contrib.acp.trajectory_map import acp_session_events_to_ageval
 from ageval.plugins.contrib.acp.usage import _as_plain_mapping, normalize_acp_usage
+from ageval.plugins.decorators import executor_plugin
+
+
+def _idle_timeout_seconds(raw: Any) -> float | None:
+    """``options.idle_timeout_seconds``: unset / ≤0 disables; garbage fails closed."""
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
+        from ageval.plugins.errors import ExtensionMaterializeError
+
+        raise ExtensionMaterializeError(
+            "acp_idle_timeout_invalid",
+            kind="extension_materialize_failed",
+        )
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        from ageval.plugins.errors import ExtensionMaterializeError
+
+        raise ExtensionMaterializeError(
+            "acp_idle_timeout_invalid",
+            kind="extension_materialize_failed",
+        ) from None
+    return value if value > 0 else None
 
 
 class _IdleTimeout(Exception):
@@ -81,29 +107,63 @@ def _workspace_unchanged(events: tuple[dict[str, Any], ...] | list[dict[str, Any
     return all(kinds and kinds <= _READONLY_TOOL_KINDS for kinds in seen.values())
 
 
-class AcpExecutor(AgentExecutor):
+@executor_plugin(priority=100, source="first-party")
+class AcpExecutor(BaseExecutor):
     """Descriptor-driven ACP executor; one entry process per ageval session."""
 
-    kind: str = "acp"
+    kind = "acp"
+    requires_environment = True
+    supported_apis = frozenset({"chat"})
+    supported_model_fields = frozenset({"id", "api", "reasoning_effort"})
+    extra_allowlist = frozenset()
 
     def __init__(
         self,
         *,
-        entry_id: str,
-        host: Any,
-        placement: Placement,
-        model: str = "entry-default",
+        entry_id: str | None = None,
+        host: Any = None,
+        placement: Placement | None = None,
+        model: Any = "entry-default",
         reasoning_effort: str | None = None,
         base_url: str | None = None,
         api_key_env: str | None = None,
+        api_key: str | None = None,
         descriptor: AcpEntryDescriptor | None = None,
         idle_timeout_seconds: float | None = None,
+        options: Mapping[str, Any] | None = None,
+        profile_id: str | None = None,
+        **_kwargs: Any,
     ) -> None:
+        del profile_id
+        opts = dict(options) if isinstance(options, Mapping) else {}
+        if entry_id is None:
+            raw_entry = opts.get("entry")
+            entry_id = (
+                raw_entry.strip() if isinstance(raw_entry, str) and raw_entry.strip() else None
+            )
+            if entry_id is None:
+                from ageval.plugins.errors import ExtensionMaterializeError
+
+                raise ExtensionMaterializeError(
+                    "acp_entry_required",
+                    kind="extension_materialize_failed",
+                )
+            spec = spec_from_factory(model, opts, default_id="entry-default")
+            self.supports_model(spec)
+            self.bind_model(spec)
+            if idle_timeout_seconds is None:
+                idle_timeout_seconds = _idle_timeout_seconds(opts.get("idle_timeout_seconds"))
+        elif isinstance(model, Mapping):
+            spec = spec_from_factory(model, opts, default_id="entry-default")
+            self.supports_model(spec)
+            self.bind_model(spec)
+        else:
+            self.model = model if isinstance(model, str) and model.strip() else "entry-default"
+            effort = reasoning_effort.strip() if isinstance(reasoning_effort, str) else None
+            self.reasoning_effort = effort or None
+        if api_key_env is None and isinstance(api_key, str) and api_key.strip():
+            api_key_env = api_key.strip()
         self.entry_id = entry_id
-        self.model = model
-        self.reasoning_effort = reasoning_effort.strip() if reasoning_effort else None
-        if self.reasoning_effort == "":
-            self.reasoning_effort = None
         self.base_url = base_url
         self.api_key_env = api_key_env
         idle = float(idle_timeout_seconds) if idle_timeout_seconds is not None else None
@@ -111,9 +171,16 @@ class AcpExecutor(AgentExecutor):
         resolved = descriptor if descriptor is not None else get_entry(entry_id)
         if resolved is None:
             raise KeyError(f"unknown_acp_entry:{entry_id}")
+        if placement is None:
+            from ageval.plugins.errors import ExtensionMaterializeError
+
+            raise ExtensionMaterializeError(
+                "acp_placement_required",
+                kind="extension_materialize_failed",
+            )
         self.descriptor: AcpEntryDescriptor = resolved
         self._host = host
-        self._placement = placement
+        self._placement: Placement = placement
 
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
@@ -128,6 +195,19 @@ class AcpExecutor(AgentExecutor):
         self._last_error_detail: str | None = None
         self._lock = threading.Lock()
         self._closed = False
+
+    def supports_model(self, spec: ModelSpec) -> None:
+        require_model_support(
+            spec,
+            supported_apis=self.supported_apis,
+            supported_model_fields=self.supported_model_fields,
+            extra_allowlist=self.extra_allowlist,
+        )
+
+    def bind_model(self, spec: ModelSpec) -> None:
+        self.spec = spec
+        self.model = spec.id
+        self.reasoning_effort = spec.reasoning_effort
 
     def _child_env(self) -> dict[str, str]:
         """Entry env: this Attempt's HOME plus an allowlisted credential set."""
@@ -266,7 +346,7 @@ class AcpExecutor(AgentExecutor):
         return latest
 
     async def _bind_reasoning_effort(self, config_options: Any) -> None:
-        """Apply profile ``options.reasoning_effort`` to the advertised selector."""
+        """Apply ``model.reasoning.effort`` to the advertised selector."""
         self._actual_reasoning_effort = await bind_reasoning_effort(
             self._conn,
             session_id=self._acp_session_id,
@@ -531,8 +611,8 @@ class AcpExecutor(AgentExecutor):
         timeout: float = 60.0,
         collect_dir: str | None = None,
         redaction_sentinels: tuple[str, ...] | list[str] | None = None,
-        tools: Any = None,
-        messages: Any = None,
+        tools: Sequence[Mapping[str, Any]] | None = None,
+        messages: Sequence[Mapping[str, Any]] | None = None,
     ) -> AgentResult:
         from ageval.runtime.offline import is_offline_agent
 

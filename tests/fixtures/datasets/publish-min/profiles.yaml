@@ -3,4 +3,4 @@ environment: local
 agent_profiles:
   http-default:
     executor: openai-http
-    model: none
+    model: {id: none}

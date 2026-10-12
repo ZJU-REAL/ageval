@@ -67,7 +67,10 @@ agent_profiles:
           composition: slim               # omit permission → unrestricted local bash/fs
           # permission: read-only         # or workspace-write | danger-full-access
       - plugin: docker
-    model: deepseek-v4-flash
+    model:
+      id: deepseek-v4-flash
+      reasoning:
+        effort: xhigh
     api_key: ${deepseek_api_key}          # env locator
 ```
 
@@ -95,7 +98,7 @@ ageval isolation. Docker + landlock / Seatbelt may fail to start
 knob.
 
 Same `run.py`; switch only via profiles or
-`--set '/bindings/<role>/options/permission="read-only"'`.
+`--set '/agent_profiles/<role>/options/permission="read-only"'`.
 
 ## minimal-demo smoke (real API)
 

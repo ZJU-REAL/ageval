@@ -78,7 +78,7 @@ def test_loopback_invokes_without_api_key(monkeypatch: pytest.MonkeyPatch) -> No
 
     server, base = _serve(Handler)
     try:
-        result = OpenAIHTTPExecutor(model="mock", base_url=base).invoke("hi")
+        result = OpenAIHTTPExecutor(model={"id": "mock"}, base_url=base).invoke("hi")
     finally:
         server.shutdown()
         server.server_close()
@@ -129,7 +129,7 @@ def test_tools_round_trip_on_loopback() -> None:
 
     server, base = _serve(Handler)
     try:
-        result = OpenAIHTTPExecutor(model="mock", base_url=base).invoke(
+        result = OpenAIHTTPExecutor(model={"id": "mock"}, base_url=base).invoke(
             "lookup the customer",
             tools=[
                 {
@@ -198,9 +198,8 @@ def test_reasoning_effort_is_posted_when_set() -> None:
     server, base = _serve(Handler)
     try:
         result = OpenAIHTTPExecutor(
-            model="mock",
+            model={"id": "mock", "reasoning": {"effort": "high"}},
             base_url=base,
-            reasoning_effort="high",
         ).invoke("hi")
     finally:
         server.shutdown()
@@ -213,7 +212,7 @@ def test_reasoning_effort_is_posted_when_set() -> None:
     assert result.metadata["actual_reasoning_effort"] == "high"
 
 
-def test_extra_body_merges_into_chat_completions_body() -> None:
+def test_provider_extra_merges_into_chat_body() -> None:
     from ageval.plugins.contrib.openai_http import build_openai_http_executor
 
     captured: dict[str, Any] = {}
@@ -236,15 +235,12 @@ def test_extra_body_merges_into_chat_completions_body() -> None:
     server, base = _serve(Handler)
     try:
         ex = build_openai_http_executor(
-            model="deepseek/deepseek-v4-flash-0731",
-            base_url=base,
-            options={
-                "reasoning_effort": "low",
-                "extra_body": {
-                    "reasoning": {"max_tokens": 128},
-                    "provider": {"allow_fallbacks": False},
-                },
+            model={
+                "id": "deepseek/deepseek-v4-flash-0731",
+                "reasoning": {"effort": "low"},
+                "extra": {"provider": {"allow_fallbacks": False}},
             },
+            base_url=base,
         )
         result = ex.invoke("hi")
     finally:
@@ -252,59 +248,26 @@ def test_extra_body_merges_into_chat_completions_body() -> None:
         server.server_close()
 
     assert result.ok is True
-    assert captured["body"]["reasoning"] == {"max_tokens": 128}
     assert captured["body"]["provider"] == {"allow_fallbacks": False}
     assert captured["body"]["reasoning_effort"] == "low"
+    assert "reasoning" not in captured["body"]
     assert captured["body"]["model"] == "deepseek/deepseek-v4-flash-0731"
 
 
-def test_extra_body_overrides_reasoning_effort() -> None:
+def test_flat_model_and_extra_body_are_config_errors() -> None:
+    from ageval.model import ModelConfigError
     from ageval.plugins.contrib.openai_http import build_openai_http_executor
 
-    captured: dict[str, Any] = {}
-
-    class Handler(BaseHTTPRequestHandler):
-        def do_POST(self) -> None:  # noqa: N802
-            length = int(self.headers.get("Content-Length") or 0)
-            captured["body"] = json.loads(self.rfile.read(length).decode("utf-8"))
-            payload = {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
-            raw = json.dumps(payload).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
-
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
-            del format, args
-
-    server, base = _serve(Handler)
-    try:
-        ex = build_openai_http_executor(
-            model="mock",
-            base_url=base,
-            options={
-                "reasoning_effort": "low",
-                "extra_body": {"reasoning_effort": "high"},
-            },
-        )
-        result = ex.invoke("hi")
-    finally:
-        server.shutdown()
-        server.server_close()
-
-    assert result.ok is True
-    assert captured["body"]["reasoning_effort"] == "high"
-
-
-def test_invalid_extra_body() -> None:
-    from ageval.plugins.contrib.openai_http import build_openai_http_executor
-
-    with pytest.raises(ValueError, match="extra_body must be a mapping"):
-        build_openai_http_executor(options={"extra_body": ["provider"]})
-    with pytest.raises(ValueError, match="rejects"):
+    with pytest.raises(ModelConfigError, match="model_nested_required"):
+        build_openai_http_executor(model="mock")
+    with pytest.raises(ModelConfigError, match="extra_body"):
         build_openai_http_executor(
-            options={"extra_body": {"model": "other", "tools": []}},
+            model={"id": "mock"},
+            options={"extra_body": {"provider": {"allow_fallbacks": False}}},
+        )
+    with pytest.raises(ModelConfigError, match="model_extra_rejected"):
+        build_openai_http_executor(
+            model={"id": "mock", "extra": {"reasoning": {"max_tokens": 128}}},
         )
 
 
@@ -347,7 +310,7 @@ def test_reasoning_content_becomes_thought_event(tmp_path: Path) -> None:
     server, base = _serve(Handler)
     collect = tmp_path / "raw"
     try:
-        result = OpenAIHTTPExecutor(model="mock", base_url=base).invoke(
+        result = OpenAIHTTPExecutor(model={"id": "mock"}, base_url=base).invoke(
             "lookup",
             tools=[{"type": "function", "function": {"name": "lookup"}}],
             collect_dir=str(collect),
@@ -385,7 +348,7 @@ def test_omit_tools_keeps_content_path() -> None:
 
     server, base = _serve(Handler)
     try:
-        result = OpenAIHTTPExecutor(model="mock", base_url=base).invoke("hello")
+        result = OpenAIHTTPExecutor(model={"id": "mock"}, base_url=base).invoke("hello")
     finally:
         server.shutdown()
         server.server_close()
@@ -428,7 +391,7 @@ def test_http_usage_maps_first_class_and_extra() -> None:
 
     server, base = _serve(Handler)
     try:
-        result = OpenAIHTTPExecutor(model="mock", base_url=base).invoke("hi")
+        result = OpenAIHTTPExecutor(model={"id": "mock"}, base_url=base).invoke("hi")
     finally:
         server.shutdown()
         server.server_close()
@@ -462,3 +425,72 @@ def test_http_usage_omitted_does_not_fabricate_zeros() -> None:
     assert "cost_usd" not in usage
     assert "extra" not in usage
     assert extra is None
+
+
+def test_responses_sends_reasoning_effort_only_nested() -> None:
+    captured: dict[str, Any] = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length") or 0)
+            captured["path"] = self.path
+            captured["body"] = json.loads(self.rfile.read(length).decode("utf-8"))
+            payload = {"output_text": "ok", "output": []}
+            raw = json.dumps(payload).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    server, base = _serve(Handler)
+    try:
+        result = OpenAIHTTPExecutor(
+            model={
+                "id": "dashscope/glm-5.2",
+                "api": "responses",
+                "reasoning": {"effort": "xhigh"},
+            },
+            base_url=base,
+        ).invoke("hi")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result.ok is True
+    assert result.text == "ok"
+    assert captured["path"].endswith("/responses")
+    assert captured["body"]["reasoning"] == {"effort": "xhigh"}
+    assert "reasoning_effort" not in captured["body"]
+    assert "temperature" not in captured["body"]
+
+
+def test_watchdog_expiry_is_a_repeatable_transport_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+    import urllib.request
+
+    class _Hang:
+        def __enter__(self) -> object:
+            time.sleep(5)
+            raise TimeoutError("hung")
+
+        def __exit__(self, *_args: object) -> bool:
+            return False
+
+    def _hang(*_args: object, **_kwargs: object) -> _Hang:
+        return _Hang()
+
+    monkeypatch.setattr(urllib.request, "urlopen", _hang)
+    monkeypatch.delenv("AGEVAL_OFFLINE_AGENT", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    result = OpenAIHTTPExecutor(
+        model={"id": "mock", "timeout": 30, "watchdog": 0.2},
+        base_url="https://api.example.invalid/v1",
+    ).invoke("hi", timeout=30)
+    assert result.ok is False
+    assert result.error is not None
+    assert "openai_http_watchdog" in result.error
+    assert result.repeatable is True

@@ -168,7 +168,7 @@ export type FileContent = {
 };
 
 /** Nested profile `model:`. Field table: docs/design/16-model.md. */
-export type JobOverlayModel = {
+export type HubModelSpec = {
   id: string;
   api?: string;
   reasoning?: { effort?: string };
@@ -177,15 +177,17 @@ export type JobOverlayModel = {
   extra?: Record<string, unknown>;
 };
 
+export type JobOverlayModel = HubModelSpec;
+
 export type JobOverlayProfile = {
   executor?: string;
-  /** String id on stored rows, or the nested object from the model field table. */
-  model?: string | JobOverlayModel;
+  /** Nested object only. A stored string id is coerced when a profile is emitted. */
+  model?: HubModelSpec;
   base_url?: string;
   api_key?: string;
   label?: string;
   agent_ref?: string;
-  options?: { entry?: string; reasoning_effort?: string };
+  options?: { entry?: string };
   overlays?: string[];
   extensions?: Array<{ plugin?: string; options?: Record<string, unknown> }>;
 };
@@ -197,22 +199,32 @@ export type JobOverlay = {
   agent_profiles?: Record<string, JobOverlayProfile>;
 };
 
-/** Profiles preview lines for one `model` value. Strings stay a single scalar line. */
-export function formatJobOverlayModel(model: JobOverlayProfile["model"]): string[] {
-  if (typeof model === "string") return [`    model: ${model}`];
-  if (!model) return [];
-  const id = model.id.trim();
+/** Profiles preview lines. A stored string id is written as nested `model.id`. */
+export function formatJobOverlayModel(
+  model: HubModelSpec | string | null | undefined,
+): string[] {
+  const spec: HubModelSpec | undefined =
+    typeof model === "string"
+      ? model.trim()
+        ? { id: model.trim() }
+        : undefined
+      : (model ?? undefined);
+  if (!spec) return [];
+  const id = spec.id.trim();
   if (!id) return [];
   const lines = ["    model:", `      id: ${id}`];
-  const api = model.api?.trim() ?? "";
+  const api = spec.api?.trim() ?? "";
   if (api) lines.push(`      api: ${api}`);
-  const effort = model.reasoning?.effort?.trim() ?? "";
+  const effort = spec.reasoning?.effort?.trim() ?? "";
   if (effort) {
     lines.push("      reasoning:");
     lines.push(`        effort: ${effort}`);
   }
-  if (typeof model.timeout === "number") lines.push(`      timeout: ${model.timeout}`);
-  if (typeof model.watchdog === "number") lines.push(`      watchdog: ${model.watchdog}`);
+  if (typeof spec.timeout === "number") lines.push(`      timeout: ${spec.timeout}`);
+  if (typeof spec.watchdog === "number") lines.push(`      watchdog: ${spec.watchdog}`);
+  if (spec.extra && Object.keys(spec.extra).length > 0) {
+    lines.push(`      extra: ${JSON.stringify(spec.extra)}`);
+  }
   return lines;
 }
 

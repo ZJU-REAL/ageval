@@ -3,7 +3,7 @@ environment: local
 agent_profiles:
   solver:
     executor: acp
-    model: entry-default
+    model: {id: entry-default}
     options:
       entry: codex
     extensions:

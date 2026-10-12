@@ -90,7 +90,7 @@ export const LEADERBOARD_K_FIXTURES: SuiteRow[] = [
         solver: {
           executor: "acp",
           options: { entry: "codex" },
-          model: "gpt-demo",
+          model: { id: "gpt-demo" },
           api_key: "OPENAI_API_KEY",
         },
       },
@@ -134,7 +134,7 @@ export const LEADERBOARD_K_FIXTURES: SuiteRow[] = [
         solver: {
           executor: "acp",
           options: { entry: "pi" },
-          model: "local-demo",
+          model: { id: "local-demo" },
         },
       },
     },
@@ -181,7 +181,7 @@ export const LEADERBOARD_K_FIXTURES: SuiteRow[] = [
         solver: {
           executor: "acp",
           options: { entry: "opencode" },
-          model: "deepseek/deepseek-v4-pro",
+          model: { id: "deepseek/deepseek-v4-pro", reasoning: { effort: "xhigh" } },
         },
       },
     },

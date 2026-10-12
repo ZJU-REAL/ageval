@@ -123,14 +123,14 @@ agent_profiles:
           agent: "lib.agents:MyAgent"
           method: "run"
     model:
-      id: openai/glm-5.2
+      id: dashscope/glm-5.2
       api: responses
       reasoning:
         effort: xhigh
     api_key: ${litellm_api_key}
 ```
 
-`--set /bindings/<role>/options/<key>=…` writes the executor plugin row
+`--set /agent_profiles/<role>/options/<key>=…` writes the executor plugin row
 (ACP still rejects `command` / engine keys). YAML key is `agent_profiles`.
 
 ## README contract

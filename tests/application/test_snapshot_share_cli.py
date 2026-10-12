@@ -45,7 +45,7 @@ def _write_suite(root: Path) -> tuple[Path, Path, Path]:
     summary_path = suite / "summary.json"
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     (suite / "profiles.yaml").write_text(
-        f"solver:\n  api_key: {SECRET}\n  model: demo\n",
+        f"solver:\n  api_key: {SECRET}\n  model: {{id: demo}}\n",
         encoding="utf-8",
     )
     result_path = run / "result.json"

@@ -30,10 +30,11 @@ SDK `tools=` / `messages=` remain OpenAI-shaped. Translation to
 
 | Name | Default | Purpose |
 | --- | --- | --- |
+| `model` | `{id: claude-sonnet-4-6}` | Nested spec. `supported_apis`: `chat` (Messages, not Responses). `supported_model_fields`: `id`, `api`, `timeout`, `watchdog`, `extra`. `extra_allowlist`: `thinking`. `reasoning.effort` is rejected. |
+| `model.timeout` / `model.watchdog` | invoke timeout / `180` | Same clocks as openai-http. Watchdog expiry is a repeatable transport error. |
+| `model.extra.thinking` | omit | Copied onto the Messages body. |
 | `options.max_tokens` | `4096` | Required Messages `max_tokens`. Positive int. Non-int values are rejected. |
 | `options.anthropic_version` | `2023-06-01` | `anthropic-version` request header. Non-string values are rejected. |
-| `options.extra_body` | omit | Optional mapping merged as-is into the Messages JSON (after first-class fields). Vendor keys such as `thinking`. Omit / empty = do not merge. Non-mapping values are rejected. Rejects `model` / `api_key` / `messages` / `tools` / `system` / `max_tokens`. Conflicting keys: extra_body wins. |
-| `model` | `claude-sonnet-4-6` | Model id the Messages endpoint accepts. Builtin agent card has no default; pass `--model` on the run. |
 | `base_url` | unset (executor default `https://api.anthropic.com/v1`) | `${ENV_NAME}` (lock stores the locator) or a literal `http(s)` URL. Host `AGEVAL_ANTHROPIC_BASE_URL` is the fallback when the field is omitted. |
 | `api_key` | `ANTHROPIC_API_KEY` | Env **locator name**, not the secret. Empty key is allowed only when `base_url` host is `127.0.0.1` / `localhost` / `::1`. |
 
@@ -41,14 +42,16 @@ SDK `tools=` / `messages=` remain OpenAI-shaped. Translation to
 
 ```yaml
 executor: anthropic-http
-model: claude-sonnet-4-6
-base_url: https://api.anthropic.com/v1
-api_key: ${ANTHROPIC_API_KEY}
-options:
-  extra_body:
+model:
+  id: claude-sonnet-4-6
+  extra:
     thinking:
       type: enabled
       budget_tokens: 2000
+base_url: https://api.anthropic.com/v1
+api_key: ${ANTHROPIC_API_KEY}
+options:
+  max_tokens: 4096
 ```
 
 Native `tools=` from the session catalog is posted as Anthropic

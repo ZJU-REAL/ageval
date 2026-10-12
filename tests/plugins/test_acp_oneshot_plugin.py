@@ -262,7 +262,7 @@ def test_lock_cli_selects_oneshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
                 "agent_profiles:",
                 '  "*":',
                 "    executor: acp-oneshot",
-                "    model: zai-coding-cn/glm-5.2",
+                "    model: {id: zai-coding-cn/glm-5.2}",
                 "    api_key: ${ZHIPU_API_KEY}",
                 "    options:",
                 "      entry: pi",

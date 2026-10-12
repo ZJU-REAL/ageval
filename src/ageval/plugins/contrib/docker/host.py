@@ -34,12 +34,14 @@ from ageval.environments.protocol import (
     ExecResult,
     Placement,
 )
+from ageval.plugins.base import BaseEnvironment
 from ageval.plugins.contrib.docker.images import (
     daemon_available,
     docker,
     host_platform,
     resolve_image,
 )
+from ageval.plugins.decorators import environment_plugin
 
 BOX_ROOT = "/attempt"
 ATTEMPT_UID = 10001
@@ -85,7 +87,8 @@ class DockerStdio:
             return None
 
 
-class DockerHost:
+@environment_plugin(priority=100, source="first-party")
+class DockerHost(BaseEnvironment):
     """A long-lived container per Attempt, driven by the docker CLI."""
 
     kind = "docker"

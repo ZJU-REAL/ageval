@@ -146,7 +146,7 @@ uv run ageval run examples/core --task sdk-agent-session -k 5
 uv run ageval lock examples/core --task config-minimal --set /parameters/seed=7
 # Job binding override: entry/model/plugin options live in profiles.yaml, not task.yaml
 uv run ageval run examples/core --task sdk-agent-session \
-  --set '/bindings/solver/options/entry="pi"'
+  --set '/agent_profiles/solver/options/entry="pi"'
 # Or replace Dataset profiles.yaml for the run:
 # uv run ageval run examples/core --task sdk-agent-session --profiles /path/to/profiles.yaml
 ```
@@ -160,15 +160,17 @@ Fixed parameter leaves (others rejected):
 
 Job binding axes:
 
-- `/bindings/<role_id>/model`
-- `/bindings/<role_id>/executor`
-- `/bindings/<role_id>/api_key`
-- `/bindings/<role_id>/base_url`
-- `/bindings/<role_id>/options/<key>` (executor plugin row; ACP still rejects `command` / engine keys)
+- `/agent_profiles/<role_id>/model` (nested object)
+- `/agent_profiles/<role_id>/model/id`
+- `/agent_profiles/<role_id>/model/reasoning/effort`
+- `/agent_profiles/<role_id>/executor`
+- `/agent_profiles/<role_id>/api_key`
+- `/agent_profiles/<role_id>/base_url`
+- `/agent_profiles/<role_id>/options/<key>` (executor plugin row; ACP still rejects `command` / engine keys)
 
 **Not** overridable: intent `limits.*` (task contract).
 
-String values need JSON quotes, e.g. `--set '/bindings/solver/options/entry="pi"'`.
+String values need JSON quotes, e.g. `--set '/agent_profiles/solver/model/id="pi"'`.
 
 ### Evidence and trajectory
 

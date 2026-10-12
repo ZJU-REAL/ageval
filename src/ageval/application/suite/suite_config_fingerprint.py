@@ -623,7 +623,7 @@ def collect_suite_config(
     """Build suite config fingerprint fields from task result rows + package.
 
     Suite job axis = Dataset ``profiles.yaml`` (optional CLI ``--profiles`` /
-    ``/bindings/*`` overrides). Per-task role topology may differ freely (#59).
+    ``/agent_profiles/*`` overrides). Per-task role topology may differ freely.
     """
     per_task: list[list[dict[str, str]]] = []
     overlays: list[dict[str, Any] | None] = []

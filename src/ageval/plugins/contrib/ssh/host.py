@@ -35,6 +35,8 @@ from ageval.environments.protocol import (
     ExecResult,
     Placement,
 )
+from ageval.plugins.base import BaseEnvironment
+from ageval.plugins.decorators import environment_plugin
 
 BOX_ROOT = "/attempt"
 _MAX_STREAM_BYTES = 256 * 1024
@@ -90,7 +92,8 @@ class SSHStdio:
             return None
 
 
-class SSHHost:
+@environment_plugin(priority=100, source="first-party")
+class SSHHost(BaseEnvironment):
     """A remote machine, optionally with a container on it."""
 
     kind = "ssh"

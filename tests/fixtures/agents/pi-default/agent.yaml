@@ -6,7 +6,7 @@ description: "Pi coding agent via ACP with the entry's default model. Needs a pr
 tags: [coding, acp, eval]
 binding:
   executor: acp
-  model: entry-default
+  model: {id: entry-default}
   extensions:
     - plugin: acp
       options: { entry: pi }

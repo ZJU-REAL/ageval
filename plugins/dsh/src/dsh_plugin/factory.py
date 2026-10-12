@@ -136,6 +136,14 @@ def resolve_base_url(explicit: str | None) -> str | None:
     return DEFAULT_BASE_URL
 
 
+def _model_id(model: Any) -> str:
+    from ageval.config.profiles import model_id
+
+    if model is None:
+        return ""
+    return model_id(model)
+
+
 def build_executor(
     *,
     options: dict[str, Any] | None = None,
@@ -161,7 +169,7 @@ def build_executor(
         host=host,
         placement=placement,
         plugin_root=_plugin_root(),
-        model=(model or "").strip() or DEFAULT_MODEL,
+        model=_model_id(model) or DEFAULT_MODEL,
         provider=provider,
         composition=composition,
         permission=permission,

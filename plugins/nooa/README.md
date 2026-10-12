@@ -61,7 +61,10 @@ agent_profiles:
           agent: "lib.agents:JsonlAggAgent"   # package-local nooa.Agent
           method: "run"
       - plugin: docker
-    model: openai/glm-5.2
+    model:
+      id: openai/glm-5.2
+      reasoning:
+        effort: xhigh
     api_key: ${litellm_api_key}          # env locator
     # base_url: http://127.0.0.1:8000/v1   # optional; else litellm_base_url / OPENAI_BASE_URL
 ```

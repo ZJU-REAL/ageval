@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
+from ageval.config.profiles import model_id
 from ageval.plugins.agent_result import AgentResult
 from ageval.plugins.protocol import ExtensionGraph, WinnerRef
 from ageval.plugins.registry import ExtensionRegistry
@@ -118,5 +119,5 @@ class ScriptedBinder(AgentBinder):
             plugin_id=ScriptedExecutor.kind,
             executor=self._executor,
             graph=graph,
-            model=str(row.get("model") or "scripted-model"),
+            model=model_id(row.get("model")) or "scripted-model",
         )

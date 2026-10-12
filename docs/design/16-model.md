@@ -57,7 +57,7 @@ model:
 
 `ModelConfigError` 是配置错误。lock 失败。它不是传输失败，不进入 upstream stall。
 
-Current：类型、`resolve_model`、`require_model_support` 可导入。注册扫描与 lock 调用还没接到这些类型上。现有 contrib 与 miniswe 仍用各自的类，不从这里继承。miniswe 自己的解析仍在插件包内。
+Current：`resolve_model` 在 profile 解析和 lock 上拒绝字符串 id 与平铺模型键。独占 executor 赢家若是 `BaseExecutor` 子类，lock 调用 `supports_model`。一类环境与一类 executor（`local` / `docker` / `e2b` / `ssh` / `daytona` / `acp` / `openai-http` / `anthropic-http`）继承基类并带装饰器。miniswe 使用同一份 `ModelSpec`，经 `load_installed` 进入，不在 builtin 名单里。
 
 ## BaseEnvironment
 
@@ -94,4 +94,4 @@ Current：类型、`resolve_model`、`require_model_support` 可导入。注册�
 
 ## Hub
 
-`JobOverlayProfile.model` 可以是字符串 id，或本页的嵌套对象（`id` / `api` / `reasoning.effort` / `timeout` / `watchdog` / `extra`）。展示、suite usage、Performance 读 `id`。已存的字符串 id 仍按 id 读。配置文件改为只写嵌套对象是后续的作者面切换；本页不把平铺字段定义成第二种规范形状。
+Hub 的 `JobOverlayProfile.model` 只写本页的嵌套对象。展示、suite usage、Performance 读 `id`。已存的字符串 id 在再次写出 profile 时收成 `{id}`。`options` 不再携带 `extra_body` 或平铺 `reasoning_effort`。

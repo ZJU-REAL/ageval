@@ -3,7 +3,7 @@ environment: local
 agent_profiles:
   solver:
     executor: acp
-    model: entry-default
+    model: {id: entry-default}
     api_key: ${SOLVER_API_KEY}
     options:
       entry: codex
@@ -12,7 +12,7 @@ agent_profiles:
       - plugin: local
   judge:
     executor: openai-http
-    model: mock
+    model: {id: mock}
     api_key: ${JUDGE_API_KEY}
     base_url: ${JUDGE_BASE_URL}
     extensions:

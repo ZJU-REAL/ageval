@@ -12,8 +12,17 @@ from services.registry.hosted.rows import HOSTED_ENVIRONMENTS, JobRow
 from ageval.application.agent_ops.resolve import bindings_from_agent_specs
 from ageval.config.errors import ConfigError
 from ageval.config.profiles import PROFILES_FORMAT, parse_job_mapping, write_profiles_yaml
+from ageval.model.errors import ModelConfigError
 
 _ENV_PLUGINS = frozenset({"docker", "local", "ssh", "podman", "e2b", "daytona"})
+_FLAT_MODEL_KEYS = (
+    "api",
+    "reasoning_effort",
+    "timeout",
+    "request_timeout",
+    "watchdog",
+    "extra_body",
+)
 
 
 class HostedRunError(Exception):
@@ -61,6 +70,8 @@ def prepare_profiles(
         parse_job_mapping(document, location="hosted-profiles")
     except ConfigError as exc:
         raise HostedRunError(exc.error_code, exc.message) from exc
+    except ModelConfigError as exc:
+        raise HostedRunError(exc.kind, exc.message) from exc
     write_profiles_yaml(profiles_path, document)
     text = profiles_path.read_text(encoding="utf-8")
     for secret in (model_value, provider_value):
@@ -122,9 +133,36 @@ def _apply_job(document: dict[str, Any], job: JobRow, model_locator: str) -> Non
     for profile in profiles.values():
         if not isinstance(profile, dict):
             continue
-        profile["model"] = job.model
+        profile["model"] = _nested_model(profile.get("model"), str(job.model).strip())
         profile["api_key"] = locator
+        _strip_flat_model_keys(profile)
         profile["extensions"] = _rewrite_extensions(profile.get("extensions"), job.environment)
+
+
+def _nested_model(current: Any, model_id: str) -> dict[str, Any]:
+    if isinstance(current, dict):
+        updated = dict(current)
+        updated["id"] = model_id
+        return updated
+    return {"id": model_id}
+
+
+def _strip_flat_model_keys(profile: dict[str, Any]) -> None:
+    options = profile.get("options")
+    if isinstance(options, dict):
+        for key in _FLAT_MODEL_KEYS:
+            options.pop(key, None)
+    rows = profile.get("extensions")
+    if not isinstance(rows, list):
+        return
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        item_options = item.get("options")
+        if not isinstance(item_options, dict):
+            continue
+        for key in _FLAT_MODEL_KEYS:
+            item_options.pop(key, None)
 
 
 def _rewrite_extensions(extensions: Any, environment: str) -> list[Any]:

@@ -11,6 +11,7 @@ from ageval.cli.run_output import (
     print_human,
     use_json_stdout,
 )
+from ageval.config.profiles import model_id
 
 _OMIT = frozenset(
     {
@@ -259,7 +260,7 @@ def _binding_lines(overlay: Mapping[str, Any]) -> list[str]:
         if not isinstance(spec, Mapping):
             continue
         executor = str(spec.get("executor") or "")
-        model = str(spec.get("model") or "")
+        model = model_id(spec.get("model"))
         raw_opts = spec.get("options")
         opts: Mapping[str, Any] = raw_opts if isinstance(raw_opts, Mapping) else {}
         entry = str(opts.get("entry") or spec.get("entry") or "")

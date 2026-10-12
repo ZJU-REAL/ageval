@@ -30,6 +30,8 @@ from ageval.environments.protocol import (
     ExecResult,
     Placement,
 )
+from ageval.plugins.base import BaseEnvironment
+from ageval.plugins.decorators import environment_plugin
 
 API_KEY_ENV = "DAYTONA_API_KEY"
 _API_KEY_ALIASES = (API_KEY_ENV, "daytona_api_key")
@@ -120,7 +122,8 @@ class DaytonaStdio:
         return int(code) if code is not None else None
 
 
-class DaytonaHost:
+@environment_plugin(priority=100, source="first-party")
+class DaytonaHost(BaseEnvironment):
     """An ephemeral Daytona sandbox per Attempt."""
 
     kind = "daytona"

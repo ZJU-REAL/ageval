@@ -4,10 +4,10 @@ agent_profiles:
   solver:
     executor: miniswe
     model:
-      id: openai/glm-5.2
+      id: dashscope/glm-5.2
       api: responses
       reasoning:
-        effort: high
+        effort: xhigh
       timeout: 120
       watchdog: 300
       extra:

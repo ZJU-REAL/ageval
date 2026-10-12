@@ -9,20 +9,25 @@ from __future__ import annotations
 import copy
 import json
 import os
+import threading
 import urllib.error
 import urllib.request
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
 from typing import Any
 
-from ageval.plugins.agent_result import AgentExecutor, AgentResult
+from ageval.model import ModelSpec, require_model_support, spec_from_factory
+from ageval.plugins.agent_result import AgentResult
+from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.anthropic_http.usage import normalize_anthropic_http_usage
+from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.http_loopback import is_http_loopback
 
 _DEFAULT_BASE = "https://api.anthropic.com/v1"
 _DEFAULT_KEY_ENV = "ANTHROPIC_API_KEY"
+_DEFAULT_MODEL_ID = "claude-sonnet-4-6"
 _DEFAULT_VERSION = "2023-06-01"
 _DEFAULT_MAX_TOKENS = 4096
+_DEFAULT_WATCHDOG_SECONDS = 180.0
 _SOURCE = "anthropic-http"
 
 
@@ -233,17 +238,88 @@ def _parse_thought(blocks: Any) -> str:
     return "\n".join(parts)
 
 
-@dataclass
-class AnthropicHTTPExecutor(AgentExecutor):
-    """Minimal Messages executor; credentials from host env via locator name."""
+def _as_max_tokens(raw: Any) -> int:
+    if raw is None or raw == "":
+        return _DEFAULT_MAX_TOKENS
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        from ageval.plugins.errors import ExtensionMaterializeError
 
-    kind: str = "anthropic-http"
-    model: str = "claude-sonnet-4-6"
-    base_url: str | None = None
-    api_key_env: str | None = None
-    anthropic_version: str = _DEFAULT_VERSION
-    max_tokens: int = _DEFAULT_MAX_TOKENS
-    extra_body: dict[str, Any] = field(default_factory=dict)
+        raise ExtensionMaterializeError(
+            "anthropic_max_tokens_invalid",
+            kind="extension_materialize_failed",
+        )
+    if raw < 1:
+        from ageval.plugins.errors import ExtensionMaterializeError
+
+        raise ExtensionMaterializeError(
+            "anthropic_max_tokens_invalid",
+            kind="extension_materialize_failed",
+        )
+    return raw
+
+
+def _as_version(raw: Any) -> str:
+    if raw is None or raw == "":
+        return _DEFAULT_VERSION
+    if not isinstance(raw, str) or not raw.strip():
+        from ageval.plugins.errors import ExtensionMaterializeError
+
+        raise ExtensionMaterializeError(
+            "anthropic_version_invalid",
+            kind="extension_materialize_failed",
+        )
+    return raw.strip()
+
+
+@executor_plugin(priority=120, source="first-party")
+class AnthropicHTTPExecutor(BaseExecutor):
+    """Messages API executor. No box. Thinking travels in ``extra.thinking``."""
+
+    kind = "anthropic-http"
+    requires_environment = False
+    supported_apis = frozenset({"chat"})
+    supported_model_fields = frozenset({"id", "api", "timeout", "watchdog", "extra"})
+    extra_allowlist = frozenset({"thinking"})
+
+    def __init__(
+        self,
+        *,
+        options: Mapping[str, Any] | None = None,
+        profile_id: str | None = None,
+        model: Any = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        **_kwargs: Any,
+    ) -> None:
+        del profile_id
+        self.base_url = base_url.strip() if isinstance(base_url, str) and base_url.strip() else None
+        self.api_key_env = api_key.strip() if isinstance(api_key, str) and api_key.strip() else None
+        opts = options if isinstance(options, Mapping) else {}
+        spec = spec_from_factory(model, opts, default_id=_DEFAULT_MODEL_ID)
+        self.supports_model(spec)
+        self.bind_model(spec)
+        self.max_tokens = _as_max_tokens(opts.get("max_tokens"))
+        self.anthropic_version = _as_version(opts.get("anthropic_version"))
+
+    def supports_model(self, spec: ModelSpec) -> None:
+        require_model_support(
+            spec,
+            supported_apis=self.supported_apis,
+            supported_model_fields=self.supported_model_fields,
+            extra_allowlist=self.extra_allowlist,
+        )
+
+    def bind_model(self, spec: ModelSpec) -> None:
+        self.spec = spec
+        self.model = spec.id
+        self.http_timeout = spec.timeout
+        self.watchdog = (
+            float(spec.watchdog) if spec.watchdog is not None else _DEFAULT_WATCHDOG_SECONDS
+        )
+        self.extra = dict(spec.extra)
+
+    def close(self) -> None:
+        return None
 
     def invoke(
         self,
@@ -291,8 +367,8 @@ class AnthropicHTTPExecutor(AgentExecutor):
         catalog = anthropic_tools(tools)
         if catalog:
             payload["tools"] = catalog
-        if self.extra_body:
-            payload.update(copy.deepcopy(self.extra_body))
+        if self.extra:
+            payload.update(copy.deepcopy(self.extra))
         body = json.dumps(payload).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
@@ -301,31 +377,44 @@ class AnthropicHTTPExecutor(AgentExecutor):
         if key:
             headers["x-api-key"] = key
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                raw = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:800]
+        kind, found = _exchange(
+            req,
+            http_timeout=self.http_timeout if self.http_timeout is not None else timeout,
+            watchdog=self.watchdog,
+            invoke_timeout=timeout,
+        )
+        if kind == "watchdog":
             return AgentResult(
                 model=self.model,
                 text="",
                 structured=None,
                 ok=False,
-                error=f"HTTPError:{exc.code}",
-                metadata={
-                    "executor_kind": "anthropic-http",
-                    "http_error_body": detail,
-                },
-            )
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
-            return AgentResult(
-                model=self.model,
-                text="",
-                structured=None,
-                ok=False,
-                error=type(exc).__name__,
+                error=f"TimeoutError:anthropic_http_watchdog:{self.watchdog:g}",
                 metadata={"executor_kind": "anthropic-http"},
             )
+        if kind == "http":
+            assert isinstance(found, dict)
+            return AgentResult(
+                model=self.model,
+                text="",
+                structured=None,
+                ok=False,
+                error=f"HTTPError:{found['http_code']}",
+                metadata={
+                    "executor_kind": "anthropic-http",
+                    "http_error_body": found.get("http_body"),
+                },
+            )
+        if kind == "transport":
+            return AgentResult(
+                model=self.model,
+                text="",
+                structured=None,
+                ok=False,
+                error=str(found),
+                metadata={"executor_kind": "anthropic-http"},
+            )
+        raw = found if isinstance(found, dict) else {}
         blocks = raw.get("content") if isinstance(raw, dict) else None
         text = _parse_text(blocks)
         thought = _parse_thought(blocks)
@@ -391,3 +480,48 @@ class AnthropicHTTPExecutor(AgentExecutor):
             extra=extra,
             metadata={"executor_kind": "anthropic-http"},
         )
+
+
+def _exchange(
+    req: urllib.request.Request,
+    *,
+    http_timeout: float,
+    watchdog: float,
+    invoke_timeout: float,
+) -> tuple[str, Any]:
+    """POST under the HTTP clock and the watchdog. Expiry is transport, not config."""
+    if http_timeout is None or http_timeout <= 0:
+        http_timeout = watchdog
+    join_for = watchdog
+    watchdog_ceiling = True
+    try:
+        invoke_cap = float(invoke_timeout)
+    except (TypeError, ValueError):
+        invoke_cap = watchdog
+    if invoke_cap > 0 and invoke_cap < watchdog:
+        join_for = invoke_cap
+        watchdog_ceiling = False
+    box: dict[str, Any] = {}
+
+    def _post() -> None:
+        try:
+            with urllib.request.urlopen(req, timeout=http_timeout) as resp:
+                box["raw"] = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            box["http_code"] = exc.code
+            box["http_body"] = exc.read().decode("utf-8", errors="replace")[:800]
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+            box["transport"] = type(exc).__name__
+
+    worker = threading.Thread(target=_post, name="anthropic-http", daemon=True)
+    worker.start()
+    worker.join(join_for)
+    if worker.is_alive():
+        return ("watchdog" if watchdog_ceiling else "transport"), (
+            None if watchdog_ceiling else "TimeoutError"
+        )
+    if "http_code" in box:
+        return "http", box
+    if "transport" in box:
+        return "transport", box["transport"]
+    return "ok", box.get("raw")

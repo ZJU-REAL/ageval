@@ -27,7 +27,7 @@ def _make_pkg(tmp_path: Path, agent_id: str = "http-default", version: str = "0.
     pkg.mkdir(parents=True, exist_ok=True)
     (pkg / "agent.yaml").write_text(
         f"format: ageval.agent/1\nagent_id: {agent_id}\nversion: '{version}'\n"
-        "label: T\nbinding: {executor: openai-http, model: none}\n",
+        "label: T\nbinding: {executor: openai-http, model: {id: none}}\n",
         encoding="utf-8",
     )
     return pkg
@@ -92,7 +92,7 @@ def test_bindings_from_builtin_short_id() -> None:
 def test_builtin_model_override() -> None:
     out = resolve_agent_specs(["pi"], model="glm-4.7")
     doc = yaml.safe_load(out.read_text(encoding="utf-8"))
-    assert {row["model"] for row in doc["agent_profiles"].values()} == {"glm-4.7"}
+    assert [row["model"] for row in doc["agent_profiles"].values()] == [{"id": "glm-4.7"}]
     assert {row["agent_ref"].split("@", 1)[0] for row in doc["agent_profiles"].values()} == {"pi"}
 
 
@@ -121,6 +121,8 @@ def test_resolve_model_overrides_bound_roles(tmp_path: Path) -> None:
     overridden = resolve_agent_specs([str(pkg), f"critic={pkg}"], model="glm-4.7")
     assert overridden != default
     doc = yaml.safe_load(overridden.read_text(encoding="utf-8"))
-    assert {row["model"] for row in doc["agent_profiles"].values()} == {"glm-4.7"}
+    models = [row["model"] for row in doc["agent_profiles"].values()]
+    assert models == [{"id": "glm-4.7"}] * len(models)
     base = yaml.safe_load(default.read_text(encoding="utf-8"))
-    assert {row["model"] for row in base["agent_profiles"].values()} == {"none"}
+    base_models = [row["model"] for row in base["agent_profiles"].values()]
+    assert base_models == [{"id": "none"}] * len(base_models)

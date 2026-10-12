@@ -406,7 +406,7 @@ def _write_suite_summary(db: Path, suite_run_id: str) -> Path:
                 "solver": {
                     "executor": "acp",
                     "options": {"entry": "pi"},
-                    "model": "m1",
+                    "model": {"id": "m1"},
                     "api_key": "LOCATOR_ONLY",
                 }
             }
@@ -457,14 +457,9 @@ def test_suite_results_upload_get_list_roundtrip(
     assert listed["count"] == 1
     assert listed["items"][0]["suite_run_id"] == suite_run_id
     assert listed["items"][0]["agent_label"] == "codex"
-    assert (
-        listed["items"][0]
-        .get("job_overlay", {})
-        .get("agent_profiles", {})
-        .get("solver", {})
-        .get("model")
-        == "m1"
-    )
+    assert listed["items"][0].get("job_overlay", {}).get("agent_profiles", {}).get(
+        "solver", {}
+    ).get("model") == {"id": "m1"}
 
     got = get_suite_result(suite_run_id)
     assert got["ok"] is True

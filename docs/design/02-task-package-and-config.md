@@ -25,7 +25,7 @@ ageval run  official/demo@0.1.0 --dir tmp
 
 `run` / `lock` / `view` / `results upload-suite` 第一个参数是本地 dataset 根 **或** Hub ref（`dataset_id@version` / `@sha256:…`）。`--dir <path>` 只在 `run` 上、且只配合 Hub ref：在 `<path>/<dataset_id>/` 找包（例：`--dir tmp` + `official/demo@0.1.0` → `tmp/official/demo`）。子目录已是匹配 dataset 就复用，否则 fetch 进去再 run。相对路径相对 cwd。本地路径再加 `--dir` 是 `invalid_override`。`lock` / `view` / `upload-suite` 走已校验缓存，命中不打 Hub。`tasks` / `campaign` 仍只收本地目录。
 
-`--profiles` 整份替换根上的配置文件。`--agent` 与 `--profiles` 互斥。`--model` 须配合 `--agent`，改已绑角色的 `binding.model`（包缺省否则保留）。`--set` 白名单：`/parameters/seed`、`/parameters/active_profile`、`/bindings/<role>/{model,executor,api_key,base_url,options/<key>}`。`limits.*` 不可 `--set`。`ageval results --model` 是上传观测标签，不是这条糖。
+`--profiles` 整份替换根上的配置文件。`--agent` 与 `--profiles` 互斥。`--model` 须配合 `--agent`，改已绑角色的 `model.id`（包缺省否则保留）。`--set` 白名单：`/parameters/seed`、`/parameters/active_profile`、`/agent_profiles/<role>/{model,executor,api_key,base_url,options/<key>}`，以及嵌套 `model/id`、`model/api`、`model/timeout`、`model/watchdog`、`model/reasoning/effort`。`model` 必须是嵌套对象。`limits.*` 不可 `--set`。`ageval results --model` 是上传观测标签，不是这条糖。
 
 ## 成员 `task.yaml`
 

@@ -11,6 +11,7 @@ from typing import Any
 from ageval.application.composition import build_run_attempt
 from ageval.config.errors import ConfigError
 from ageval.evidence.locators import campaign_locator
+from ageval.model.errors import ModelConfigError
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,13 +38,13 @@ def expand_matrix(axes: list[MatrixAxis]) -> list[dict[str, Any]]:
 
 
 def parse_matrix_arg(raw: str) -> MatrixAxis:
-    """Parse ``/parameters/x=[1,2]`` or ``/bindings/<role>/model=[…]`` matrix axis."""
+    """Parse ``/parameters/x=[1,2]`` or ``/agent_profiles/<role>/model/id=[…]``."""
     if "=" not in raw:
         raise ConfigError("campaign_matrix_invalid", "matrix must be pointer=json-array")
     pointer, _, arr = raw.partition("=")
     if not pointer.startswith("/"):
         raise ConfigError("campaign_matrix_invalid", "pointer must start with /")
-    # #59: parameters/* and binding axes (/bindings/<role>/…)
+    # parameters/* and binding axes (/agent_profiles/<role>/…)
     from ageval.config.overrides import is_allowlisted_override_pointer
 
     if not is_allowlisted_override_pointer(pointer):
@@ -97,7 +98,7 @@ async def run_campaign(
                 profiles_path=profiles_path,
                 keep_vendor_raw=keep_vendor_raw,
             )
-        except ConfigError as exc:
+        except (ConfigError, ModelConfigError) as exc:
             row.update({"exit_code": 2, "status": "ERROR", "error": str(exc)})
             trials.append(row)
             continue

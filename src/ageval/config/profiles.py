@@ -257,7 +257,9 @@ def parse_job_mapping(raw: Mapping[str, Any], *, location: str = "profiles.yaml"
                 location=f"{location}:/agent_profiles/{rid}",
             )
         out[rid] = copy.deepcopy(profile)
-        _reject_bad_stall_option(out[rid], location=f"{location}:/agent_profiles/{rid}")
+        loc = f"{location}:/agent_profiles/{rid}"
+        _reject_bad_stall_option(out[rid], location=loc)
+        _assert_nested_model(out[rid], location=loc)
     return JobDocument(
         environment=env_raw.strip(),
         environment_options=copy.deepcopy(env_options_raw),
@@ -504,6 +506,9 @@ def apply_profile_override(job: JobDocument, pointer: str, value: Any) -> None:
             require_upstream_stall_seconds(value, location=pointer)
         options[key] = value
         return
+    if field == "model" or field.startswith("model/"):
+        _apply_model_override(target, field, value, location=pointer)
+        return
     target[field] = value
 
 
@@ -519,15 +524,63 @@ def is_profile_override_pointer(pointer: str) -> bool:
     return _is_allowlisted_profile_field(field)
 
 
+_MODEL_NESTED_LEAVES = frozenset({"id", "api", "timeout", "watchdog"})
+
+
 def _is_allowlisted_profile_field(field: str) -> bool:
     if field in _BINDING_OVERRIDE_LEAVES:
         return True
+    if field.startswith("model/"):
+        rest = field[len("model/") :]
+        return rest in _MODEL_NESTED_LEAVES or rest == "reasoning/effort"
     if not field.startswith("options/"):
         return False
     key = field[len("options/") :]
     if not key or "/" in key or not _ROLE_ID_RE.fullmatch(key):
         return False
     return key not in _OPTIONS_DENYLIST
+
+
+def _apply_model_override(target: dict[str, Any], field: str, value: Any, *, location: str) -> None:
+    """Write a nested ``model`` mapping, or one allowlisted leaf inside it."""
+    if field == "model":
+        if not isinstance(value, Mapping):
+            raise ConfigError(
+                "model_config",
+                "model_nested_required",
+                location=location,
+            )
+        target["model"] = copy.deepcopy(dict(value))
+        return
+    model = target.get("model")
+    if not isinstance(model, dict):
+        model = {}
+        target["model"] = model
+    rest = field[len("model/") :]
+    if rest == "id":
+        if not isinstance(value, str) or not value.strip():
+            raise ConfigError("model_config", f"model_id_invalid:{value!r}", location=location)
+        model["id"] = value.strip()
+        return
+    if rest == "api":
+        if not isinstance(value, str) or not value.strip():
+            raise ConfigError("model_config", f"model_api_invalid:{value!r}", location=location)
+        model["api"] = value.strip()
+        return
+    if rest == "reasoning/effort":
+        if not isinstance(value, str) or not value.strip():
+            raise ConfigError(
+                "model_config",
+                f"reasoning_effort_invalid:{value!r}",
+                location=location,
+            )
+        reasoning = model.get("reasoning")
+        if not isinstance(reasoning, dict):
+            reasoning = {}
+            model["reasoning"] = reasoning
+        reasoning["effort"] = value.strip()
+        return
+    model[rest] = value
 
 
 def secret_free_options(options: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -560,6 +613,72 @@ def require_upstream_stall_seconds(raw: Any, *, location: str) -> int:
             location=location,
         )
     return raw
+
+
+def _model_options(profile: Mapping[str, Any]) -> dict[str, Any]:
+    """Profile options plus extension options, so flat model keys cannot hide."""
+    opts: dict[str, Any] = {}
+    raw = profile.get("options")
+    if isinstance(raw, Mapping):
+        opts.update(dict(raw))
+    rows = profile.get("extensions")
+    if isinstance(rows, Sequence) and not isinstance(rows, (str, bytes)):
+        for item in rows:
+            if not isinstance(item, Mapping):
+                continue
+            item_options = item.get("options")
+            if not isinstance(item_options, Mapping):
+                continue
+            for key, value in item_options.items():
+                opts.setdefault(str(key), value)
+    return opts
+
+
+def _require_bound_model(
+    profile: Mapping[str, Any],
+    graph: Any,
+    registry: Any,
+    *,
+    location: str,
+) -> None:
+    """When the executor winner is a class, reject a spec it cannot send."""
+    from ageval.model import ModelConfigError, resolve_model
+    from ageval.plugins.base import BaseExecutor
+    from ageval.plugins.slots import EXECUTOR
+
+    model = profile.get("model")
+    if not isinstance(model, Mapping):
+        return
+    winners = getattr(graph, "winners", None)
+    if not isinstance(winners, Mapping):
+        return
+    winner = winners.get(EXECUTOR)
+    if winner is None:
+        return
+    registration = registry.get_registration(EXECUTOR, winner.plugin_id)
+    impl = registration.impl if registration is not None else None
+    if not isinstance(impl, type) or not issubclass(impl, BaseExecutor):
+        return
+    try:
+        spec = resolve_model(model, _model_options(profile))
+        impl.supports_model(object.__new__(impl), spec)
+    except ModelConfigError as exc:
+        raise ConfigError("model_config", exc.message, location=location) from exc
+
+
+def _assert_nested_model(profile: Mapping[str, Any], *, location: str) -> None:
+    """Reject a string ``model`` and flat model keys. Omitted model stays omitted."""
+    from ageval.model import ModelConfigError, resolve_model
+
+    model = profile.get("model")
+    options = _model_options(profile)
+    try:
+        if model is None:
+            resolve_model({"id": "omitted"}, options)
+        else:
+            resolve_model(model, options)
+    except ModelConfigError as exc:
+        raise ConfigError("model_config", exc.message, location=location) from exc
 
 
 def _reject_bad_stall_option(profile: Mapping[str, Any], *, location: str) -> None:

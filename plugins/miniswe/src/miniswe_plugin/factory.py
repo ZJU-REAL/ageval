@@ -6,10 +6,14 @@ import concurrent.futures
 import json
 import os
 import uuid
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from ageval.model import ModelSpec, require_model_support, spec_from_factory
 from ageval.plugins.agent_result import AgentResult, parse_validated_text_structured
+from ageval.plugins.base import BaseExecutor
+from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.errors import ExtensionMaterializeError
 from ageval.plugins.http_loopback import is_http_loopback
 from ageval.runtime.upstream_stall import current_stall
@@ -20,7 +24,7 @@ from miniswe_plugin.llm_client import (
     bind_direct_responses_client,
     chat_model_for_openai_compat_gateway,
 )
-from miniswe_plugin.model import resolve_model, transport_clocks, wire_body
+from miniswe_plugin.model import DEFAULT_MODEL_ID, transport_clocks, wire_body
 from miniswe_plugin.stall import (
     StallExhausted,
     install_single_package_attempt,
@@ -176,10 +180,17 @@ def _write_backend_raw(collect_dir: str | None, payload: dict[str, Any]) -> None
     )
 
 
-class MinisweExecutorSPI:
+@executor_plugin(priority=110, source="installed")
+class MinisweExecutorSPI(BaseExecutor):
     """Executor SPI. The box runs the shell; the LLM client stays on this side."""
 
     kind = PLUGIN_ID
+    requires_environment = True
+    supported_apis = frozenset({"chat", "responses"})
+    supported_model_fields = frozenset(
+        {"id", "api", "reasoning_effort", "timeout", "watchdog", "extra"}
+    )
+    extra_allowlist = frozenset({"reasoning", "provider"})
 
     def __init__(
         self,
@@ -188,7 +199,7 @@ class MinisweExecutorSPI:
         placement: Any,
         options: dict[str, Any] | None = None,
         profile_id: str | None = None,
-        model: str | None = None,
+        model: Any = None,
         base_url: str | None = None,
         api_key: str | None = None,
         plugin_id: str | None = None,
@@ -200,23 +211,35 @@ class MinisweExecutorSPI:
         self.placement = placement
         self.options = opts
         self.profile_id = profile_id
-        spec = resolve_model(model, opts)
-        self.spec = spec
-        self.model = spec.id
+        spec = spec_from_factory(model, opts, default_id=DEFAULT_MODEL_ID)
+        self.supports_model(spec)
+        self.bind_model(spec)
         self.base_url = base_url if isinstance(base_url, str) else None
         self.api_key_env = api_key if isinstance(api_key, str) else None
         self.step_limit = _as_positive_int(opts.get("step_limit"), name="step_limit", default=30)
         self.cost_limit = _as_nonneg_float(opts.get("cost_limit"), name="cost_limit", default=0.0)
         self.cmd_timeout = _as_positive_int(opts.get("cmd_timeout"), name="cmd_timeout", default=30)
+        self.session_id = f"ageval-{self.profile_id or 'solver'}-{uuid.uuid4().hex[:12]}"
+        self.execution_location = getattr(host, "kind", None) or "box"
+        self._ready = False
+
+    def supports_model(self, spec: ModelSpec) -> None:
+        require_model_support(
+            spec,
+            supported_apis=self.supported_apis,
+            supported_model_fields=self.supported_model_fields,
+            extra_allowlist=self.extra_allowlist,
+        )
+
+    def bind_model(self, spec: ModelSpec) -> None:
+        self.spec = spec
+        self.model = spec.id
         self.reasoning_effort = spec.reasoning_effort
         self.api = spec.api
         self.extra_body = dict(spec.extra)
         # ``timeout`` is the HTTP clock (None = do not set one). ``watchdog`` is
         # the Future abort, already filled with the default cap when omitted.
         self.timeout, self.watchdog = transport_clocks(spec)
-        self.session_id = f"ageval-{self.profile_id or 'solver'}-{uuid.uuid4().hex[:12]}"
-        self.execution_location = getattr(host, "kind", None) or "box"
-        self._ready = False
 
     @staticmethod
     def describe() -> dict[str, Any]:
@@ -242,8 +265,10 @@ class MinisweExecutorSPI:
         workdir: str | None = None,
         collect_dir: str | None = None,
         redaction_sentinels: tuple[str, ...] | list[str] | None = None,
+        tools: Sequence[Mapping[str, Any]] | None = None,
+        messages: Sequence[Mapping[str, Any]] | None = None,
     ) -> AgentResult:
-        del redaction_sentinels, workdir
+        del redaction_sentinels, workdir, tools, messages
         if _offline():
             return AgentResult(
                 model=self.model,
@@ -472,25 +497,7 @@ class MinisweExecutorSPI:
                 raise TimeoutError("miniswe_timeout") from exc
 
 
-def build_executor(
-    *,
-    host: Any,
-    placement: Any,
-    options: dict[str, Any] | None = None,
-    profile_id: str | None = None,
-    model: str | None = None,
-    base_url: str | None = None,
-    api_key: str | None = None,
-    package_root: str | None = None,
-) -> MinisweExecutorSPI:
-    """plugin.yaml exclusive entry: factory receives host + placement from bind_winner."""
-    del package_root
-    return MinisweExecutorSPI(
-        host=host,
-        placement=placement,
-        options=options,
-        profile_id=profile_id,
-        model=model,
-        base_url=base_url,
-        api_key=api_key,
-    )
+def build_executor(**kwargs: Any) -> MinisweExecutorSPI:
+    """Thin wrapper. The installed entry is the class."""
+    kwargs.pop("package_root", None)
+    return MinisweExecutorSPI(**kwargs)

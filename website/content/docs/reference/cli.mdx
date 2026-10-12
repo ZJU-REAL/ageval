@@ -82,7 +82,10 @@ Path = dataset root. `run` / `lock` / `view` / `upload-suite` also accept a Hub 
 | --- | --- |
 | `/parameters/seed` | Seed etc. |
 | `/parameters/active_profile` | Profile id |
-| `/bindings/<role>/options/<key>` | Job binding override (`entry`, plugin `agent`, …; ACP still rejects `command` / engine keys) |
+| `/agent_profiles/<role>/model` | Nested model object |
+| `/agent_profiles/<role>/model/id` | Model id |
+| `/agent_profiles/<role>/model/reasoning/effort` | Thinking effort. Omit means do not send |
+| `/agent_profiles/<role>/options/<key>` | Job binding override (`entry`, plugin `agent`, …; ACP still rejects `command` / engine keys) |
 | Intent `limits.*` | **Not** overridable via `--set` |
 
 Anything else fails at lock. Details: `src/ageval/cli/README.md` · skill `ageval-cli`.

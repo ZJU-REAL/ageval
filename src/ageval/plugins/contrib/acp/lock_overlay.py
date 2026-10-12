@@ -18,6 +18,12 @@ from ageval.environments.protocol import HOME_PATH
 _SKIP_MODELS = frozenset({"", "entry-default"})
 
 
+def _row_model_id(row: Mapping[str, Any]) -> str:
+    from ageval.config.profiles import model_id
+
+    return model_id(row.get("model"))
+
+
 @dataclass(frozen=True, slots=True)
 class OverlayFile:
     """One file relative to Attempt HOME."""
@@ -127,7 +133,7 @@ def build_pi_overlays(rows: list[Mapping[str, Any]]) -> list[OverlayFile]:
     default_provider: str | None = None
     default_model: str | None = None
     for row in rows:
-        model = str(row.get("model") or "").strip()
+        model = _row_model_id(row)
         if model in _SKIP_MODELS:
             continue
         provider, model_id = split_model(model)
@@ -177,7 +183,7 @@ def build_opencode_overlays(rows: list[Mapping[str, Any]]) -> list[OverlayFile]:
     providers: dict[str, dict[str, Any]] = {}
     default_model: str | None = None
     for row in rows:
-        model = str(row.get("model") or "").strip()
+        model = _row_model_id(row)
         if model in _SKIP_MODELS:
             continue
         if default_model is None:
@@ -260,7 +266,7 @@ def build_codex_overlays(rows: list[Mapping[str, Any]]) -> list[OverlayFile]:
     base_url: str | None = None
     env_key: str | None = None
     for row in rows:
-        raw = str(row.get("model") or "").strip()
+        raw = _row_model_id(row)
         if raw in _SKIP_MODELS:
             continue
         split_provider, model_id = split_model(raw)
@@ -298,7 +304,7 @@ def build_codex_overlays(rows: list[Mapping[str, Any]]) -> list[OverlayFile]:
             lines.append(f"env_key = {_toml_escape(env_key)}")
     slugs: list[str] = []
     for row in rows:
-        raw = str(row.get("model") or "").strip()
+        raw = _row_model_id(row)
         if raw in _SKIP_MODELS:
             continue
         _, model_id = split_model(raw)
@@ -322,7 +328,7 @@ def build_codex_overlays(rows: list[Mapping[str, Any]]) -> list[OverlayFile]:
 def build_claude_overlays(rows: list[Mapping[str, Any]]) -> list[OverlayFile]:
     model: str | None = None
     for row in rows:
-        raw = str(row.get("model") or "").strip()
+        raw = _row_model_id(row)
         if raw in _SKIP_MODELS:
             continue
         _, model_id = split_model(raw)

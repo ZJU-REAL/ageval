@@ -43,7 +43,7 @@ def test_acp_lock_snapshot_is_safe(tmp_path: Path, monkeypatch) -> None:  # type
                 "agent_profiles": {
                     "solver": {
                         "executor": "acp",
-                        "model": "entry-default",
+                        "model": {"id": "entry-default"},
                         "api_key": "${OPENAI_API_KEY}",
                         "base_url": "${OPENAI_BASE_URL}",
                         "extensions": [

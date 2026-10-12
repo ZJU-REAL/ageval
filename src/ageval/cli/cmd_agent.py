@@ -38,7 +38,7 @@ AGENT_OPTION_HELP = (
 )
 
 MODEL_OPTION_HELP = (
-    "Override binding.model for roles bound by --agent on this lock/run/campaign. "
+    "Override model.id for roles bound by --agent on this lock/run/campaign. "
     "Requires --agent. Omit to keep the package default. "
     "Not the observational --model on ageval results upload / upload-suite."
 )

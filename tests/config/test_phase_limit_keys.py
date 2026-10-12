@@ -12,7 +12,7 @@ from ageval.config.model import thaw
 
 SOLVER = {
     "executor": "acp",
-    "model": "entry-default",
+    "model": {"id": "entry-default"},
     "options": {"entry": "codex"},
     "extensions": [{"plugin": "acp"}, {"plugin": "local"}],
 }

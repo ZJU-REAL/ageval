@@ -124,8 +124,7 @@ kind 名仍是 `openai-http`（api-client，Chat Completions）。**不要**在�
 | `messages` | 若提供，作为 chat 历史（不再只包一轮 prompt） |
 | capability | `tools: native`，`session: new-only`（逻辑 session，无 provider resume） |
 | 凭证 | 一等字段 `model` / `base_url` / `api_key`（env locator）。远程 URL 缺钥则不能进入运行。loopback 空钥是 **HTTP executor 规则**（`openai-http` / `anthropic-http` / `dsh` / `nooa` / `miniswe`），不是 openai-http 特例 |
-| `options.reasoning_effort` | 可选。有值则写入 Chat Completions 的 `reasoning_effort`；缺省不发该键。evidence：`locked_reasoning_effort` / `actual_reasoning_effort`（HTTP 200 时二者相同；4xx 时 actual 为 null） |
-| `options.extra_body` | 可选 mapping，原样 merge 进 Chat Completions JSON（在 `reasoning_effort` 之后，撞键 extra_body 赢）。省略 / 空 = 不发。非 mapping 则拒绝。拒绝 `model` / `api_key` / `messages` / `tools`。Core 不翻译厂商字段。 |
+| `model` | 嵌套 Spec，字段表见 [16](../16-model.md)。`api: chat` 把 effort 写成顶层 `reasoning_effort`；`api: responses` 只写 `reasoning.effort`，并 POST `/responses`。省略 effort 不发。`timeout` 是单次 HTTP 时钟，`watchdog` 到期是可重试的传输失败。`extra` 只允许 `provider`。evidence：`locked_reasoning_effort` / `actual_reasoning_effort`（HTTP 200 时二者相同；4xx 时 actual 为 null） |
 
 tau2-class harness（`minimal-demo` 的 `tau2-dialog-min`、`examples/datasets/tau3-*`）把域 schema 传入 invoke；收到 `tool_calls` 后走 package `Environment.get_response` / `ToolSet.call`，再 `record_observation` 把回包挂到该 invoke。原生 `tool_calls` 是 **HTTP api-client 的主动作通道**（`openai-http` / `anthropic-http`）；「Return ONLY JSON」只留给没有 `tool_calls` 的文本 executor（ACP）。禁止在 Core 里 scrape vendor stdout 当工具通道。
 
@@ -148,7 +147,7 @@ kind 名是 `anthropic-http`（api-client，Anthropic Messages）。与 `openai-
 | 凭证 | 同 HTTP executor 规则。`api_key` 缺省 locator `ANTHROPIC_API_KEY`。loopback 空钥省略 `x-api-key` |
 | `options.max_tokens` | 必发。缺省 `4096`。非正整数则拒绝 |
 | `options.anthropic_version` | 请求头。缺省 `2023-06-01`。非字符串则拒绝 |
-| `options.extra_body` | 原样 merge 进 Messages JSON（在一等字段之后，撞键 extra_body 赢）。thinking / cache 等厂商键走这里。拒绝 `model` / `api_key` / `messages` / `tools` / `system` / `max_tokens` |
+| `model` | 嵌套 Spec，字段表见 [16](../16-model.md)。本 executor 只接受 `api: chat`。`extra.thinking` 原样进入 Messages JSON。`reasoning.effort` 不在支持字段里。`timeout` / `watchdog` 与 openai-http 同一对时钟 |
 
 `thinking` 块映成 thought 事件（`channel: thought`）。events 合同与 openai-http 相同（`source: anthropic-http`）。
 

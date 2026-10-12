@@ -31,7 +31,7 @@ from ageval.config.profiles import (
 
 ACP_SOLVER = {
     "executor": "acp",
-    "model": "m",
+    "model": {"id": "m"},
     "extensions": [{"plugin": "acp", "options": {"entry": "pi"}}],
 }
 
@@ -106,12 +106,12 @@ def test_profile_binds_the_slot_and_cli_override_wins(tmp_path: Path) -> None:
     lock = _lock(
         root,
         _job({"solver": dict(ACP_SOLVER)}),
-        overrides={"/agent_profiles/solver/model": "other-model"},
+        overrides={"/agent_profiles/solver/model/id": "other-model"},
     )
     (row,) = thaw(lock.agent_profiles)
     assert row["id"] == "solver"
     assert row["executor"] == "acp"
-    assert row["model"] == "other-model"
+    assert row["model"]["id"] == "other-model"
 
 
 def test_merge_helper_binds_every_declared_slot() -> None:
@@ -122,9 +122,9 @@ def test_merge_helper_binds_every_declared_slot() -> None:
 
 def test_override_on_an_unnamed_role_inherits_the_rest() -> None:
     job = _job({"*": dict(ACP_SOLVER)})
-    apply_profile_override(job, "/agent_profiles/solver/model", "opus")
+    apply_profile_override(job, "/agent_profiles/solver/model/id", "opus")
     (row,) = merge_job_onto_slots([{"id": "solver"}], job)
-    assert row["model"] == "opus"
+    assert row["model"]["id"] == "opus"
     assert row["extensions"][0]["options"]["entry"] == "pi"
 
 
@@ -145,7 +145,7 @@ def test_document_round_trips_through_yaml(tmp_path: Path) -> None:
     )
     job = load_job_document(path)
     assert job.environment == "local"
-    assert job.profiles["solver"]["model"] == "m"
+    assert job.profiles["solver"]["model"] == {"id": "m"}
 
 
 def test_unknown_profile_key_fails_closed(tmp_path: Path) -> None:
@@ -218,7 +218,7 @@ def test_overlay_keeps_plugin_options_but_drops_registry_truth() -> None:
         {
             "solver": {
                 "executor": "acp",
-                "model": "m",
+                "model": {"id": "m"},
                 "extensions": [
                     {
                         "plugin": "acp",
