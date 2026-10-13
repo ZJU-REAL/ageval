@@ -138,7 +138,7 @@ Custom overlay packages for executors that are **not** builtin catalog cards:
 `dsh-default`, `nooa-default`, `miniswe-default`. Built-in Agent packages
 (`pi`, `opencode`, `codex`, `claude-code`, `grok-build`, `openai-http`,
 `anthropic-http`) ship with ageval — `--agent pi` needs no install.
-`binding.model` is the package default, not identity. `--agent` is mutually
+`model.id` is the package default, not identity. `--agent` is mutually
 exclusive with `--profiles`. Optional `--model` overrides this run:
 
 ```bash

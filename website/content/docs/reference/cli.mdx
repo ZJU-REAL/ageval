@@ -64,7 +64,7 @@ Path = dataset root. `run` / `lock` / `view` / `upload-suite` also accept a Hub 
 | `--keep-vendor-raw` | After seal, keep vendor raw / layer B. Default: drop. `task-artifacts/` stays either way. Independent of `--keep-workspace` |
 | `--dir <path>` | Hub ref only. Looks at `<path>/<dataset_id>/`; reuses a matching child |
 | `--agent` | Bind an `ageval.agent/1` Agent package (`pi`, `org/name@version`, or a local path); mutually exclusive with `--profiles` |
-| `--model` | Override this run’s `binding.model` on roles `--agent` bound. Requires `--agent`. Not `results upload-suite --model`. `results analyze --model` is a separate flag and still requires `--agent` |
+| `--model` | Override `model.id` on roles `--agent` bound. Requires `--agent`. Not `results upload-suite --model`. `results analyze --model` is a separate flag and still requires `--agent` |
 | `--set` / `--profiles` | Overrides / alternate job binding |
 | `--probe` | Feasibility only: plan + readiness for this binding/`environment`. No Agent, no image write, no lock digest change. Exit 1 if the selected path is unsatisfied. |
 | `--json` | Write the full result document on stdout. A TTY defaults to a short recap (suite: `summary` path plus `ageval view` / `upload-suite`); a pipe still defaults to JSON. |
@@ -84,7 +84,13 @@ Path = dataset root. `run` / `lock` / `view` / `upload-suite` also accept a Hub 
 | `/parameters/active_profile` | Profile id |
 | `/agent_profiles/<role>/model` | Nested model object |
 | `/agent_profiles/<role>/model/id` | Model id |
+| `/agent_profiles/<role>/model/api` | `chat` or `responses` |
+| `/agent_profiles/<role>/model/timeout` | Per-request HTTP timeout |
+| `/agent_profiles/<role>/model/watchdog` | Abort clock |
 | `/agent_profiles/<role>/model/reasoning/effort` | Thinking effort. Omit means do not send |
+| `/agent_profiles/<role>/executor` | Executor id |
+| `/agent_profiles/<role>/api_key` | Env locator name |
+| `/agent_profiles/<role>/base_url` | Literal URL or env locator |
 | `/agent_profiles/<role>/options/<key>` | Job binding override (`entry`, plugin `agent`, …; ACP still rejects `command` / engine keys) |
 | Intent `limits.*` | **Not** overridable via `--set` |
 

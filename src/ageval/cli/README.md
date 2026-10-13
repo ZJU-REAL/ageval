@@ -162,6 +162,9 @@ Job binding axes:
 
 - `/agent_profiles/<role_id>/model` (nested object)
 - `/agent_profiles/<role_id>/model/id`
+- `/agent_profiles/<role_id>/model/api`
+- `/agent_profiles/<role_id>/model/timeout`
+- `/agent_profiles/<role_id>/model/watchdog`
 - `/agent_profiles/<role_id>/model/reasoning/effort`
 - `/agent_profiles/<role_id>/executor`
 - `/agent_profiles/<role_id>/api_key`

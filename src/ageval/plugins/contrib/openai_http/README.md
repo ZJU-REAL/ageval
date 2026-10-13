@@ -47,8 +47,11 @@ base_url: https://openrouter.ai/api/v1
 api_key: ${openrouter_api_key}
 ```
 
-Native `tools=` is posted when the session has a catalog. Responses may
-include `tool_calls` and reasoning `thought` events for the trajectory.
+Native `tools=` is posted when the session has a catalog. On `api: responses`,
+tools are flat `{type, name, description, parameters}`, and history uses
+`function_call` / `function_call_output` items. Chat Completions keeps the
+nested `function` tool object and `tool_calls`. Responses may include
+`tool_calls` and reasoning `thought` events for the trajectory.
 The raw HTTP body stays under `backend_raw`.
 
 `RunTerminal.completed` is not PASS. PASS still comes from the independent

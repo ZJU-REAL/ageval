@@ -48,7 +48,9 @@ PASS 只经 `bind_evaluation` 进入 Result。`RunTerminal.completed`、轨迹�
 - 轨迹行写入 `evaluation/observation.jsonl`（轨迹文件，与 Agent 轨迹同一行形）。**省略 `user` 行**（judge 提示常含 hidden reference）。不是 bind 的输入，不拷进 `result.json` / `metrics` / `summary.extra` / `evaluation/evaluator_raw.json`。
 - `evaluator.py` 返回 `{status, score, metrics}`，`status` 只许 `PASS` 或 `FAIL`。`bind_evaluation` 只读这三字段。其他值（含 `ERROR`）使 evaluate 相位以 `evaluator_invalid_status` 失败。可选额外键 `checks` 见下：parent 写入 `evaluation/checks.json`，**不是** bind 的输入。
 
-低分是有效 FAIL。打不了分就抛出，Attempt 记 ERROR（phase `evaluate`）。cleanup 失败只 warning。缺产物时题包可以返回 FAIL。
+低分是有效 FAIL。打不了分就抛出，Attempt 记 ERROR（phase `evaluate`）。cleanup 失败只 warning。
+
+`evaluation.inputs` 里声明了、而 run 没有 publish 的 artifact（`target: workspace` 除外），在进入 `evaluator.py` 之前以 `missing_evaluation_input` 失败，phase 是 `evaluate`。没写进这份清单的缺产物，仍由题包自己返回 FAIL。
 
 ## 可选：evaluator 返回 `checks`（确定性检查项）
 

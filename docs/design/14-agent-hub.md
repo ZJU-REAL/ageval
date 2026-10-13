@@ -1,6 +1,6 @@
 # 14 — Agent 对象
 
-format `ageval.agent/1`。不要 `ageval.harness/1`，不要第二套 `package_kind`。`binding.model` 是这次 run 省略 `--model` 时的缺省，不是身份。`base_url` / `api_key` 是 locator，不是包身份，不上 Hub 卡片。
+format `ageval.agent/1`。不要 `ageval.harness/1`，不要第二套 `package_kind`。`model.id` 是这次 run 省略 `--model` 时的缺省，不是身份。`base_url` / `api_key` 是 locator，不是包身份，不上 Hub 卡片。
 
 ## 两种卡
 
@@ -12,13 +12,13 @@ format `ageval.agent/1`。不要 `ageval.harness/1`，不要第二套 `package_k
 
 文件树有 `overlays/` 就暴露给包预览；没有就不要造。加卡 = 改 JSON + 过检查脚本，不是 `ageval agent publish`，也不是往 packages 表插行。短 id 保留：publish 撞到则拒绝。
 
-**定制卡（upload）。** `ageval agent publish` → `org/name@version`。Harness 身份是 executor + ACP entry。缺省 `binding.model`、overlays/files、其余 plugin options（如 `reasoning_effort`）是 run 配方，不是 attach 尺子。
+**定制卡（upload）。** `ageval agent publish` → `org/name@version`。Harness 身份是 executor + ACP entry。缺省 `model`（`id` 与 `reasoning.effort`）、overlays/files、其余 plugin options 是 run 配方，不是 attach 尺子。
 
 ## CLI
 
 `ageval agent install …` 写入 `~/.ageval/agents` 之后，按 `binding.extensions[].plugin` 安装尚未在本机的插件（复用 `ageval plugin install`；只写 `~/.ageval/plugins`）。contrib（如 `acp`）跳过。缺插件或 `host_requires` 不满足则整条 install 失败，不能进入运行，不把「agent 已装、插件跳过」当成功。不新增 `ageval.agent/1` 字段，不改 profiles / task.yaml。
 
-`--agent pi` 解析仓内机制树（不必 `agent install`）。`--agent org/name@version` 仍是 upload 包。`--agent` 与 `--profiles` 互斥。`--model` 是 run 参数（`lock` / `run` / `campaign`）：先投影 `--agent`，再改已绑角色的 `binding.model`。省略则用包缺省（内置 Agent 包可以没有缺省）。不要 `--api-key` / `--base-url`。`ageval results --model` 仍是上传观测标签。不要把 Agent 包当成第二套 lock 权威。
+`--agent pi` 解析仓内机制树（不必 `agent install`）。`--agent org/name@version` 仍是 upload 包。`--agent` 与 `--profiles` 互斥。`--model` 是 run 参数（`lock` / `run` / `campaign`）：先投影 `--agent`，再改已绑角色的 `model.id`。省略则用包缺省（内置 Agent 包可以没有缺省）。不要 `--api-key` / `--base-url`。`ageval results --model` 仍是上传观测标签。不要把 Agent 包当成第二套 lock 权威。
 
 ## 溯源与可比性
 
@@ -26,7 +26,7 @@ format `ageval.agent/1`。不要 `ageval.harness/1`，不要第二套 `package_k
 
 ## Hub 浏览与 model
 
-`binding.model` 是 invoke id。LiteLLM / OpenCode / DashScope 网关等要带前缀（`dashscope/qwen-max`、`openrouter/deepseek/deepseek-v4-flash`）。Runtime、lock、yaml、CommandStrip `--model` **原样**保留。Hub **不**把 overlay 改写成 catalog slug，也不在 `profiles.yaml` / agent 绑定上加 Hub-only 键。
+调用时用的是 `model.id`。已经存成字符串的 id，读的时候同样取这一段。LiteLLM / OpenCode / DashScope 网关等要带前缀（`dashscope/qwen-max`、`openrouter/deepseek/deepseek-v4-flash`）。Runtime、lock、yaml、CommandStrip `--model` **原样**保留。Hub **不**把 overlay 改写成 catalog slug，也不在 `profiles.yaml` / agent 绑定上加 Hub-only 键。
 
 百科身份是 pin 里的 canonical id（如 `deepseek/deepseek-v4-flash`）。不要 `package_kind=model`，不要 `ageval.model/1`，不要 `/agents/:id/models/:model`。Lab 是 snapshot 分组键，不是 Hub `org_id`。
 
@@ -38,7 +38,7 @@ Pin 可带 `aliases`：overlay **整串** exact → 一条 canonical。Maintaine
 
 ### Join（Hub 侧）
 
-Join key = overlay `binding.model` **as run**。不要在 yaml 里剥前缀。
+Join key 是这次 run 里 overlay 的 `model.id` 原文字符串。不要在 yaml 里剥前缀。
 
 Matcher（确定性，无编辑距离）：
 

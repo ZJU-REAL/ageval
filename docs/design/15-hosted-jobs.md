@@ -34,7 +34,7 @@ worker 是部署里的另一个进程（`python -m services.registry.hosted.work
 | --- | --- |
 | `environment` | `e2b` 或 `daytona`。其它值 `hosted_environment_refused`，不入队 |
 | `version` | 已发布版本，或 `draft` |
-| `model` | 这一次的 `binding.model` |
+| `model` | 这次提交的模型 id。写进 profiles 时是嵌套 `model.id` |
 | `model_secret_id` | 同组织的 `kind=model` 密钥 |
 | `provider_secret_id` | 同组织的 `kind=provider` 密钥，且 `provider` 等于 `environment` |
 | `agent_ref` | 可空。空则用 dataset 自己的 profiles。否则是内置短 id（`pi`）或已装进 worker 的 `id@version` / `role=id@version`。worker 上没有的包，这一次 job 失败 |
@@ -62,7 +62,7 @@ worker 是部署里的另一个进程（`python -m services.registry.hosted.work
 
 1. 认领一行 `queued`（`status` 仍是 `queued` 才改成 `running`）。
 2. 按 job 上的版本把 dataset blob 解到临时目录。
-3. 写成一份 `ageval.profiles/1`：`environment` 改成该 job 的 e2b 或 daytona；每个 role 的 `model` 写成这次提交的 model id，`api_key` 写成 `${LOCATOR}`；extensions 里的环境插件（`docker` / `local` / `ssh` / `podman` / `e2b` / `daytona`）收成一行这个环境 id。写完后若文件里出现密钥明文，或 `environment` 不是 e2b / daytona，这一次失败，不起进程。
+3. 写成一份 `ageval.profiles/1`：`environment` 改成该 job 的 e2b 或 daytona；每个 role 的 `model` 收成嵌套对象，`id` 写成这次提交的模型 id，其余模型字段保留，`options` 里的平铺模型键去掉；`api_key` 写成 `${LOCATOR}`；extensions 里的环境插件（`docker` / `local` / `ssh` / `podman` / `e2b` / `daytona`）收成一行这个环境 id。写完后若文件里出现密钥明文，或 `environment` 不是 e2b / daytona，这一次失败，不起进程。
 4. `python -m ageval.cli.main run <dataset> --profiles <file> --json`，带上 `--task` 和 `--max-concurrent-tasks`。
 5. 用现有 `ResultsCommands.upload_suite_result(..., with_attempts=True)` 把 suite 和 Attempt 上传成 **private**。上传者是提交 job 的用户。Hub 上已有的 suite 页负责终态结果。
 6. 删临时目录。

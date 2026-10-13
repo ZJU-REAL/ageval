@@ -64,7 +64,7 @@ ageval results revoke-snapshot <token-or-url>
 | `--keep-vendor-raw` | 写入成功后保留 vendor raw / layer B；默认丢掉。`task-artifacts/` 两种情况下都留下。与 `--keep-workspace` 独立 |
 | `--dir <path>` | 只配合 Hub ref：在 `<path>/<dataset_id>/` 找包；已匹配则复用 |
 | `--agent` | 绑定 `ageval.agent/1` Agent 包（`pi`、`org/name@version` 或本地路径）；与 `--profiles` 互斥 |
-| `--model` | 改这次 run 已绑角色的 `binding.model`；须配合 `--agent`。不是 `results upload-suite --model`。`results analyze --model` 是另一条旗标，同样必须配合 `--agent` |
+| `--model` | 改这次 run 已绑角色的 `model.id`；须配合 `--agent`。不是 `results upload-suite --model`。`results analyze --model` 是另一条旗标，同样必须配合 `--agent` |
 | `--set` / `--profiles` | 覆盖项 / 换一份配置文件 |
 | `--probe` | 只做可行性：按绑定 / `environment` 打印 plan + readiness。不 invoke Agent、不写入镜像、不改 lock digest。选中路径不满足则 exit 1。 |
 | `--json` | stdout 打完整结果文档。TTY 默认是短 recap（整份跑完时含 `summary` 路径与 `ageval view` / `upload-suite`）；管道默认仍是 JSON。 |
@@ -86,7 +86,13 @@ ageval results revoke-snapshot <token-or-url>
 | `/parameters/active_profile` | 切换 profile |
 | `/agent_profiles/<role>/model` | 嵌套 model 对象 |
 | `/agent_profiles/<role>/model/id` | 模型 id |
+| `/agent_profiles/<role>/model/api` | `chat` 或 `responses` |
+| `/agent_profiles/<role>/model/timeout` | 单次 HTTP 时钟 |
+| `/agent_profiles/<role>/model/watchdog` | 中止时钟 |
 | `/agent_profiles/<role>/model/reasoning/effort` | 思考档位。省略表示不发送 |
+| `/agent_profiles/<role>/executor` | executor id |
+| `/agent_profiles/<role>/api_key` | 环境变量名 |
+| `/agent_profiles/<role>/base_url` | 字面 URL 或环境变量名 |
 | `/agent_profiles/<role>/options/<key>` | job binding 覆盖（含 `entry`、插件 `agent` 等；ACP 仍拒绝 `command` / engine 键） |
 | `limits.*` | 三只时钟与 `agent_invocations`（**不可**覆盖 — 见下） |
 

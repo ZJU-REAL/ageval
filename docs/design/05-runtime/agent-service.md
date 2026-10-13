@@ -75,7 +75,7 @@ run.py / evaluator.py  Agent.session(profile).invoke
        executor.invoke → host.attach_stdio(entry argv) 或 host.exec（环境内 worker）
                         或 openai-http POST /chat/completions
                         或 anthropic-http POST /messages
-       非 ok → upstream stall（相位时钟停、固定 60 秒、同一 prompt / tools / messages）
+       非 ok → upstream stall（相位时钟停、固定 60 秒、同一 prompt / tools / messages；4xx 除 408 / 429 外不重试）
        after_agent_invoke（最终结果一次）
        normalize_agent_result
   → 轨迹文件：run 相位 → trajectory.jsonl
@@ -84,12 +84,12 @@ run.py / evaluator.py  Agent.session(profile).invoke
 
 `ParentAgentService.invoke` 只回 `AgentResult`（含可选 `tool_calls`）。**不**在每次 invoke 后 `download` 环境内 workspace。轨迹来自 executor events。publishable 在 **solver writer 停后** 由 run 相位 harvest 一次（Protocol `download`；tree 按 exclude 做快照），evaluate 再把快照 upload 进 **打分 Host**。
 
-executor 返回的 `ok` 不是 true 时，这次 invoke 进入 upstream stall，而不是第一次失败就结束 Attempt。规则、预算和 CLI 见 [07](../07-budget-evaluation-failure.md)。要点：
+executor 返回的 `ok` 不是 true、且这次结果可以重试时，这次 invoke 进入 upstream stall，而不是第一次失败就结束 Attempt。规则、预算和 CLI 见 [07](../07-budget-evaluation-failure.md)。要点：
 
 - 预算是 profile `options.upstream_stall_seconds`（省略 `3600`，`0` 关掉）。间隔固定 60 秒。同一次 invoke 只扣一次 `agent_invocations`。
 - stall 期间 run 的 `wall_time_seconds` 或 evaluate 的 `evaluate_seconds` 不走，worker 等待跟着延长。
 - wall 已到期、额度已用完、redaction 失败、offline forced 这些发生在 executor 之前，立刻拒绝，不显示 `upstream_stall`。
-- `openai-http` / `anthropic-http` 的任何非 ok 都可重试。ACP 只在这条 prompt 还没改 workspace 时，于同一 session 重发；改过则 `repeatable: false`，一行 `not_repeatable`，不等待。
+- HTTP executor 的 4xx，除 408 与 429 外，是模型配置错误，不进入 stall。408、429 和其它非 ok 仍可重试。ACP 只在这条 prompt 还没改 workspace 时，于同一 session 重发；改过则 `repeatable: false`，一行 `not_repeatable`，不等待。
 - miniswe 的 stall 包住进程内当前模型查询，不新开 agent，并关掉该包自己的短 tenacity。内层预算用尽（`stall_exhausted`）时外层不再开一轮。
 - 证据是一条 `upstream_stall` 事实。stall 不是 PASS，也不是 `result.json` 的 status。
 
@@ -125,6 +125,8 @@ kind 名仍是 `openai-http`（api-client，Chat Completions）。**不要**在�
 | capability | `tools: native`，`session: new-only`（逻辑 session，无 provider resume） |
 | 凭证 | 一等字段 `model` / `base_url` / `api_key`（env locator）。远程 URL 缺钥则不能进入运行。loopback 空钥是 **HTTP executor 规则**（`openai-http` / `anthropic-http` / `dsh` / `nooa` / `miniswe`），不是 openai-http 特例 |
 | `model` | 嵌套 Spec，字段表见 [16](../16-model.md)。`api: chat` 把 effort 写成顶层 `reasoning_effort`；`api: responses` 只写 `reasoning.effort`，并 POST `/responses`。省略 effort 不发。`timeout` 是单次 HTTP 时钟，`watchdog` 到期是可重试的传输失败。`extra` 只允许 `provider`。evidence：`locked_reasoning_effort` / `actual_reasoning_effort`（HTTP 200 时二者相同；4xx 时 actual 为 null） |
+
+`api: responses` 时，SDK 的 `tools` / `messages` 在这个 executor 边界改写。`tools` 是扁平的 `{type: function, name, description, parameters}`，不再包一层 `function`。assistant 的 `tool_calls` 写成 `function_call`，role `tool` 写成 `function_call_output`。Chat Completions 仍用上面的表。网关没有 `/responses` 时这次调用失败，不退回 chat。
 
 tau2-class harness（`minimal-demo` 的 `tau2-dialog-min`、`examples/datasets/tau3-*`）把域 schema 传入 invoke；收到 `tool_calls` 后走 package `Environment.get_response` / `ToolSet.call`，再 `record_observation` 把回包挂到该 invoke。原生 `tool_calls` 是 **HTTP api-client 的主动作通道**（`openai-http` / `anthropic-http`）；「Return ONLY JSON」只留给没有 `tool_calls` 的文本 executor（ACP）。禁止在 Core 里 scrape vendor stdout 当工具通道。
 
