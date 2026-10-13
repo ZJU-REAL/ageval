@@ -17,7 +17,7 @@ from ageval.config.package_fs import LocalPackageReader
 from ageval.config.provenance import merge_provenance, validate_provenance
 
 MINIMAL = CONFIG_MIN / "tasks" / "minimal"
-HTTP_PROFILES = {"solver": {"executor": "openai-http", "model": "gpt-4.1-mini"}}
+HTTP_PROFILES = {"solver": {"executor": "openai-http", "model": {"id": "gpt-4.1-mini"}}}
 
 
 def _minimal_task_yaml(*, extra: str = "", task_id: str = "minimal") -> str:

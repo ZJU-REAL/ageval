@@ -67,7 +67,12 @@ def docker(*args: str, timeout: float = 600.0) -> subprocess.CompletedProcess[st
 
 
 def daemon_available() -> bool:
-    return docker("version", "--format", "{{.Server.Version}}", timeout=30.0).returncode == 0
+    """True when a docker CLI is installed and its daemon answers."""
+    try:
+        found = docker("version", "--format", "{{.Server.Version}}", timeout=30.0)
+    except FileNotFoundError:
+        return False
+    return found.returncode == 0
 
 
 def image_digest(tag: str) -> str | None:

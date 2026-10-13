@@ -118,6 +118,22 @@ def _published(artifacts_dir: Path) -> dict[str, str]:
     return out
 
 
+def _missing_inputs(inputs: Any, published: dict[str, str]) -> list[str]:
+    """Declared ``evaluation.inputs`` artifacts the run did not publish."""
+    if not isinstance(inputs, list):
+        return []
+    missing: list[str] = []
+    for row in inputs:
+        if not isinstance(row, dict):
+            continue
+        aid = str(row.get("artifact") or "").strip()
+        if not aid or str(row.get("target") or "") == "workspace":
+            continue
+        if aid not in published and aid not in missing:
+            missing.append(aid)
+    return missing
+
+
 def _maybe_agent(attempt_id: str) -> Any:
     sock = os.environ.get("AGEVAL_AGENT_SERVICE_SOCK", "").strip()
     if not sock or not attempt_id:
@@ -140,9 +156,19 @@ def _run(frames: _Frames) -> int:
     workspace_dir = _box_dir("AGEVAL_WORKSPACE")
     evaluation_dir = _box_dir("AGEVAL_EVALUATION")
     try:
+        published = _published(artifacts_dir)
+        missing = _missing_inputs(launch.get("evaluation_inputs"), published)
+        if missing:
+            # The run never published what the evaluator reads: fail before user code.
+            from ageval_sdk.errors import ScriptError
+
+            raise ScriptError(
+                "missing_evaluation_input",
+                "run did not publish evaluation input artifact(s): " + ", ".join(missing),
+            )
         func = _load_entry(task_root, str(launch["entrypoint"]), dataset_root)
         inputs: dict[str, Any] = {
-            "artifacts": _published(artifacts_dir),
+            "artifacts": published,
             "artifacts_dir": str(artifacts_dir),
             "workspace_dir": str(workspace_dir),
             "evaluation_dir": str(evaluation_dir),

@@ -8,7 +8,11 @@ description: >-
 tags: [coding, miniswe]
 binding:
   executor: miniswe
-  model: openai/glm-5.2
+  model:
+    id: dashscope/glm-5.2
+    api: responses
+    reasoning:
+      effort: xhigh
   api_key: ${litellm_api_key}
   base_url: ${litellm_base_url}
   extensions:

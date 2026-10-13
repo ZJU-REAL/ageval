@@ -23,6 +23,7 @@ import copy
 import hashlib
 import json
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -153,7 +154,13 @@ def resolve_agent_specs(specs: list[str], model: str | None = None) -> Path:
     bindings = bindings_from_agent_specs(specs)
     if model:
         for binding in bindings.values():
-            binding["model"] = model
+            current = binding.get("model")
+            if isinstance(current, Mapping):
+                updated = dict(current)
+                updated["id"] = model
+                binding["model"] = updated
+            else:
+                binding["model"] = {"id": model}
     document = {"format": PROFILES_FORMAT, "agent_profiles": bindings}
     # Re-parse for shape safety before anything reads the file.
     parse_job_mapping(document, location="--agent")

@@ -137,7 +137,7 @@ def test_omit_overlays_lock_unchanged(tmp_path: Path) -> None:
             "solver": {
                 "executor": "acp",
                 "extensions": [{"plugin": "acp", "options": {"entry": "pi"}}],
-                "model": "m",
+                "model": {"id": "m"},
             }
         },
     )
@@ -147,7 +147,7 @@ def test_omit_overlays_lock_unchanged(tmp_path: Path) -> None:
             "solver": {
                 "executor": "acp",
                 "extensions": [{"plugin": "acp", "options": {"entry": "pi"}}],
-                "model": "m",
+                "model": {"id": "m"},
             }
         },
     )
@@ -158,7 +158,7 @@ def test_omit_overlays_lock_unchanged(tmp_path: Path) -> None:
 def test_lock_requires_existing_overlay_path(tmp_path: Path) -> None:
     db = _write_dataset(
         tmp_path,
-        agent_profiles={"solver": {"executor": "openai-http", "model": "none"}},
+        agent_profiles={"solver": {"executor": "openai-http", "model": {"id": "none"}}},
     )
     with pytest.raises(ConfigError) as ei:
         _lock(
@@ -166,7 +166,7 @@ def test_lock_requires_existing_overlay_path(tmp_path: Path) -> None:
             {
                 "solver": {
                     "executor": "openai-http",
-                    "model": "none",
+                    "model": {"id": "none"},
                     "overlays": ["overlays/missing.md"],
                 }
             },
@@ -177,7 +177,7 @@ def test_lock_requires_existing_overlay_path(tmp_path: Path) -> None:
 def test_lock_accepts_file_and_directory(tmp_path: Path) -> None:
     db = _write_dataset(
         tmp_path,
-        agent_profiles={"solver": {"executor": "openai-http", "model": "none"}},
+        agent_profiles={"solver": {"executor": "openai-http", "model": {"id": "none"}}},
         overlay_files={
             "overlays/AGENTS.md": "# hello\n",
             "overlays/skills/jsonl-agg/SKILL.md": "# skill\n",
@@ -186,7 +186,7 @@ def test_lock_accepts_file_and_directory(tmp_path: Path) -> None:
     agent_profiles = {
         "solver": {
             "executor": "openai-http",
-            "model": "none",
+            "model": {"id": "none"},
             "overlays": ["overlays/skills/jsonl-agg", "overlays/AGENTS.md"],
         }
     }
@@ -201,7 +201,7 @@ def test_lock_accepts_file_and_directory(tmp_path: Path) -> None:
 def test_lock_rejects_secret_in_overlay_file(tmp_path: Path) -> None:
     db = _write_dataset(
         tmp_path,
-        agent_profiles={"solver": {"executor": "openai-http", "model": "none"}},
+        agent_profiles={"solver": {"executor": "openai-http", "model": {"id": "none"}}},
         overlay_files={"overlays/secret.md": "-----BEGIN PRIVATE KEY-----\nabc\n"},
     )
     with pytest.raises(ConfigError) as ei:
@@ -210,7 +210,7 @@ def test_lock_rejects_secret_in_overlay_file(tmp_path: Path) -> None:
             {
                 "solver": {
                     "executor": "openai-http",
-                    "model": "none",
+                    "model": {"id": "none"},
                     "overlays": ["overlays/secret.md"],
                 }
             },
@@ -222,7 +222,7 @@ def test_lock_rejects_secret_in_overlay_file(tmp_path: Path) -> None:
 def test_lock_allows_env_locator_in_overlay_json(tmp_path: Path) -> None:
     db = _write_dataset(
         tmp_path,
-        agent_profiles={"solver": {"executor": "openai-http", "model": "none"}},
+        agent_profiles={"solver": {"executor": "openai-http", "model": {"id": "none"}}},
         overlay_files={
             "overlays/cfg.json": '{"apiKey": "{env:litellm_api_key}"}\n',
         },
@@ -232,7 +232,7 @@ def test_lock_allows_env_locator_in_overlay_json(tmp_path: Path) -> None:
         {
             "solver": {
                 "executor": "openai-http",
-                "model": "none",
+                "model": {"id": "none"},
                 "overlays": ["overlays/cfg.json"],
             }
         },
@@ -273,7 +273,7 @@ def test_standalone_task_cannot_declare_overlays(tmp_path: Path) -> None:
             {
                 "solver": {
                     "executor": "openai-http",
-                    "model": "none",
+                    "model": {"id": "none"},
                     "overlays": ["overlays/AGENTS.md"],
                 }
             },

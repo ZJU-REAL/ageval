@@ -56,9 +56,27 @@ export function formatModelLabel(
   return { text, title: value };
 }
 
+/** Profile model id: a string, or nested `model.id`. */
+export function overlayModelId(model: unknown): string {
+  if (typeof model === "string") return model.trim();
+  if (!model || typeof model !== "object" || Array.isArray(model)) return "";
+  const id = (model as { id?: unknown }).id;
+  return typeof id === "string" ? id.trim() : "";
+}
+
+function nestedReasoningEffort(model: unknown): string {
+  if (!model || typeof model !== "object" || Array.isArray(model)) return "";
+  const reasoning = (model as { reasoning?: unknown }).reasoning;
+  if (!reasoning || typeof reasoning !== "object" || Array.isArray(reasoning)) return "";
+  const effort = (reasoning as { effort?: unknown }).effort;
+  return typeof effort === "string" && effort.trim() ? effort.trim() : "";
+}
+
 export function reasoningEffortFromBinding(binding: unknown): string {
   if (!binding || typeof binding !== "object") return "";
   const rec = binding as Record<string, unknown>;
+  const nested = nestedReasoningEffort(rec.model);
+  if (nested) return nested;
   const fromOpts = (opts: unknown): string => {
     let raw = opts;
     if (typeof raw === "string" && raw.trim().startsWith("{")) {
@@ -164,8 +182,7 @@ export function displayLabelsFromOverlay(overlay: unknown): {
     const rec = raw as Record<string, unknown>;
     const name = displayAgentName(rec);
     if (name) agents.push(name);
-    const model = rec.model;
-    models.push(typeof model === "string" ? model.trim() : "");
+    models.push(overlayModelId(rec.model));
   }
   const join = (values: string[]) => {
     const cleaned = values.filter(Boolean);

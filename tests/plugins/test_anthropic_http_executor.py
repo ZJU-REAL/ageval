@@ -68,7 +68,7 @@ def test_loopback_invokes_without_api_key(monkeypatch: pytest.MonkeyPatch) -> No
 
     server, base = _serve(Handler)
     try:
-        result = AnthropicHTTPExecutor(model="mock", base_url=base).invoke("hi")
+        result = AnthropicHTTPExecutor(model={"id": "mock"}, base_url=base).invoke("hi")
     finally:
         server.shutdown()
         server.server_close()
@@ -122,7 +122,7 @@ def test_tools_round_trip_on_loopback(monkeypatch: pytest.MonkeyPatch) -> None:
 
     server, base = _serve(Handler)
     try:
-        result = AnthropicHTTPExecutor(model="mock", base_url=base).invoke(
+        result = AnthropicHTTPExecutor(model={"id": "mock"}, base_url=base).invoke(
             "lookup the customer",
             tools=[
                 {
@@ -248,7 +248,7 @@ def test_thinking_block_becomes_thought_event(tmp_path: Path) -> None:
     server, base = _serve(Handler)
     collect = tmp_path / "raw"
     try:
-        result = AnthropicHTTPExecutor(model="mock", base_url=base).invoke(
+        result = AnthropicHTTPExecutor(model={"id": "mock"}, base_url=base).invoke(
             "lookup",
             tools=[{"type": "function", "function": {"name": "lookup"}}],
             collect_dir=str(collect),
@@ -288,13 +288,12 @@ def test_extra_body_and_max_tokens() -> None:
     server, base = _serve(Handler)
     try:
         ex = build_anthropic_http_executor(
-            model="claude-sonnet-4-6",
-            base_url=base,
-            options={
-                "max_tokens": 128,
-                "anthropic_version": "2023-06-01",
-                "extra_body": {"thinking": {"type": "enabled", "budget_tokens": 2000}},
+            model={
+                "id": "claude-sonnet-4-6",
+                "extra": {"thinking": {"type": "enabled", "budget_tokens": 2000}},
             },
+            base_url=base,
+            options={"max_tokens": 128, "anthropic_version": "2023-06-01"},
         )
         result = ex.invoke("hi")
     finally:
@@ -308,11 +307,25 @@ def test_extra_body_and_max_tokens() -> None:
 
 
 def test_invalid_extra_body() -> None:
+    from ageval.model import ModelConfigError
     from ageval.plugins.contrib.anthropic_http import build_anthropic_http_executor
+    from ageval.plugins.errors import ExtensionMaterializeError
 
-    with pytest.raises(ValueError, match="extra_body must be a mapping"):
-        build_anthropic_http_executor(options={"extra_body": ["thinking"]})
-    with pytest.raises(ValueError, match="rejects"):
-        build_anthropic_http_executor(options={"extra_body": {"model": "other", "tools": []}})
-    with pytest.raises(ValueError, match="max_tokens"):
-        build_anthropic_http_executor(options={"max_tokens": 0})
+    with pytest.raises(ModelConfigError, match="extra_body"):
+        build_anthropic_http_executor(
+            model={"id": "claude-sonnet-4-6"},
+            options={"extra_body": ["thinking"]},
+        )
+    with pytest.raises(ModelConfigError, match="model_extra_rejected"):
+        build_anthropic_http_executor(
+            model={"id": "claude-sonnet-4-6", "extra": {"model": "other"}},
+        )
+    with pytest.raises(ExtensionMaterializeError, match="anthropic_max_tokens_invalid"):
+        build_anthropic_http_executor(
+            model={"id": "claude-sonnet-4-6"},
+            options={"max_tokens": 0},
+        )
+    with pytest.raises(ModelConfigError, match="model_field_unsupported"):
+        build_anthropic_http_executor(
+            model={"id": "claude-sonnet-4-6", "reasoning": {"effort": "high"}},
+        )

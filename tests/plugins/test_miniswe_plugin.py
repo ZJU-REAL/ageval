@@ -17,6 +17,7 @@ from ageval.environments.protocol import (
     ExecResult,
     Placement,
 )
+from ageval.model import ModelConfigError
 from ageval.plugins.contrib.local.host import LocalHost
 from ageval.plugins.defaults import register_defaults
 from ageval.plugins.errors import InjectUnsatisfiedError
@@ -42,6 +43,10 @@ from miniswe_plugin.trajectory import SCHEMA, to_ageval_trajectory_events  # noq
 
 def _placement() -> Placement:
     return Placement(target_id="box", user="10001:10001", workdir=WORKSPACE_PATH)
+
+
+def _model(model_id: str = "openai/x", **fields: object) -> dict[str, object]:
+    return {"id": model_id, **fields}
 
 
 def _isolated_home(
@@ -83,7 +88,7 @@ def test_package_has_no_docker_exec_or_container_id() -> None:
 def test_factory_stores_host_and_placement() -> None:
     host = SimpleNamespace(kind="local")
     placement = _placement()
-    spi = build_executor(host=host, placement=placement, model="openai/x")
+    spi = build_executor(host=host, placement=placement, model=_model())
     assert spi.host is host
     assert spi.placement is placement
     assert isinstance(spi, MinisweExecutorSPI)
@@ -130,7 +135,7 @@ def test_api_option_defaults_to_chat_and_omits_unset_effort() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        model="openai/x",
+        model=_model(),
     )
     assert spi.api == "chat"
     kwargs = spi._litellm_model_kwargs(key=None, base=None)
@@ -141,49 +146,45 @@ def test_api_responses_maps_effort_onto_reasoning_object() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        options={
-            "api": "responses",
-            "reasoning_effort": "high",
-            "extra_body": {"reasoning": {"summary": "auto"}},
-        },
-        model="openai/glm-5.2",
+        model=_model(
+            "dashscope/glm-5.2",
+            api="responses",
+            reasoning={"effort": "high"},
+            extra={"reasoning": {"summary": "auto"}},
+        ),
     )
     kwargs = spi._litellm_model_kwargs(key=None, base=None)
     assert kwargs["reasoning"] == {"summary": "auto", "effort": "high"}
     assert "reasoning_effort" not in kwargs
 
 
-def test_api_responses_skips_forced_none_effort() -> None:
+def test_api_responses_omits_unset_effort() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        options={"api": "responses"},
-        model="openai/x",
+        model=_model(api="responses"),
     )
     assert spi.api == "responses"
     kwargs = spi._litellm_model_kwargs(key=None, base=None)
     assert "reasoning_effort" not in kwargs
+    assert "reasoning" not in kwargs
 
 
 def test_api_chat_respects_explicit_effort() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        options={"api": "chat", "reasoning_effort": "max"},
-        model="openai/x",
+        model=_model(api="chat", reasoning={"effort": "max"}),
     )
     assert spi._litellm_model_kwargs(key=None, base=None)["reasoning_effort"] == "max"
 
 
 def test_invalid_api_option() -> None:
-    from ageval.plugins.errors import ExtensionMaterializeError
-
-    with pytest.raises(ExtensionMaterializeError, match="api"):
+    with pytest.raises(ModelConfigError, match="model_api_invalid"):
         build_executor(
             host=SimpleNamespace(kind="local"),
             placement=_placement(),
-            options={"api": "graphql"},
-            model="openai/x",
+            model=_model(api="graphql"),
         )
 
 
@@ -191,18 +192,17 @@ def test_connection_close_header_always_set() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        model="openai/x",
+        model=_model(),
     )
     kwargs = spi._litellm_model_kwargs(key="sk-x", base="https://example.invalid/v1")
     assert kwargs["extra_headers"]["Connection"] == "close"
 
 
-def test_request_timeout_forwarded_to_litellm_kwargs() -> None:
+def test_timeout_forwarded_to_litellm_kwargs() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        options={"request_timeout": 120},
-        model="openai/x",
+        model=_model(timeout=120),
     )
     assert spi.timeout == 120.0
     assert spi.spec.watchdog is None
@@ -213,7 +213,7 @@ def test_request_timeout_forwarded_to_litellm_kwargs() -> None:
     defaulted = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        model="openai/x",
+        model=_model(),
     )
     assert defaulted.timeout is None
     assert defaulted.watchdog == 180.0
@@ -221,34 +221,29 @@ def test_request_timeout_forwarded_to_litellm_kwargs() -> None:
     omitted = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        options={"request_timeout": 0},
-        model="openai/x",
+        model=_model(timeout=0),
     )
     assert omitted.timeout is None
     assert omitted.watchdog == 180.0
     assert "timeout" not in omitted._litellm_model_kwargs(key=None, base=None)
 
 
-def test_request_timeout_wins_over_extra_body() -> None:
-    spi = build_executor(
-        host=SimpleNamespace(kind="local"),
-        placement=_placement(),
-        options={"request_timeout": 90},
-        model="openai/x",
-    )
-    # timeout/request_timeout are reserved in extra_body; option alone sets timeout.
-    kwargs = spi._litellm_model_kwargs(key=None, base=None)
-    assert kwargs["timeout"] == 90.0
-
-
-def test_invalid_request_timeout() -> None:
-    from ageval.plugins.errors import ExtensionMaterializeError
-
-    with pytest.raises(ExtensionMaterializeError, match="request_timeout"):
+def test_flat_request_timeout_is_a_config_error() -> None:
+    with pytest.raises(ModelConfigError, match="request_timeout"):
         build_executor(
             host=SimpleNamespace(kind="local"),
             placement=_placement(),
-            options={"request_timeout": -1},
+            options={"request_timeout": 90},
+            model=_model(),
+        )
+
+
+def test_invalid_timeout() -> None:
+    with pytest.raises(ModelConfigError, match="model_timeout_invalid"):
+        build_executor(
+            host=SimpleNamespace(kind="local"),
+            placement=_placement(),
+            model=_model(timeout=-1),
         )
 
 
@@ -256,8 +251,7 @@ def test_reasoning_effort_forwarded_to_litellm_kwargs() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        options={"reasoning_effort": "max"},
-        model="openai/dashscope/qwen3.8-max",
+        model=_model("openai/dashscope/qwen3.8-max", reasoning={"effort": "max"}),
     )
     assert spi.reasoning_effort == "max"
     kwargs = spi._litellm_model_kwargs(key="sk-x", base="https://example.invalid/v1")
@@ -266,36 +260,34 @@ def test_reasoning_effort_forwarded_to_litellm_kwargs() -> None:
     omitted = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        model="openai/x",
+        model=_model(),
     )
     assert omitted.reasoning_effort is None
     assert "reasoning_effort" not in omitted._litellm_model_kwargs(key=None, base=None)
 
 
 def test_invalid_reasoning_effort() -> None:
-    from ageval.plugins.errors import ExtensionMaterializeError
-
-    with pytest.raises(ExtensionMaterializeError, match="reasoning_effort"):
+    with pytest.raises(ModelConfigError, match="reasoning_effort_invalid"):
         build_executor(
             host=SimpleNamespace(kind="local"),
             placement=_placement(),
-            options={"reasoning_effort": 1},
+            model=_model(reasoning={"effort": 1}),
         )
 
 
-def test_extra_body_merges_into_litellm_kwargs() -> None:
+def test_extra_merges_into_litellm_kwargs() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        options={
-            "reasoning_effort": "low",
-            "step_limit": 12,
-            "extra_body": {
+        options={"step_limit": 12},
+        model=_model(
+            "openrouter/openai/gpt-4o",
+            reasoning={"effort": "low"},
+            extra={
                 "reasoning": {"max_tokens": 2000},
                 "provider": {"order": ["Together"]},
             },
-        },
-        model="openrouter/openai/gpt-4o",
+        ),
     )
     kwargs = spi._litellm_model_kwargs(key="sk-x", base="https://openrouter.ai/api/v1")
     assert kwargs["reasoning"] == {"max_tokens": 2000}
@@ -306,41 +298,37 @@ def test_extra_body_merges_into_litellm_kwargs() -> None:
     omitted = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        model="openai/x",
+        model=_model(),
     )
     assert omitted.extra_body == {}
     assert "reasoning" not in omitted._litellm_model_kwargs(key=None, base=None)
 
 
-def test_extra_body_cannot_override_reasoning_effort() -> None:
-    from ageval.plugins.errors import ExtensionMaterializeError
-
-    with pytest.raises(ExtensionMaterializeError, match="extra_body_reserved"):
+def test_extra_cannot_override_reasoning_effort() -> None:
+    with pytest.raises(ModelConfigError, match="model_extra_overrides"):
         build_executor(
             host=SimpleNamespace(kind="local"),
             placement=_placement(),
-            options={
-                "reasoning_effort": "low",
-                "extra_body": {"reasoning_effort": "high"},
-            },
-            model="openai/x",
+            model=_model(
+                reasoning={"effort": "low"},
+                extra={"reasoning": {"effort": "high"}},
+            ),
         )
 
 
-def test_invalid_extra_body() -> None:
-    from ageval.plugins.errors import ExtensionMaterializeError
-
-    with pytest.raises(ExtensionMaterializeError, match="extra_body_invalid"):
+def test_flat_extra_body_and_reserved_extra_are_config_errors() -> None:
+    with pytest.raises(ModelConfigError, match="extra_body"):
         build_executor(
             host=SimpleNamespace(kind="local"),
             placement=_placement(),
             options={"extra_body": ["reasoning"]},
+            model=_model(),
         )
-    with pytest.raises(ExtensionMaterializeError, match="extra_body_reserved"):
+    with pytest.raises(ModelConfigError, match="model_extra_rejected"):
         build_executor(
             host=SimpleNamespace(kind="local"),
             placement=_placement(),
-            options={"extra_body": {"api_key": "sk-leak", "model": "other"}},
+            model=_model(extra={"api_key": "sk-leak", "model": "other"}),
         )
 
 
@@ -349,7 +337,7 @@ def test_offline_invoke_does_not_import_vendor(monkeypatch: object) -> None:
     spi = MinisweExecutorSPI(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        model="openai/x",
+        model=_model(),
         api_key="litellm_api_key",
     )
     result = spi.invoke("ping")
@@ -414,7 +402,7 @@ def test_lock_cli_miniswe_profile_records_inject(
                 "          cost_limit: 0",
                 "          cmd_timeout: 60",
                 "      - plugin: docker",
-                "    model: openai/glm-5.3",
+                "    model: {id: openai/glm-5.3}",
                 "    api_key: ${litellm_api_key}",
                 "    base_url: ${litellm_base_url}",
             ]

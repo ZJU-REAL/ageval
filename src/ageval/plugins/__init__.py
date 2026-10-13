@@ -6,12 +6,14 @@ Third-party business plugins do not live under this package.
 
 from __future__ import annotations
 
+from ageval.plugins.base import BaseEnvironment, BaseExecutor
 from ageval.plugins.conflict import ExtensionConflictError
 from ageval.plugins.errors import (
     ExtensionMaterializeError,
     ExtensionPluginNotFoundError,
     ExtensionRegistryError,
     InjectUnsatisfiedError,
+    PluginContractError,
     ServiceConflictError,
     ServiceNotFoundError,
     UnknownExtensionSlotError,
@@ -32,6 +34,8 @@ from ageval.plugins.slots import ALL_SLOTS, SlotKind, get_slot_kind, is_slot
 
 __all__ = [
     "ALL_SLOTS",
+    "BaseEnvironment",
+    "BaseExecutor",
     "BindingIntent",
     "ExplicitBinding",
     "ExtensionConflictError",
@@ -43,6 +47,7 @@ __all__ = [
     "HandlerRef",
     "InjectRequirement",
     "InjectUnsatisfiedError",
+    "PluginContractError",
     "ServiceConflictError",
     "ServiceNotFoundError",
     "ServiceTable",

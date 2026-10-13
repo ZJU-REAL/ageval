@@ -16,17 +16,20 @@ agent_profiles:
       - plugin: acp
         options:
           entry: codex
-          # reasoning_effort: high   # optional; must be a value the session advertises
-    model: gpt-5.4-mini
+          # idle_timeout_seconds: 120
+    model:
+      id: gpt-5.4-mini
+      # reasoning:
+      #   effort: high   # optional; must be a value the session advertises
 ```
 
 | Field | Note |
 | --- | --- |
 | `executor` | Use `acp` for coding agents |
 | `- plugin: acp` / `options.entry` | **Required**; discover with `ageval executors -v` |
-| `options.reasoning_effort` | Optional. Entries with an advertised thinking selector use `set_config_option`. `grok-build` adds `--reasoning-effort` on `grok agent … stdio` |
+| `model.reasoning.effort` | Optional. Entries with an advertised thinking selector use `set_config_option`. `grok-build` adds `--reasoning-effort` on `grok agent … stdio`. Omit to leave the entry default |
 | `options.idle_timeout_seconds` | Optional stall ceiling during `session/prompt`. Any `session/update` or permission resets it. Unset / ≤0 → the phase clock only. Fires `acp_idle_timeout` (still capped by that clock: `wall_time_seconds` in run, `evaluate_seconds` in evaluate) |
-| `model` | Model id for that entry |
+| `model.id` | Model id for that entry |
 | `api_key` | Optional env **name** |
 
 No command/version/install in package yaml.

@@ -31,5 +31,6 @@ Issues / 代码
 | [13-web-ui-tokens.md](13-web-ui-tokens.md) | UI 令牌与视觉不变量（跨面宪法；不写页面清单） |
 | [14-agent-hub.md](14-agent-hub.md) | `ageval.agent/1` |
 | [15-hosted-jobs.md](15-hosted-jobs.md) | Hub 提交 suite；worker 只跑 e2b / daytona |
+| [16-model.md](16-model.md) | `ModelSpec` / `resolve_model`；`BaseEnvironment` / `BaseExecutor` |
 
 Runtime 读序：`lifecycle` → `environment`（四 kind、ssh A/B、能力表）→ `agent-service` → `evaluation`（gold 时间切）→ `evidence` → `analysis`（跑完之后，只读）→ `campaign-suite`。

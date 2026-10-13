@@ -21,23 +21,30 @@ box is required; this executor does not inject `environment`.
 
 | Name | Default | Purpose |
 | --- | --- | --- |
-| `options.reasoning_effort` | omit | Optional OpenAI-shaped Chat Completions `reasoning_effort`. Empty / omit = do not send. Non-string values are rejected. |
-| `options.extra_body` | omit | Optional mapping merged as-is into the Chat Completions JSON body (after `reasoning_effort`). Vendor-native keys (OpenRouter `reasoning` / `provider`, …). Omit / empty = do not merge. Non-mapping values are rejected. Rejects `model` / `api_key` / `messages` / `tools`. Conflicting keys: extra_body wins. |
-| `model` | `gpt-4.1-mini` | Chat Completions model id the endpoint accepts (`openai/…`, `deepseek/…`, or any id the `base_url` gateway accepts). |
-| `base_url` | unset (executor default `https://api.openai.com/v1`) | `${ENV_NAME}` (lock stores the locator) or a literal `http(s)` URL. Host `AGEVAL_OPENAI_BASE_URL` is the fallback when the field is omitted. Point at OpenRouter, DashScope, a local gateway, etc. |
+| `model` | `{id: gpt-4.1-mini}` | Nested spec. Field table: `docs/design/16-model.md`. `supported_apis`: `chat`, `responses`. `supported_model_fields`: `id`, `api`, `reasoning_effort`, `timeout`, `watchdog`, `extra`. `extra_allowlist`: `provider` (empty would reject every extra key). |
+| `model.api` | `chat` | `chat` posts `/chat/completions` and sends effort as top-level `reasoning_effort`. `responses` posts `/responses` and sends effort only as `reasoning.effort`. A gateway without `/responses` fails that call; this executor does not fall back to chat. Acceptance id for Responses is `dashscope/glm-5.2`. |
+| `model.reasoning.effort` | omit | Omit does not send an effort field. `none` is sent. |
+| `model.timeout` | invoke timeout | Per-request HTTP timeout. |
+| `model.watchdog` | `180` | Overall abort. Expiry is a repeatable transport error (`openai_http_watchdog`), which the parent stall loop retries. A config error is not retried: an HTTP 4xx other than 408/429 returns `ModelConfigError:HTTPError:<code>` with `repeatable=False`, and the parent stall loop treats any executor's bare `HTTPError:4xx` (except 408/429) the same way. |
+| `base_url` | unset (executor default `https://api.openai.com/v1`) | Profile sibling of `model`, not a spec field. `${ENV_NAME}` or a literal `http(s)` URL. Host `AGEVAL_OPENAI_BASE_URL` is the fallback when the field is omitted. |
 | `api_key` | `OPENAI_API_KEY` | Env **locator name**, not the secret. Empty key is allowed only when `base_url` host is `127.0.0.1` / `localhost` / `::1`. |
 
 ## Bind
 
 ```yaml
 executor: openai-http
-model: deepseek/deepseek-v4-flash-0731
-base_url: https://openrouter.ai/api/v1
-api_key: ${openrouter_api_key}
-options:
-  extra_body:
+model:
+  id: dashscope/glm-5.2
+  api: responses
+  reasoning:
+    effort: xhigh
+  timeout: 120
+  watchdog: 300
+  extra:
     provider:
       allow_fallbacks: false
+base_url: https://openrouter.ai/api/v1
+api_key: ${openrouter_api_key}
 ```
 
 Native `tools=` is posted when the session has a catalog. Responses may

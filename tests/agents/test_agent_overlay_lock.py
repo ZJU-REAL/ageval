@@ -75,7 +75,7 @@ def _make_agent(
 ) -> Path:
     pkg = tmp / f"agent-{agent_id.replace('/', '-')}"
     pkg.mkdir(parents=True)
-    binding: dict[str, Any] = {"executor": "openai-http", "model": "none"}
+    binding: dict[str, Any] = {"executor": "openai-http", "model": {"id": "none"}}
     if listed:
         binding["overlays"] = listed
     (pkg / "agent.yaml").write_text(
@@ -119,7 +119,7 @@ def test_lock_with_agent_ref_uses_agent_cache_not_dataset(tmp_path: Path) -> Non
         {
             "*": {
                 "executor": "openai-http",
-                "model": "none",
+                "model": {"id": "none"},
                 "overlays": ["overlays/skills/demo"],
                 "agent_ref": f"official/xx@0.1.0+sha256:{short}",
             }
@@ -144,7 +144,7 @@ def test_lock_agent_ref_ignores_dataset_same_path(tmp_path: Path) -> None:
             {
                 "solver": {
                     "executor": "openai-http",
-                    "model": "none",
+                    "model": {"id": "none"},
                     "overlays": ["overlays/skills/demo"],
                     "agent_ref": f"official/xx@0.1.0+sha256:{short}",
                 }
@@ -171,13 +171,13 @@ def test_lock_exact_role_without_overlays_not_attributed(tmp_path: Path) -> None
         {
             "*": {
                 "executor": "openai-http",
-                "model": "none",
+                "model": {"id": "none"},
                 "overlays": ["overlays/skills/demo"],
                 "agent_ref": f"official/xx@0.1.0+sha256:{xx_short}",
             },
             "user": {
                 "executor": "openai-http",
-                "model": "none",
+                "model": {"id": "none"},
                 "agent_ref": f"official/yy@0.1.0+sha256:{yy_short}",
             },
         },
@@ -199,10 +199,10 @@ def test_handwritten_profiles_still_use_dataset_root(tmp_path: Path) -> None:
         {
             "solver": {
                 "executor": "openai-http",
-                "model": "none",
+                "model": {"id": "none"},
                 "overlays": ["overlays/AGENTS.md"],
             },
-            "user": {"executor": "openai-http", "model": "none"},
+            "user": {"executor": "openai-http", "model": {"id": "none"}},
         },
     )
     overlay = thaw(locked.job_overlay)

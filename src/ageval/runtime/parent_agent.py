@@ -23,6 +23,7 @@ from typing import Any
 
 from ageval.evidence.redaction import RedactionError
 from ageval.evidence.store import AttemptEvidenceStore, InvocationHandle
+from ageval.model.errors import http_error_reason_is_config_error
 from ageval.plugins.protocol import ExtensionGraph
 from ageval.plugins.slots import (
     AFTER_AGENT_CLOSE,
@@ -722,7 +723,10 @@ def _result_ok(result: Any) -> bool:
 
 
 def _result_repeatable(result: Any) -> bool:
-    return bool(getattr(result, "repeatable", True))
+    if not bool(getattr(result, "repeatable", True)):
+        return False
+    # A 4xx other than 408/429 is a model config error from any HTTP executor.
+    return not http_error_reason_is_config_error(_result_reason(result))
 
 
 def _result_reason(result: Any) -> str:

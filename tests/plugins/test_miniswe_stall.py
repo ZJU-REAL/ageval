@@ -429,7 +429,7 @@ def _spi(monkeypatch: pytest.MonkeyPatch) -> MinisweExecutorSPI:
     return MinisweExecutorSPI(
         host=SimpleNamespace(kind="local"),
         placement=SimpleNamespace(workdir="/attempt/workspace", user=None),
-        model="openai/x",
+        model={"id": "openai/x"},
         api_key="OPENAI_API_KEY",
         base_url="https://api.example.invalid/v1",
     )
@@ -481,7 +481,7 @@ def test_missing_credential_is_not_claimed(monkeypatch: pytest.MonkeyPatch) -> N
     spi = MinisweExecutorSPI(
         host=SimpleNamespace(kind="local"),
         placement=SimpleNamespace(workdir="/attempt/workspace", user=None),
-        model="openai/x",
+        model={"id": "openai/x"},
         api_key=None,
         base_url="https://api.example.invalid/v1",
     )

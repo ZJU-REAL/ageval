@@ -9,7 +9,7 @@ slots:
   exclusive:
     - id: executor
       priority: 110
-      entry: "miniswe_plugin.factory:build_executor"
+      entry: "miniswe_plugin.factory:MinisweExecutorSPI"
   chain:
     - id: trajectory_collect
       priority: 110

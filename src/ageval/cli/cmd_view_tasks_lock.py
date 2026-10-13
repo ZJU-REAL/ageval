@@ -141,7 +141,7 @@ def register(app: typer.Typer) -> None:
                 "--set",
                 help=(
                     "Repeatable override as <JSON Pointer>=<JSON value>, e.g. "
-                    '`/parameters/seed=7` or `/agent_profiles/solver/model="x"`. '
+                    '`/parameters/seed=7` or `/agent_profiles/solver/model/id="x"`. '
                     "Allowlisted pointers only (intent limits are not overridable)."
                 ),
             ),
@@ -181,6 +181,8 @@ def register(app: typer.Typer) -> None:
             )
             raise typer.Exit(code=2)
         from ageval.cli.cmd_agent import resolve_agent_option
+        from ageval.model.errors import ModelConfigError
+        from ageval.plugins.errors import PluginContractError
 
         profiles = resolve_agent_option(agent, profiles, model=model)
         try:
@@ -191,7 +193,7 @@ def register(app: typer.Typer) -> None:
                 profiles_path=profiles,
                 profile=profile,
             )
-        except ConfigError as exc:
+        except (ConfigError, ModelConfigError, PluginContractError) as exc:
             # Stable operator-facing failure: exit 2, message on stderr, empty stdout.
             typer.echo(str(exc), err=True)
             raise typer.Exit(code=2) from exc

@@ -26,7 +26,8 @@ agent_profiles:
       - plugin: acp
         options:
           entry: pi
-    model: gpt-5.4-mini
+    model:
+      id: gpt-5.4-mini
 ```
 
 ACP `entry` lives on `- plugin: acp` / `options.entry`.
@@ -53,11 +54,11 @@ ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg --agent loca
 
 ```bash
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
-  --set '/bindings/solver/options/entry="codex"'
+  --set '/agent_profiles/solver/options/entry="codex"'
 ```
 
-Only allowlisted `--set` pointers work, e.g. `/bindings/solver/options/reasoning_effort="high"`. The CLI page lists the pointers.
+Only allowlisted `--set` pointers work, e.g. `/agent_profiles/solver/model/reasoning/effort="high"`. The CLI page lists the pointers.
 
-`api_key` is always an env **name**, never the secret. Optional profile fields: `options.reasoning_effort` (thinking level), `options.idle_timeout_seconds` (stall ceiling), and `base_url`.
+`api_key` is always an env **name**, never the secret. Optional profile fields: `model.reasoning.effort` (thinking level), `options.idle_timeout_seconds` (stall ceiling), and `base_url`.
 
 Non-ACP agent runtimes (nooa / dsh / miniswe) switch with a whole `--profiles` file. They ship as plugins: `ageval plugin install plugins/<name>`, then set `executor:` to that name and attach the matching `plugin:` line in profiles.

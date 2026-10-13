@@ -88,8 +88,8 @@ def _open(service: ParentAgentService) -> str:
 def test_http_error_retries_then_returns_the_success(tmp_path: Path) -> None:
     backend = ScriptedExecutor(
         script=[
-            _result(ok=False, error="HTTPError:401"),
-            _result(ok=False, error="HTTPError:401"),
+            _result(ok=False, error="HTTPError:503"),
+            _result(ok=False, error="HTTPError:503"),
             _result(ok=True),
         ]
     )
@@ -128,7 +128,7 @@ def test_http_error_retries_then_returns_the_success(tmp_path: Path) -> None:
         (
             "upstream_stall",
             {
-                "reason": "HTTPError:401",
+                "reason": "HTTPError:503",
                 "started_at": "2026-10-01T00:00:00Z",
                 "try_count": 3,
                 "outcome": "resumed",
@@ -168,7 +168,7 @@ def test_stall_does_not_spend_the_phase_clock(
             self.prompts.append(prompt)
             self.timeouts.append(timeout)
             if len(self.prompts) == 1:
-                return _result(ok=False, error="HTTPError:401")
+                return _result(ok=False, error="HTTPError:503")
             self.remaining = ctx.remaining_seconds()
             return _result(ok=True)
 
@@ -202,7 +202,7 @@ def test_stall_does_not_spend_the_phase_clock(
 
 
 def test_zero_budget_fails_on_the_first_error_without_a_label(tmp_path: Path) -> None:
-    backend = ScriptedExecutor(script=[_result(ok=False, error="HTTPError:401")])
+    backend = ScriptedExecutor(script=[_result(ok=False, error="HTTPError:503")])
     service, clock, events, labels, facts = _service(
         tmp_path, backend, options={"upstream_stall_seconds": 0}
     )
@@ -210,7 +210,7 @@ def test_zero_budget_fails_on_the_first_error_without_a_label(tmp_path: Path) ->
     answer = service.invoke(session_id=_open(service), prompt="once")
 
     assert answer["ok"] is False
-    assert answer["error"] == "HTTPError:401"
+    assert answer["error"] == "HTTPError:503"
     assert backend.prompts == ["once"]
     assert clock.sleeps == []
     assert events == []
@@ -308,7 +308,7 @@ def test_judge_stall_uses_the_evaluate_label_and_skips_the_run_quota(tmp_path: P
 
 
 def test_exhausted_wall_and_quota_do_not_enter_the_stall(tmp_path: Path) -> None:
-    backend = ScriptedExecutor(script=[_result(ok=False, error="HTTPError:401")])
+    backend = ScriptedExecutor(script=[_result(ok=False, error="HTTPError:503")])
     service, clock, events, labels, facts = _service(tmp_path, backend, limit=0)
     session = _open(service)
 
@@ -333,7 +333,7 @@ def test_exhausted_wall_and_quota_do_not_enter_the_stall(tmp_path: Path) -> None
 def test_offline_refusal_does_not_enter_the_stall(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    backend = ScriptedExecutor(script=[_result(ok=False, error="HTTPError:401")])
+    backend = ScriptedExecutor(script=[_result(ok=False, error="HTTPError:503")])
     service, _clock, events, _labels, _facts = _service(tmp_path, backend)
     service.offline_env = "AGEVAL_STALL_OFFLINE_TEST"
     monkeypatch.setenv("AGEVAL_STALL_OFFLINE_TEST", "1")
@@ -375,7 +375,7 @@ def test_claimed_and_stall_exhausted_do_not_start_another_invoke(tmp_path: Path)
 
 
 def test_chains_run_once_around_the_retry(tmp_path: Path) -> None:
-    backend = ScriptedExecutor(script=[_result(ok=False, error="HTTPError:401"), _result(ok=True)])
+    backend = ScriptedExecutor(script=[_result(ok=False, error="HTTPError:503"), _result(ok=True)])
     service, _clock, _events, _labels, _facts = _service(tmp_path, backend)
     session = _open(service)
     graph = service.session_graph(session)
@@ -411,5 +411,5 @@ def test_chains_run_once_around_the_retry(tmp_path: Path) -> None:
 
 
 def test_http_result_is_repeatable_unless_marked() -> None:
-    failed = AgentResult(model="m", text="", structured=None, ok=False, error="HTTPError:401")
+    failed = AgentResult(model="m", text="", structured=None, ok=False, error="HTTPError:503")
     assert failed.repeatable is True

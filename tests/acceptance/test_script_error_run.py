@@ -14,7 +14,7 @@ environment: local
 agent_profiles:
   solver:
     executor: openai-http
-    model: mock
+    model: {id: mock}
     api_key: ${SOLVER_API_KEY}
     base_url: ${SOLVER_BASE_URL}
     extensions:

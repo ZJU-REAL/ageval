@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ageval.model.errors import ModelConfigError
 from ageval.plugins.errors import ExtensionMaterializeError, ExtensionPluginNotFoundError
 from ageval.plugins.protocol import ExtensionGraph
 from ageval.plugins.registry import ExtensionRegistry
@@ -70,7 +71,7 @@ def bind_winner(
     bound_options = dict(winner.options or {}) if options is None else dict(options)
     try:
         return registration.impl(options=bound_options, **_accepted(registration.impl, context))
-    except ExtensionMaterializeError:
+    except (ExtensionMaterializeError, ModelConfigError):
         raise
     except Exception as exc:  # noqa: BLE001 — one bind failure, no retry
         raise ExtensionMaterializeError(

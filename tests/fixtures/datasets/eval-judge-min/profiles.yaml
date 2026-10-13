@@ -3,7 +3,7 @@ environment: local
 agent_profiles:
   solver:
     executor: openai-http
-    model: mock
+    model: {id: mock}
     api_key: ${SOLVER_API_KEY}
     base_url: ${SOLVER_BASE_URL}
     extensions:
@@ -11,7 +11,7 @@ agent_profiles:
       - plugin: local
   judge:
     executor: openai-http
-    model: mock
+    model: {id: mock}
     api_key: ${JUDGE_API_KEY}
     base_url: ${JUDGE_BASE_URL}
     extensions:

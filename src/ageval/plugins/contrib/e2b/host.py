@@ -27,6 +27,8 @@ from ageval.environments.protocol import (
     ExecResult,
     Placement,
 )
+from ageval.plugins.base import BaseEnvironment
+from ageval.plugins.decorators import environment_plugin
 
 API_KEY_ENV = "E2B_API_KEY"
 _API_KEY_ALIASES = (API_KEY_ENV, "e2b_api_key")
@@ -92,7 +94,8 @@ class E2BStdio:
         return int(getattr(result, "exit_code", 0) or 0)
 
 
-class E2BHost:
+@environment_plugin(priority=100, source="first-party")
+class E2BHost(BaseEnvironment):
     """An ephemeral cloud sandbox per Attempt.
 
     No shared filesystem with this machine, so files really move: upload writes

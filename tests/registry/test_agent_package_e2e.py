@@ -103,7 +103,7 @@ def test_publish_agent_archives_listed_overlays(env: dict[str, str], tmp_path: P
     pkg.mkdir()
     (pkg / "agent.yaml").write_text(
         "format: ageval.agent/1\nagent_id: overlay-demo\nversion: '1.0'\n"
-        "binding:\n  executor: openai-http\n  model: none\n"
+        "binding:\n  executor: openai-http\n  model: {id: none}\n"
         "  overlays: [overlays/skills/demo]\n",
         encoding="utf-8",
     )
@@ -144,7 +144,7 @@ def test_publish_rejects_missing_listed_overlay(env: dict[str, str], tmp_path: P
     pkg.mkdir()
     (pkg / "agent.yaml").write_text(
         "format: ageval.agent/1\nagent_id: missing-ov\nversion: '1.0'\n"
-        "binding:\n  executor: openai-http\n  model: none\n"
+        "binding:\n  executor: openai-http\n  model: {id: none}\n"
         "  overlays: [overlays/skills/demo]\n",
         encoding="utf-8",
     )
@@ -160,7 +160,7 @@ def test_reject_secret_bearing_agent(env: dict[str, str], tmp_path: Path) -> Non
     pkg.mkdir()
     (pkg / "agent.yaml").write_text(
         "format: ageval.agent/1\nagent_id: leaky\nversion: '1.0'\n"
-        "binding: {executor: openai-http, model: none}\n",
+        "binding: {executor: openai-http, model: {id: none}}\n",
         encoding="utf-8",
     )
     (pkg / "notes.txt").write_text("api_key = sk-abc123def456ghi789jkl000\n", encoding="utf-8")
@@ -183,7 +183,7 @@ def test_reject_agent_yaml_as_dataset(env: dict[str, str], tmp_path: Path) -> No
     pkg.mkdir()
     (pkg / "agent.yaml").write_text(
         "format: ageval.agent/1\nagent_id: sneaky\nversion: '1.0'\n"
-        "binding: {executor: openai-http, model: none}\n",
+        "binding: {executor: openai-http, model: {id: none}}\n",
         encoding="utf-8",
     )
     # Hand-rolled tarball: ageval.registry.archive validates dataset trees.

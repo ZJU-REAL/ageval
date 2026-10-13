@@ -63,6 +63,14 @@ def resolve_base_url(explicit: str | None) -> str | None:
     return None
 
 
+def _model_id(model: Any) -> str:
+    from ageval.config.profiles import model_id
+
+    if model is None:
+        return ""
+    return model_id(model)
+
+
 def build_executor(
     *,
     options: dict[str, Any] | None = None,
@@ -90,7 +98,7 @@ def build_executor(
         package_root=package_root,
         agent_ref=str(agent_ref).strip(),
         method=str(opts.get("method") or "run").strip() or "run",
-        model=(model or "").strip() or "openai/gpt-4.1-mini",
+        model=_model_id(model) or "openai/gpt-4.1-mini",
         base_url=base_url if isinstance(base_url, str) else None,
         api_key_env=api_key if isinstance(api_key, str) else None,
     )

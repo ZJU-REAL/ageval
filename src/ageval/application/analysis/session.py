@@ -9,7 +9,7 @@ from __future__ import annotations
 import contextlib
 import shutil
 import tempfile
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from dataclasses import dataclass
@@ -21,6 +21,7 @@ from ageval.agents.reserved import builtin_harness_root, canonical_harness_id
 from ageval.application.analysis.errors import ANALYSIS_AGENT
 from ageval.config.env_refs import is_http_url
 from ageval.config.errors import ConfigError
+from ageval.config.profiles import model_id
 from ageval.environments.protocol import BoxSpec, EnvironmentFailure
 from ageval.plugins.binding import bind_winner
 from ageval.plugins.bootstrap import ensure_bootstrapped
@@ -76,8 +77,14 @@ def load_analysis_profile(
     row = dict(binding)
     row["id"] = "analyst"
     if isinstance(model, str) and model.strip():
-        row["model"] = model.strip()
-    if not str(row.get("model") or "").strip():
+        current = row.get("model")
+        if isinstance(current, Mapping):
+            updated = dict(current)
+            updated["id"] = model.strip()
+            row["model"] = updated
+        else:
+            row["model"] = {"id": model.strip()}
+    if not model_id(row.get("model")):
         raise ConfigError(
             ANALYSIS_AGENT,
             "--model is required when the agent binding has no model",

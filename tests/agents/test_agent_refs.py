@@ -24,7 +24,7 @@ def _make_pkg(tmp_path: Path, agent_id: str = "http-default", version: str = "0.
     pkg.mkdir(parents=True, exist_ok=True)
     (pkg / "agent.yaml").write_text(
         f"format: ageval.agent/1\nagent_id: {agent_id.rsplit('/', 1)[-1]}\nversion: '{version}'\n"
-        "binding: {executor: openai-http, model: none}\n",
+        "binding: {executor: openai-http, model: {id: none}}\n",
         encoding="utf-8",
     )
     return pkg
@@ -78,7 +78,7 @@ def test_file_ref_yaml_with_overlays_shares_package_root(tmp_path: Path) -> None
     yaml_path = pkg / "agent.yaml"
     yaml_path.write_text(
         "format: ageval.agent/1\nagent_id: http-default\nversion: '0.1.0'\n"
-        "binding:\n  executor: openai-http\n  model: none\n"
+        "binding:\n  executor: openai-http\n  model: {id: none}\n"
         "  overlays: [overlays/skills/demo]\n",
         encoding="utf-8",
     )

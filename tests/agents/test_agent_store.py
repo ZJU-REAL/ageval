@@ -22,7 +22,7 @@ def _make_pkg(tmp_path: Path, agent_id: str = "http-default", version: str = "0.
     pkg.mkdir(parents=True, exist_ok=True)
     (pkg / "agent.yaml").write_text(
         f"format: ageval.agent/1\nagent_id: {agent_id}\nversion: '{version}'\n"
-        "label: T\nbinding: {executor: openai-http, model: none}\n",
+        "label: T\nbinding: {executor: openai-http, model: {id: none}}\n",
         encoding="utf-8",
     )
     return pkg
@@ -86,7 +86,7 @@ def test_install_writes_overlay_files(tmp_path: Path) -> None:
     skill.write_text("# demo\n", encoding="utf-8")
     (pkg / "agent.yaml").write_text(
         "format: ageval.agent/1\nagent_id: http-default\nversion: '0.1.0'\n"
-        "label: T\nbinding:\n  executor: openai-http\n  model: none\n"
+        "label: T\nbinding:\n  executor: openai-http\n  model: {id: none}\n"
         "  overlays: [overlays/skills/demo]\n",
         encoding="utf-8",
     )

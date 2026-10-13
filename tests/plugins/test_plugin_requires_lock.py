@@ -85,7 +85,7 @@ def _profiles(tmp: Path, extra_plugin: str) -> Path:
                             {"plugin": "host-probe"},
                             {"plugin": extra_plugin},
                         ],
-                        "model": "none",
+                        "model": {"id": "none"},
                         "api_key": "${PROBE_API_KEY}",
                     }
                 },

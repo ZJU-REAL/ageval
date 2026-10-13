@@ -49,7 +49,7 @@ def test_acp_profile_lock_snapshot(tmp_path: Path) -> None:
         {
             "opencode-acp": {
                 "executor": "acp",
-                "model": "entry-default",
+                "model": {"id": "entry-default"},
                 "extensions": [{"plugin": "acp", "options": {"entry": "opencode"}}],
             }
         },
@@ -66,7 +66,7 @@ def test_acp_profile_lock_snapshot(tmp_path: Path) -> None:
 def test_acp_missing_entry_fails(tmp_path: Path) -> None:
     pkg = _write_pkg(tmp_path / "pkg", ["bad"])
     with pytest.raises(ConfigError):
-        _lock(pkg, {"bad": {"executor": "acp", "model": "m"}})
+        _lock(pkg, {"bad": {"executor": "acp", "model": {"id": "m"}}})
 
 
 def test_acp_unknown_entry_fails(tmp_path: Path) -> None:
@@ -77,32 +77,45 @@ def test_acp_unknown_entry_fails(tmp_path: Path) -> None:
             {
                 "bad": {
                     "executor": "acp",
-                    "model": "m",
+                    "model": {"id": "m"},
                     "extensions": [{"plugin": "acp", "options": {"entry": "not-registered"}}],
                 }
             },
         )
 
 
-def test_acp_reasoning_effort_option_survives_lock(tmp_path: Path) -> None:
+def test_acp_reasoning_effort_survives_lock(tmp_path: Path) -> None:
     pkg = _write_pkg(tmp_path / "pkg", ["solver"])
     lock = _lock(
         pkg,
         {
             "solver": {
                 "executor": "acp",
-                "model": "entry-default",
-                "extensions": [
-                    {
-                        "plugin": "acp",
-                        "options": {"entry": "pi", "reasoning_effort": "high"},
-                    }
-                ],
+                "model": {"id": "entry-default", "reasoning": {"effort": "high"}},
+                "extensions": [{"plugin": "acp", "options": {"entry": "pi"}}],
             }
         },
     )
     profiles = thaw(lock.agent_profiles)
-    assert profiles[0]["extensions"][0]["options"]["reasoning_effort"] == "high"
+    assert profiles[0]["model"]["reasoning"]["effort"] == "high"
+    assert "reasoning_effort" not in profiles[0]["extensions"][0]["options"]
+
+
+def test_acp_flat_reasoning_effort_is_a_config_error(tmp_path: Path) -> None:
+    pkg = _write_pkg(tmp_path / "pkg", ["solver"])
+    with pytest.raises(ConfigError, match="reasoning_effort"):
+        _lock(
+            pkg,
+            {
+                "solver": {
+                    "executor": "acp",
+                    "model": {"id": "entry-default"},
+                    "extensions": [
+                        {"plugin": "acp", "options": {"entry": "pi", "reasoning_effort": "high"}}
+                    ],
+                }
+            },
+        )
 
 
 def test_acp_package_cannot_override_command(tmp_path: Path) -> None:
@@ -113,7 +126,7 @@ def test_acp_package_cannot_override_command(tmp_path: Path) -> None:
             {
                 "bad": {
                     "executor": "acp",
-                    "model": "m",
+                    "model": {"id": "m"},
                     "extensions": [
                         {"plugin": "acp", "options": {"entry": "opencode", "command": ["evil"]}}
                     ],

@@ -85,7 +85,7 @@ def _profiles(root: Path) -> None:
                 "agent_profiles:",
                 "  '*':",
                 "    executor: acp",
-                "    model: old-model",
+                "    model: {id: old-model}",
                 "    api_key: ${OLD_KEY}",
                 "    extensions:",
                 "      - plugin: acp",
@@ -120,7 +120,7 @@ def test_prepare_rewrites_environment_and_keeps_secrets_out(tmp_path: Path) -> N
     assert loaded["environment"] == "e2b"
     assert loaded["evaluate_host"]["isolated"] is True
     profile = loaded["agent_profiles"]["*"]
-    assert profile["model"] == "gpt-4.1"
+    assert profile["model"] == {"id": "gpt-4.1"}
     assert profile["api_key"] == "${OPENAI_API_KEY}"
     assert profile["extensions"] == [{"plugin": "acp"}, {"plugin": "e2b"}]
     with pytest.raises(HostedRunError) as refused:

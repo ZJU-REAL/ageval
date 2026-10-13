@@ -127,7 +127,7 @@ def test_isolated_evaluate_llm_judge_on_published_tree(tmp_path: Path) -> None:
         "agent_profiles:\n"
         "  judge:\n"
         "    executor: openai-http\n"
-        "    model: mock\n"
+        "    model: {id: mock}\n"
         "    api_key: ${JUDGE_API_KEY}\n"
         "    base_url: ${JUDGE_BASE_URL}\n"
         "    extensions:\n"

@@ -358,8 +358,9 @@ class ConfigCore:
         capabilities it requires must be checked before anything starts.
         """
         from ageval.plugins.bootstrap import ensure_bootstrapped
-        from ageval.plugins.errors import ExtensionRegistryError
+        from ageval.plugins.errors import ExtensionRegistryError, PluginContractError
         from ageval.plugins.lock_bind import extension_graph_to_lock
+        from ageval.plugins.model_contract import assert_executor_model
         from ageval.plugins.plugin_requires import PluginRequiresError
         from ageval.plugins.protocol import intent_from_profile
         from ageval.plugins.resolve import resolve as resolve_extensions
@@ -368,10 +369,14 @@ class ConfigCore:
             registry = ensure_bootstrapped()
         except PluginRequiresError as exc:
             raise ConfigError(exc.kind, str(exc), location="/agent_profiles") from exc
+        from ageval.config.profiles import _assert_nested_model
+
         out: dict[str, dict[str, Any]] = {}
         rows = list(profiles_rows) or [{}]
         for profile in rows:
             pid = str(profile.get("id") or "").strip()
+            where = f"/agent_profiles/{pid}" if pid else "/agent_profiles"
+            _assert_nested_model(profile, location=where)
             intent = intent_from_profile(
                 profile,
                 environment=environment,
@@ -381,6 +386,9 @@ class ConfigCore:
             intent.profile_id = pid
             try:
                 graph = resolve_extensions(intent, registry, materialize=True)
+            except PluginContractError:
+                # Subclass of ExtensionRegistryError. Leave it unwrapped.
+                raise
             except ExtensionRegistryError as exc:
                 where = f"/agent_profiles/{pid}/extension_bindings" if pid else "/requires"
                 raise ConfigError(
@@ -390,6 +398,9 @@ class ConfigCore:
                     else f"the box this job selected cannot run this task: {exc}",
                     location=where,
                 ) from exc
+            # Model contract before the lock fragment exists. A reject here
+            # does not write a lock and does not enter upstream stall.
+            assert_executor_model(profile, graph, registry)
             out[pid] = extension_graph_to_lock(graph)
         return out or None
 

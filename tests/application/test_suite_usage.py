@@ -8,6 +8,7 @@ from ageval.application.suite.suite_usage import (
     aggregate_usage,
     collect_suite_usage,
     merge_suite_usage,
+    overlay_model,
     usage_from_trajectory,
 )
 
@@ -16,6 +17,19 @@ def _write_traj(run_dir: Path, usage: dict) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     line = json.dumps({"type": "terminal", "usage": usage})
     (run_dir / "trajectory.jsonl").write_text(line + "\n", encoding="utf-8")
+
+
+def test_overlay_model_reads_nested_id() -> None:
+    summary = {
+        "job_overlay": {
+            "agent_profiles": {
+                "solver": {"model": {"id": "openai/example-model", "api": "responses"}}
+            }
+        }
+    }
+    assert overlay_model(summary) == "openai/example-model"
+    flat = {"job_overlay": {"agent_profiles": {"solver": {"model": "openai/x"}}}}
+    assert overlay_model(flat) == "openai/x"
 
 
 def test_usage_from_trajectory_sums_terminals(tmp_path: Path) -> None:

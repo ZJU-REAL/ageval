@@ -13,7 +13,10 @@ agent_profiles:
         agent: lib.agents:JsonlAggAgent
         method: run
     - plugin: docker
-    model: openai/dashscope/qwen3.8-max
+    model:
+      id: openai/dashscope/qwen3.8-max
+      reasoning:
+        effort: max
     api_key: ${litellm_api_key}
     base_url: ${litellm_base_url}
   user:
@@ -24,7 +27,10 @@ agent_profiles:
         agent: lib.agents:UserSimAgent
         method: run
     - plugin: docker
-    model: openai/dashscope/qwen3.8-max
+    model:
+      id: openai/dashscope/qwen3.8-max
+      reasoning:
+        effort: max
     api_key: ${litellm_api_key}
     base_url: ${litellm_base_url}
   service:
@@ -35,7 +41,10 @@ agent_profiles:
         agent: lib.agents:ServiceAgent
         method: run
     - plugin: docker
-    model: openai/dashscope/qwen3.8-max
+    model:
+      id: openai/dashscope/qwen3.8-max
+      reasoning:
+        effort: max
     api_key: ${litellm_api_key}
     base_url: ${litellm_base_url}
   specialist:
@@ -46,7 +55,10 @@ agent_profiles:
         agent: lib.agents:SpecialistAgent
         method: run
     - plugin: docker
-    model: openai/dashscope/qwen3.8-max
+    model:
+      id: openai/dashscope/qwen3.8-max
+      reasoning:
+        effort: max
     api_key: ${litellm_api_key}
     base_url: ${litellm_base_url}
   planner:
@@ -57,7 +69,10 @@ agent_profiles:
         agent: lib.agents:PlannerAgent
         method: run
     - plugin: docker
-    model: openai/dashscope/qwen3.8-max
+    model:
+      id: openai/dashscope/qwen3.8-max
+      reasoning:
+        effort: max
     api_key: ${litellm_api_key}
     base_url: ${litellm_base_url}
   reducer:
@@ -68,6 +83,9 @@ agent_profiles:
         agent: lib.agents:ReducerAgent
         method: run
     - plugin: docker
-    model: openai/dashscope/qwen3.8-max
+    model:
+      id: openai/dashscope/qwen3.8-max
+      reasoning:
+        effort: max
     api_key: ${litellm_api_key}
     base_url: ${litellm_base_url}

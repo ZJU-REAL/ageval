@@ -9,7 +9,10 @@ description: >-
 tags: [coding, dsh]
 binding:
   executor: dsh
-  model: dashscope/deepseek-v4-flash
+  model:
+    id: dashscope/deepseek-v4-flash
+    reasoning:
+      effort: xhigh
   api_key: ${litellm_api_key}
   base_url: ${litellm_base_url}
   extensions:

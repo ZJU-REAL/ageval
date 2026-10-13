@@ -51,7 +51,7 @@ Coding agents enter the box through the parent **ACP** client + `host.attach_std
 dataset root (ageval.yaml / ageval.dataset/1)
   → resolve_task(--task) → tasks/<id>/task.yaml
   → merge profiles.yaml (environment + agent_profiles)
-  → load_and_lock → LockedTaskConfig + extension_bindings + digest
+  → load_and_lock → model contract, then LockedTaskConfig + extension_bindings + digest
   → IdentityFactory: Run / Trial / Attempt + evidence root
   → host.preflight
   → run_attempt
@@ -136,12 +136,15 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   │       ├── record.py
 │   │       └── cleanup.py
 │   ├── config/                      # dataset root + task.yaml + profiles
+│   ├── model/                       # ModelSpec · resolve_model (no gateway key list)
 │   ├── environments/
 │   │   ├── protocol.py              # EnvironmentProvider · StdioTransport · caps
 │   │   └── streams.py
 │   ├── plugins/
+│   │   ├── base.py                  # BaseEnvironment · BaseExecutor
+│   │   ├── decorators.py            # @environment_plugin / @executor_plugin
 │   │   ├── slots.py                 # exclusive / chain ids
-│   │   ├── registry.py / resolve.py / bootstrap.py
+│   │   ├── registry.py / resolve.py / bootstrap.py / builtin.py
 │   │   ├── defaults/                # environment_setup recognizes setup.sh
 │   │   └── contrib/
 │   │       ├── acp/                 # exclusive executor + attach_stdio client
@@ -209,7 +212,10 @@ This is the accepted direction, **not** splitting Current back into `adapters/` 
 ```text
 src/ageval/
   cli/ application/ attempt/phases/ config/
+  model/                            # ModelSpec · resolve_model
   environments/protocol.py          # still no vendor SDK
+  plugins/base.py                   # BaseEnvironment · BaseExecutor
+  plugins/decorators.py             # @environment_plugin / @executor_plugin
   plugins/contrib/{acp,docker,local,e2b,daytona,ssh,openai_http,anthropic_http}
   plugins/defaults/                 # or move to contrib/defaults — pick one, not both
   runtime/{identity,parent_agent,task_launch,task_worker}
@@ -267,8 +273,12 @@ cli ──────────────► application.composition
                          │
                          ├─► config / attempt / runtime / capabilities / evaluation
                          │
-                         └─► plugins.bootstrap ──► contrib/* ──► environments.protocol
-                                                    (contrib is not imported back by protocol)
+                         └─► plugins.bootstrap ──► plugins.builtin ──► contrib/* ──► environments.protocol
+                                 (builtin lists modules; it does not scan contrib/.
+                                  contrib is not imported back by protocol)
+
+plugins.base ──► ageval.model · environments.protocol
+ageval.model ──► (no plugins, no contrib, no application)
 
 ageval_sdk ──► public DTOs / protocol shapes only
                (must not import application, contrib internals, or Control Plane private modules)
@@ -285,6 +295,7 @@ ageval_sdk ──► public DTOs / protocol shapes only
 - `container_id` or `if kind == e2b` appearing in ACP / `attempt` / `run.py`.
 - A second `resolve_executor` / CLI bypass / hand-constructing Docker in application.
 - Production code importing a test helper as the only wiring path.
+- A gateway key list inside `ModelSpec` or `resolve_model`. Allowed `model.extra` keys are the executor `extra_allowlist`.
 
 Third-party workflow SDKs: allowed only as a task or **explicit** external plugin dependency; they must not become Core authority.
 
@@ -469,6 +480,7 @@ Fixtures and mocks must not raise the evidence grade. `AGEVAL_SKIP_REAL_ACP=1` o
 | `run.py` / SDK API? | [docs/design/03](docs/design/03-task-run-and-sdk.md) |
 | Box kind / ACP / evaluate / evidence? | [docs/design/05-runtime/](docs/design/05-runtime/) |
 | Plugin exclusive/chain? | [docs/design/11](docs/design/11-extension-plugins.md) |
+| Model fields / executor base? | [docs/design/16](docs/design/16-model.md) |
 | Evaluation and failure semantics? | [docs/design/07](docs/design/07-budget-evaluation-failure.md) |
 | Full owner matrix? | [docs/design/09](docs/design/09-owner-matrix-and-structure.md) |
 | Where source lives, who depends on whom, lifecycle diagrams? | **This document** |

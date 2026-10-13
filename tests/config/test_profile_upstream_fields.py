@@ -46,7 +46,7 @@ def test_accepts_base_url_and_api_key_locator(tmp_path: Path) -> None:
         {
             "glm": {
                 "executor": "openai-http",
-                "model": "glm-4.7",
+                "model": {"id": "glm-4.7"},
                 "base_url": "https://open.bigmodel.cn/api/coding/paas/v4",
                 "api_key": "${zhipu_coding_api_key}",
             }
@@ -66,7 +66,7 @@ def test_rejects_secret_like_api_key(tmp_path: Path) -> None:
             {
                 "bad": {
                     "executor": "openai-http",
-                    "model": "glm-4.7",
+                    "model": {"id": "glm-4.7"},
                     "api_key": "sk-this-is-a-secret-value-not-a-locator",
                 }
             },
@@ -83,7 +83,7 @@ def test_rejects_non_url_base(tmp_path: Path) -> None:
             {
                 "bad": {
                     "executor": "openai-http",
-                    "model": "glm-4.7",
+                    "model": {"id": "glm-4.7"},
                     "base_url": "not-a-url",
                 }
             },
@@ -101,7 +101,7 @@ def test_unwraps_base_url_env_ref_to_locator_name(
         {
             "glm": {
                 "executor": "openai-http",
-                "model": "glm-4.7",
+                "model": {"id": "glm-4.7"},
                 "base_url": "${TEST_LITELLM_BASE}",
                 "api_key": "${zhipu_coding_api_key}",
             }
@@ -125,7 +125,7 @@ def test_rejects_bare_base_url_locator(tmp_path: Path) -> None:
             {
                 "glm": {
                     "executor": "openai-http",
-                    "model": "glm-4.7",
+                    "model": {"id": "glm-4.7"},
                     "base_url": "litellm_base_url",
                     "api_key": "${zhipu_coding_api_key}",
                 }
@@ -142,7 +142,7 @@ def test_rejects_bare_api_key_locator(tmp_path: Path) -> None:
             {
                 "glm": {
                     "executor": "openai-http",
-                    "model": "glm-4.7",
+                    "model": {"id": "glm-4.7"},
                     "api_key": "zhipu_coding_api_key",
                 }
             },
@@ -158,7 +158,7 @@ def test_lock_keeps_unset_base_url_locator(tmp_path: Path, monkeypatch: pytest.M
         {
             "glm": {
                 "executor": "openai-http",
-                "model": "glm-4.7",
+                "model": {"id": "glm-4.7"},
                 "base_url": "${MISSING_BASE_URL}",
                 "api_key": "${zhipu_coding_api_key}",
             }

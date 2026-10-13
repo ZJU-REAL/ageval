@@ -32,6 +32,14 @@ def describe_acp_oneshot(*, entry_id: str | None = None) -> dict[str, Any]:
     }
 
 
+def _model_id(model: Any) -> str:
+    from ageval.config.profiles import model_id
+
+    if model is None:
+        return ""
+    return model_id(model)
+
+
 def build_executor(
     *,
     host: Any,
@@ -58,7 +66,7 @@ def build_executor(
             f"unknown acp entry: {entry!r}",
             kind="extension_materialize_failed",
         )
-    model_s = (model or "").strip() or "entry-default"
+    model_s = _model_id(model) or "entry-default"
     effort = opts.get("reasoning_effort")
     effort_s = str(effort).strip() if isinstance(effort, str) and effort.strip() else None
     argv = acp_stdio_argv(

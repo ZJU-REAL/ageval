@@ -14,13 +14,13 @@ from ageval.config.profiles import parse_job_mapping
 
 SOLVER = {
     "executor": "acp",
-    "model": "entry-default",
+    "model": {"id": "entry-default"},
     "options": {"entry": "codex"},
     "extensions": [{"plugin": "acp"}, {"plugin": "local"}],
 }
 DOCKER_SOLVER = {
     "executor": "acp",
-    "model": "entry-default",
+    "model": {"id": "entry-default"},
     "options": {"entry": "codex"},
     "extensions": [{"plugin": "acp"}, {"plugin": "docker"}],
 }

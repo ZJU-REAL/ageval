@@ -134,7 +134,7 @@ async def bind_reasoning_effort(
     desired: str | None,
     config_options: Any,
 ) -> str | None:
-    """Apply profile ``options.reasoning_effort`` to the advertised selector."""
+    """Apply ``model.reasoning.effort`` to the advertised selector."""
     if not desired:
         return None
     opt = find_reasoning_config_option(config_options)

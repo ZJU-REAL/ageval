@@ -167,14 +167,27 @@ export type FileContent = {
   truncated?: boolean;
 };
 
+/** Nested profile `model:`. Field table: docs/design/16-model.md. */
+export type HubModelSpec = {
+  id: string;
+  api?: string;
+  reasoning?: { effort?: string };
+  timeout?: number;
+  watchdog?: number;
+  extra?: Record<string, unknown>;
+};
+
+export type JobOverlayModel = HubModelSpec;
+
 export type JobOverlayProfile = {
   executor?: string;
-  model?: string;
+  /** Nested object only. A stored string id is coerced when a profile is emitted. */
+  model?: HubModelSpec;
   base_url?: string;
   api_key?: string;
   label?: string;
   agent_ref?: string;
-  options?: { entry?: string; reasoning_effort?: string };
+  options?: { entry?: string };
   overlays?: string[];
   extensions?: Array<{ plugin?: string; options?: Record<string, unknown> }>;
 };
@@ -185,6 +198,35 @@ export type JobOverlay = {
   environment_options?: Record<string, unknown>;
   agent_profiles?: Record<string, JobOverlayProfile>;
 };
+
+/** Profiles preview lines. A stored string id is written as nested `model.id`. */
+export function formatJobOverlayModel(
+  model: HubModelSpec | string | null | undefined,
+): string[] {
+  const spec: HubModelSpec | undefined =
+    typeof model === "string"
+      ? model.trim()
+        ? { id: model.trim() }
+        : undefined
+      : (model ?? undefined);
+  if (!spec) return [];
+  const id = spec.id.trim();
+  if (!id) return [];
+  const lines = ["    model:", `      id: ${id}`];
+  const api = spec.api?.trim() ?? "";
+  if (api) lines.push(`      api: ${api}`);
+  const effort = spec.reasoning?.effort?.trim() ?? "";
+  if (effort) {
+    lines.push("      reasoning:");
+    lines.push(`        effort: ${effort}`);
+  }
+  if (typeof spec.timeout === "number") lines.push(`      timeout: ${spec.timeout}`);
+  if (typeof spec.watchdog === "number") lines.push(`      watchdog: ${spec.watchdog}`);
+  if (spec.extra && Object.keys(spec.extra).length > 0) {
+    lines.push(`      extra: ${JSON.stringify(spec.extra)}`);
+  }
+  return lines;
+}
 
 export function overlayAgentProfiles(
   overlay: JobOverlay | null | undefined,

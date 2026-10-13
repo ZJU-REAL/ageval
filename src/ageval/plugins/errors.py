@@ -37,3 +37,20 @@ class ServiceConflictError(ExtensionRegistryError):
 
 class InjectUnsatisfiedError(ExtensionRegistryError):
     kind = "inject_unsatisfied"
+
+
+class PluginContractError(ExtensionRegistryError):
+    """Class contract failure at registration or at lock.
+
+    Registration: the class is the wrong base, a required method is missing,
+    a true capability has no callable method, or ``extra_allowlist`` /
+    ``supported_apis`` / ``supported_model_fields`` is undeclared. An explicit
+    empty ``extra_allowlist`` is valid.
+
+    Lock: ``requires_environment`` is set and the environment inject is
+    missing or short on capabilities, or strict mode rejects a yaml-only
+    executor that cannot declare an allowlist. A bad model profile raises
+    ``ModelConfigError``. Transport failures stay on the upstream-stall path.
+    """
+
+    kind = "plugin_contract"

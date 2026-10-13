@@ -27,8 +27,8 @@ Do not write `executor: pi`. A box without `attach_stdio` still lock-fails
 | Name | Default | Purpose |
 | --- | --- | --- |
 | `options.entry` | *(required)* | ACP entry id (`codex`, `claude-code`, `pi`, `opencode`, `grok-build`). Missing / unknown → lock `extension_materialize_failed`. |
-| `options.reasoning_effort` | unset | Applied when the entry advertises a reasoning selector. |
-| `model` | `entry-default` | Session model id. |
+| `model.id` | `entry-default` | Nested `model:` only. Session model id. |
+| `model.reasoning.effort` | unset | Applied when the entry advertises a reasoning selector. Omit to keep the entry default. |
 | `api_key` | unset | Env **locator name** projected into the **exec** env. Value never enters the lock. |
 | `base_url` | unset | Projected into the exec env when the entry uses an OpenAI-compatible base. |
 
@@ -48,7 +48,10 @@ environment: docker
 agent_profiles:
   solver:
     executor: acp-oneshot
-    model: zai-coding-cn/glm-5.2
+    model:
+      id: zai-coding-cn/glm-5.2
+      reasoning:
+        effort: xhigh
     api_key: ${ZHIPU_API_KEY}
     options:
       entry: pi

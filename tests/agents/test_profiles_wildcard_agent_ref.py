@@ -15,8 +15,12 @@ from ageval.config.profiles import (
 WILDCARD_DOC = {
     "format": "ageval.profiles/1",
     "agent_profiles": {
-        "*": {"executor": "openai-http", "model": "none", "agent_ref": "local/m@0.1.0+sha256:abc"},
-        "critic": {"executor": "openai-http", "model": "other"},
+        "*": {
+            "executor": "openai-http",
+            "model": {"id": "none"},
+            "agent_ref": "local/m@0.1.0+sha256:abc",
+        },
+        "critic": {"executor": "openai-http", "model": {"id": "other"}},
     },
 }
 
@@ -29,7 +33,7 @@ def test_parse_accepts_wildcard_key() -> None:
 def test_parse_still_rejects_bad_role_ids() -> None:
     doc = {
         "format": "ageval.profiles/1",
-        "agent_profiles": {"**": {"executor": "openai-http", "model": "x"}},
+        "agent_profiles": {"**": {"executor": "openai-http", "model": {"id": "x"}}},
     }
     with pytest.raises(ConfigError):
         parse_job_mapping(doc)
@@ -39,9 +43,9 @@ def test_merge_exact_wins_wildcard_falls_back() -> None:
     job = parse_job_mapping(WILDCARD_DOC)
     merged = merge_job_onto_slots([{"id": "solver"}, {"id": "critic"}], job)
     by_id = {row["id"]: row for row in merged}
-    assert by_id["solver"]["model"] == "none"  # wildcard fallback
+    assert by_id["solver"]["model"] == {"id": "none"}  # wildcard fallback
     assert by_id["solver"]["agent_ref"] == "local/m@0.1.0+sha256:abc"
-    assert by_id["critic"]["model"] == "other"  # exact wins
+    assert by_id["critic"]["model"] == {"id": "other"}  # exact wins
     assert "agent_ref" not in by_id["critic"]
 
 
@@ -49,7 +53,7 @@ def test_merge_without_wildcard_still_fails_closed() -> None:
     job = parse_job_mapping(
         {
             "format": "ageval.profiles/1",
-            "agent_profiles": {"critic": {"executor": "openai-http", "model": "x"}},
+            "agent_profiles": {"critic": {"executor": "openai-http", "model": {"id": "x"}}},
         }
     )
     with pytest.raises(ConfigError):
@@ -64,7 +68,7 @@ def test_project_expands_wildcard_to_real_roles() -> None:
     rows = overlay["agent_profiles"]
     assert set(rows) == {"solver", "critic"}
     assert rows["solver"]["agent_ref"] == "local/m@0.1.0+sha256:abc"
-    assert rows["critic"]["model"] == "other"
+    assert rows["critic"]["model"] == {"id": "other"}
     assert "*" not in rows
 
 
@@ -91,7 +95,7 @@ def test_suite_compat_and_labels_with_wildcard_binding() -> None:
 
     binding = {
         "executor": "acp",
-        "model": "entry-default",
+        "model": {"id": "entry-default"},
         "label": "Claude Code (entry default)",
         "extensions": [{"plugin": "acp", "options": {"entry": "claude-code"}}],
     }
@@ -114,7 +118,7 @@ def test_wildcard_and_explicit_spellings_share_fingerprint() -> None:
 
     binding = {
         "executor": "acp",
-        "model": "entry-default",
+        "model": {"id": "entry-default"},
         "extensions": [{"plugin": "acp", "options": {"entry": "claude-code"}}],
     }
     per_task = [{"agent_profiles": {"solver": dict(binding)}}]
@@ -136,13 +140,13 @@ def test_overlays_do_not_inherit_onto_exact_row() -> None:
             "agent_profiles": {
                 "*": {
                     "executor": "openai-http",
-                    "model": "none",
+                    "model": {"id": "none"},
                     "overlays": ["overlays/skills/demo"],
                     "agent_ref": "official/xx@0.1.0+sha256:aaaaaaaaaaaa",
                 },
                 "user": {
                     "executor": "openai-http",
-                    "model": "other",
+                    "model": {"id": "other"},
                     "agent_ref": "official/yy@0.1.0+sha256:bbbbbbbbbbbb",
                 },
             },
@@ -168,19 +172,19 @@ def test_exact_row_overrides_wildcard_field_wise() -> None:
             "agent_profiles": {
                 "*": {
                     "executor": "acp",
-                    "model": "entry-default",
+                    "model": {"id": "entry-default"},
                     "extensions": [{"plugin": "acp", "options": {"entry": "claude-code"}}],
                 }
             },
         }
     )
-    apply_profile_override(job, "/agent_profiles/solver/model", "claude-opus-5")
+    apply_profile_override(job, "/agent_profiles/solver/model/id", "claude-opus-5")
     merged = merge_job_onto_slots([{"id": "solver"}, {"id": "critic"}], job)
     by_id = {row["id"]: row for row in merged}
-    assert by_id["solver"]["model"] == "claude-opus-5"  # override wins
+    assert by_id["solver"]["model"]["id"] == "claude-opus-5"  # override wins
     assert by_id["solver"]["executor"] == "acp"  # inherited from wildcard
     assert by_id["solver"]["extensions"][0]["options"]["entry"] == "claude-code"
-    assert by_id["critic"]["model"] == "entry-default"  # untouched fallback
+    assert by_id["critic"]["model"] == {"id": "entry-default"}  # untouched fallback
 
     eff = effective_profile(job.profiles, "solver")
-    assert eff is not None and eff["model"] == "claude-opus-5" and eff["executor"] == "acp"
+    assert eff is not None and eff["model"]["id"] == "claude-opus-5" and eff["executor"] == "acp"

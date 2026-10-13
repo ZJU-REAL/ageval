@@ -65,7 +65,7 @@ def test_agent_side_by_side_versions(env: dict[str, str], tmp_path: Path) -> Non
         pkg.mkdir()
         (pkg / "agent.yaml").write_text(
             f"format: ageval.agent/1\nagent_id: http-default\nversion: '{version}'\n"
-            "label: T\nbinding: {executor: openai-http, model: none}\n",
+            "label: T\nbinding: {executor: openai-http, model: {id: none}}\n",
             encoding="utf-8",
         )
         return pkg
@@ -142,7 +142,7 @@ def test_lock_with_builtin_agent_without_install(env: dict[str, str]) -> None:
     overlay = summary["job_overlay"]["agent_profiles"]
     refs = {row.get("agent_ref") for row in overlay.values()}
     assert all(isinstance(ref, str) and ref.startswith("pi@0.1.0+sha256:") for ref in refs)
-    assert {row.get("model") for row in overlay.values()} == {"glm-4.7"}
+    assert {row.get("model", {}).get("id") for row in overlay.values()} == {"glm-4.7"}
     dumped = json.dumps(summary)
     assert "sk-" not in dumped
 
@@ -153,12 +153,14 @@ def test_lock_model_override_requires_agent_and_writes_overlay(
     assert _cli(env, "agent", "install", str(EXAMPLE_AGENT)).returncode == 0
 
     default = _lock_summary(env, "--agent", "local/pi-default@0.1.0")
-    default_models = {row.get("model") for row in default["job_overlay"]["agent_profiles"].values()}
+    default_models = {
+        row.get("model", {}).get("id") for row in default["job_overlay"]["agent_profiles"].values()
+    }
     assert default_models == {"entry-default"}
 
     overridden = _lock_summary(env, "--agent", "local/pi-default@0.1.0", "--model", "glm-4.7")
     overlay = overridden["job_overlay"]["agent_profiles"]
-    assert {row.get("model") for row in overlay.values()} == {"glm-4.7"}
+    assert {row.get("model", {}).get("id") for row in overlay.values()} == {"glm-4.7"}
     assert overridden["digest"] != default["digest"]
     dumped = json.dumps(overridden)
     assert "glm-4.7" in dumped
@@ -171,9 +173,9 @@ def test_lock_model_override_requires_agent_and_writes_overlay(
         "--model",
         "glm-4.7",
         "--set",
-        '/agent_profiles/solver/model="via-set"',
+        '/agent_profiles/solver/model/id="via-set"',
     )
-    assert via_set["job_overlay"]["agent_profiles"]["solver"]["model"] == "via-set"
+    assert via_set["job_overlay"]["agent_profiles"]["solver"]["model"]["id"] == "via-set"
 
     missing = _cli(env, "lock", str(DATABASE), "--task", "terminal-jsonl-agg", "--model", "glm-4.7")
     assert missing.returncode == 2
@@ -221,7 +223,7 @@ def _write_agent(root: Path, *, plugin: str) -> Path:
             "version: '0.1.0'\n"
             "binding:\n"
             "  executor: openai-http\n"
-            "  model: none\n"
+            "  model: {id: none}\n"
             "  extensions:\n"
             f"    - plugin: {plugin}\n"
         ),

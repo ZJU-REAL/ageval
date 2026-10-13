@@ -13,6 +13,7 @@ from typing import Any
 
 from ageval.application.model_directory import estimate_cost_usd, load_model_pin
 from ageval.config.errors import ConfigError
+from ageval.config.profiles import model_id
 from ageval.evidence.locators import resolve_attempt_run_dir
 
 _TRAJECTORY = "trajectory.jsonl"
@@ -180,9 +181,9 @@ def overlay_model(summary: Mapping[str, Any]) -> str:
     for raw in profiles.values():
         if not isinstance(raw, dict):
             continue
-        model = raw.get("model")
-        if isinstance(model, str) and model.strip():
-            return model.strip()
+        ident = model_id(raw.get("model"))
+        if ident:
+            return ident
     return str(summary.get("model_label") or "").strip()
 
 

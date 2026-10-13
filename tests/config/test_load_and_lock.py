@@ -17,7 +17,7 @@ from ageval.config.overrides import parse_set_override
 
 SOLVER = {
     "executor": "acp",
-    "model": "entry-default",
+    "model": {"id": "entry-default"},
     "options": {"entry": "codex"},
     "extensions": [{"plugin": "acp"}, {"plugin": "local"}],
 }
@@ -98,7 +98,7 @@ def test_lock_binds_executor_per_profile_mixed_mechanisms(tmp_path: Path) -> Non
                 "solver": {**SOLVER, "api_key": "${SOLVER_API_KEY}"},
                 "judge": {
                     "executor": "openai-http",
-                    "model": "gpt-4.1-mini",
+                    "model": {"id": "gpt-4.1-mini"},
                     "api_key": "${JUDGE_API_KEY}",
                     "base_url": "http://127.0.0.1:9/v1",
                     "extensions": [{"plugin": "openai-http"}, {"plugin": "local"}],
@@ -226,5 +226,8 @@ def test_set_override_pointer_allowlist() -> None:
         parse_set_override('/harness/entrypoint="x:y"')
     assert caught.value.error_code == "invalid_override"
 
-    pointer, value = parse_set_override('/agent_profiles/solver/model="gpt-test"')
-    assert (pointer, value) == ("/agent_profiles/solver/model", "gpt-test")
+    pointer, value = parse_set_override('/agent_profiles/solver/model/id="gpt-test"')
+    assert (pointer, value) == ("/agent_profiles/solver/model/id", "gpt-test")
+    whole, body = parse_set_override('/agent_profiles/solver/model={"id":"gpt-test"}')
+    assert whole == "/agent_profiles/solver/model"
+    assert body == {"id": "gpt-test"}

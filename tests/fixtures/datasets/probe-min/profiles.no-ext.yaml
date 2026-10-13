@@ -3,5 +3,5 @@ environment: local
 agent_profiles:
   solver:
     executor: host-probe
-    model: none
+    model: {id: none}
     api_key: ${PROBE_API_KEY}

@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, NamedTuple
 
+from services.registry.auth.tokens import TokenInfo
 from services.registry.dataset import BOUND_RELEASE
 from services.registry.inbox.maintainers import (
     COLLECT_MODES,
@@ -20,11 +21,11 @@ from services.registry.inbox.maintainers import (
     auth_is_maintainer,
 )
 from services.registry.orgs.official import official_dataset_ids
-from services.registry.auth.tokens import TokenInfo
 
 from ageval.agents.refs import published_agent_ref_parts
 from ageval.agents.reserved import builtin_harness_ids, canonical_harness_id
 from ageval.application.suite.attach_agent_ref import hub_agent_ref_parts
+from ageval.config.profiles import model_id
 from ageval.config.runtime_identity import (
     agent_display_name,
     resolve_agent_id,
@@ -462,7 +463,6 @@ def _performances_from_suite(
     out: list[dict[str, Any]] = []
     for role_id, raw, parts in valid:
         package_id, agent_version = parts
-        model = raw.get("model")
         agent_ref = raw.get("agent_ref")
         row: dict[str, Any] = {
             "package_id": package_id,
@@ -471,7 +471,7 @@ def _performances_from_suite(
             "dataset_version": str(suite.get("dataset_version") or ""),
             "suite_run_id": str(suite.get("suite_run_id") or ""),
             "role": role_id,
-            "model": model.strip() if isinstance(model, str) else "",
+            "model": model_id(raw.get("model")),
             "pass_rate": suite.get("pass_rate"),
             "mean_score": suite.get("mean_score"),
             "metrics": metrics_out,
@@ -496,7 +496,7 @@ def _with_canonical_models(
         return rows
     out: list[dict[str, Any]] = []
     for row in rows:
-        overlay = str(row.get("model") or "").strip()
+        overlay = model_id(row.get("model"))
         canonical = stored.get(overlay, "").strip()
         if canonical:
             row = {**row, "canonical_model": canonical}

@@ -30,7 +30,7 @@ def _job(
 ) -> dict[str, Any]:
     row: dict[str, Any] = {
         "executor": "acp",
-        "model": model,
+        "model": {"id": model},
         "api_key": api_key,
         "options": {"entry": entry},
         "extensions": [{"plugin": "acp"}, {"plugin": "docker"}],
@@ -141,12 +141,12 @@ def test_union_models_from_all_roles() -> None:
     job = {
         "agent_profiles": {
             "user": {
-                "model": "zai-coding-cn/glm-5.3",
+                "model": {"id": "zai-coding-cn/glm-5.3"},
                 "api_key": "ZHIPU_API_KEY",
                 "options": {"entry": "pi"},
             },
             "service": {
-                "model": "zai-coding-cn/glm-5.2",
+                "model": {"id": "zai-coding-cn/glm-5.2"},
                 "api_key": "ZHIPU_API_KEY",
                 "options": {"entry": "pi"},
             },

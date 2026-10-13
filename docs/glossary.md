@@ -85,6 +85,11 @@ public 只许出现「public」或「both」行的规范名。internal 词出现
 | bake | bake | internal | 镜像在 build 期写入 | 烘焙；public 写「写入镜像」 |
 | isolated | isolated | — | 禁止单独出现。证据等级写 `runnable-mvp` 等全名；字段写 `evaluate_host.isolated` | isolated 当形容词裸用 |
 | —（内部分级，勿外露） | evidence grade | internal | `runnable-mvp` 等内部验收分级，只在 AGENTS / Issue / evidence 声明里出现 | public 出现「证据等级 / evidence grade」；「证据等级升级 / evidence-grade upgrade」当公开文案——public 写事实：「不影响评测结果」「不会让结果更可信」 |
+| Model | Model | internal | profile 上的嵌套 `model:`，解析成 `ModelSpec`。字段表在 `docs/design/16-model.md` | 把 `api_key` / `base_url` 写成 Model 字段；在 Spec 里写网关允许名单；format `ageval.model/1` |
+| — | ModelSpec | internal | `ageval.model` 的冻结规格：`id` / `api` / `reasoning_effort` / `timeout` / `watchdog` / `extra` | 第二套 Spec；把 watchdog 省略读成无限 |
+| — | BaseEnvironment | internal | 环境 ABC。`capabilities` 用 `EnvironmentCapabilities` | 再造一套 capability 类型 |
+| — | BaseExecutor | internal | executor ABC。每个 executor 实现 `supports_model` 与 `bind_model` | `consumes_model` |
+| — | extra_allowlist | internal | executor 类体声明的 `model.extra` 键。空集拒绝全部 | 写进 `ModelSpec` 的全局名单；未声明却当空集用 |
 
 ### PASS / FAIL / ERROR
 

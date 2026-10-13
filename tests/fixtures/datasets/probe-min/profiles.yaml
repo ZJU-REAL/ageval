@@ -5,5 +5,5 @@ agent_profiles:
     executor: host-probe
     extensions:
     - plugin: host-probe
-    model: none
+    model: {id: none}
     api_key: ${PROBE_API_KEY}

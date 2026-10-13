@@ -253,7 +253,7 @@ def test_real_acp_invocation_limit_is_scored(tmp_path: Path) -> None:
         "agent_profiles:\n"
         "  solver:\n"
         "    executor: acp\n"
-        "    model: glm-5.3\n"
+        "    model: {id: glm-5.3}\n"
         f"    api_key: ${{{key_name}}}\n"
         "    options:\n"
         "      entry: pi\n"

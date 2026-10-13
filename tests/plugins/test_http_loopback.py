@@ -152,7 +152,7 @@ def test_miniswe_loopback_does_not_emit_missing_credential(
     spi = MinisweExecutorSPI(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        model="openai/x",
+        model={"id": "openai/x"},
         api_key=None,
         base_url="http://127.0.0.1:9/v1",
     )
@@ -170,7 +170,7 @@ def test_miniswe_remote_missing_credential(monkeypatch: pytest.MonkeyPatch) -> N
     spi = MinisweExecutorSPI(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        model="openai/x",
+        model={"id": "openai/x"},
         api_key=None,
         base_url="https://api.example.invalid/v1",
     )
@@ -210,7 +210,7 @@ def _http_profiles(path: Path, *, base_url: str, api_key: str | None) -> None:
         "agent_profiles:",
         "  solver:",
         "    executor: openai-http",
-        "    model: mock",
+        "    model: {id: mock}",
         f"    base_url: {base_url}",
     ]
     if api_key is not None:

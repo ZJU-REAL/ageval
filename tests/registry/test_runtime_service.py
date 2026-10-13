@@ -209,6 +209,30 @@ def test_builtin_harness_performances_skip_consent(tmp_path: Path) -> None:
     assert "agent_refs" not in by_id["suite_uploaded_ref"]
 
 
+def test_nested_model_id_is_the_performance_model(tmp_path: Path) -> None:
+    packages, results, runtimes = _services(tmp_path)
+    _publish(packages, tmp_path, dataset_id="official/gaia", org_id="official")
+    binding = {
+        "executor": "acp",
+        "extensions": [{"plugin": "acp", "options": {"entry": "pi"}}],
+        "model": {
+            "id": "openai/example-model",
+            "api": "responses",
+            "reasoning": {"effort": "xhigh"},
+        },
+        "agent_ref": "pi@0.1.0+sha256:aaaaaaaaaaaa",
+    }
+    _upload(
+        results,
+        tmp_path,
+        suite_run_id="suite_nested_model",
+        dataset_id="official/gaia",
+        agent_profiles={"solver": binding},
+    )
+    rows = runtimes.performances_for_agent("pi", TokenInfo(scopes=frozenset(), user_id=""))
+    assert rows[0]["model"] == "openai/example-model"
+
+
 def test_official_public_suite_appears_community_does_not(tmp_path: Path) -> None:
     packages, results, runtimes = _services(tmp_path)
     _publish(packages, tmp_path, dataset_id="official/gaia", org_id="official")

@@ -23,6 +23,8 @@
 
 效果是 **interface / implementation 分离**：ACP 的稳定接口是「名为 `environment`、且声明了 `attach_stdio` 的环境」；docker 把 `exec -i` 收在自己的 `attach_stdio` 里，e2b 把 SDK stdin 流收在同一方法里。换一种 kind，ACP 源码与 lock 里的 inject 行都不改。环境内部怎么实现，对 executor **不可见**（locality）。
 
+一类环境与一类 executor 继承 `BaseEnvironment` / `BaseExecutor`（`src/ageval/plugins/base.py`），并用 `@environment_plugin` / `@executor_plugin` 注册。Model 字段、`supports_model` / `bind_model`、`extra_allowlist` 见 [16](16-model.md)。lock 在写 lock 之前调用 `supports_model`；`requires_environment` 未满足是 `PluginContractError`。没有装饰类的外置 factory 默认警告，`AGEVAL_STRICT_MODEL_CONTRACT=1` 时改为 `PluginContractError`。miniswe 走同一基类，仍由 `load_installed` 装入。nooa / dsh / acp-oneshot 仍是各自的 factory，不在 builtin 名单里。
+
 `exec` 与 `attach_stdio` 是同一服务上的不同 capability，不是两个 service。缺 cap 在 **lock** 失败，不在 invoke 中途探测。PASS / identity / cleanup 不准 export。
 
 笛卡尔积成立的条件：每个 executor 的 `invoke` 只通过已 inject 的 `environment` 服务碰环境。本机 SDK + 碰巧能看见的 bind-mount **不算** 满足这条。dsh / nooa 必须走环境内 worker + `host.exec`，与 ACP 同一 seam。

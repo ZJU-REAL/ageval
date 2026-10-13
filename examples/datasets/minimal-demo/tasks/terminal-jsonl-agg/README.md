@@ -17,7 +17,7 @@ on role `solver`.
 uv run ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg
 # switch ACP entry via allowlisted override
 uv run ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
-  --set '/bindings/solver/options/entry="codex"'
+  --set '/agent_profiles/solver/options/entry="codex"'
 ```
 
 Needs a host ACP entry, credentials for that entry, and Docker (default environment).

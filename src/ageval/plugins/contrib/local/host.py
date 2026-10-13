@@ -23,6 +23,8 @@ from ageval.environments.protocol import (
     ExecResult,
     Placement,
 )
+from ageval.plugins.base import BaseEnvironment
+from ageval.plugins.decorators import environment_plugin
 
 _BOX_ROOT = "/attempt"
 _MAX_STREAM_BYTES = 256 * 1024
@@ -59,7 +61,8 @@ class LocalStdio:
             return None
 
 
-class LocalHost:
+@environment_plugin(priority=100, source="first-party")
+class LocalHost(BaseEnvironment):
     """Real local box: one work root per Attempt, real subprocesses."""
 
     kind = "local"

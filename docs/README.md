@@ -40,6 +40,7 @@
 | [design/12-hub-dataset-and-leaderboard.md](design/12-hub-dataset-and-leaderboard.md) | Hub / Registry |
 | [design/13-web-ui-tokens.md](design/13-web-ui-tokens.md) | Web UI 令牌 |
 | [design/14-agent-hub.md](design/14-agent-hub.md) | `ageval.agent/1` |
+| [design/16-model.md](design/16-model.md) | `ModelSpec`、嵌套 `model:`、环境与 executor 基类 |
 
 文件名前缀只表示读序。
 

@@ -30,6 +30,6 @@ def test_parse_ok() -> None:
 
 
 def test_parse_profile_axis() -> None:
-    axis = parse_matrix_arg('/agent_profiles/solver/model=["a","b"]')
-    assert axis.pointer == "/agent_profiles/solver/model"
+    axis = parse_matrix_arg('/agent_profiles/solver/model/id=["a","b"]')
+    assert axis.pointer == "/agent_profiles/solver/model/id"
     assert axis.values == ("a", "b")
