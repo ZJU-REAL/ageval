@@ -524,6 +524,207 @@ def post_responses_api(
         close_llm_client(client)
 
 
+def _chat_stream_enabled(explicit: bool | None) -> bool:
+    """Default chat streaming on; env ``AGEVAL_MINISWE_CHAT_STREAM=0`` disables.
+
+    Explicit ``stream=`` on ``post_chat_completions`` wins over the env.
+    """
+    if explicit is not None:
+        return bool(explicit)
+    import os
+
+    raw = (os.environ.get("AGEVAL_MINISWE_CHAT_STREAM") or "1").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
+
+def _merge_thinking_blocks(dst: list[dict[str, Any]], src: Any) -> None:
+    """Append streamed ``thinking`` text into blocks by index."""
+    if not isinstance(src, list):
+        return
+    for i, block in enumerate(src):
+        if not isinstance(block, dict):
+            continue
+        while len(dst) <= i:
+            dst.append({"type": "thinking", "thinking": ""})
+        cur = dst[i]
+        if not isinstance(cur, dict):
+            cur = {"type": "thinking", "thinking": ""}
+            dst[i] = cur
+        if block.get("type"):
+            cur["type"] = block["type"]
+        piece = block.get("thinking")
+        if isinstance(piece, str) and piece:
+            cur["thinking"] = str(cur.get("thinking") or "") + piece
+        # Preserve other non-empty fields from the first sighting.
+        for key, value in block.items():
+            if key in {"type", "thinking"}:
+                continue
+            if key not in cur and value is not None:
+                cur[key] = value
+
+
+def _merge_tool_call_delta(tool_calls: dict[int, dict[str, Any]], deltas: Any) -> None:
+    """Accumulate OpenAI-style streamed ``tool_calls`` deltas by ``index``."""
+    if not isinstance(deltas, list):
+        return
+    for delta in deltas:
+        if not isinstance(delta, dict):
+            continue
+        try:
+            index = int(delta.get("index", 0))
+        except (TypeError, ValueError):
+            index = 0
+        slot = tool_calls.setdefault(
+            index,
+            {
+                "id": None,
+                "type": "function",
+                "function": {"name": "", "arguments": ""},
+            },
+        )
+        if delta.get("id"):
+            slot["id"] = delta["id"]
+        if delta.get("type"):
+            slot["type"] = delta["type"]
+        if "caller" in delta and delta["caller"] is not None and "caller" not in slot:
+            slot["caller"] = delta["caller"]
+        fn = delta.get("function")
+        if isinstance(fn, dict):
+            target = slot.setdefault("function", {"name": "", "arguments": ""})
+            if fn.get("name"):
+                target["name"] = str(target.get("name") or "") + str(fn["name"])
+            args = fn.get("arguments")
+            if isinstance(args, str) and args:
+                target["arguments"] = str(target.get("arguments") or "") + args
+
+
+def assemble_chat_completion_from_stream(
+    chunks: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Fold SSE ``chat.completion.chunk`` objects into one chat.completion dict.
+
+    Preserves ``tool_calls``, ``reasoning_content``, ``thinking_blocks``, and
+    ``provider_specific_fields`` the non-stream path already kept via
+    ``ChatCompletion.model_validate``.
+    """
+    if not chunks:
+        raise RuntimeError("chat_http_stream_empty")
+
+    meta: dict[str, Any] = {}
+    role = "assistant"
+    content_parts: list[str] = []
+    reasoning_parts: list[str] = []
+    thinking_blocks: list[dict[str, Any]] = []
+    provider_thinking: list[dict[str, Any]] = []
+    provider_extra: dict[str, Any] = {}
+    tool_calls: dict[int, dict[str, Any]] = {}
+    finish_reason: str | None = None
+    usage: dict[str, Any] | None = None
+
+    for chunk in chunks:
+        if not isinstance(chunk, dict):
+            continue
+        for key in ("id", "created", "model", "system_fingerprint", "service_tier"):
+            if key in chunk and chunk[key] is not None and key not in meta:
+                meta[key] = chunk[key]
+        if isinstance(chunk.get("usage"), dict):
+            usage = chunk["usage"]
+        for choice in chunk.get("choices") or []:
+            if not isinstance(choice, dict):
+                continue
+            fr = choice.get("finish_reason")
+            if fr:
+                finish_reason = fr
+            delta = choice.get("delta") or {}
+            if not isinstance(delta, dict):
+                continue
+            if delta.get("role"):
+                role = str(delta["role"])
+            piece = delta.get("content")
+            if isinstance(piece, str) and piece:
+                content_parts.append(piece)
+            rpiece = delta.get("reasoning_content")
+            if isinstance(rpiece, str) and rpiece:
+                reasoning_parts.append(rpiece)
+            if "thinking_blocks" in delta:
+                _merge_thinking_blocks(thinking_blocks, delta.get("thinking_blocks"))
+            _merge_tool_call_delta(tool_calls, delta.get("tool_calls"))
+            psf = delta.get("provider_specific_fields")
+            if isinstance(psf, dict):
+                if "thinking_blocks" in psf:
+                    _merge_thinking_blocks(
+                        provider_thinking, psf.get("thinking_blocks")
+                    )
+                for key, value in psf.items():
+                    if key == "thinking_blocks":
+                        continue
+                    if key not in provider_extra and value is not None:
+                        provider_extra[key] = value
+
+    message: dict[str, Any] = {
+        "role": role,
+        "content": "".join(content_parts) if content_parts else "",
+    }
+    saw_reasoning = False
+    for c in chunks:
+        if not isinstance(c, dict):
+            continue
+        for ch in c.get("choices") or []:
+            if isinstance(ch, dict) and isinstance(ch.get("delta"), dict):
+                if "reasoning_content" in ch["delta"]:
+                    saw_reasoning = True
+                    break
+        if saw_reasoning:
+            break
+    if reasoning_parts or saw_reasoning:
+        message["reasoning_content"] = "".join(reasoning_parts)
+    if thinking_blocks:
+        message["thinking_blocks"] = thinking_blocks
+    if provider_thinking or provider_extra:
+        psf_out = dict(provider_extra)
+        if provider_thinking:
+            psf_out["thinking_blocks"] = provider_thinking
+        message["provider_specific_fields"] = psf_out
+    if tool_calls:
+        ordered = [tool_calls[i] for i in sorted(tool_calls)]
+        # Normalize required OpenAI fields.
+        cleaned: list[dict[str, Any]] = []
+        for tc in ordered:
+            fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
+            item: dict[str, Any] = {
+                "id": tc.get("id") or "",
+                "type": tc.get("type") or "function",
+                "function": {
+                    "name": str(fn.get("name") or ""),
+                    "arguments": str(fn.get("arguments") or ""),
+                },
+            }
+            if "caller" in tc:
+                item["caller"] = tc["caller"]
+            cleaned.append(item)
+        message["tool_calls"] = cleaned
+
+    data: dict[str, Any] = {
+        "id": meta.get("id") or "chatcmpl-stream",
+        "created": meta.get("created") or 0,
+        "model": meta.get("model") or "",
+        "object": "chat.completion",
+        "choices": [
+            {
+                "index": 0,
+                "finish_reason": finish_reason or ("tool_calls" if tool_calls else "stop"),
+                "message": message,
+            }
+        ],
+    }
+    for key in ("system_fingerprint", "service_tier"):
+        if key in meta:
+            data[key] = meta[key]
+    if usage is not None:
+        data["usage"] = usage
+    return data
+
+
 def post_chat_completions(
     *,
     api_base: str | None,
@@ -534,6 +735,7 @@ def post_chat_completions(
     timeout: float | None = None,
     extra_headers: dict[str, str] | None = None,
     extra_body: dict[str, Any] | None = None,
+    stream: bool | None = None,
 ) -> Any:
     """POST ``/v1/chat/completions`` with an ephemeral no-keepalive httpx client.
 
@@ -541,12 +743,30 @@ def post_chat_completions(
     hang cannot ignore ``timeout=`` or leave the Future watchdog unable to
     abandon (see attempt_1c23ff53). Returns an OpenAI ``ChatCompletion`` so
     ``LitellmModel.query`` parsers keep working.
+
+    Chat Completions default to **SSE streaming** (``stream=True``): first
+    tokens arrive in seconds even when non-stream TTFB is minutes under
+    ``reasoning_effort=max``. Chunks are assembled into one final assistant
+    message including ``tool_calls`` and reasoning fields the non-stream path
+    already preserved. ``timeout`` is applied as httpx read idle-between-chunks
+    (and connect), not as a total-generation wall alone — long generations stay
+    healthy as long as chunks keep arriving. Set ``stream=False`` or
+    ``AGEVAL_MINISWE_CHAT_STREAM=0`` to force the legacy non-stream POST.
+    Responses API is untouched (``post_responses_api`` stays non-stream).
     """
+    import time
+
     import httpx
     from openai.types.chat import ChatCompletion
 
     url = chat_completions_url(api_base)
     wire_model = wire_model_name(model)
+    use_stream = _chat_stream_enabled(stream)
+    # Allow extra_body to force stream on/off only when caller left stream=None
+    # and did not set the env-driven default path via explicit False/True.
+    if stream is None and isinstance(extra_body, dict) and "stream" in extra_body:
+        use_stream = bool(extra_body.get("stream"))
+
     payload: dict[str, Any] = {
         "model": wire_model,
         "messages": messages,
@@ -564,9 +784,21 @@ def post_chat_completions(
                 "timeout",
                 "drop_params",
                 "client",
+                "stream",  # owned by this function / flag
             }:
                 continue
             payload[key] = value
+
+    if use_stream:
+        payload["stream"] = True
+        # Ask the gateway for a final usage object on the stream (OpenAI shape).
+        so = payload.get("stream_options")
+        if not isinstance(so, dict):
+            payload["stream_options"] = {"include_usage": True}
+        else:
+            so = dict(so)
+            so.setdefault("include_usage", True)
+            payload["stream_options"] = so
 
     headers: dict[str, str] = {
         "Content-Type": "application/json",
@@ -580,6 +812,9 @@ def post_chat_completions(
                 headers[key] = value
         headers.setdefault("Connection", "close")
 
+    # read= timeout → idle gap between streamed chunks (or full-body wait when
+    # non-stream). connect stays capped so DNS/TCP failures fail fast.
+    # Preserve canary client_timeout (None = no HTTP clock).
     http_timeout, _timeout_s = client_timeout(timeout)
     client = httpx.Client(
         limits=httpx.Limits(max_keepalive_connections=0, max_connections=10),
@@ -589,19 +824,55 @@ def post_chat_completions(
     )
     register_in_flight_client(client)
     try:
-        response = client.post(url, headers=headers, content=json.dumps(payload).encode("utf-8"))
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            body = (exc.response.text if exc.response is not None else "")[:800]
-            status = exc.response.status_code if exc.response is not None else None
-            raise_for_http_status("chat_http", status, body, cause=exc)
-        try:
-            data = response.json()
-        except Exception as exc:
-            raise RuntimeError(f"chat_http_bad_json:{response.text[:400]}") from exc
-        if not isinstance(data, dict):
-            raise RuntimeError(f"chat_http_not_object:{type(data).__name__}")
+        body_bytes = json.dumps(payload).encode("utf-8")
+        if not use_stream:
+            response = client.post(url, headers=headers, content=body_bytes)
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                body = (exc.response.text if exc.response is not None else "")[:800]
+                status = exc.response.status_code if exc.response is not None else None
+                raise_for_http_status("chat_http", status, body, cause=exc)
+            try:
+                data = response.json()
+            except Exception as exc:
+                raise RuntimeError(f"chat_http_bad_json:{response.text[:400]}") from exc
+            if not isinstance(data, dict):
+                raise RuntimeError(f"chat_http_not_object:{type(data).__name__}")
+            return ChatCompletion.model_validate(data)
+
+        t0 = time.perf_counter()
+        ttfb: float | None = None
+        chunks: list[dict[str, Any]] = []
+        with client.stream("POST", url, headers=headers, content=body_bytes) as response:
+            if response.status_code >= 400:
+                err_body = (response.read() or b"").decode("utf-8", "replace")[:800]
+                raise_for_http_status("chat_http", response.status_code, err_body)
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                if ttfb is None:
+                    ttfb = time.perf_counter() - t0
+                    # Visible on suite stderr — proves stream health vs headers hang.
+                    print(f"miniswe_chat_stream_ttfb:{ttfb:.3f}", flush=True)
+                if not line.startswith("data:"):
+                    continue
+                data_s = line[5:].strip()
+                if not data_s:
+                    continue
+                if data_s == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data_s)
+                except Exception as exc:
+                    raise RuntimeError(f"chat_http_bad_json:{data_s[:400]}") from exc
+                if not isinstance(obj, dict):
+                    raise RuntimeError(f"chat_http_stream_not_object:{type(obj).__name__}")
+                chunks.append(obj)
+
+        if not chunks:
+            raise RuntimeError("chat_http_stream_empty")
+        data = assemble_chat_completion_from_stream(chunks)
         return ChatCompletion.model_validate(data)
     finally:
         unregister_in_flight_client(client)
@@ -614,6 +885,7 @@ def bind_direct_completion_client(
     api_key: str | None,
     api_base: str | None,
     timeout: float | None,
+    stream: bool | None = None,
 ) -> None:
     """Replace ``LitellmModel._query`` with curl-equivalent httpx chat POST.
 
@@ -656,12 +928,12 @@ def bind_direct_completion_client(
                 timeout=timeout,
                 extra_headers=headers,
                 extra_body=extra_body or None,
+                stream=stream,
             )
         finally:
             recycle_llm_clients()
 
     model._query = _query  # type: ignore[method-assign]
-
 
 def bind_ephemeral_completion_client(
     model: Any,
