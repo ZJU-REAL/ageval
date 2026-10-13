@@ -13,10 +13,6 @@ on:
   pull_request_review:
     types: [submitted]
 
-concurrency:
-  group: claude-assistant-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
   claude:
     if: |
@@ -24,6 +20,10 @@ jobs:
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && !endsWith(github.event.comment.user.login, '[bot]')) ||
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') && !endsWith(github.event.review.user.login, '[bot]')) ||
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    # Job-level only. A skipped bot comment must not take this group and cancel the run.
+    concurrency:
+      group: claude-assistant-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
