@@ -14,6 +14,7 @@ import pytest
 from tests.helpers.box import local_box
 
 from ageval.environments.protocol import EnvironmentCapabilities, ExecResult
+from ageval.model import ModelConfigError
 from ageval.plugins.contrib.acp import build_acp_executor
 from ageval.plugins.defaults import register_defaults
 from ageval.plugins.errors import ExtensionMaterializeError, InjectUnsatisfiedError
@@ -168,6 +169,40 @@ def test_factory_requires_entry() -> None:
     host = local_box("/nowhere")
     with pytest.raises(ExtensionMaterializeError, match="acp_entry_required"):
         build_executor(host=host, placement=host.placement(), options={})
+
+
+def test_factory_reads_nested_reasoning_effort() -> None:
+    host = local_box("/nowhere")
+    model = {"id": "zai-coding-cn/glm-5.2", "reasoning": {"effort": "xhigh"}}
+    executor = build_executor(
+        host=host,
+        placement=host.placement(),
+        options={"entry": "pi"},
+        model=model,
+    )
+    assert executor.model == "zai-coding-cn/glm-5.2"
+    assert executor.reasoning_effort == "xhigh"
+
+    grok = build_executor(
+        host=host,
+        placement=host.placement(),
+        options={"entry": "grok-build"},
+        model={"id": "grok-4.5", "reasoning": {"effort": "low"}},
+    )
+    assert grok.reasoning_effort == "low"
+    assert grok.acp_command[grok.acp_command.index("--reasoning-effort") + 1] == "low"
+    assert grok.acp_command[grok.acp_command.index("--model") + 1] == "grok-4.5"
+
+
+def test_factory_rejects_flat_reasoning_effort() -> None:
+    host = local_box("/nowhere")
+    with pytest.raises(ModelConfigError, match="model_flat_rejected:reasoning_effort"):
+        build_executor(
+            host=host,
+            placement=host.placement(),
+            options={"entry": "pi", "reasoning_effort": "high"},
+            model={"id": "m"},
+        )
 
 
 def test_package_has_no_box_handle_or_entry_branch() -> None:

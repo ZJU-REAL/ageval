@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from acp_oneshot_plugin.container import AcpOneshotBoxExecutor
+from ageval.model import spec_from_factory
 from ageval.plugins.contrib.acp.entry_local import acp_stdio_argv
 from ageval.plugins.contrib.acp.registry import get_entry
 from ageval.plugins.errors import ExtensionMaterializeError
@@ -32,21 +33,13 @@ def describe_acp_oneshot(*, entry_id: str | None = None) -> dict[str, Any]:
     }
 
 
-def _model_id(model: Any) -> str:
-    from ageval.config.profiles import model_id
-
-    if model is None:
-        return ""
-    return model_id(model)
-
-
 def build_executor(
     *,
     host: Any,
     placement: Any,
     options: dict[str, Any] | None = None,
     profile_id: str | None = None,
-    model: str | None = None,
+    model: Any = None,
     base_url: str | None = None,
     api_key: str | None = None,
     package_root: str | None = None,
@@ -66,9 +59,9 @@ def build_executor(
             f"unknown acp entry: {entry!r}",
             kind="extension_materialize_failed",
         )
-    model_s = _model_id(model) or "entry-default"
-    effort = opts.get("reasoning_effort")
-    effort_s = str(effort).strip() if isinstance(effort, str) and effort.strip() else None
+    spec = spec_from_factory(model, opts, default_id="entry-default")
+    model_s = spec.id
+    effort_s = spec.reasoning_effort
     argv = acp_stdio_argv(
         entry,
         list(descriptor.acp_command),

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import sys
 import threading
 from typing import Any, NoReturn
 
@@ -652,9 +653,7 @@ def assemble_chat_completion_from_stream(
             psf = delta.get("provider_specific_fields")
             if isinstance(psf, dict):
                 if "thinking_blocks" in psf:
-                    _merge_thinking_blocks(
-                        provider_thinking, psf.get("thinking_blocks")
-                    )
+                    _merge_thinking_blocks(provider_thinking, psf.get("thinking_blocks"))
                 for key, value in psf.items():
                     if key == "thinking_blocks":
                         continue
@@ -853,8 +852,12 @@ def post_chat_completions(
                     continue
                 if ttfb is None:
                     ttfb = time.perf_counter() - t0
-                    # Visible on suite stderr — proves stream health vs headers hang.
-                    print(f"miniswe_chat_stream_ttfb:{ttfb:.3f}", flush=True)
+                    # Suite logs read stderr. stdout is the run result document.
+                    print(
+                        f"miniswe_chat_stream_ttfb:{ttfb:.3f}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
                 if not line.startswith("data:"):
                     continue
                 data_s = line[5:].strip()
@@ -934,6 +937,7 @@ def bind_direct_completion_client(
             recycle_llm_clients()
 
     model._query = _query  # type: ignore[method-assign]
+
 
 def bind_ephemeral_completion_client(
     model: Any,
