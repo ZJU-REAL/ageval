@@ -100,4 +100,4 @@ Agent 通过 `openai-http` / `anthropic-http` 的原生 tools 读 wrapper 里的
 
 ## Viewer
 
-本地 Attempt 页在 `report.json` 存在时显示 Analysis，按 analyzer 分块。没有报告就不显示这块。Hub 不读、不上传这些文件。
+本地 Attempt 页在 `report.json` 存在时，在证据页签里显示 Analysis，按 analyzer 分块。没有报告就不显示这个页签。Hub 不读、不上传这些文件。

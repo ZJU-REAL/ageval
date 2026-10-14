@@ -102,6 +102,8 @@ sets ``AGEVAL_REGISTRY_URL=http://127.0.0.1:8080``.
 | `ageval cache list\|path\|purge` | Local verified cache |
 | `ageval results upload\|get\|list` | Attempt run evidence bundles; upload accepts `--replace` |
 | `ageval results upload-suite\|get-suite\|list-suites` | Suite/job aggregates + task refs (no suite PASS); meta may include `job_overlay` |
+| `ageval results analyze` | Read-only report for one Attempt (`--run`) or a suite (`--suite-run`). Default analyzer `stats`; `hack` and `review` can call `openai-http` or `anthropic-http`. Does not change PASS or upload to Hub |
+| `ageval results regrade` | New Attempt that scores harvested `task-artifacts/` with the current dataset lock. The agent run does not start. Source `result.json` stays |
 | `ageval results export-profiles` | Export suite `job_overlay` → re-runnable `profiles.yaml` (#59) |
 | `ageval results share\|unshare` | Share / revoke private result access (owner only) |
 | `ageval results share-snapshot\|sync-snapshot\|revoke-snapshot` | Read-only Hub link `/s/{token}`. `--suite-run` shares the suite; `--run` shares one Attempt. `--live` patches that same token when a job finishes; `sync-snapshot` resumes it. Does not change visibility, result_shares, or board_listed |

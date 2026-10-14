@@ -52,6 +52,8 @@ agent_profiles:
   solver:
     executor: acp
     api_key: ${ZHIPU_API_KEY}
+    model:
+      id: gpt-5.4-mini
     options:
       entry: pi
     extensions:
@@ -59,7 +61,9 @@ agent_profiles:
       - plugin: docker
 ```
 
-Optional `label` on a role. `--agent` is mutually exclusive with `--profiles`. `--model` requires `--agent`. Optional `overlays` paths must start with `overlays/` and stay locator-only.
+Optional `label` on a role. `--agent` is mutually exclusive with `--profiles`. `--model` requires `--agent` and writes this run’s `model.id`. Optional `overlays` paths must start with `overlays/` and stay locator-only.
+
+`model` is a nested object. Omitting it is still valid. A string `model`, or a flat model key on `options` (`api`, `reasoning_effort`, `timeout`, `request_timeout`, `watchdog`, `extra_body`), fails lock. Optional leaves are `api` (`chat` or `responses`), `reasoning.effort`, `timeout`, `watchdog`, and `extra`. An omitted leaf is not sent. `options.upstream_stall_seconds` defaults to 3600; `0` turns that wait off. The retry interval is 60 seconds and is not a field.
 
 Optional `evaluate_host.isolated: true` (Current: docker) starts a scoring environment. Combined with member `evaluation.environments`, Core lazily starts one host per name.
 

@@ -59,6 +59,6 @@ Trajectory 里每条 **tool-call**（以及过长行）可折叠；观测 PASS �
 
 **Verifier**：同时有 `evaluation/observation.jsonl` 与 `evaluation/checks.json` 时，页签行最右侧是 Trajectory / Files 切换（默认轨迹）。只有一种时就只显示那一种。在文件树里选中 `checks.json`，右侧预览渲染检查点（计数、可展开行、stdout/stderr、dataset 脚本）。没有单独的 Checks 面板。Agent 的 Trajectory 页仍只读根 `trajectory.jsonl`。
 
-当 `analysis/<analyzer>/report.json` 存在时，Attempt 页在证据页签之前显示 Analysis（`stats`、`hack`、`review`）。没有报告就不显示这块。这些报告是观察，不改变 PASS，也不改 `evaluation/checks.json`。Hub 不上传它们。
+当 `analysis/<analyzer>/report.json` 存在时，Attempt 页的证据页签里多一个 **Analysis**（`stats`、`hack`、`review`）。没有报告就不显示这个页签。这些报告是观察，不改变 PASS，也不改 `evaluation/checks.json`。Hub 不上传它们。
 
 平时不连 Registry。点分享才会把当前打开的 suite 或 job 传上去。远程目录走 Hub。

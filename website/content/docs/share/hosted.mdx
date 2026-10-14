@@ -28,7 +28,7 @@ An agent package that is not installed on the worker fails that job. Publishing 
 | Model | The inference key. Profiles store `${NAME}` (for example `${OPENAI_API_KEY}`). The ageval process projects that value into the agent entry. |
 | Provider | The e2b or daytona key that opens the sandbox. The worker keeps it on the process that opens the sandbox. It is not written into profiles, the lock, or evidence, and it is not used as the model locator. |
 
-The provider locator is fixed: `E2B_API_KEY` or `DAYTONA_API_KEY`. A model locator cannot use those names.
+The provider locator is fixed: `E2B_API_KEY` or `DAYTONA_API_KEY`. A model locator is an uppercase env name ending in `_API_KEY`, `_KEY`, or `_TOKEN` (for example `OPENAI_API_KEY`). It cannot be `E2B_API_KEY` or `DAYTONA_API_KEY`.
 
 `AGEVAL_HOSTED_SECRET_KEY` stays on Registry and the worker. It is 32 bytes of urlsafe base64. Lists never return a secret value.
 

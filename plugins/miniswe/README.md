@@ -37,7 +37,7 @@ These limits are agent knobs, not Model fields.
 
 | Name | Default | Purpose |
 | --- | --- | --- |
-| `options.stream` | `true` on `api: chat` | Chat Completions use SSE. `false`, or env `AGEVAL_MINISWE_CHAT_STREAM=0`, sends one JSON body. Responses ignores this. |
+| `options.stream` | `true` on `api: chat` | Chat Completions use SSE. `false` sends one JSON body. An omitted key is treated as `true`, so `AGEVAL_MINISWE_CHAT_STREAM=0` does not turn a profile run off. Responses ignores this. |
 | `options.step_limit` | `30` | Agent step cap. `0` = unlimited. Negative / non-int values are rejected. |
 | `options.cost_limit` | `0` | Cost cap. `0` = unlimited. Negative values are rejected. |
 | `options.cmd_timeout` | `30` | Seconds per `host.exec` bash action. |
@@ -72,7 +72,7 @@ One profile binds one nested `model:`. The field table is [docs/design/16-model.
 
 HTTP 400, 401, 403, 404, and 422 stop the call as `ModelConfigError`. 408, 429, and 5xx stay transport failures and may stall. An api that cannot represent a declared effort fails the same way, before stall retries.
 
-For gpt-6-sol tool calls prefer `api: responses`. Chat models with an `anthropic/` (or bare `claude*`) profile id are remapped to `openai/<id>` so the gateway still sees `anthropic/…` on `/v1/chat/completions`. Chat posts SSE unless `options.stream` is false or `AGEVAL_MINISWE_CHAT_STREAM=0`. Responses stays one POST. Each completion uses a fresh httpx client with `max_keepalive_connections=0`, sends `Connection: close`, and flushes LiteLLM's client cache before, after, and on stall retry.
+For gpt-6-sol tool calls prefer `api: responses`. Chat models with an `anthropic/` (or bare `claude*`) profile id are remapped to `openai/<id>` so the gateway still sees `anthropic/…` on `/v1/chat/completions`. Chat posts SSE unless `options.stream` is false. Responses stays one POST. Each completion uses a fresh httpx client with `max_keepalive_connections=0`, sends `Connection: close`, and flushes LiteLLM's client cache before, after, and on stall retry.
 
 `api_key` defaults to the locator names `OPENAI_API_KEY` / `litellm_api_key` / `LITELLM_API_KEY`. Omit the key on loopback `base_url` (`127.0.0.1` / `localhost` / `::1`). `base_url` defaults to `OPENAI_BASE_URL` / `litellm_base_url` / `LITELLM_BASE_URL`.
 

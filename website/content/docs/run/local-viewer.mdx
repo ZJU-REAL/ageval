@@ -57,6 +57,6 @@ Each **tool-call** row (and other long rows) can collapse; the observational PAS
 
 **Verifier:** When both `evaluation/observation.jsonl` and `evaluation/checks.json` are present, a Trajectory / Files toggle sits on the far right of the tab row (trajectory first). Otherwise the tab shows the one surface that exists. Selecting `checks.json` in the file tree renders the checkpoints in the preview (counts, expandable rows, stdout/stderr, package script). There is no separate Checks panel. The Agent Trajectory tab still reads only root `trajectory.jsonl`.
 
-When `analysis/<analyzer>/report.json` exists, the Attempt page shows an Analysis section (`stats`, `hack`, or `review`) before the evidence tabs. The section is omitted when no report is present. Those reports are observations. They do not change PASS or `evaluation/checks.json`. Hub does not upload them.
+When `analysis/<analyzer>/report.json` exists, the Attempt page adds an **Analysis** evidence tab (`stats`, `hack`, or `review`). The tab is omitted when no report is present. Those reports are observations. They do not change PASS or `evaluation/checks.json`. Hub does not upload them.
 
 Browsing does not read Registry. The share control on an opened suite or job uploads a snapshot. Remote catalogs stay on the Hub.

@@ -51,7 +51,7 @@ worker 是部署里的另一个进程（`python -m services.registry.hosted.work
 
 | kind | 谁读 | 写到哪 |
 | --- | --- | --- |
-| `model` | `ageval` 父进程按 profiles 里的 locator 投影进 ACP entry。这是 [agent-service](05-runtime/agent-service.md) 已有的契约：文件里只有 `${NAME}` | locator 由用户指定，形如 `OPENAI_API_KEY`。不能是 `E2B_API_KEY` / `DAYTONA_API_KEY`（及小写别名） |
+| `model` | `ageval` 父进程按 profiles 里的 locator 投影进 ACP entry。这是 [agent-service](05-runtime/agent-service.md) 已有的契约：文件里只有 `${NAME}` | locator 须匹配 `^[A-Z][A-Z0-9_]{0,63}$`，并以 `_API_KEY`、`_KEY` 或 `_TOKEN` 结尾，例如 `OPENAI_API_KEY`。不能是 `E2B_API_KEY` / `DAYTONA_API_KEY` |
 | `provider` | worker 父进程用来开沙箱。e2b 固定 `E2B_API_KEY`，daytona 固定 `DAYTONA_API_KEY` | 只进入 `ageval` 子进程的环境，不写进 profiles、lock、evidence，也不改成模型 locator |
 
 子进程环境会去掉另一家提供方的钥匙、`AGEVAL_HOSTED_SECRET_KEY`、Registry token 和对象存储钥匙。e2b / daytona 的沙箱只收调用方声明的环境，不收整份父环境。提供方钥匙因此留在开沙箱的进程上。
