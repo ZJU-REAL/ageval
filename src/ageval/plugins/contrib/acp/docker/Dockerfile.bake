@@ -25,5 +25,5 @@ RUN set -eu; \
 RUN npm install -g __ACP_ENTRY_PACKAGES__ \
     && npm cache clean --force
 
-# Detect commands the probe will look for (first name of each family).
+# Required command realpath must be that package's bin. Aliases are not checked.
 RUN __ACP_DETECT_BINARIES__

@@ -103,7 +103,8 @@ def test_render_opencode_bakes_pinned_detect_commands() -> None:
     assert desc is not None
     body = render_bake_body(_template(), "opencode")
     assert "opencode-ai@1.18.12" in body
-    assert "command -v opencode" in body
+    assert '"name":"opencode","package":"opencode-ai"' in body
+    assert "command -v opencode" not in body
     assert "__ACP_ENTRY_PACKAGES__" not in body
     assert all(
         "npx" not in line.split()
@@ -119,8 +120,10 @@ def test_render_pi_vs_opencode_bodies_differ() -> None:
     assert pi != opencode
     assert "pi-acp@0.0.33" in pi
     assert "@earendil-works/pi-coding-agent@0.83.0" in pi
-    assert "command -v pi" in pi
-    assert "command -v pi-acp" in pi
+    assert '"name":"pi","package":"@earendil-works/pi-coding-agent"' in pi
+    assert '"name":"pi-acp","package":"pi-acp"' in pi
+    assert "command -v pi" not in pi
+    assert "command -v pi-acp" not in pi
     assert "opencode-ai@" not in pi
 
 
@@ -144,7 +147,8 @@ def test_render_every_registered_entry() -> None:
         for token in desc.install_command[len(prefix) :].split():
             assert token in body
         for name in _needed_commands(desc):
-            assert f"command -v {name}" in body
+            assert f'"name":"{name}","package":' in body
+            assert f"command -v {name}" not in body
         assert "__ACP_ENTRY_PACKAGES__" not in body
         assert "__ACP_DETECT_BINARIES__" not in body
         assert all(

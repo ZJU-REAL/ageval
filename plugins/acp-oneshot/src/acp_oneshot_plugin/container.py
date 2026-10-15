@@ -26,6 +26,11 @@ from ageval.plugins.agent_result import (
 )
 from ageval.plugins.contrib.acp.child_env import project_credential_env
 from ageval.plugins.contrib.acp.home import home_env
+from ageval.plugins.contrib.acp.hooks import (
+    resolve_entry_argv0,
+    store_entry_argv0,
+    stored_entry_argv0,
+)
 
 WORKER_ENV = "AGEVAL_ACP_ONESHOT_WORKER"
 _BOOTSTRAP = (
@@ -140,10 +145,24 @@ class AcpOneshotBoxExecutor:
         workdir = self._placement.workdir or WORKSPACE_PATH
         cwd = self._host.visible_path(workdir)
         box_result = f"{HOME_PATH}/.acp-oneshot-result.json"
+        argv = list(self.acp_command)
+        argv0 = stored_entry_argv0(self._host, self.entry_id)
+        already_absolute = bool(argv) and str(argv[0]).startswith("/")
+        if argv0 is None and not already_absolute:
+            argv0 = await resolve_entry_argv0(self._host, self._descriptor)
+            if argv0:
+                store_entry_argv0(self._host, self.entry_id, argv0)
+        if argv0:
+            argv[0] = argv0
+        elif not already_absolute:
+            raise EnvironmentFailure(
+                "acp_runtime_missing",
+                f"acp entry {self.entry_id!r} has no pinned binary",
+            )
         request = {
             "prompt": prompt,
             "cwd": cwd,
-            "acp_command": list(self.acp_command),
+            "acp_command": argv,
             "model": self.model,
             "reasoning_effort": self.reasoning_effort,
             "entry_id": self.entry_id,

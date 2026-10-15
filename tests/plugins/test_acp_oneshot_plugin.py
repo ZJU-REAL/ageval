@@ -32,6 +32,7 @@ if str(_SRC) not in sys.path:
 from acp_oneshot_plugin.container import AcpOneshotBoxExecutor  # noqa: E402
 from acp_oneshot_plugin.factory import build_executor  # noqa: E402
 
+from ageval.plugins.contrib.acp.hooks import store_entry_argv0  # noqa: E402
 from ageval.plugins.contrib.acp.registry import clear_registry_cache  # noqa: E402
 
 ECHO = ROOT / "tests" / "fixtures" / "acp" / "echo_agent.py"
@@ -91,6 +92,23 @@ def _executor(host: Any, *, model: str = "entry-default") -> AcpOneshotBoxExecut
         fixed_env={"NO_BROWSER": "1"},
         descriptor=_descriptor(),
     )
+
+
+@pytest.mark.asyncio
+async def test_oneshot_worker_argv0_is_the_stored_absolute_path(tmp_path: Path) -> None:
+    class _Capture(SpyHost):
+        async def exec(self, command, **kwargs: Any):  # type: ignore[no-untyped-def]
+            self.commands.append((list(command), None))
+            return ExecResult(exit_code=0, stdout='{"ok": true, "text": "ok"}\n', stderr="")
+
+    pinned = "/opt/pi-acp/bin/pi-acp"
+    capture = _Capture(tmp_path)
+    store_entry_argv0(capture, "pi", pinned)
+    executor = _executor(capture)
+    await executor._ainvoke("hi", timeout=5, collect_dir=None)
+    request = json.loads(capture.commands[0][0][-1])
+    assert request["acp_command"][0] == pinned
+    assert request["acp_command"][1:] == [str(ECHO)]
 
 
 def test_manifest_injects_environment_exec_only() -> None:
