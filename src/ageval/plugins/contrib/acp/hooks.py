@@ -15,7 +15,7 @@ from typing import Any
 from ageval.environments.protocol import HOME_PATH, EnvironmentFailure
 from ageval.plugins.contrib.acp.child_env import entry_credentials_missing
 from ageval.plugins.contrib.acp.home import home_env
-from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, get_entry
+from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, AcpRegistryError, get_entry
 from ageval.plugins.errors import ExtensionMaterializeError
 from ageval.plugins.protocol import NextFn
 
@@ -150,7 +150,13 @@ def ensure_runtime(**kwargs: Any) -> Any:
             "acp_entry_required",
             kind="extension_materialize_failed",
         )
-    descriptor = get_entry(entry_id)
+    try:
+        descriptor = get_entry(entry_id)
+    except AcpRegistryError as exc:
+        raise ExtensionMaterializeError(
+            str(exc),
+            kind="extension_materialize_failed",
+        ) from exc
     if descriptor is None:
         raise ExtensionMaterializeError(
             f"unknown acp entry: {entry_id!r}",

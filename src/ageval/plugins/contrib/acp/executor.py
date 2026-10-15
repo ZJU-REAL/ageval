@@ -43,7 +43,7 @@ from ageval.plugins.contrib.acp.entry_local import (
     uses_entry_local_bind,
 )
 from ageval.plugins.contrib.acp.home import home_env
-from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, get_entry
+from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, AcpRegistryError, get_entry
 from ageval.plugins.contrib.acp.trajectory_map import acp_session_events_to_ageval
 from ageval.plugins.contrib.acp.usage import _as_plain_mapping, normalize_acp_usage
 from ageval.plugins.decorators import executor_plugin
@@ -168,7 +168,15 @@ class AcpExecutor(BaseExecutor):
         self.api_key_env = api_key_env
         idle = float(idle_timeout_seconds) if idle_timeout_seconds is not None else None
         self.idle_timeout_seconds = idle if idle is not None and idle > 0 else None
-        resolved = descriptor if descriptor is not None else get_entry(entry_id)
+        try:
+            resolved = descriptor if descriptor is not None else get_entry(entry_id)
+        except AcpRegistryError as exc:
+            from ageval.plugins.errors import ExtensionMaterializeError
+
+            raise ExtensionMaterializeError(
+                str(exc),
+                kind="extension_materialize_failed",
+            ) from exc
         if resolved is None:
             raise KeyError(f"unknown_acp_entry:{entry_id}")
         if placement is None:

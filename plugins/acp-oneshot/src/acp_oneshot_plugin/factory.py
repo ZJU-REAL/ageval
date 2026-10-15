@@ -7,7 +7,7 @@ from typing import Any
 from acp_oneshot_plugin.container import AcpOneshotBoxExecutor
 from ageval.model import spec_from_factory
 from ageval.plugins.contrib.acp.entry_local import acp_stdio_argv
-from ageval.plugins.contrib.acp.registry import get_entry
+from ageval.plugins.contrib.acp.registry import AcpRegistryError, get_entry
 from ageval.plugins.errors import ExtensionMaterializeError
 
 _EXECUTION_MODE = "acp-oneshot"
@@ -53,7 +53,13 @@ def build_executor(
             "acp_entry_required",
             kind="extension_materialize_failed",
         )
-    descriptor = get_entry(entry)
+    try:
+        descriptor = get_entry(entry)
+    except AcpRegistryError as exc:
+        raise ExtensionMaterializeError(
+            str(exc),
+            kind="extension_materialize_failed",
+        ) from exc
     if descriptor is None:
         raise ExtensionMaterializeError(
             f"unknown acp entry: {entry!r}",

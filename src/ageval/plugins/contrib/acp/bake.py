@@ -7,7 +7,7 @@ Dockerfile; this module only substitutes the bound entry. No floating ``npx``.
 from __future__ import annotations
 
 from ageval.plugins.contrib.acp.hooks import _needed_commands
-from ageval.plugins.contrib.acp.registry import get_entry
+from ageval.plugins.contrib.acp.registry import AcpRegistryError, get_entry, pinned_npm_packages
 from ageval.plugins.errors import ExtensionMaterializeError
 
 PACKAGES_MARKER = "__ACP_ENTRY_PACKAGES__"
@@ -36,7 +36,13 @@ RUN set -eu; \
 
 def render_bake_body(template: str, entry_id: str) -> str:
     """Fill the bake template with the pinned packages for *entry_id*."""
-    descriptor = get_entry(entry_id)
+    try:
+        descriptor = get_entry(entry_id)
+    except AcpRegistryError as exc:
+        raise ExtensionMaterializeError(
+            str(exc),
+            kind="extension_materialize_failed",
+        ) from exc
     if descriptor is None:
         raise ExtensionMaterializeError(
             f"unknown acp entry: {entry_id!r}",
@@ -47,7 +53,13 @@ def render_bake_body(template: str, entry_id: str) -> str:
             "acp bake template missing package or detect marker",
             kind="extension_materialize_failed",
         )
-    packages = _npm_packages(descriptor.install_command)
+    try:
+        packages = pinned_npm_packages(descriptor.install_command)
+    except AcpRegistryError as exc:
+        raise ExtensionMaterializeError(
+            str(exc),
+            kind="extension_materialize_failed",
+        ) from exc
     names = _needed_commands(descriptor)
     if not names:
         raise ExtensionMaterializeError(
@@ -59,21 +71,3 @@ def render_bake_body(template: str, entry_id: str) -> str:
     if descriptor.entry_id == "codex":
         body = body.rstrip() + "\n" + _CODEX_NATIVE_RUN.lstrip("\n")
     return body
-
-
-def _npm_packages(install_command: str) -> str:
-    text = install_command.strip()
-    prefix = "npm install -g "
-    if not text.startswith(prefix):
-        raise ExtensionMaterializeError(
-            "acp install_command must be npm install -g <pinned packages>",
-            kind="extension_materialize_failed",
-        )
-    packages = text[len(prefix) :].strip()
-    tokens = packages.split()
-    if not tokens or "npx" in tokens or any(tok.endswith("@latest") for tok in tokens):
-        raise ExtensionMaterializeError(
-            "acp install_command rejects floating npx / latest",
-            kind="extension_materialize_failed",
-        )
-    return packages

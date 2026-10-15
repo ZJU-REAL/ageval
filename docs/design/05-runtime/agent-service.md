@@ -178,6 +178,8 @@ kind 名是 `anthropic-http`（api-client，Anthropic Messages）。与 `openai-
 
 ## Agent 运行时（挂 `after_environment_ready`）
 
+运行时 entry 表是包内 `acp_entries.json`，再并上 `$AGEVAL_HOME/acp-entries.json`（未设置 `AGEVAL_HOME` 时目录是 `~/.ageval`）。文件不存在就不并。家目录里的 `entry_id` 与包内 id 相同则失败，不覆盖包内那一行。官方 Attempt 镜像的 `install-executors.sh` 和 `acp-entries.lock.json` 只收包内 entry。`--agent` 和内置卡仍只用包内 id；家目录文件不是 harness 卡。
+
 0. **lock overlay（Attempt HOME，不拷宿主）。** lock 已有 `model` / `api_key` locator / 可选 `base_url`。箱子 `start` 之后、`attach_stdio` 之前，ACP contrib 按 **entry** 写成该引擎自己的配置文件（Pi：`.pi/agent/models.json` + `settings.json`；OpenCode：`.config/opencode/opencode.json`；Codex：`.codex/config.toml`（Attempt 已隔离，写 `sandbox_mode = danger-full-access`，禁止再套一层 bwrap）；Claude Code：`.claude/settings.json`）。`entry-default` 不写。locator **值**不进文件（Pi `$ENV`、OpenCode `{env:NAME}`）。**禁止**从宿主 `~/.pi` / `~/.config` 拷 catalog。local / docker / e2b 同一条 Attempt HOME。Claude Code 同时把 lock 的 `model` 投影进 attach env（`ANTHROPIC_MODEL`；有 `base_url` 时再写 `ANTHROPIC_DEFAULT_*` / `CLAUDE_CODE_SUBAGENT_MODEL`）。Codex ACP 默认 `workspace-write`（bwrap）；Attempt 里投影 `INITIAL_AGENT_MODE=agent-full-access`，并写 `.codex/models.json` + `model_catalog_json`（slug 等于 `model`）。grok-build 仍 argv `--model`。
 1. 读 `options.entry`（如 `pi`）→ 需要哪些环境内二进制（`pi`、`pi-acp`、…）以及 entry 表钉死的包版本。
 2. `host.exec` 探测三件事：名字（`which`）、钉死的 npm 包版本（`npm ls -g pkg@pin`）、一次便宜的 stdio JSON-RPC `initialize`（不是 `session/prompt`）。同名但协议不是 stdio ACP（例如只开 TCP 的旧 `opencode`）算未命中。

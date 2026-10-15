@@ -112,6 +112,11 @@ async def _copy_keyless_auth(host: Any, descriptor: AcpEntryDescriptor) -> list[
     copied: list[str] = []
     for rel in descriptor.keyless_auth_paths:
         source = host_home / rel
+        if source.is_symlink():
+            raise EnvironmentFailure(
+                "acp_auth_path_symlink",
+                f"refusing to copy symlinked auth path {rel}",
+            )
         if not source.is_file():
             continue
         await host.upload(source, f"{HOME_PATH}/{rel}")
