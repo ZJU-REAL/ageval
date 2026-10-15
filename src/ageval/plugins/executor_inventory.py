@@ -195,6 +195,7 @@ def describe_acp_entry(
         "binary": ready.get("acp_binary"),
         "binary_on_path": ready["acp_entry_ready"],
         "binary_path": ready.get("acp_path") if verbose else None,
+        "source": desc.source,
     }
     if verbose:
         row["credential_env_names"] = list(desc.credential_env_names)

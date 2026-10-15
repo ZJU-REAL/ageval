@@ -148,7 +148,7 @@ Agent / `run.py` 阶段 **不得** `upload` `evaluation/`。evaluate phase 开�
 
 ### US12 — 云上已有 image：连上 + 探测再装 agent
 
-`environment: ssh`。**A** 无 `image`：环境=整机，`attach_stdio` = `ssh -T -- argv`。**B** 有已有 tag：`start` 远端 `docker run`，`attach_stdio` = `ssh -- docker exec -i`。两种 agent 都在云上。ACP 挂 `after_environment_ready`：名字 + 钉死包版本 + stdio `initialize`；docker bake 已匹配则跳过安装，不对再按 entry `install_command` 装。
+`environment: ssh`。**A** 无 `image`：环境=整机，`attach_stdio` = `ssh -T -- argv`。**B** 有已有 tag：`start` 远端 `docker run`，`attach_stdio` = `ssh -- docker exec -i`。两种 agent 都在云上。ACP 挂 `after_environment_ready`：`npm ls -g --depth=0` 版本相等，且必需命令的 realpath 等于该包 `bin`，然后才 stdio `initialize`（argv[0] 是这个绝对路径）。这取代了把 `versions` 留空、只看 PATH 名字的探测。版本或 realpath 不对就按 entry `install_command` 装一次再探一次，安装失败或第二次仍不对就停。版本和路径已齐、只有 `initialize` 失败时不安装。
 
 ## 红线
 
@@ -188,7 +188,7 @@ gold 隔离是**时间切**：不 mount，evaluate 再 upload。这是默认，�
 - Agent 后端：独占槽 `executor`。环境：独占槽 `environment`。扩展只有 exclusive 与 chain。
 - 题包根：**dataset**，format `ageval.dataset/1`。CLI：`ageval lock` / `ageval.yaml`。
 - gold：同一环境；evaluate 开头再 upload。
-- ACP：docker 在 `host.start()` 用插件 `image_layers` bake 绑定的 `options.entry`；`after_environment_ready` 探名字 + 钉死包版本 + stdio `initialize`，已匹配则跳过，不对再按 entry `install_command` 装。
+- ACP：docker 在 `host.start()` 用插件 `image_layers` bake 绑定的 `options.entry`；`after_environment_ready` 对 `npm ls -g --depth=0` 的版本和必需命令 realpath 做检查，过了才 stdio `initialize`，argv[0] 是通过检查的绝对路径。这取代了把 `versions` 留空的探测。已匹配则跳过安装；不对则按 entry `install_command` 装一次再探一次，然后停。
 - ssh：A 整机 / B 远端已有容器。inject：`service: environment`。
 
 ## 审查问题（实现时对照）

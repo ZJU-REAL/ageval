@@ -228,6 +228,10 @@ def parse_job_mapping(raw: Mapping[str, Any], *, location: str = "profiles.yaml"
             location=f"{location}:/agent_profiles",
         )
 
+    from ageval.config.validate import require_acp_registry
+
+    require_acp_registry()
+
     out: dict[str, dict[str, Any]] = {}
     for role_id, profile in profiles_raw.items():
         if not isinstance(role_id, str) or not role_id.strip():

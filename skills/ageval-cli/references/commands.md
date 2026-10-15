@@ -24,14 +24,14 @@ Stdout JSON (high level):
 | `supported` | Kind names valid for `agent_profiles[].executor` (e.g. `acp`, `openai-http`, `anthropic-http`) |
 | `host_ready` | Subset of kinds that can be constructed on this host |
 | `executors[]` | Per kind: `execution_mode` (from `describe()` when published), `host_ready` |
-| `acp_entries[]` | Per ACP `entry_id`: `acp_command`, `engine_ready`, `acp_entry_ready`, `host_ready`, credential env *names*; `-v` adds `credential_missing` / `keyless_auth` |
+| `acp_entries[]` | Per ACP `entry_id`: `source` (`package` or `user`), `acp_command`, `engine_ready`, `acp_entry_ready`, `host_ready`, credential env *names*; `-v` adds `credential_missing` / `keyless_auth` / `install_command` |
 
-- ACP registry: `ageval.plugins.contrib.acp.registry` (static pins)
+- ACP registry: packaged `acp_entries.json` plus `$AGEVAL_HOME/acp-entries.json` when that file exists (default `~/.ageval/acp-entries.json`). A packaged id cannot be overridden. A bad home file exits non-zero and does not fall back to the packaged rows. The process started is the pinned package binary. The official Attempt image does not contain home-file entries.
 - Plugin `host_ready` uses declared `host_requires` / reachable `describe()`
 - Child env is allowlisted (`PATH` / `HOME` / `LANG` + entry credential names + binding locators + `fixed_env`). Undeclared host tokens do not reach the entry
 - No package path; no secrets; exit 0
 
-**Author packages with:** `executor: acp` + `- plugin: acp` / `options.entry: <entry_id from acp_entries>`.
+**Author packages with:** `executor: acp` and `options.entry`. Packaged ids ship in `acp_entries.json`. `$AGEVAL_HOME/acp-entries.json` can add an id and cannot override a packaged id.
 
 ## `ageval lock`
 

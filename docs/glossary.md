@@ -74,7 +74,7 @@ public 只许出现「public」或「both」行的规范名。internal 词出现
 | PASS / FAIL / ERROR | PASS / FAIL / ERROR | both | 见下 | completed、轨迹完整当通过；用超时文本决定 FAIL |
 | 阶段 | phase | both | environment → run → evaluate → record；cleanup 始终执行 | 相位；用「步骤」指这些阶段（轨迹 tool step 除外） |
 | attach_stdio | attach_stdio | both | 已开环境里起前台进程，交回 stdin/stdout | — |
-| ACP entry | ACP entry | both | `options.entry`：`pi` / `codex` / `claude-code` / `opencode` / `grok-build` | — |
+| ACP entry | ACP entry | both | `options.entry`。包内 id 是 `pi` / `codex` / `claude-code` / `opencode` / `grok-build`。运行时表再并上 `$AGEVAL_HOME/acp-entries.json`（文件存在时）；包内 id 不能被覆盖。官方 `install-executors.sh` / `acp-entries.lock.json` 只收包内 entry | 用家目录 entry 当内置卡 |
 | capabilities | capabilities | both | 环境声明能兑现什么；`requires ⊆ capabilities`，否则 lock 失败 | — |
 | BYOK / BYOA | BYOK / BYOA | internal | 密钥 / 本机 auth 投影 | public 不必教这两个缩写 |
 | 托管运行 | hosted job | both | Hub 提交、Registry 排队、部署里的 worker 在 E2B 或 Daytona 上跑完并上传的 suite | `--launch`；在共享 Hub 主机上跑 Docker；用 hosted job 的成功冒充题的 PASS |

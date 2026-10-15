@@ -32,6 +32,9 @@ class DeclarationCapabilityCatalog:
         return format_id in self.FORMATS
 
     def supports_acp_entry(self, entry_id: str) -> bool:
-        from ageval.plugins.contrib.acp.registry import get_entry
+        from ageval.plugins.contrib.acp.registry import peek_acp_entries
 
-        return get_entry(entry_id) is not None
+        table = peek_acp_entries()
+        if not table:
+            return False
+        return entry_id in table

@@ -30,7 +30,7 @@ agent_profiles:
       id: gpt-5.4-mini
 ```
 
-ACP `entry` lives on `- plugin: acp` / `options.entry`.
+ACP `entry` lives on `executor: acp` and `options.entry`. Packaged ids are the built-ins below. `$AGEVAL_HOME/acp-entries.json` (default `~/.ageval/acp-entries.json`) can add an id; it cannot replace a packaged id. The process that starts is that entry's pinned package binary. The official Attempt image does not include entries from that file. `--agent` still resolves only the packaged ids.
 
 ## Agent packages (`--agent`)
 

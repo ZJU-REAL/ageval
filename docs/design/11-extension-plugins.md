@@ -76,7 +76,7 @@ agent_profiles:
     extensions: [ssh, acp]
 ```
 
-外置包实例见 `plugins/nooa/plugin.yaml`：`slots.exclusive` / `slots.chain`，`host_requires`，`config.image_layers`（给 environment 赢家 bake，**不是**时间线槽）。first-party `acp` 同样声明 `config.image_layers`：只 bake 该 graph 绑定的 `options.entry`（钉死包来自 `acp_entries.json`），不把全部 ACP entry 写进每张题图。
+外置包实例见 `plugins/nooa/plugin.yaml`：`slots.exclusive` / `slots.chain`，`host_requires`，`config.image_layers`（给 environment 赢家 bake，**不是**时间线槽）。first-party `acp` 同样声明 `config.image_layers`：只 bake 该 graph 绑定的 `options.entry`（钉死包来自包内 `acp_entries.json` 与 `$AGEVAL_HOME/acp-entries.json` 的并集；包内 id 不能被家目录行覆盖），不把全部 ACP entry 写进每张题图。官方 Attempt 镜像的 `install-executors.sh` 和 `acp-entries.lock.json` 只收包内 entry。
 
 `description` 可选。一段功能说明；Hub 插件详情把它画在 Install (CLI) 上方。缺省不展示。空字符串 / 非字符串则拒绝。Hub 渲染 Markdown 链接（`[text](https://…)`）；其它块级语法不展示。
 

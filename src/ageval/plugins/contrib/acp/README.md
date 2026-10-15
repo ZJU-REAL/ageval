@@ -21,7 +21,7 @@ scrape in this repo.
 | export | exclusive `executor` |
 | inject | `environment`: `attach_stdio` |
 | chain | `after_environment_ready` (probe the box; skip `install_command` when the bake already matches pin + stdio `initialize`), `trajectory_collect` |
-| bake | `docker/Dockerfile.bake` — bound `options.entry` only (pins from `acp_entries.json`). Official Attempt images still bake every shipped entry. Invoke does not `npm i`. |
+| bake | `docker/Dockerfile.bake` — bound `options.entry` only. Pins come from packaged `acp_entries.json`, or from `$AGEVAL_HOME/acp-entries.json` when that file defines the id. A packaged id cannot be overridden. Official Attempt images bake shipped entries only. Invoke does not `npm i`. |
 
 Missing `attach_stdio` fails at **lock**, not mid-invoke.
 

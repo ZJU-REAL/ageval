@@ -180,6 +180,16 @@ def _reject_retired_keys(doc: dict[str, Any]) -> None:
             )
 
 
+def require_acp_registry() -> None:
+    """Load the merged ACP table. A bad home file is one ConfigError, then stop."""
+    from ageval.plugins.contrib.acp.registry import AcpRegistryError, load_acp_entries
+
+    try:
+        load_acp_entries()
+    except AcpRegistryError as exc:
+        raise ConfigError(exc.error_code, exc.message, location=exc.location) from exc
+
+
 def _validate_profiles(
     doc: dict[str, Any],
     *,
@@ -187,6 +197,7 @@ def _validate_profiles(
 ) -> set[str]:
     from ageval.config.checks import require_agent_profiles_list
 
+    require_acp_registry()
     profiles = require_agent_profiles_list(doc.get("agent_profiles") or [])
     profile_ids: set[str] = set()
     for idx, profile in enumerate(profiles):

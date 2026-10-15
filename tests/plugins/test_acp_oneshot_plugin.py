@@ -32,6 +32,9 @@ if str(_SRC) not in sys.path:
 from acp_oneshot_plugin.container import AcpOneshotBoxExecutor  # noqa: E402
 from acp_oneshot_plugin.factory import build_executor  # noqa: E402
 
+from ageval.plugins.contrib.acp.hooks import store_entry_argv0  # noqa: E402
+from ageval.plugins.contrib.acp.registry import clear_registry_cache  # noqa: E402
+
 ECHO = ROOT / "tests" / "fixtures" / "acp" / "echo_agent.py"
 
 
@@ -89,6 +92,23 @@ def _executor(host: Any, *, model: str = "entry-default") -> AcpOneshotBoxExecut
         fixed_env={"NO_BROWSER": "1"},
         descriptor=_descriptor(),
     )
+
+
+@pytest.mark.asyncio
+async def test_oneshot_worker_argv0_is_the_stored_absolute_path(tmp_path: Path) -> None:
+    class _Capture(SpyHost):
+        async def exec(self, command, **kwargs: Any):  # type: ignore[no-untyped-def]
+            self.commands.append((list(command), None))
+            return ExecResult(exit_code=0, stdout='{"ok": true, "text": "ok"}\n', stderr="")
+
+    pinned = "/opt/pi-acp/bin/pi-acp"
+    capture = _Capture(tmp_path)
+    store_entry_argv0(capture, "pi", pinned)
+    executor = _executor(capture)
+    await executor._ainvoke("hi", timeout=5, collect_dir=None)
+    request = json.loads(capture.commands[0][0][-1])
+    assert request["acp_command"][0] == pinned
+    assert request["acp_command"][1:] == [str(ECHO)]
 
 
 def test_manifest_injects_environment_exec_only() -> None:
@@ -344,3 +364,40 @@ def test_lock_cli_selects_oneshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     blob = json.dumps(data)
     assert "sk-lock-must-not-see" not in blob
     assert "ZHIPU_API_KEY" in blob or "api_key" in blob
+
+
+def test_oneshot_resolves_a_home_file_entry() -> None:
+    home = Path(os.environ["AGEVAL_HOME"])
+    (home / "acp-entries.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "entries": [
+                    {
+                        "entry_id": "kimi",
+                        "integration_mode": 2,
+                        "execution_mode": "acp-stdio",
+                        "engine_detect_commands": ["kimi"],
+                        "acp_command": ["kimi", "acp"],
+                        "acp_detect_commands": ["kimi"],
+                        "acp_package": "@moonshot-ai/kimi-code",
+                        "acp_version": "1.2.3",
+                        "install_command": "npm install -g @moonshot-ai/kimi-code@1.2.3",
+                        "credential_env_names": ["KIMI_API_KEY"],
+                        "model_binding": "config-option",
+                        "platforms": ["darwin", "linux"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    clear_registry_cache()
+    built = build_executor(
+        host=None,
+        placement=None,
+        options={"entry": "kimi"},
+        model={"id": "entry-default"},
+    )
+    assert built.entry_id == "kimi"
+    assert built.acp_command[:2] == ["kimi", "acp"]

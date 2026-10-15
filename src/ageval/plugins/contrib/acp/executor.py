@@ -43,7 +43,12 @@ from ageval.plugins.contrib.acp.entry_local import (
     uses_entry_local_bind,
 )
 from ageval.plugins.contrib.acp.home import home_env
-from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, get_entry
+from ageval.plugins.contrib.acp.hooks import (
+    resolve_entry_argv0,
+    store_entry_argv0,
+    stored_entry_argv0,
+)
+from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, AcpRegistryError, get_entry
 from ageval.plugins.contrib.acp.trajectory_map import acp_session_events_to_ageval
 from ageval.plugins.contrib.acp.usage import _as_plain_mapping, normalize_acp_usage
 from ageval.plugins.decorators import executor_plugin
@@ -168,7 +173,15 @@ class AcpExecutor(BaseExecutor):
         self.api_key_env = api_key_env
         idle = float(idle_timeout_seconds) if idle_timeout_seconds is not None else None
         self.idle_timeout_seconds = idle if idle is not None and idle > 0 else None
-        resolved = descriptor if descriptor is not None else get_entry(entry_id)
+        try:
+            resolved = descriptor if descriptor is not None else get_entry(entry_id)
+        except AcpRegistryError as exc:
+            from ageval.plugins.errors import ExtensionMaterializeError
+
+            raise ExtensionMaterializeError(
+                str(exc),
+                kind="extension_materialize_failed",
+            ) from exc
         if resolved is None:
             raise KeyError(f"unknown_acp_entry:{entry_id}")
         if placement is None:
@@ -254,9 +267,19 @@ class AcpExecutor(BaseExecutor):
 
         from ageval.environments.streams import open_streams
 
+        argv0 = stored_entry_argv0(self._host, self.entry_id or "")
+        if argv0 is None and self.entry_id:
+            argv0 = await resolve_entry_argv0(self._host, self.descriptor)
+            if argv0:
+                store_entry_argv0(self._host, self.entry_id, argv0)
+        if not argv0:
+            from ageval.environments.protocol import EnvironmentFailure
+
+            raise EnvironmentFailure(
+                "acp_runtime_missing",
+                f"acp entry {self.entry_id!r} has no pinned binary",
+            )
         argv = self.stdio_argv()
-        if not argv:
-            raise RuntimeError("acp_entry_missing")
         client = _AgevalAcpClient()
         self._client = client
         pipe = await self._host.attach_stdio(
@@ -300,10 +323,19 @@ class AcpExecutor(BaseExecutor):
         await self._bind_entry(init, new)
 
     def stdio_argv(self) -> list[str]:
-        """ACP stdio argv for this entry, as run inside the box."""
+        """ACP stdio argv. argv[0] is the pinned absolute path, never a PATH name."""
+        from ageval.environments.protocol import EnvironmentFailure
+
+        argv0 = stored_entry_argv0(self._host, self.entry_id or "")
+        if not argv0:
+            raise EnvironmentFailure(
+                "acp_runtime_missing",
+                f"acp entry {self.entry_id!r} has no pinned binary",
+            )
+        command = [argv0, *self.descriptor.acp_command[1:]]
         return acp_stdio_argv(
             self.entry_id,
-            list(self.descriptor.acp_command),
+            command,
             model=self.model,
             reasoning_effort=self.reasoning_effort,
         )

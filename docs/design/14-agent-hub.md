@@ -6,7 +6,7 @@ format `ageval.agent/1`。不要 `ageval.harness/1`，不要第二套 `package_k
 
 **内置 Agent 包（builtin catalog overlay，不是 upload）。** 与 `/plugins` 内置行同构：`src/ageval/agents/builtin/catalog.json` 手写清单 + 同目录文件树预览。 CLI `--agent pi` 与 Hub 详情共用这棵树。`builtin: true`，无 `org_id`，无 blob / digest / 下载。Registry **不** `import ageval.plugins.contrib`。短 id：
 
-- ACP：`options.entry`（`pi` / `opencode` / `codex` / `claude-code` / `grok-build`）。运输名 `acp` 不是卡。
+- ACP：`options.entry`（`pi` / `opencode` / `codex` / `claude-code` / `grok-build`）。运输名 `acp` 不是卡。`$AGEVAL_HOME/acp-entries.json` 能给这次 run 增加 entry，不能覆盖这些包内 id，也不是 harness 卡。`--agent` 和这份内置清单仍只认包内 id。
 - 非运输 executor：`openai-http`、`anthropic-http`。
 - 环境（`docker` / `local` / `e2b` / `ssh` / `daytona`）不是 Agent 卡。外置 executor（`dsh` / `nooa` / `miniswe`）不自动进清单。
 

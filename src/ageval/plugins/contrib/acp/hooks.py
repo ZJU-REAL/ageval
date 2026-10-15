@@ -1,9 +1,8 @@
-"""ACP ``after_environment_ready`` hook: probe the box, install only if missing.
+"""ACP ``after_environment_ready`` hook: probe the box, install only on a pin miss.
 
-The recipe comes from ``acp_entries.json``. A hit is the binary name and one
-cheap stdio ``initialize``. Docker already baked the bound ``options.entry``
-into the task image at ``host.start()``; a matching bake skips
-``install_command``. A same-named binary that speaks TCP ACP does not.
+A hit is ``npm ls -g --depth=0`` version equality, the required command's
+realpath equal to that package's bin, and one stdio ``initialize`` whose
+argv[0] is that absolute path. A version or realpath miss installs once.
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ from typing import Any
 from ageval.environments.protocol import HOME_PATH, EnvironmentFailure
 from ageval.plugins.contrib.acp.child_env import entry_credentials_missing
 from ageval.plugins.contrib.acp.home import home_env
-from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, get_entry
+from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, AcpRegistryError, get_entry
 from ageval.plugins.errors import ExtensionMaterializeError
 from ageval.plugins.protocol import NextFn
 
@@ -39,8 +38,8 @@ _PROBE_EXEC_TIMEOUT_SEC = 90
 _PROTOCOL_VERSION = 1
 
 # In-box stdlib probe. Parent execs this via host.python_command; it must not
-# import ageval. Name + pin first; initialize only when those already match,
-# so a wrong-version TCP binary does not eat the handshake timeout.
+# import ageval. Version and required-bin realpath first; initialize only
+# when both already match, and argv[0] is that absolute path.
 _PROBE_SOURCE = r"""
 import json, os, select, shutil, subprocess, sys, time
 
@@ -118,25 +117,89 @@ def _handshake(command, payload, timeout):
         except Exception:
             pass
 
+def _npm_root():
+    try:
+        proc = subprocess.run(
+            ["npm", "root", "-g"],
+            capture_output=True, text=True, timeout=20,
+        )
+    except Exception:
+        return ""
+    return (proc.stdout or "").strip()
+
+def _which_real(name):
+    found = shutil.which(name)
+    if not found:
+        return ""
+    try:
+        return os.path.realpath(found)
+    except Exception:
+        return ""
+
+def _unscoped(package):
+    return package.rsplit("/", 1)[-1]
+
+def _package_bin(root, package, name):
+    if not root or not package or not name:
+        return ""
+    pkg_dir = os.path.join(root, package)
+    try:
+        with open(os.path.join(pkg_dir, "package.json"), encoding="utf-8") as fh:
+            manifest = json.load(fh)
+    except Exception:
+        return ""
+    declared = manifest.get("bin")
+    rel = None
+    if isinstance(declared, str):
+        if name != _unscoped(package):
+            return ""
+        rel = declared
+    elif isinstance(declared, dict):
+        candidate = declared.get(name)
+        if isinstance(candidate, str):
+            rel = candidate
+    if not rel:
+        return ""
+    try:
+        return os.path.realpath(os.path.join(pkg_dir, rel))
+    except Exception:
+        return ""
+
 cfg = json.loads(sys.argv[1])
-wanted = list(cfg.get("wanted") or [])
-missing = [name for name in wanted if not shutil.which(name)]
-# Bake-in: binary + initialize is enough. npm ls -g is slow and the
-# unprivileged sandbox cannot npm i -g when the pin check fails.
-versions = []
+root = _npm_root()
+versions = _pins(cfg)
+declared_pins = list(cfg.get("pins") or [])
+pins_ok = bool(declared_pins) and len(versions) == len(declared_pins) and all(
+    row.get("ok") for row in versions
+)
+missing = []
+resolved = {}
+for item in cfg.get("required") or []:
+    name = str(item.get("name") or "")
+    package = str(item.get("package") or "")
+    expected = _package_bin(root, package, name)
+    actual = _which_real(name)
+    if not expected or not actual or expected != actual:
+        missing.append(name)
+    else:
+        resolved[name] = actual
+acp_command = [str(part) for part in (cfg.get("acp_command") or [])]
+argv0 = resolved.get(acp_command[0]) if acp_command else None
+paths_ok = (not missing) and bool(argv0)
 init = {"ok": False, "reason": "skipped"}
-if not missing:
+if pins_ok and paths_ok and not cfg.get("skip_handshake"):
     init = _handshake(
-        list(cfg.get("acp_command") or []),
+        [argv0, *acp_command[1:]],
         cfg.get("payload") or {},
         cfg.get("handshake_timeout_sec") or 8,
     )
-ok = (not missing) and bool(init.get("ok"))
+ok = pins_ok and paths_ok and (bool(init.get("ok")) or bool(cfg.get("skip_handshake")))
 sys.stdout.write(json.dumps({
     "ok": ok,
     "missing": missing,
     "versions": versions,
     "initialize": init,
+    "argv0": argv0,
 }))
 """
 
@@ -150,7 +213,13 @@ def ensure_runtime(**kwargs: Any) -> Any:
             "acp_entry_required",
             kind="extension_materialize_failed",
         )
-    descriptor = get_entry(entry_id)
+    try:
+        descriptor = get_entry(entry_id)
+    except AcpRegistryError as exc:
+        raise ExtensionMaterializeError(
+            str(exc),
+            kind="extension_materialize_failed",
+        ) from exc
     if descriptor is None:
         raise ExtensionMaterializeError(
             f"unknown acp entry: {entry_id!r}",
@@ -251,15 +320,13 @@ async def _ensure_entry_present(ctx: Any, descriptor: AcpEntryDescriptor) -> Non
     probe = await _run_probe(ctx, descriptor)
     ctx.record_fact("acp_runtime_probe", {"entry": descriptor.entry_id, **probe})
     if probe.get("ok"):
+        _remember_argv0(ctx, descriptor.entry_id, probe.get("argv0"))
         return
-    missing = probe.get("missing")
-    if not isinstance(missing, list):
-        missing = _needed_commands(descriptor)
-    if not missing:
+    if not _needs_install(probe):
         raise EnvironmentFailure(
             "acp_runtime_missing",
             f"acp entry {descriptor.entry_id!r} failed runtime probe "
-            f"({_probe_reason(probe)}) with binaries on PATH; not installing",
+            f"({_probe_reason(probe)}) with the pinned binary; not installing",
         )
     if not descriptor.install_command:
         raise EnvironmentFailure(
@@ -292,6 +359,7 @@ async def _ensure_entry_present(ctx: Any, descriptor: AcpEntryDescriptor) -> Non
             f"acp entry {descriptor.entry_id!r} still failing runtime probe "
             f"after install ({_probe_reason(again)})",
         )
+    _remember_argv0(ctx, descriptor.entry_id, again.get("argv0"))
 
 
 def _install_line(install_command: str) -> str:
@@ -304,21 +372,83 @@ def _install_line(install_command: str) -> str:
     return f'({install_command}) || sudo -n env PATH="$PATH" bash -lc {quoted}'
 
 
-def _needed_commands(descriptor: AcpEntryDescriptor) -> list[str]:
-    """First detect command of each family the entry needs inside the box."""
-    names: list[str] = []
-    if descriptor.integration_mode == 1 and descriptor.engine_detect_commands:
-        names.append(descriptor.engine_detect_commands[0])
-    if descriptor.acp_detect_commands:
-        names.append(descriptor.acp_detect_commands[0])
-    seen: set[str] = set()
-    out: list[str] = []
-    for name in names:
-        token = name.strip().split()[0] if name.strip() else ""
-        if token and token not in seen:
-            seen.add(token)
-            out.append(token)
+def required_bins(descriptor: AcpEntryDescriptor) -> list[tuple[str, str]]:
+    """``(command, package)`` pairs whose realpath must be that package's bin.
+
+    Mode 1 checks the engine command and ``acp_command[0]``. Modes 2 and 3
+    check only ``acp_command[0]``. Detect aliases are not required.
+    """
+    rows: list[tuple[str, str]] = []
+    if descriptor.integration_mode == 1 and descriptor.engine_command and descriptor.engine_package:
+        rows.append((descriptor.engine_command, descriptor.engine_package))
+    if descriptor.acp_command and descriptor.acp_package:
+        rows.append((descriptor.acp_command[0], descriptor.acp_package))
+    seen: set[tuple[str, str]] = set()
+    out: list[tuple[str, str]] = []
+    for item in rows:
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
     return out
+
+
+def _needed_commands(descriptor: AcpEntryDescriptor) -> list[str]:
+    """Required command names. Aliases in the detect lists are not included."""
+    return [name for name, _package in required_bins(descriptor)]
+
+
+_ARGV0_ATTR = "acp_entry_argv0"
+
+
+def store_entry_argv0(host: Any, entry_id: str, argv0: str) -> None:
+    """Remember the pinned absolute argv0 on the box the executor will attach to."""
+    current = getattr(host, _ARGV0_ATTR, None)
+    if not isinstance(current, dict):
+        current = {}
+        setattr(host, _ARGV0_ATTR, current)
+    current[entry_id] = argv0
+
+
+def stored_entry_argv0(host: Any, entry_id: str) -> str | None:
+    current = getattr(host, _ARGV0_ATTR, None)
+    if not isinstance(current, dict):
+        return None
+    value = current.get(entry_id)
+    if isinstance(value, str) and value.startswith("/"):
+        return value
+    return None
+
+
+def _remember_argv0(ctx: Any, entry_id: str, argv0: Any) -> None:
+    if not isinstance(argv0, str) or not argv0.startswith("/"):
+        return
+    store_entry_argv0(_box_host(ctx), entry_id, argv0)
+    bag = getattr(ctx, "acp_entry_argv0", None)
+    if not isinstance(bag, dict):
+        bag = {}
+        ctx.acp_entry_argv0 = bag
+    bag[entry_id] = argv0
+
+
+def _needs_install(probe: dict[str, Any]) -> bool:
+    """Version or required-bin miss installs once. A failed handshake does not."""
+    if probe.get("ok"):
+        return False
+    versions = probe.get("versions")
+    pins_ok = (
+        isinstance(versions, list)
+        and bool(versions)
+        and all(isinstance(row, dict) and row.get("ok") for row in versions)
+    )
+    missing = probe.get("missing")
+    argv0 = probe.get("argv0")
+    paths_ok = (
+        isinstance(missing, list)
+        and not missing
+        and isinstance(argv0, str)
+        and argv0.startswith("/")
+    )
+    return not (pins_ok and paths_ok)
 
 
 def _pinned_packages(descriptor: AcpEntryDescriptor) -> list[tuple[str, str]]:
@@ -339,9 +469,15 @@ def _pinned_packages(descriptor: AcpEntryDescriptor) -> list[tuple[str, str]]:
     return pins
 
 
-def _probe_config(descriptor: AcpEntryDescriptor) -> dict[str, Any]:
-    return {
-        "wanted": _needed_commands(descriptor),
+def _probe_config(
+    descriptor: AcpEntryDescriptor,
+    *,
+    skip_handshake: bool = False,
+) -> dict[str, Any]:
+    config: dict[str, Any] = {
+        "required": [
+            {"name": name, "package": package} for name, package in required_bins(descriptor)
+        ],
         "pins": [list(item) for item in _pinned_packages(descriptor)],
         "acp_command": list(descriptor.acp_command),
         "handshake_timeout_sec": _HANDSHAKE_TIMEOUT_SEC,
@@ -356,16 +492,44 @@ def _probe_config(descriptor: AcpEntryDescriptor) -> dict[str, Any]:
             },
         },
     }
+    if skip_handshake:
+        config["skip_handshake"] = True
+    return config
 
 
-def _probe_argv(host: Any, descriptor: AcpEntryDescriptor) -> list[str]:
+def _probe_argv(
+    host: Any,
+    descriptor: AcpEntryDescriptor,
+    *,
+    skip_handshake: bool = False,
+) -> list[str]:
     python = [str(part) for part in getattr(host, "python_command", ()) or ("python3",)]
     return [
         *python,
         "-c",
         _PROBE_SOURCE,
-        json.dumps(_probe_config(descriptor), separators=(",", ":")),
+        json.dumps(
+            _probe_config(descriptor, skip_handshake=skip_handshake),
+            separators=(",", ":"),
+        ),
     ]
+
+
+async def resolve_entry_argv0(host: Any, descriptor: AcpEntryDescriptor) -> str | None:
+    """Re-check the pinned bin inside the box. No handshake, no PATH fallback."""
+    try:
+        result = await host.exec(
+            _probe_argv(host, descriptor, skip_handshake=True),
+            timeout_sec=float(_PROBE_EXEC_TIMEOUT_SEC),
+            env=_probe_env(host, descriptor),
+        )
+    except Exception:  # noqa: BLE001 — resolve is fail-closed
+        return None
+    parsed = _parse_probe_stdout(getattr(result, "stdout", "") or "")
+    argv0 = parsed.get("argv0")
+    if _needs_install(parsed) or not isinstance(argv0, str) or not argv0.startswith("/"):
+        return None
+    return argv0
 
 
 def _parse_probe_stdout(stdout: str) -> dict[str, Any]:

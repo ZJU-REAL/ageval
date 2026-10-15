@@ -74,6 +74,8 @@ class AttemptCtx:
     summary_extra: dict[str, Any] | None = None
     on_phase: PhaseObserver | None = None
     phase_facts: list[PhaseFact] = field(default_factory=list)
+    # Absolute ACP argv0 resolved in the box, keyed by entry id. Not a lock field.
+    acp_entry_argv0: dict[str, str] = field(default_factory=dict)
     phase: str = "created"
     evaluation_result: Any = None
     _writers_stopped: bool = False
