@@ -82,6 +82,8 @@ class LockedTaskConfig:
     extension_bindings: Mapping[str, Any] | None = None
     # Set when the operator asked to rebuild the box recipe.
     force_build: bool = False
+    # Home-file ACP rows a profile referenced. Omitted when every entry is packaged.
+    acp_user_entries: Mapping[str, Any] | None = None
 
     def canonical_payload(self) -> dict[str, Any]:
         """Payload used for digest: everything except the digest field itself."""
@@ -107,6 +109,8 @@ class LockedTaskConfig:
             payload["job_overlay"] = thaw(self.job_overlay)
         if self.extension_bindings is not None:
             payload["extension_bindings"] = thaw(self.extension_bindings)
+        if self.acp_user_entries is not None:
+            payload["acp_user_entries"] = thaw(self.acp_user_entries)
         return payload
 
     def profile_row(self, profile_id: str) -> Mapping[str, Any] | None:
@@ -132,6 +136,7 @@ class LockSummary:
     provenance: Mapping[str, Any] | None = None
     job_overlay: Mapping[str, Any] | None = None
     extension_bindings: Mapping[str, Any] | None = None
+    acp_user_entries: Mapping[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -152,6 +157,8 @@ class LockSummary:
             out["job_overlay"] = thaw(self.job_overlay)
         if self.extension_bindings is not None:
             out["extension_bindings"] = thaw(self.extension_bindings)
+        if self.acp_user_entries is not None:
+            out["acp_user_entries"] = thaw(self.acp_user_entries)
         return out
 
 
@@ -170,4 +177,5 @@ def locked_to_summary(lock: LockedTaskConfig) -> LockSummary:
         provenance=lock.provenance,
         job_overlay=lock.job_overlay,
         extension_bindings=lock.extension_bindings,
+        acp_user_entries=lock.acp_user_entries,
     )

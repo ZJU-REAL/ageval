@@ -30,9 +30,14 @@ def register(app: typer.Typer) -> None:
         Plugin ``host_ready`` is constructability (declared host_requires /
         describe()), not install Recognition or a missing PATH binary.
         """
+        from ageval.plugins.contrib.acp.registry import AcpRegistryError
         from ageval.plugins.executor_inventory import build_executor_inventory
 
-        summary = build_executor_inventory(verbose=verbose)
+        try:
+            summary = build_executor_inventory(verbose=verbose)
+        except AcpRegistryError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
         emit(summary)
 
     @app.command("publish")

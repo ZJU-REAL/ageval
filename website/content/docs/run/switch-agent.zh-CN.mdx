@@ -30,7 +30,7 @@ agent_profiles:
       id: gpt-5.4-mini
 ```
 
-ACP 的 `entry` 写在 `- plugin: acp` / `options.entry`。
+ACP 的 `entry` 写在 `executor: acp` 和 `options.entry`。包内 id 是下面的内置项。`$AGEVAL_HOME/acp-entries.json`（未设置时是 `~/.ageval/acp-entries.json`）可以再加一个 id，不能替换包内 id。启动的进程是该 entry 钉死的包里的二进制。官方 Attempt 镜像不包含这个文件里的 entry。`--agent` 仍然只解析包内 id。
 
 ## Agent 包（`--agent`）
 

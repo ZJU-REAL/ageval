@@ -113,6 +113,26 @@ def test_executors_ready_table() -> None:
     assert "sha256" not in text
 
 
+def test_executors_human_marks_user_entries() -> None:
+    text = humanize(
+        {
+            "supported": ["acp"],
+            "host_ready": [],
+            "missing_binary": [],
+            "executors": [{"kind": "acp", "host_ready": False}],
+            "acp_entries": [
+                {"entry_id": "kimi", "host_ready": False, "source": "user"},
+                {"entry_id": "pi", "host_ready": True, "source": "package"},
+            ],
+        }
+    )
+    for line in text.splitlines():
+        if "kimi" in line:
+            assert "user" in line
+        if line.strip().startswith("pi"):
+            assert "user" not in line
+
+
 def test_publish_and_suite_upload_skip_blob_digest() -> None:
     pub = humanize(
         {

@@ -12,6 +12,8 @@ from tests.helpers.lock import CONFIG_MIN, job_document, lock_task
 
 from ageval.config.capabilities import DeclarationCapabilityCatalog
 from ageval.config.errors import ConfigError
+from ageval.config.load_and_lock import referenced_acp_user_entries
+from ageval.config.model import locked_to_summary
 from ageval.config.profiles import JobDocument
 from ageval.environments.protocol import EnvironmentFailure
 from ageval.plugins.contrib.acp.home import _copy_keyless_auth
@@ -260,6 +262,57 @@ def test_bad_home_file_stops_pi_and_non_acp_locks() -> None:
     with pytest.raises(ConfigError) as http_lock:
         lock_task(_EVAL_JUDGE, "judge-score")
     assert http_lock.value.error_code == "invalid_schema"
+
+
+def test_packaged_lock_omits_acp_user_entries() -> None:
+    locked = lock_task(CONFIG_MIN, "minimal", job=_acp_job("pi"))
+    assert locked.acp_user_entries is None
+    assert "acp_user_entries" not in locked.canonical_payload()
+    assert "acp_user_entries" not in locked_to_summary(locked).as_dict()
+
+
+def test_user_entry_lock_stores_snapshot_and_changes_digest() -> None:
+    _home_file(_kimi_doc())
+    first = lock_task(CONFIG_MIN, "minimal", job=_acp_job("kimi"))
+    assert first.acp_user_entries is not None
+    snap = dict(first.acp_user_entries["kimi"])
+    assert snap["entry_id"] == "kimi"
+    blob = json.dumps(snap)
+    for banned in ("install_command", "fixed_env", "source", "/Users", "/opt", "/home"):
+        assert banned not in blob
+    assert list(locked_to_summary(first).as_dict()["acp_user_entries"]) == ["kimi"]
+    _home_file(
+        _kimi_doc(
+            acp_version="1.2.4",
+            install_command="npm install -g @moonshot-ai/kimi-code@1.2.4",
+        )
+    )
+    second = lock_task(CONFIG_MIN, "minimal", job=_acp_job("kimi"))
+    assert second.digest != first.digest
+    assert second.acp_user_entries is not None
+    assert second.acp_user_entries["kimi"]["acp_version"] == "1.2.4"
+
+
+def test_referenced_user_entries_are_sorted_and_skip_packaged_ids() -> None:
+    doc = _kimi_doc()
+    entries = doc["entries"]
+    assert isinstance(entries, list)
+    zeta = dict(entries[0])
+    zeta["entry_id"] = "zeta"
+    zeta["engine_detect_commands"] = ["zeta"]
+    zeta["acp_detect_commands"] = ["zeta"]
+    zeta["acp_command"] = ["zeta", "acp"]
+    entries.append(zeta)
+    _home_file(doc)
+    snaps = referenced_acp_user_entries(
+        [
+            {"executor": "acp", "options": {"entry": "zeta"}},
+            {"executor": "acp", "options": {"entry": "pi"}},
+            {"executor": "acp", "options": {"entry": "kimi"}},
+        ]
+    )
+    assert snaps is not None
+    assert list(snaps) == ["kimi", "zeta"]
 
 
 def test_symlink_auth_path_stops_before_copy(

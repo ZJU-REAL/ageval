@@ -50,6 +50,33 @@ from ageval.config.yaml_io import parse_yaml
 from ageval.plugins.slots import ENVIRONMENT
 
 
+def referenced_acp_user_entries(profiles: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
+    """Lock snapshots for home-file entries a profile names. Packaged ids are omitted."""
+    from ageval.config.profiles import acp_entry_from_profile, plugin_row_options
+    from ageval.plugins.contrib.acp.registry import AcpRegistryError, get_entry
+
+    ids: set[str] = set()
+    for row in profiles:
+        if not isinstance(row, Mapping):
+            continue
+        named = acp_entry_from_profile(row)
+        if named:
+            ids.add(named)
+        oneshot = plugin_row_options(row, "acp-oneshot").get("entry")
+        if isinstance(oneshot, str) and oneshot.strip():
+            ids.add(oneshot.strip())
+    snaps: dict[str, Any] = {}
+    for entry_id in sorted(ids):
+        try:
+            desc = get_entry(entry_id)
+        except AcpRegistryError as exc:
+            raise ConfigError(exc.error_code, exc.message, location=exc.location) from exc
+        if desc is None or desc.source != "user":
+            continue
+        snaps[entry_id] = desc.as_lock_snapshot()
+    return snaps or None
+
+
 class ConfigCore:
     """Normative Config Core façade."""
 
@@ -170,6 +197,7 @@ class ConfigCore:
                 )
             )
 
+        user_entries = referenced_acp_user_entries(profiles_rows)
         fields: dict[str, Any] = {
             "format": str(merged["format"]),
             "dataset_id": dataset_id,
@@ -189,6 +217,7 @@ class ConfigCore:
             "job_overlay": freeze(job_overlay),
             "extension_bindings": freeze(extension_bindings) if extension_bindings else None,
             "force_build": force_build,
+            **({"acp_user_entries": freeze(user_entries)} if user_entries is not None else {}),
         }
         provisional = LockedTaskConfig(digest="", **fields)
         return LockedTaskConfig(digest=digest_payload(provisional.canonical_payload()), **fields)

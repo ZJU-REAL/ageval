@@ -65,3 +65,45 @@ def test_executors_verbose_adds_detail() -> None:
     assert "credential_env_names" in acp_rows["opencode"]
     assert "credential_missing" in acp_rows["pi"]
     assert "keyless_auth" in acp_rows["codex"]
+    assert acp_rows["pi"]["source"] == "package"
+
+
+def test_executors_lists_a_home_entry_and_a_bad_file_exits() -> None:
+    home = Path(os.environ["AGEVAL_HOME"])
+    (home / "acp-entries.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "entries": [
+                    {
+                        "entry_id": "kimi",
+                        "integration_mode": 2,
+                        "execution_mode": "acp-stdio",
+                        "engine_detect_commands": ["kimi"],
+                        "acp_command": ["kimi", "acp"],
+                        "acp_detect_commands": ["kimi"],
+                        "acp_package": "@moonshot-ai/kimi-code",
+                        "acp_version": "1.2.3",
+                        "install_command": "npm install -g @moonshot-ai/kimi-code@1.2.3",
+                        "credential_env_names": ["KIMI_API_KEY"],
+                        "model_binding": "config-option",
+                        "platforms": ["darwin", "linux"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    listed = _run_ageval("executors")
+    assert listed.returncode == 0, listed.stderr
+    data = json.loads(listed.stdout)
+    rows = {row["entry_id"]: row for row in data["acp_entries"]}
+    assert rows["kimi"]["source"] == "user"
+    assert rows["pi"]["source"] == "package"
+    assert "/Users" not in listed.stdout
+    (home / "acp-entries.json").write_text("{", encoding="utf-8")
+    failed = _run_ageval("executors")
+    assert failed.returncode != 0
+    assert "Traceback" not in failed.stderr
+    assert "acp_user_entries_unreadable" in failed.stderr
+    assert "codex" not in failed.stdout

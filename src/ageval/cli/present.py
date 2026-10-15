@@ -288,7 +288,12 @@ def _executors_block(payload: Mapping[str, Any]) -> str:
     if entries:
         lines.append("─" * 40)
         lines.append("acp")
-        acp_rows = [[str(r.get("entry_id") or ""), _ready(r.get("host_ready"))] for r in entries]
+        acp_rows: list[list[str]] = []
+        for row in entries:
+            cells = [str(row.get("entry_id") or ""), _ready(row.get("host_ready"))]
+            if row.get("source") == "user":
+                cells.append("user")
+            acp_rows.append(cells)
         lines.extend("  " + line for line in _align_cells(acp_rows))
     return "\n".join(lines) + "\n"
 
