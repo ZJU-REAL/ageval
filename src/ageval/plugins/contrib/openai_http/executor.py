@@ -11,6 +11,7 @@ import copy
 import json
 import os
 import threading
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Mapping, Sequence
@@ -253,6 +254,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
         {"id", "api", "reasoning_effort", "timeout", "watchdog", "extra"}
     )
     extra_allowlist = frozenset({"provider"})
+    concurrent_sessions = True
 
     def __init__(
         self,
@@ -289,9 +291,17 @@ class OpenAIHTTPExecutor(BaseExecutor):
             float(spec.watchdog) if spec.watchdog is not None else _DEFAULT_WATCHDOG_SECONDS
         )
         self.extra = dict(spec.extra)
+        self._invoke_cancel = threading.Event()
 
     def close(self) -> None:
         return None
+
+    def prepare_invoke(self) -> None:
+        self._invoke_cancel.clear()
+
+    def cancel_invoke(self) -> None:
+        """Stop waiting on this process. Does not abort the remote provider."""
+        self._invoke_cancel.set()
 
     def invoke(
         self,
@@ -304,6 +314,8 @@ class OpenAIHTTPExecutor(BaseExecutor):
         messages: Sequence[Mapping[str, Any]] | None = None,
     ) -> AgentResult:
         del redaction_sentinels
+        if self._invoke_cancel.is_set():
+            return self._result(ok=False, error="invoke_cancelled", effort=self.reasoning_effort)
         key_env = self.api_key_env or _DEFAULT_KEY_ENV
         key = os.environ.get(key_env, "")
         base = self.base_url or os.environ.get("AGEVAL_OPENAI_BASE_URL") or _DEFAULT_BASE
@@ -325,6 +337,13 @@ class OpenAIHTTPExecutor(BaseExecutor):
             headers["Authorization"] = f"Bearer {key}"
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
         kind, found = self._exchange(req, timeout=timeout)
+        if kind == "cancelled":
+            return self._result(
+                ok=False,
+                error="invoke_cancelled",
+                effort=effort,
+                repeatable=False,
+            )
         if kind == "watchdog":
             return self._result(
                 ok=False,
@@ -444,7 +463,16 @@ class OpenAIHTTPExecutor(BaseExecutor):
 
         worker = threading.Thread(target=_post, name="openai-http", daemon=True)
         worker.start()
-        worker.join(join_for)
+        deadline = time.monotonic() + join_for
+        while worker.is_alive():
+            if self._invoke_cancel.is_set():
+                return "cancelled", None
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            worker.join(min(0.05, remaining))
+        if self._invoke_cancel.is_set():
+            return "cancelled", None
         if worker.is_alive():
             return ("watchdog" if watchdog_ceiling else "transport"), (
                 None if watchdog_ceiling else "TimeoutError"

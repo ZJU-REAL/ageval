@@ -160,6 +160,7 @@ class AcpExecutor(BaseExecutor):
     """Descriptor-driven ACP executor; one entry process per ageval session."""
 
     kind = "acp"
+    concurrent_sessions = True
     requires_environment = True
     supported_apis = frozenset({"chat"})
     supported_model_fields = frozenset({"id", "api", "reasoning_effort"})
@@ -820,6 +821,16 @@ class AcpExecutor(BaseExecutor):
         if self._conn is not None and self._acp_session_id is not None:
             with contextlib_suppress(Exception):
                 await self._conn.cancel(session_id=self._acp_session_id)
+
+    def prepare_invoke(self) -> None:
+        return None
+
+    def cancel_invoke(self) -> None:
+        """Ask the entry to cancel the current prompt. Close still owns the process."""
+        loop = self._loop
+        if loop is None or self._conn is None or self._acp_session_id is None:
+            return
+        asyncio.run_coroutine_threadsafe(self._cancel(), loop)
 
     def close(self) -> None:
         with self._lock:

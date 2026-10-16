@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
@@ -494,6 +495,45 @@ def test_watchdog_expiry_is_a_repeatable_transport_error(monkeypatch: pytest.Mon
     assert result.error is not None
     assert "openai_http_watchdog" in result.error
     assert result.repeatable is True
+
+
+def test_cancel_stops_the_local_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+    import urllib.request
+
+    started = threading.Event()
+
+    class _Hang:
+        def __enter__(self) -> object:
+            started.set()
+            time.sleep(30)
+            return self
+
+        def __exit__(self, *_args: object) -> bool:
+            return False
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *_a, **_k: _Hang())
+    monkeypatch.delenv("AGEVAL_OFFLINE_AGENT", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    executor = OpenAIHTTPExecutor(
+        model={"id": "mock", "timeout": 30, "watchdog": 30},
+        base_url="https://api.example.invalid/v1",
+    )
+    box: dict[str, Any] = {}
+
+    def _run() -> None:
+        box["result"] = executor.invoke("hi", timeout=30)
+
+    worker = Thread(target=_run, daemon=True)
+    worker.start()
+    assert started.wait(2)
+    executor.cancel_invoke()
+    worker.join(2)
+    assert not worker.is_alive()
+    result = box["result"]
+    assert result.ok is False
+    assert result.error == "invoke_cancelled"
+    assert result.repeatable is False
 
 
 def _status_server(code: int) -> tuple[ThreadingHTTPServer, str, dict[str, int]]:
