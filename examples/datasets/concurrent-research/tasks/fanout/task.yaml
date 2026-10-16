@@ -1,0 +1,24 @@
+format: ageval.task/1
+task_id: fanout
+parameters:
+  topics:
+    - cedar
+    - mica
+    - kelp
+    - quartz
+    - linen
+    - amber
+agent_profiles:
+  - id: solver
+limits:
+  wall_time_seconds: 900
+  agent_invocations: 40
+  agent_concurrency: 4
+artifacts:
+  publishable:
+    - id: report
+      path: artifacts/report.json
+evaluation:
+  inputs:
+    - artifact: report
+      target: artifacts/report.json

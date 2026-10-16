@@ -132,6 +132,17 @@ Package-local detail: [`datasets/tau3-airline-5/README.md`](datasets/tau3-airlin
 Regenerate the in-repo cut:
 `python examples/datasets/tau3-airline-5/scripts/generate_package.py --ids 0,1,2,3,4`.
 
+## `datasets/concurrent-research/` (`dataset_id: official/concurrent-research`)
+
+One Attempt, six child `openai-http` sessions, at most four active. The coordinator writes `report.json`. The evaluator scores that file. Not a benchmark score.
+
+```bash
+ageval lock examples/datasets/concurrent-research --task fanout
+ageval run examples/datasets/concurrent-research --task fanout
+```
+
+Needs `glm_coding_api_key`. Detail: [`datasets/concurrent-research/README.md`](datasets/concurrent-research/README.md).
+
 ## `agents/` (`ageval.agent/1`)
 
 Custom overlay packages for executors that are **not** builtin catalog cards:
