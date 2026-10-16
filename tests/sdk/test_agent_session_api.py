@@ -24,7 +24,7 @@ def test_session_forwards_tools_without_treating_them_as_overrides(
 ) -> None:
     captured: list[dict[str, object]] = []
 
-    def _fake_call(payload: dict[str, object]) -> dict[str, object]:
+    async def _fake_call(payload: dict[str, object]) -> dict[str, object]:
         captured.append(payload)
         if payload.get("op") == "open":
             return {"ok": True, "session_id": "sess_test"}
@@ -56,7 +56,7 @@ def test_session_forwards_tools_without_treating_them_as_overrides(
 def test_session_open_forwards_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: list[dict[str, object]] = []
 
-    def _fake_call(payload: dict[str, object]) -> dict[str, object]:
+    async def _fake_call(payload: dict[str, object]) -> dict[str, object]:
         captured.append(payload)
         if payload.get("op") == "open":
             return {"ok": True, "session_id": "sess_env"}
@@ -80,7 +80,7 @@ def test_record_observation_forwards_to_parent(
 ) -> None:
     captured: list[dict[str, object]] = []
 
-    def _fake_call(payload: dict[str, object]) -> dict[str, object]:
+    async def _fake_call(payload: dict[str, object]) -> dict[str, object]:
         captured.append(payload)
         if payload.get("op") == "open":
             return {"ok": True, "session_id": "sess_test"}
