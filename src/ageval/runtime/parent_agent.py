@@ -554,6 +554,8 @@ class ParentAgentService:
         except InvokeCancelled:
             return self._cancelled(binding, handle, started)
         except Exception as exc:  # noqa: BLE001 — a crash still leaves evidence
+            if ticket.cancel.is_set():
+                return self._cancelled(binding, handle, started)
             latency = (time.monotonic() - started) * 1000.0
             kind = str(getattr(exc, "kind", None) or type(exc).__name__)
             detail = str(getattr(exc, "message", None) or exc).strip()[:500]
@@ -919,28 +921,21 @@ class ParentAgentService:
     def _set_phase_clock_frozen(self, frozen: bool) -> None:
         """Freeze before the ctx snapshot; thaw the deadline before clearing the flag.
 
-        Overlapping stalls share one phase clock. One resume decrements the
-        count and leaves the clock frozen while another stall is still open.
+        Overlapping stalls each notify the phase clock. The clock stays frozen
+        until the last one resumes, and the flag drops only after that thaw.
         """
         with self._lock:
-            previous = self._stall_freezes
             if frozen:
                 self._stall_freezes += 1
+                if self._stall_freezes == 1:
+                    self._phase_clock_frozen = True
             elif self._stall_freezes > 0:
                 self._stall_freezes -= 1
-            current = self._stall_freezes
-            if previous == 0 and current > 0:
-                self._phase_clock_frozen = True
-            transition = (previous == 0) != (current == 0)
-        if not transition:
-            return
         hook = self.on_phase_clock
-        if frozen:
-            if callable(hook):
-                hook(True)
-            return
         if callable(hook):
-            hook(False)
+            hook(frozen)
+        if frozen:
+            return
         with self._lock:
             if self._stall_freezes == 0:
                 self._phase_clock_frozen = False

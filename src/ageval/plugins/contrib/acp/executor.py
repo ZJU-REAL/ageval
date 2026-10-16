@@ -252,6 +252,7 @@ class AcpExecutor(BaseExecutor):
         self._last_error_detail: str | None = None
         self._lock = threading.Lock()
         self._closed = False
+        self._inflight: Any = None
 
     def supports_model(self, spec: ModelSpec) -> None:
         require_model_support(
@@ -301,7 +302,12 @@ class AcpExecutor(BaseExecutor):
     def _run(self, coro: Any, *, timeout: float) -> Any:
         loop = self._ensure_loop()
         fut = asyncio.run_coroutine_threadsafe(coro, loop)
-        return fut.result(timeout=timeout)
+        self._inflight = fut
+        try:
+            return fut.result(timeout=timeout)
+        finally:
+            if self._inflight is fut:
+                self._inflight = None
 
     async def _attach_and_init(self) -> None:
         """Attach the entry inside the box and bring the ACP session up."""
@@ -826,11 +832,13 @@ class AcpExecutor(BaseExecutor):
         return None
 
     def cancel_invoke(self) -> None:
-        """Ask the entry to cancel the current prompt. Close still owns the process."""
+        """Cancel the prompt and drop the in-flight wait. Close still owns the process."""
         loop = self._loop
-        if loop is None or self._conn is None or self._acp_session_id is None:
-            return
-        asyncio.run_coroutine_threadsafe(self._cancel(), loop)
+        fut = self._inflight
+        if loop is not None and self._conn is not None and self._acp_session_id is not None:
+            asyncio.run_coroutine_threadsafe(self._cancel(), loop)
+        if fut is not None:
+            fut.cancel()
 
     def close(self) -> None:
         with self._lock:

@@ -117,6 +117,59 @@ def test_first_success_cancels_children_not_yet_admitted() -> None:
     assert started == ["a"]
 
 
+def test_first_success_cancels_a_running_loser() -> None:
+    started = asyncio.Event()
+    released = asyncio.Event()
+
+    async def _slow() -> dict[str, bool]:
+        started.set()
+        await released.wait()
+        return {"ok": False}
+
+    async def _winner() -> dict[str, bool]:
+        await started.wait()
+        return {"ok": True}
+
+    result = asyncio.run(
+        first_success(
+            [_slow(), _winner()],
+            limit=2,
+            accept=lambda reply: reply.get("ok") is True,
+        )
+    )
+
+    assert result == {"ok": True}
+    assert released.is_set() is False
+
+
+def test_completion_order_can_start_another_child() -> None:
+    release = asyncio.Event()
+
+    async def _slow() -> str:
+        await release.wait()
+        return "slow"
+
+    async def _fast() -> str:
+        return "fast"
+
+    async def _extra() -> str:
+        return "extra"
+
+    async def _run() -> list[str]:
+        active = {asyncio.create_task(_slow()), asyncio.create_task(_fast())}
+        done, active = await asyncio.wait(active, return_when=asyncio.FIRST_COMPLETED)
+        assert [task.result() for task in done] == ["fast"]
+        assert len(active) == 1
+        active.add(asyncio.create_task(_extra()))
+        release.set()
+        finished = [task.result() for task in done] + list(await asyncio.gather(*active))
+        return finished
+
+    finished = asyncio.run(_run())
+    assert finished[0] == "fast"
+    assert set(finished[1:]) == {"slow", "extra"}
+
+
 def test_first_success_replenishes_until_a_winner() -> None:
     started: list[str] = []
 

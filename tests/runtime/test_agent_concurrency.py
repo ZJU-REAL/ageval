@@ -255,6 +255,25 @@ def test_unsafe_executor_is_rejected_before_it_overlaps(tmp_path: Path) -> None:
     _join(other)
 
 
+def test_cancel_request_stops_a_running_invoke(tmp_path: Path) -> None:
+    backend = HoldExecutor()
+    service = _service(tmp_path, backend, concurrency=2)
+    session = _open(service)
+    result: dict[str, Any] = {}
+
+    def _call() -> None:
+        result.update(service.invoke(session_id=session, prompt="live", request_id="req_live"))
+
+    worker = threading.Thread(daemon=True, target=_call)
+    worker.start()
+    _wait_until(lambda: backend.active == 1)
+    drained = service.cancel_request(session_id=session, request_id="req_live")
+    _join(worker)
+    assert drained["drained"] is True
+    assert result["error"] == "invoke_cancelled"
+    assert backend.calls == 1
+
+
 def test_seal_drains_an_in_flight_solver_before_returning(tmp_path: Path) -> None:
     backend = HoldExecutor()
     service = _service(tmp_path, backend, concurrency=2)
@@ -283,10 +302,10 @@ def test_stall_freeze_survives_another_invoke_resuming(tmp_path: Path) -> None:
     service._set_phase_clock_frozen(True)
     service._set_phase_clock_frozen(False)
     assert service._phase_clock_frozen is True
-    assert seen == [True]
+    assert seen == [True, True, False]
     service._set_phase_clock_frozen(False)
     assert service._phase_clock_frozen is False
-    assert seen == [True, False]
+    assert seen == [True, True, False, False]
 
 
 def _intervals(service: ParentAgentService) -> list[tuple[str, str]]:
