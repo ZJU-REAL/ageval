@@ -53,9 +53,7 @@ class HoldExecutor:
             self.max_active = max(self.max_active, self.active)
             self.holds.append(hold)
         try:
-            while (
-                not hold.is_set() and not self.release_all.is_set() and not self._cancel.is_set()
-            ):
+            while not hold.is_set() and not self.release_all.is_set() and not self._cancel.is_set():
                 hold.wait(0.01)
         finally:
             with self._lock:
@@ -177,7 +175,8 @@ def test_same_session_invokes_stay_in_arrival_order(tmp_path: Path) -> None:
     service = _service(tmp_path, backend, concurrency=4)
     session = _open(service)
     threads = [
-        threading.Thread(daemon=True, 
+        threading.Thread(
+            daemon=True,
             target=lambda prompt: service.invoke(session_id=session, prompt=prompt),
             args=(prompt,),
         )
@@ -199,8 +198,9 @@ def test_queued_cancel_does_not_spend_quota_or_call_the_executor(tmp_path: Path)
     backend = HoldExecutor()
     service = _service(tmp_path, backend, limit=2, concurrency=1)
     session = _open(service)
-    first = threading.Thread(daemon=True, 
-        target=lambda: service.invoke(session_id=session, prompt="run", request_id="req_run")
+    first = threading.Thread(
+        daemon=True,
+        target=lambda: service.invoke(session_id=session, prompt="run", request_id="req_run"),
     )
     second_result: dict[str, Any] = {}
 
@@ -315,8 +315,10 @@ def test_evidence_intervals_overlap_only_when_the_cap_allows(tmp_path: Path) -> 
         service = _service(tmp_path / str(concurrency), backend, concurrency=concurrency)
         sessions = [_open(service), _open(service)]
         threads = [
-            threading.Thread(daemon=True, 
-                target=lambda sid: service.invoke(session_id=sid, prompt="p"), args=(sid,)
+            threading.Thread(
+                daemon=True,
+                target=lambda sid: service.invoke(session_id=sid, prompt="p"),
+                args=(sid,),
             )
             for sid in sessions
         ]
@@ -354,7 +356,8 @@ def test_socket_dispatch_overlaps_two_clients(tmp_path: Path) -> None:
             assert opened["ok"]
             sessions.append(opened["session_id"])
         threads = [
-            threading.Thread(daemon=True, 
+            threading.Thread(
+                daemon=True,
                 target=lambda session_id, prompt: agent_service_client_call(
                     str(server.socket_path),
                     {
@@ -439,8 +442,6 @@ def test_sdk_invoke_does_not_block_the_task_loop(tmp_path: Path) -> None:
 def test_no_background_thread_survives_the_module() -> None:
     time.sleep(0.05)
     alive = [
-        t.name
-        for t in threading.enumerate()
-        if t.is_alive() and t is not threading.main_thread()
+        t.name for t in threading.enumerate() if t.is_alive() and t is not threading.main_thread()
     ]
     assert alive == []
