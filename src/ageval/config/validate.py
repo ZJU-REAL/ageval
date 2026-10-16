@@ -60,6 +60,7 @@ ALLOWED_LIMIT_KEYS = frozenset(
         "environment_seconds",
         "evaluate_seconds",
         "agent_invocations",
+        "agent_concurrency",
     }
 )
 PUBLISHABLE_KEYS = frozenset({"id", "path", "kind", "exclude"})
@@ -369,6 +370,12 @@ def _validate_limits(limits: Any) -> None:
                 ERROR_INVALID_SCHEMA,
                 f"limits.{key} must be a non-negative integer",
                 location=f"/limits/{key}",
+            )
+        if key == "agent_concurrency" and val < 1:
+            raise ConfigError(
+                ERROR_INVALID_SCHEMA,
+                "limits.agent_concurrency must be a positive integer",
+                location="/limits/agent_concurrency",
             )
 
 
