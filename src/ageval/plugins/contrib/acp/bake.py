@@ -55,12 +55,17 @@ for (const item of required) {
 """
 
 
+def _js_one_line(source: str) -> str:
+    """Dockerfile RUN is one instruction. A newline inside the script starts a new one."""
+    return " ".join(part.strip() for part in source.splitlines() if part.strip())
+
+
 def _realpath_check(required: list[tuple[str, str]]) -> str:
     payload = json.dumps(
         [{"name": name, "package": package} for name, package in required],
         separators=(",", ":"),
     )
-    return "node -e " + shlex.quote(_PIN_CHECK_JS) + " " + shlex.quote(payload)
+    return "node -e " + shlex.quote(_js_one_line(_PIN_CHECK_JS)) + " " + shlex.quote(payload)
 
 
 # BuildKit runs a shell-form RUN as `/bin/sh -c` (dash on ubuntu/debian). This

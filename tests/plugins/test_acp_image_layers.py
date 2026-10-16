@@ -105,6 +105,9 @@ def test_render_opencode_bakes_pinned_detect_commands() -> None:
     assert "opencode-ai@1.18.12" in body
     assert '"name":"opencode","package":"opencode-ai"' in body
     assert "command -v opencode" not in body
+    detect = [line for line in body.splitlines() if "node -e" in line]
+    assert len(detect) == 1
+    assert detect[0].startswith("RUN node -e ")
     assert "__ACP_ENTRY_PACKAGES__" not in body
     assert all(
         "npx" not in line.split()
