@@ -15,6 +15,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+import pytest
 from tests.helpers.agent_binding import ScriptedBinder
 
 from ageval.evidence.export import export_trajectory
@@ -123,3 +124,58 @@ def test_acp_future_cancel_seals_and_exports(tmp_path: Path, monkeypatch) -> Non
         server.stop()
         shutil.rmtree(socket_dir, ignore_errors=True)
         os.environ.pop("AGEVAL_AGENT_SERVICE_SOCK", None)
+
+
+def _direct_service(
+    tmp_path: Path, executor: Any
+) -> tuple[ParentAgentService, AttemptEvidenceStore]:
+    store = AttemptEvidenceStore(root=tmp_path / "run", attempt_id=ATTEMPT, run_id="run_x")
+    service = ParentAgentService(
+        attempt_id=ATTEMPT,
+        binder=ScriptedBinder(executor),
+        agent_invocation_limit=4,
+        agent_concurrency=1,
+        evidence_store=store,
+        offline_env="",
+    )
+    return service, store
+
+
+def test_asyncio_cancelled_error_seals_as_invoke_cancelled(tmp_path: Path) -> None:
+    class _Boom:
+        kind = "scripted"
+        concurrent_sessions = True
+
+        def invoke(self, prompt: str, **_kwargs: Any) -> AgentResult:
+            del prompt
+            raise asyncio.CancelledError()
+
+    service, store = _direct_service(tmp_path, _Boom())
+    opened = service.open_session(profile_id="solver")
+    assert opened["ok"]
+    reply = service.invoke(session_id=str(opened["session_id"]), prompt="hang")
+    assert reply["ok"] is False
+    assert reply["error"] == "invoke_cancelled"
+    meta = json.loads((store.list_invocations()[0] / "metadata.json").read_text(encoding="utf-8"))
+    assert meta["status"] == "cancelled"
+    exported = export_trajectory(store.root, tmp_path / "export")
+    assert exported.ok, exported.error
+
+
+@pytest.mark.parametrize("exc_type", [KeyboardInterrupt, SystemExit])
+def test_process_exit_is_not_sealed_as_cancelled(
+    tmp_path: Path, exc_type: type[BaseException]
+) -> None:
+    class _Boom:
+        kind = "scripted"
+        concurrent_sessions = True
+
+        def invoke(self, prompt: str, **_kwargs: Any) -> AgentResult:
+            del prompt
+            raise exc_type()
+
+    service, _store = _direct_service(tmp_path, _Boom())
+    opened = service.open_session(profile_id="solver")
+    assert opened["ok"]
+    with pytest.raises(exc_type):
+        service.invoke(session_id=str(opened["session_id"]), prompt="hang")

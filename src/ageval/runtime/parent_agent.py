@@ -9,6 +9,7 @@ limit and apologise afterwards.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -552,6 +553,10 @@ class ParentAgentService:
             result = self._chain(binding, AFTER_AGENT_INVOKE, result)
             result = self._chain(binding, NORMALIZE_AGENT_RESULT, result)
         except InvokeCancelled:
+            return self._cancelled(binding, handle, started)
+        except asyncio.CancelledError:
+            # BaseException, so the handler below does not see it.
+            # A threadsafe future raises concurrent.futures.CancelledError instead.
             return self._cancelled(binding, handle, started)
         except Exception as exc:  # noqa: BLE001 — a crash still leaves evidence
             if ticket.cancel.is_set():
