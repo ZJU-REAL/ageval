@@ -15,7 +15,7 @@ def map_error_status(error: str | None) -> str:
     """Terminal status for a failed invoke; everything unclassified is failed."""
     if error in {"TimeoutExpired", "timeout"}:
         return "timeout"
-    if error in {"CancelledError", "cancelled", "KeyboardInterrupt"}:
+    if error in {"CancelledError", "cancelled", "KeyboardInterrupt", "invoke_cancelled"}:
         return "cancelled"
     return "failed"
 

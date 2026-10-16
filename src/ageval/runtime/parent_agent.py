@@ -116,6 +116,28 @@ class SessionBinding:
     actor_id: str | None = None
     closed: bool = False
     last_handle: InvocationHandle | None = None
+    handles: dict[str, InvocationHandle] = field(default_factory=dict)
+
+
+class InvokeCancelled(Exception):
+    """Caller or seal stopped this invoke before the executor finished."""
+
+
+@dataclass
+class _Ticket:
+    """One admitted parent invoke. Queued work has not called the executor."""
+
+    request_id: str
+    session_id: str
+    prompt: str
+    tools: Any
+    messages: Any
+    run_phase: bool
+    arrival: int
+    state: str = "queued"
+    cancel: threading.Event = field(default_factory=threading.Event)
+    finished: threading.Event = field(default_factory=threading.Event)
+    result: dict[str, Any] | None = None
 
 
 @dataclass
@@ -125,6 +147,7 @@ class ParentAgentService:
     attempt_id: str  # Runtime-owned; never taken from the worker
     binder: AgentBinder
     agent_invocation_limit: int
+    agent_concurrency: int = 1
     invoke_quota: AgentInvocationQuota | None = None
     evidence_store: AttemptEvidenceStore | None = None
     # Current phase clock (monotonic seconds); checked before each external invoke.
@@ -149,15 +172,28 @@ class ParentAgentService:
     task_id: str = ""
     attempt_index: int = 0
     _phase_clock_frozen: bool = field(default=False, repr=False)
+    _stall_freezes: int = field(default=0, repr=False)
+    _tickets: dict[str, _Ticket] = field(default_factory=dict, repr=False)
+    _session_queues: dict[str, list[str]] = field(default_factory=dict, repr=False)
+    _pending_cancels: dict[str, threading.Event] = field(default_factory=dict, repr=False)
+    _arrival: int = field(default=0, repr=False)
+    _running_run: int = field(default=0, repr=False)
+    _running_eval: int = field(default=0, repr=False)
+    _local: threading.local = field(default_factory=threading.local, repr=False)
     _monotonic: Any = field(default=time.monotonic, repr=False)
     _sleep: Any = field(default=time.sleep, repr=False)
     _now: Any = field(default=_utc_now, repr=False)
+    _cond: threading.Condition = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.invoke_quota is None:
             self.invoke_quota = AgentInvocationQuota(limit=self.agent_invocation_limit)
         timeout = float(self.invoke_timeout_seconds)
         self.invoke_timeout_seconds = timeout if timeout > 0 else DEFAULT_INVOKE_TIMEOUT_SECONDS
+        if int(self.agent_concurrency) < 1:
+            raise ValueError("agent_concurrency must be >= 1")
+        self.agent_concurrency = int(self.agent_concurrency)
+        self._cond = threading.Condition(self._lock)
 
     # --- sessions ------------------------------------------------------------
 
@@ -165,12 +201,29 @@ class ParentAgentService:
         """Stop solver writers; keep the socket so evaluate can still invoke.
 
         Profiles that already opened a session during run may not invoke after
-        gold lands. New profiles (e.g. ``judge``) still may.
+        gold lands. New profiles (e.g. ``judge``) still may. Queued solver
+        invokes are dropped. In-flight solver invokes are cancelled and drained
+        before this returns, so ``mark_writers_stopped`` happens after they stop.
         """
-        with self._lock:
+        with self._cond:
             self._run_sealed = True
             self._run_profile_ids = {binding.profile_id for binding in self._sessions.values()}
             session_ids = [sid for sid, binding in self._sessions.items() if not binding.closed]
+            run_tickets = [
+                ticket
+                for ticket in self._tickets.values()
+                if ticket.run_phase and ticket.state != "terminal"
+            ]
+            for ticket in run_tickets:
+                ticket.cancel.set()
+            for event in self._pending_cancels.values():
+                event.set()
+            self._pending_cancels.clear()
+            self._cond.notify_all()
+        for ticket in run_tickets:
+            self._request_executor_cancel(ticket)
+        for ticket in run_tickets:
+            ticket.finished.wait()
         for session_id in session_ids:
             self.close_session(session_id=session_id)
 
@@ -326,11 +379,23 @@ class ParentAgentService:
         return None
 
     def close_session(self, *, session_id: str) -> dict[str, Any]:
-        with self._lock:
+        with self._cond:
             binding = self._sessions.get(session_id)
             if binding is None:
                 return {"ok": True, "already": "missing"}
             binding.closed = True
+            waiting = [
+                self._tickets[request_id]
+                for request_id in self._session_queues.get(session_id, ())
+                if request_id in self._tickets and self._tickets[request_id].state != "terminal"
+            ]
+            for ticket in waiting:
+                ticket.cancel.set()
+            self._cond.notify_all()
+        for ticket in waiting:
+            self._request_executor_cancel(ticket)
+        for ticket in waiting:
+            ticket.finished.wait()
 
         payload: dict[str, Any] = {
             "session_id": session_id,
@@ -371,17 +436,68 @@ class ParentAgentService:
         prompt: str,
         tools: Any = None,
         messages: Any = None,
+        request_id: str | None = None,
     ) -> dict[str, Any]:
         refusal = self._refuse_before_effect(session_id)
         if refusal is not None:
             return refusal
-        with self._lock:
-            binding = self._sessions[session_id]
-            assert self.invoke_quota is not None
-            if not self._run_sealed and not self.invoke_quota.try_consume():
-                self._note_run_limit("agent_invocations")
-                return {"ok": False, "error": "agent_invocation_limit"}
+        admitted = self._enqueue(
+            session_id=session_id,
+            prompt=prompt,
+            tools=tools,
+            messages=messages,
+            request_id=request_id,
+        )
+        if isinstance(admitted, dict):
+            return admitted
+        self._wait_turn(admitted)
+        if admitted.state == "terminal":
+            assert admitted.result is not None
+            return admitted.result
+        self._local.ticket = admitted
+        try:
+            result = self._execute(admitted)
+            admitted.result = result
+            return result
+        finally:
+            self._local.ticket = None
+            self._complete(admitted)
 
+    def cancel_request(self, *, session_id: str, request_id: str) -> dict[str, Any]:
+        """Stop one invoke and return only after it is terminal.
+
+        A request that has not been read yet leaves a tombstone, so a late
+        frame cannot start the executor. The local wait covers the socket race;
+        the tombstone covers a frame that arrives after that wait.
+        """
+        rid = str(request_id or "").strip()
+        if not rid:
+            return {"ok": False, "error": "missing_request_id"}
+        pending: threading.Event | None = None
+        with self._cond:
+            ticket = self._tickets.get(rid)
+            if ticket is None:
+                pending = threading.Event()
+                self._pending_cancels[rid] = pending
+            elif ticket.session_id != session_id:
+                return {"ok": False, "error": "invocation_mismatch"}
+            else:
+                ticket.cancel.set()
+                self._cond.notify_all()
+        if pending is not None:
+            pending.wait(timeout=1.0)
+            return {"ok": True, "drained": True}
+        assert ticket is not None
+        self._request_executor_cancel(ticket)
+        ticket.finished.wait()
+        return {"ok": True, "drained": True}
+
+    def _execute(self, ticket: _Ticket) -> dict[str, Any]:
+        with self._lock:
+            binding = self._sessions[ticket.session_id]
+        prompt = ticket.prompt
+        tools = ticket.tools
+        messages = ticket.messages
         started = time.monotonic()
         handle, refused = self._begin_evidence(binding, prompt, tools=tools, messages=messages)
         if refused is not None:
@@ -395,10 +511,18 @@ class ParentAgentService:
         stall: UpstreamStall | None = None
         token: Any = None
         try:
+            if ticket.cancel.is_set():
+                raise InvokeCancelled()
             sent = self._chain(binding, BEFORE_AGENT_INVOKE, prompt)
             stall = self._make_stall(binding)
             token = bind_stall(stall)
             while True:
+                if ticket.cancel.is_set():
+                    raise InvokeCancelled()
+                self._prepare_executor(binding)
+                if ticket.cancel.is_set():
+                    self._request_executor_cancel(ticket)
+                    raise InvokeCancelled()
                 invoke_kwargs: dict[str, Any] = {
                     "timeout": self._invoke_timeout(),
                     "collect_dir": collect_dir,
@@ -409,6 +533,8 @@ class ParentAgentService:
                 if messages is not None:
                     invoke_kwargs["messages"] = messages
                 result = binding.executor.invoke(sent, **invoke_kwargs)
+                if ticket.cancel.is_set():
+                    raise InvokeCancelled()
                 if _result_ok(result):
                     stall.end_resumed()
                     break
@@ -425,6 +551,8 @@ class ParentAgentService:
                 break
             result = self._chain(binding, AFTER_AGENT_INVOKE, result)
             result = self._chain(binding, NORMALIZE_AGENT_RESULT, result)
+        except InvokeCancelled:
+            return self._cancelled(binding, handle, started)
         except Exception as exc:  # noqa: BLE001 — a crash still leaves evidence
             latency = (time.monotonic() - started) * 1000.0
             kind = str(getattr(exc, "kind", None) or type(exc).__name__)
@@ -458,6 +586,7 @@ class ParentAgentService:
             self.invocations_completed += 1
             if handle is not None:
                 binding.last_handle = handle
+                binding.handles[handle.invocation_id] = handle
         return {
             "ok": bool(result.ok),
             "error": result.error,
@@ -470,6 +599,167 @@ class ParentAgentService:
             "evidence_relative": handle.relative_path if handle else None,
             "tool_calls": _public_tool_calls(result),
         }
+
+    def _cancelled(
+        self, binding: SessionBinding, handle: InvocationHandle | None, started: float
+    ) -> dict[str, Any]:
+        latency = (time.monotonic() - started) * 1000.0
+        if handle is not None:
+            seal_failure(handle, status="cancelled", error="invoke_cancelled", latency_ms=latency)
+        return self._failed(binding, handle, error="invoke_cancelled")
+
+    def _enqueue(
+        self,
+        *,
+        session_id: str,
+        prompt: str,
+        tools: Any,
+        messages: Any,
+        request_id: str | None,
+    ) -> _Ticket | dict[str, Any]:
+        rid = (
+            request_id.strip()
+            if isinstance(request_id, str) and request_id.strip()
+            else f"req_{uuid.uuid4().hex[:16]}"
+        )
+        with self._cond:
+            pending = self._pending_cancels.pop(rid, None)
+            if pending is not None:
+                pending.set()
+                return _refusal("invoke_cancelled")
+            binding = self._sessions.get(session_id)
+            if binding is None:
+                return {"ok": False, "error": "unknown_session"}
+            if binding.closed:
+                return {"ok": False, "error": "session_closed"}
+            if self._run_sealed and binding.profile_id in self._run_profile_ids:
+                return {
+                    "ok": False,
+                    "error": "solver_writers_stopped",
+                    "profile_id": binding.profile_id,
+                }
+            self._arrival += 1
+            ticket = _Ticket(
+                request_id=rid,
+                session_id=session_id,
+                prompt=prompt,
+                tools=tools,
+                messages=messages,
+                run_phase=not self._run_sealed,
+                arrival=self._arrival,
+            )
+            self._tickets[rid] = ticket
+            self._session_queues.setdefault(session_id, []).append(rid)
+            self._cond.notify_all()
+            return ticket
+
+    def _wait_turn(self, ticket: _Ticket) -> None:
+        with self._cond:
+            while ticket.state == "queued":
+                if ticket.cancel.is_set():
+                    self._abort_queued(ticket, _refusal("invoke_cancelled"))
+                    return
+                if not self._ready(ticket):
+                    self._cond.wait()
+                    continue
+                refused = self._claim(ticket)
+                if refused is not None:
+                    self._abort_queued(ticket, refused)
+                    return
+                return
+
+    def _ready(self, ticket: _Ticket) -> bool:
+        queue = self._session_queues.get(ticket.session_id, [])
+        if not queue or queue[0] != ticket.request_id:
+            return False
+        if ticket.run_phase:
+            return self._running_run < self.agent_concurrency
+        return self._running_eval < 1
+
+    def _claim(self, ticket: _Ticket) -> dict[str, Any] | None:
+        """Reserve the running slot. Caller holds ``_cond``. None means running."""
+        binding = self._sessions.get(ticket.session_id)
+        if binding is None or binding.closed:
+            return {"ok": False, "error": "session_closed"}
+        if self._run_sealed and binding.profile_id in self._run_profile_ids:
+            return {
+                "ok": False,
+                "error": "solver_writers_stopped",
+                "profile_id": binding.profile_id,
+            }
+        if ticket.run_phase and self._wall_expired():
+            self._note_run_limit("wall_time_seconds")
+            return _refusal("wall_time_exceeded")
+        if is_offline_agent(env_name=self.offline_env):
+            return _refusal("offline_forced")
+        if self._overlap_blocked(ticket, binding):
+            return {"ok": False, "error": "executor_not_concurrent"}
+        if ticket.run_phase:
+            assert self.invoke_quota is not None
+            if not self.invoke_quota.try_consume():
+                self._note_run_limit("agent_invocations")
+                return {"ok": False, "error": "agent_invocation_limit"}
+        ticket.state = "running"
+        if ticket.run_phase:
+            self._running_run += 1
+        else:
+            self._running_eval += 1
+        return None
+
+    def _overlap_blocked(self, ticket: _Ticket, binding: SessionBinding) -> bool:
+        others = [
+            other
+            for other in self._tickets.values()
+            if other.state == "running" and other.request_id != ticket.request_id
+        ]
+        if not others:
+            return False
+        participants = [binding]
+        for other in others:
+            other_binding = self._sessions.get(other.session_id)
+            if other_binding is not None:
+                participants.append(other_binding)
+        return any(
+            not bool(getattr(item.executor, "concurrent_sessions", False)) for item in participants
+        )
+
+    def _abort_queued(self, ticket: _Ticket, result: dict[str, Any]) -> None:
+        queue = self._session_queues.get(ticket.session_id)
+        if queue and ticket.request_id in queue:
+            queue.remove(ticket.request_id)
+        ticket.state = "terminal"
+        ticket.result = result
+        ticket.finished.set()
+        self._cond.notify_all()
+
+    def _complete(self, ticket: _Ticket) -> None:
+        with self._cond:
+            if ticket.state == "running":
+                if ticket.run_phase:
+                    self._running_run -= 1
+                else:
+                    self._running_eval -= 1
+            queue = self._session_queues.get(ticket.session_id)
+            if queue and ticket.request_id in queue:
+                queue.remove(ticket.request_id)
+            ticket.state = "terminal"
+            ticket.finished.set()
+            self._cond.notify_all()
+
+    def _prepare_executor(self, binding: SessionBinding) -> None:
+        prepare = getattr(binding.executor, "prepare_invoke", None)
+        if callable(prepare):
+            prepare()
+
+    def _request_executor_cancel(self, ticket: _Ticket) -> None:
+        with self._lock:
+            binding = self._sessions.get(ticket.session_id)
+        if binding is None:
+            return
+        cancel = getattr(binding.executor, "cancel_invoke", None)
+        if callable(cancel):
+            with contextlib.suppress(Exception):
+                cancel()
 
     def record_observation(
         self,
@@ -496,11 +786,14 @@ class ParentAgentService:
                 return {"ok": False, "error": "unknown_session"}
             if binding.closed:
                 return {"ok": False, "error": "session_closed"}
-            handle = binding.last_handle
+            if invocation_id:
+                handle = binding.handles.get(str(invocation_id))
+                if handle is None:
+                    return {"ok": False, "error": "invocation_mismatch"}
+            else:
+                handle = binding.last_handle
         if handle is None:
             return {"ok": False, "error": "no_invocation"}
-        if invocation_id and handle.invocation_id != str(invocation_id):
-            return {"ok": False, "error": "invocation_mismatch"}
         text = content if isinstance(content, str) else json.dumps(content, default=str)
         event: dict[str, Any] = {
             "kind": "tool",
@@ -587,7 +880,7 @@ class ParentAgentService:
             budget_seconds=budget_seconds(raw),
             phase=phase,
             monotonic=self._monotonic,
-            sleep=self._sleep,
+            sleep=self._sleep_for_stall,
             now=self._now,
             on_event=self._emit_stall,
             on_freeze=lambda: self._set_phase_clock_frozen(True),
@@ -595,17 +888,62 @@ class ParentAgentService:
             on_fact=self._record_stall_fact,
         )
 
+    def _sleep_for_stall(self, seconds: float) -> None:
+        """Run the injected stall sleep, but return when this invoke is cancelled."""
+        ticket = getattr(self._local, "ticket", None)
+        if ticket is not None and ticket.cancel.is_set():
+            raise InvokeCancelled()
+        if ticket is None:
+            self._sleep(seconds)
+            return
+        done = threading.Event()
+        error: list[BaseException] = []
+
+        def _run() -> None:
+            try:
+                self._sleep(seconds)
+            except BaseException as exc:  # noqa: BLE001 — re-raised on the invoke thread
+                error.append(exc)
+            finally:
+                done.set()
+
+        threading.Thread(target=_run, name="ageval-stall-sleep", daemon=True).start()
+        while not done.wait(0.05):
+            if ticket.cancel.is_set():
+                raise InvokeCancelled()
+        if error:
+            raise error[0]
+        if ticket.cancel.is_set():
+            raise InvokeCancelled()
+
     def _set_phase_clock_frozen(self, frozen: bool) -> None:
-        """Freeze before the ctx snapshot; thaw the deadline before clearing the flag."""
+        """Freeze before the ctx snapshot; thaw the deadline before clearing the flag.
+
+        Overlapping stalls share one phase clock. One resume decrements the
+        count and leaves the clock frozen while another stall is still open.
+        """
+        with self._lock:
+            previous = self._stall_freezes
+            if frozen:
+                self._stall_freezes += 1
+            elif self._stall_freezes > 0:
+                self._stall_freezes -= 1
+            current = self._stall_freezes
+            if previous == 0 and current > 0:
+                self._phase_clock_frozen = True
+            transition = (previous == 0) != (current == 0)
+        if not transition:
+            return
         hook = self.on_phase_clock
         if frozen:
-            self._phase_clock_frozen = True
             if callable(hook):
                 hook(True)
             return
         if callable(hook):
             hook(False)
-        self._phase_clock_frozen = False
+        with self._lock:
+            if self._stall_freezes == 0:
+                self._phase_clock_frozen = False
 
     def _record_stall_fact(self, name: str, detail: dict[str, Any]) -> None:
         callback = self.record_stall_fact
@@ -676,6 +1014,7 @@ class ParentAgentService:
             self.invocations_completed += 1
             if handle is not None:
                 binding.last_handle = handle
+                binding.handles[handle.invocation_id] = handle
         return {
             "ok": False,
             "error": error,

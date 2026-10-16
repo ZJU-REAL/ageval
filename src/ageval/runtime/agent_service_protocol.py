@@ -49,6 +49,8 @@ class AgentServiceServer:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._server: socket.socket | None = None
+        self._handlers: set[threading.Thread] = set()
+        self._handler_lock = threading.Lock()
 
     def start(self) -> None:
         if self.socket_path.exists():
@@ -59,7 +61,7 @@ class AgentServiceServer:
         # A box may run as its own uid; the socket sits in a private directory,
         # so the reachable surface is still only this Attempt.
         self.socket_path.chmod(0o666)
-        srv.listen(8)
+        srv.listen(128)
         srv.settimeout(0.5)
         self._server = srv
         self._thread = threading.Thread(target=self._loop, name="ageval-agent-service", daemon=True)
@@ -76,6 +78,8 @@ class AgentServiceServer:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
+        for handler in list(self._handlers):
+            handler.join(timeout=2.0)
         if self._server is not None:
             with contextlib.suppress(OSError):
                 self._server.close()
@@ -92,6 +96,18 @@ class AgentServiceServer:
                 continue
             except OSError:
                 break
+            handler = threading.Thread(
+                target=self._serve_one,
+                args=(conn,),
+                name="ageval-agent-request",
+                daemon=True,
+            )
+            with self._handler_lock:
+                self._handlers.add(handler)
+            handler.start()
+
+    def _serve_one(self, conn: socket.socket) -> None:
+        try:
             try:
                 with conn:
                     req = _recv_msg(conn)
@@ -107,6 +123,9 @@ class AgentServiceServer:
                             "message": str(exc),
                         },
                     )
+        finally:
+            with self._handler_lock:
+                self._handlers.discard(threading.current_thread())
 
     def _handle(self, req: dict[str, Any]) -> dict[str, Any]:
         op = req.get("op")
@@ -130,11 +149,18 @@ class AgentServiceServer:
         if op == "invoke":
             tools = req.get("tools")
             messages = req.get("messages")
+            request_id = req.get("request_id")
             return self.service.invoke(
                 session_id=str(req.get("session_id") or ""),
                 prompt=str(req.get("prompt") or ""),
                 tools=tools if isinstance(tools, list) else None,
                 messages=messages if isinstance(messages, list) else None,
+                request_id=request_id if isinstance(request_id, str) else None,
+            )
+        if op == "cancel":
+            return self.service.cancel_request(
+                session_id=str(req.get("session_id") or ""),
+                request_id=str(req.get("request_id") or ""),
             )
         if op == "close":
             return self.service.close_session(session_id=str(req.get("session_id") or ""))
