@@ -14,6 +14,7 @@ import threading
 import time
 from collections.abc import Mapping, Sequence
 from contextlib import suppress as contextlib_suppress
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +52,11 @@ from ageval.plugins.contrib.acp.hooks import (
 from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, AcpRegistryError, get_entry
 from ageval.plugins.contrib.acp.trajectory_map import acp_session_events_to_ageval
 from ageval.plugins.contrib.acp.usage import _as_plain_mapping, normalize_acp_usage
+from ageval.plugins.contrib.acp.usage_journal import (
+    journal_box_dir,
+    journal_texts,
+    sum_journal_files,
+)
 from ageval.plugins.decorators import executor_plugin
 
 
@@ -86,16 +92,24 @@ class _IdleTimeout(Exception):
 _READONLY_TOOL_KINDS = frozenset({"read", "search", "think", "fetch"})
 
 
+_JOURNAL_PARTIAL = frozenset(
+    {"acp_idle_timeout", "acp_timeout", "acp_unexpected_eof", "acp_protocol_error"}
+)
+
+
 def _usage_source_label(sources: Any) -> str:
-    """Which ACP source produced usage on a terminal that did not finish the prompt."""
+    """Which source produced usage on a terminal that did not finish the prompt."""
     prompt = isinstance(sources, Mapping) and sources.get("prompt_usage") is True
     update = isinstance(sources, Mapping) and sources.get("usage_update") is True
+    journal = isinstance(sources, Mapping) and sources.get("session_journal") is True
     if prompt and update:
         return "prompt_usage+usage_update"
     if prompt:
         return "prompt_usage"
     if update:
         return "usage_update"
+    if journal:
+        return "session_journal"
     return "unknown"
 
 
@@ -735,11 +749,11 @@ class AcpExecutor(BaseExecutor):
         try:
             result = self._run(self._prompt_once(prompt), timeout=timeout)
         except TimeoutError:
-            return self._timeout_result(started, collect_dir)
+            result = self._timeout_result(started, collect_dir)
         except Exception as exc:  # noqa: BLE001
             mapped = self._mapped_events()
             usage, extra = self._normalized_usage(partial=True)
-            return AgentResult(
+            result = AgentResult(
                 model=self.model,
                 text="",
                 structured=None,
@@ -763,8 +777,44 @@ class AcpExecutor(BaseExecutor):
                 },
                 repeatable=_workspace_unchanged(mapped),
             )
-        self._write_vendor(collect_dir)
-        return result
+        else:
+            self._write_vendor(collect_dir)
+        return self._apply_usage_journal(result)
+
+    def _apply_usage_journal(self, result: AgentResult) -> AgentResult:
+        """Fill first-class usage from the entry journal when ACP sent none."""
+        if result.usage:
+            return result
+        journal = self.descriptor.usage_journal
+        if journal is None or self._host is None or self._placement is None:
+            return result
+        host_path = getattr(self._host, "host_path", None)
+        if not callable(host_path):
+            return result
+        located = host_path(journal_box_dir(self._placement.home, journal))
+        if isinstance(located, Path):
+            root = located
+        elif isinstance(located, str):
+            root = Path(located)
+        else:
+            return result
+        usage, extra = sum_journal_files(journal_texts(root, journal.suffix), journal)
+        if usage is None and extra is None:
+            return result
+        merged = dict(result.extra or {})
+        if extra:
+            sources = dict(merged.get("sources") or {})
+            for key, value in dict(extra.get("sources") or {}).items():
+                if sources.get(key) is not True:
+                    sources[key] = value
+            sources["session_journal"] = True
+            merged.update({key: value for key, value in extra.items() if key != "sources"})
+            merged["sources"] = sources
+        if result.error in _JOURNAL_PARTIAL:
+            usage, merged_out = _mark_partial_usage(usage, merged)
+        else:
+            merged_out = merged or None
+        return replace(result, usage=usage, extra=merged_out)
 
     async def _cancel(self) -> None:
         if self._conn is not None and self._acp_session_id is not None:

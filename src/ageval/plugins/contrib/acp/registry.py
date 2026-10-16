@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Final, Literal
 
 from ageval.plugins.contrib.acp.path_probe import probe_commands
+from ageval.plugins.contrib.acp.usage_journal import UsageJournal, UsageJournalRecord
 from ageval.plugins.paths import ageval_home
 
 IntegrationMode = Literal[1, 2, 3]
@@ -69,6 +70,7 @@ _ENTRY_KEYS: Final[frozenset[str]] = frozenset(
         "fixed_env",
         "home_dirs",
         "keyless_auth_paths",
+        "usage_journal",
     }
 )
 _REQUIRED_ENTRY_KEYS: Final[tuple[str, ...]] = (
@@ -179,6 +181,8 @@ class AcpEntryDescriptor:
     descriptor_digest: str
     # Not part of digest_payload or as_lock_snapshot.
     source: EntrySource = "package"
+    # Optional HOME session log. In the digest. Omitted from the lock snapshot.
+    usage_journal: UsageJournal | None = None
 
     def as_lock_snapshot(self) -> dict[str, Any]:
         """Fields safe for lock/evidence (no absolute PATH, no secrets)."""
@@ -275,6 +279,134 @@ def _relative_home_path(raw: Any, *, location: str) -> str:
     if any(part in {"", ".", ".."} or not _SEGMENT_RE.fullmatch(part) for part in parts):
         raise _fail("invalid_schema", "path must stay under HOME", location)
     return raw
+
+
+_FIELD_SEGMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_JOURNAL_FIELD_TARGETS = frozenset(
+    {"prompt_tokens", "completion_tokens", "cached_tokens", "cost_usd"}
+)
+_JOURNAL_RECORD_KEYS = frozenset({"type", "usage", "match"})
+_JOURNAL_KEYS = frozenset({"dir", "suffix", "records", "fields", "extra"})
+
+
+def _dotted_field(raw: Any, *, location: str) -> str:
+    if not isinstance(raw, str) or not raw:
+        raise _fail("invalid_schema", "field path required", location)
+    parts = raw.split(".")
+    if any(not _FIELD_SEGMENT.fullmatch(part) for part in parts):
+        raise _fail("invalid_schema", "field path is not a dotted name", location)
+    return raw
+
+
+def _usage_journal(
+    raw: Any,
+    *,
+    location: str,
+    home_dirs: tuple[str, ...],
+) -> UsageJournal | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise _fail("invalid_schema", "usage_journal must be an object", location)
+    unknown = sorted(set(raw) - _JOURNAL_KEYS)
+    if unknown:
+        raise _fail("invalid_schema", f"unknown key {unknown[0]!r}", location)
+    directory = _relative_home_path(raw.get("dir"), location=f"{location}/dir")
+    if not any(directory == home or directory.startswith(home + "/") for home in home_dirs):
+        raise _fail(
+            "invalid_schema",
+            "usage_journal dir must sit under home_dirs",
+            f"{location}/dir",
+        )
+    suffix = raw.get("suffix")
+    if (
+        not isinstance(suffix, str)
+        or not suffix.startswith(".")
+        or "/" in suffix
+        or suffix == "."
+        or not _FIELD_SEGMENT.fullmatch(suffix[1:])
+    ):
+        raise _fail("invalid_schema", "usage_journal suffix must be one extension", location)
+    records_raw = raw.get("records")
+    if not isinstance(records_raw, list) or not records_raw:
+        raise _fail("invalid_schema", "usage_journal records required", f"{location}/records")
+    records: list[UsageJournalRecord] = []
+    for index, item in enumerate(records_raw):
+        rec_loc = f"{location}/records/{index}"
+        if not isinstance(item, dict):
+            raise _fail("invalid_schema", "usage_journal record must be an object", rec_loc)
+        extra_keys = sorted(set(item) - _JOURNAL_RECORD_KEYS)
+        if extra_keys:
+            raise _fail("invalid_schema", f"unknown key {extra_keys[0]!r}", rec_loc)
+        rec_type = item.get("type")
+        if not isinstance(rec_type, str) or not _FIELD_SEGMENT.fullmatch(rec_type):
+            raise _fail("invalid_schema", "usage_journal record type is invalid", rec_loc)
+        usage = _dotted_field(item.get("usage"), location=f"{rec_loc}/usage")
+        match_raw = item.get("match", {})
+        if not isinstance(match_raw, dict):
+            raise _fail("invalid_schema", "usage_journal match must be an object", rec_loc)
+        match: list[tuple[str, str]] = []
+        for key, value in match_raw.items():
+            path = _dotted_field(key, location=f"{rec_loc}/match")
+            if not isinstance(value, str):
+                raise _fail("invalid_schema", "usage_journal match value must be a string", rec_loc)
+            match.append((path, value))
+        records.append(UsageJournalRecord(type=rec_type, usage=usage, match=tuple(match)))
+    fields = _journal_map(
+        raw.get("fields"),
+        location=f"{location}/fields",
+        allowed=_JOURNAL_FIELD_TARGETS,
+        require=True,
+    )
+    extra = _journal_map(
+        raw.get("extra"),
+        location=f"{location}/extra",
+        allowed=None,
+        require=False,
+    )
+    overlap = set(fields) & set(extra)
+    if overlap:
+        raise _fail(
+            "invalid_schema",
+            "usage_journal extra repeats a first-class field",
+            f"{location}/extra",
+        )
+    return UsageJournal(
+        dir=directory,
+        suffix=suffix,
+        records=tuple(records),
+        fields=tuple(fields.items()),
+        extra=tuple(extra.items()),
+    )
+
+
+def _journal_map(
+    raw: Any,
+    *,
+    location: str,
+    allowed: frozenset[str] | None,
+    require: bool,
+) -> dict[str, str]:
+    if raw is None:
+        if require:
+            raise _fail("invalid_schema", "usage_journal fields required", location)
+        return {}
+    if not isinstance(raw, dict) or (require and not raw):
+        raise _fail("invalid_schema", "usage_journal field map required", location)
+    out: dict[str, str] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str) or not _FIELD_SEGMENT.fullmatch(key):
+            raise _fail("invalid_schema", "usage_journal field name is invalid", location)
+        if allowed is not None and key not in allowed:
+            raise _fail("invalid_schema", "usage_journal field is not first-class usage", location)
+        if allowed is None and key in _JOURNAL_FIELD_TARGETS:
+            raise _fail(
+                "invalid_schema",
+                "usage_journal extra repeats a first-class field",
+                location,
+            )
+        out[key] = _dotted_field(value, location=location)
+    return out
 
 
 def _path_list(raw: Any, *, location: str) -> tuple[str, ...]:
@@ -465,6 +597,11 @@ def _parse_entry(
         location=f"{loc}/credential_env_names",
     )
     home_dirs = _path_list(raw.get("home_dirs"), location=f"{loc}/home_dirs")
+    usage_journal = _usage_journal(
+        raw.get("usage_journal"),
+        location=f"{loc}/usage_journal",
+        home_dirs=home_dirs,
+    )
     keyless_auth_paths = _path_list(
         raw.get("keyless_auth_paths"),
         location=f"{loc}/keyless_auth_paths",
@@ -515,6 +652,8 @@ def _parse_entry(
         "platforms": list(platforms_raw),
         "fixed_env": fixed_env,
     }
+    if usage_journal is not None:
+        digest_payload["usage_journal"] = usage_journal.digest_payload()
     return AcpEntryDescriptor(
         entry_id=entry_id,
         integration_mode=mode,
@@ -537,6 +676,7 @@ def _parse_entry(
         fixed_env=fixed_env,
         descriptor_digest=_canonical_digest(digest_payload),
         source=source,
+        usage_journal=usage_journal,
     )
 
 
