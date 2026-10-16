@@ -127,7 +127,32 @@
       ],
       "keyless_auth_paths": [
         ".pi/agent/auth.json"
-      ]
+      ],
+      "usage_journal": {
+        "dir": ".pi/agent/sessions",
+        "suffix": ".jsonl",
+        "records": [
+          {
+            "type": "message",
+            "match": {"message.role": "assistant"},
+            "usage": "message.usage"
+          },
+          {"type": "usage", "usage": "usage"},
+          {"type": "compaction", "usage": "usage"},
+          {"type": "branch_summary", "usage": "usage"}
+        ],
+        "fields": {
+          "prompt_tokens": "input",
+          "completion_tokens": "output",
+          "cached_tokens": "cacheRead",
+          "cost_usd": "cost.total"
+        },
+        "extra": {
+          "cached_write_tokens": "cacheWrite",
+          "reasoning_tokens": "reasoning",
+          "total_tokens": "totalTokens"
+        }
+      }
     },
     {
       "entry_id": "opencode",

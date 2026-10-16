@@ -32,7 +32,7 @@ _PACKAGED_DIGESTS = {
     "codex": "sha256:b783adb06eef41e6afa8bbd012069581e5cac87c3f99d22e7ac87a3695e71cbe",
     "grok-build": "sha256:427d622f1fd36141e81fbdd9b9cdfe15fe14478884247285d7fb5dfc3d57a57f",
     "opencode": "sha256:2d1bc6f0d4c39824f43412b06c4957070b36f832ace1b894d8e3775e0c22835a",
-    "pi": "sha256:9148f4c07b4b4f82fe552928558b0980e2ec50cd0cade3d9c9c10aa572e50026",
+    "pi": "sha256:92229be82f1da0909de08d5511b13f50a5f72b2f681a3eb797566ccc0845cb23",
 }
 _PACKAGED = Path(__file__).resolve().parents[2] / "src/ageval/plugins/contrib/acp/acp_entries.json"
 _EVAL_JUDGE = Path(__file__).resolve().parents[1] / "fixtures/datasets/eval-judge-min"

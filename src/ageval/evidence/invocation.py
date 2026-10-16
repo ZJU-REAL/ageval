@@ -38,12 +38,29 @@ def read_invocation_payload(directory: Path) -> dict[str, Any]:
         "events": tuple(parse_jsonl_recover(directory / "events.jsonl")),
         "final_text": str(final.get("content") or ""),
         "structured": final.get("structured_output"),
-        "usage": final.get("usage"),
-        "extra": final.get("extra"),
+        "usage": _usage_of(final, metadata),
+        "extra": _extra_of(final, metadata),
         "ok": status == "completed",
         "error": metadata.get("error"),
         "metadata": turn_meta,
     }
+
+
+def _usage_of(final: dict[str, Any], metadata: dict[str, Any]) -> Any:
+    """Completed invokes keep usage on final-response. Others keep it on metadata."""
+    found = final.get("usage")
+    if found is not None:
+        return found
+    fallback = metadata.get("usage")
+    return fallback if isinstance(fallback, dict) else None
+
+
+def _extra_of(final: dict[str, Any], metadata: dict[str, Any]) -> Any:
+    found = final.get("extra")
+    if found is not None:
+        return found
+    fallback = metadata.get("extra")
+    return fallback if isinstance(fallback, dict) else None
 
 
 def _prompt_of(request: dict[str, Any]) -> str:

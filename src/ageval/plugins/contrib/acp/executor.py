@@ -14,6 +14,7 @@ import threading
 import time
 from collections.abc import Mapping, Sequence
 from contextlib import suppress as contextlib_suppress
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +52,11 @@ from ageval.plugins.contrib.acp.hooks import (
 from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, AcpRegistryError, get_entry
 from ageval.plugins.contrib.acp.trajectory_map import acp_session_events_to_ageval
 from ageval.plugins.contrib.acp.usage import _as_plain_mapping, normalize_acp_usage
+from ageval.plugins.contrib.acp.usage_journal import (
+    journal_box_dir,
+    journal_texts,
+    sum_journal_files,
+)
 from ageval.plugins.decorators import executor_plugin
 
 
@@ -84,6 +90,43 @@ class _IdleTimeout(Exception):
 # ACP tool kinds that do not write the workspace. edit / delete / move /
 # execute / other, and a call with no kind, may have changed it.
 _READONLY_TOOL_KINDS = frozenset({"read", "search", "think", "fetch"})
+
+
+_JOURNAL_PARTIAL = frozenset(
+    {"acp_idle_timeout", "acp_timeout", "acp_unexpected_eof", "acp_protocol_error"}
+)
+
+
+def _usage_source_label(sources: Any) -> str:
+    """Which source produced usage on a terminal that did not finish the prompt."""
+    prompt = isinstance(sources, Mapping) and sources.get("prompt_usage") is True
+    update = isinstance(sources, Mapping) and sources.get("usage_update") is True
+    journal = isinstance(sources, Mapping) and sources.get("session_journal") is True
+    if prompt and update:
+        return "prompt_usage+usage_update"
+    if prompt:
+        return "prompt_usage"
+    if update:
+        return "usage_update"
+    if journal:
+        return "session_journal"
+    return "unknown"
+
+
+def _mark_partial_usage(
+    usage: dict[str, Any] | None,
+    extra: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Mark usage cut off before ``session/prompt`` returned.
+
+    Neither source had data: stay null. A normal return does not call this.
+    """
+    if usage is None and extra is None:
+        return None, None
+    bag = dict(extra or {})
+    bag["usage_partial"] = True
+    bag["usage_source"] = _usage_source_label(bag.get("sources"))
+    return usage, bag
 
 
 def _workspace_unchanged(events: tuple[dict[str, Any], ...] | list[dict[str, Any]]) -> bool:
@@ -438,6 +481,7 @@ class AcpExecutor(BaseExecutor):
                 error=err,
                 stop=None,
                 error_detail=detail,
+                usage_partial=True,
             )
 
         # Token authority: PromptResponse.usage (may be absent on older agents).
@@ -499,8 +543,26 @@ class AcpExecutor(BaseExecutor):
                 with contextlib_suppress(asyncio.CancelledError, Exception):
                     await prompt_task
 
+    def _normalized_usage(
+        self, *, partial: bool
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """Map this attempt's prompt usage and latest usage_update.
+
+        ``partial`` marks a timeout or protocol failure. A finished prompt
+        leaves the normalized bag unchanged.
+        """
+        if self._client is None:
+            return None, None
+        usage, extra = normalize_acp_usage(
+            prompt_usage=self._client.prompt_usage,
+            usage_update=self._client.latest_usage_update,
+        )
+        if partial:
+            return _mark_partial_usage(usage, extra)
+        return usage, extra
+
     def _timeout_agent_result(self, started: float, *, error: str) -> AgentResult:
-        """Keep in-flight ACP updates; append one timeout lifecycle row."""
+        """Keep in-flight ACP updates, including usage already received."""
         timeout_ev: dict[str, Any] = {
             "type": "lifecycle",
             "phase": "timeout",
@@ -518,6 +580,7 @@ class AcpExecutor(BaseExecutor):
         if error == "acp_idle_timeout" and self._client is not None:
             text = "".join(self._client.text_chunks)
         mapped = self._mapped_events()
+        usage, extra = self._normalized_usage(partial=True)
         return AgentResult(
             model=self.model,
             text=text,
@@ -525,6 +588,8 @@ class AcpExecutor(BaseExecutor):
             ok=False,
             error=error,
             events=(*mapped, timeout_ev),
+            usage=usage,
+            extra=extra,
             metadata=meta,
             repeatable=_workspace_unchanged(mapped),
         )
@@ -537,6 +602,7 @@ class AcpExecutor(BaseExecutor):
         error: str | None,
         stop: Any,
         error_detail: str | None = None,
+        usage_partial: bool = False,
     ) -> AgentResult:
         structured = parse_validated_text_structured(text) if ok else None
         meta: dict[str, Any] = {
@@ -558,12 +624,7 @@ class AcpExecutor(BaseExecutor):
         mapped = self._mapped_events()
         # Dual-source normalize: tokens from PromptResponse.usage; cost/context
         # from latest UsageUpdate. Never maps context.used → prompt_tokens.
-        usage = extra = None
-        if self._client is not None:
-            usage, extra = normalize_acp_usage(
-                prompt_usage=self._client.prompt_usage,
-                usage_update=self._client.latest_usage_update,
-            )
+        usage, extra = self._normalized_usage(partial=usage_partial)
         health = observational_result_health(
             ok=ok,
             usage=usage,
@@ -680,13 +741,19 @@ class AcpExecutor(BaseExecutor):
             )
 
         started = time.monotonic()
+        # This attempt only. A timeout before the prompt coroutine starts must
+        # not reuse the previous turn's usage.
+        if self._client is not None:
+            self._client.latest_usage_update = None
+            self._client.prompt_usage = None
         try:
             result = self._run(self._prompt_once(prompt), timeout=timeout)
         except TimeoutError:
-            return self._timeout_result(started, collect_dir)
+            result = self._timeout_result(started, collect_dir)
         except Exception as exc:  # noqa: BLE001
             mapped = self._mapped_events()
-            return AgentResult(
+            usage, extra = self._normalized_usage(partial=True)
+            result = AgentResult(
                 model=self.model,
                 text="",
                 structured=None,
@@ -702,14 +769,52 @@ class AcpExecutor(BaseExecutor):
                         "source": "acp_adapter",
                     },
                 ),
+                usage=usage,
+                extra=extra,
                 metadata={
                     "executor_kind": "acp",
                     "acp_entry_id": self.entry_id,
                 },
                 repeatable=_workspace_unchanged(mapped),
             )
-        self._write_vendor(collect_dir)
-        return result
+        else:
+            self._write_vendor(collect_dir)
+        return self._apply_usage_journal(result)
+
+    def _apply_usage_journal(self, result: AgentResult) -> AgentResult:
+        """Fill first-class usage from the entry journal when ACP sent none."""
+        if result.usage:
+            return result
+        journal = self.descriptor.usage_journal
+        if journal is None or self._host is None or self._placement is None:
+            return result
+        host_path = getattr(self._host, "host_path", None)
+        if not callable(host_path):
+            return result
+        located = host_path(journal_box_dir(self._placement.home, journal))
+        if isinstance(located, Path):
+            root = located
+        elif isinstance(located, str):
+            root = Path(located)
+        else:
+            return result
+        usage, extra = sum_journal_files(journal_texts(root, journal.suffix), journal)
+        if usage is None and extra is None:
+            return result
+        merged = dict(result.extra or {})
+        if extra:
+            sources = dict(merged.get("sources") or {})
+            for key, value in dict(extra.get("sources") or {}).items():
+                if sources.get(key) is not True:
+                    sources[key] = value
+            sources["session_journal"] = True
+            merged.update({key: value for key, value in extra.items() if key != "sources"})
+            merged["sources"] = sources
+        if result.error in _JOURNAL_PARTIAL:
+            usage, merged_out = _mark_partial_usage(usage, merged)
+        else:
+            merged_out = merged or None
+        return replace(result, usage=usage, extra=merged_out)
 
     async def _cancel(self) -> None:
         if self._conn is not None and self._acp_session_id is not None:
