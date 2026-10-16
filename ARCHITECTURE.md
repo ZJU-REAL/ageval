@@ -203,7 +203,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 
 Hub Agent Performance is a **derived view** of plaza / consented `job_overlay.agent_ref` rows, not a Core object. Builtin cards default to official public suites auto-collect; Maintainers (`AGEVAL_REGISTRY_MAINTAINERS`) own that setting and builtin attach approval. There is no `/runtimes` product surface. Public Leaderboard listing is a Registry flag (`board_listed`), not visibility. Leaderboard plaza indexes those existing surfaces (`GET /v1/results/suites?board=1` without `dataset_id`, plus one derived `GET /v1/results/performances`); it is not a stored table. Delayed `agent_ref` attach and request decide share one ResultService write path; CLI `build_results_commands` is the Hub/CLI use-case root.
 
-Production Attempt: `application/run.py` mints identity once, then `attempt.run_attempt`. `application/regrade.py` mints a new Attempt and calls `attempt.run_regrade`, which starts the box and runs evaluate without the `run` phase. Cleanup is in `try/finally`. Parent Agent Service and hard ceilings share the same quota object.
+Production Attempt: `application/run.py` mints identity once, then `attempt.run_attempt`. `application/regrade.py` mints a new Attempt and calls `attempt.run_regrade`, which starts the box and runs evaluate without the `run` phase. Cleanup is in `try/finally`. Parent Agent Service and hard ceilings share the same quota object. The service admits each run-phase invoke, serializes one session in arrival order, and overlaps distinct sessions up to `limits.agent_concurrency` (omitted means 1). Quota is reserved once, immediately before the executor. `seal_run` drops queued solver work and drains in-flight solver execution before `mark_writers_stopped`. Judge sessions stay serial and do not spend that ceiling.
 
 ### Target Source Layout (not fully realized)
 
@@ -328,11 +328,15 @@ run phase
   before_run
   subprocess python -m ageval.runtime.task_worker → run.py
     Agent.session → unix socket → ParentAgentService
+      accept hands the frame to a handler; the next frame does not wait
+      one session: arrival order; distinct sessions overlap up to agent_concurrency
+      quota once, immediately before executor.invoke
       before/after_agent_open
       before_agent_invoke → this profile's executor.invoke → after_agent_invoke
       normalize_agent_result
       before/after_agent_close
-  seal_run (solver writers stopped; Agent Service stays up); mark_writers_stopped
+  seal_run (drop queued solver invokes, cancel and drain in-flight ones)
+  mark_writers_stopped (Agent Service stays up for evaluate)
   after_run
 
 evaluate phase

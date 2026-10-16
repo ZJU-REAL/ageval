@@ -41,6 +41,7 @@ limits:
   environment_seconds: 600     # environment 相位；缺省 600
   evaluate_seconds: 600        # evaluate 相位；缺省 600
   agent_invocations: 1         # 只计 run 相位的 invoke
+  agent_concurrency: 1         # 同时在 executor 里的 run 相位 invoke；缺省 1
 artifacts:
   publishable:
     - id: reply
@@ -61,6 +62,8 @@ evaluation:
   #   verification:
   #     docker_image: ageval-eval:verify
 ```
+
+`limits.agent_concurrency` 是正整数，省略等于 `1`。`0`、负数、布尔和非整数在 lock 失败一次。它封顶一次 Attempt 里同时进入 executor 的 run 相位 invoke，跨 session、跨 profile。它不封子任务个数，不封 `agent_invocations`，也不封 suite 里有几只 Attempt 在跑。`bounded_gather(limit=)` 与 `first_success(limit=)` 是 `run.py` 自己的扇出，不能把这只天花板抬高。写出 `1` 与省略相同：invoke 不重叠。`--set` 不能改 `limits.*`。
 
 ## 薄 task 目录
 

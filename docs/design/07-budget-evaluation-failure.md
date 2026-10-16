@@ -10,7 +10,9 @@
 | `limits.environment_seconds` | 600 | environment：box start、seed upload、`after_environment_ready`、`environment_setup` | ERROR，phase `environment`，token `environment_timeout`。run 不开始 |
 | `limits.evaluate_seconds` | 600 | evaluate：打分 Host 的 start 与 upload、evaluate 相位的 `after_environment_ready`、evaluator worker、`scoring.exec`、evaluate 相位的 invoke | ERROR，phase `evaluate`，token `evaluate_timeout` |
 
-`limits.agent_invocations` 只计 run 相位的 invoke。`seal_run` 之后才打开的 profile（evaluate 的 judge）不占这只额度，由 `evaluate_seconds` 封顶。写出 `0` 时，run 相位每一次 invoke 都被拒绝。同一次 parent invoke 里的上游 stall 只扣这一次额度，中间的重试不另扣。
+`limits.agent_invocations` 只计 run 相位的 invoke。`seal_run` 之后才打开的 profile（evaluate 的 judge）不占这只额度，由 `evaluate_seconds` 封顶。写出 `0` 时，run 相位每一次 invoke 都被拒绝。同一次 parent invoke 里的上游 stall 只扣这一次额度，中间的重试不另扣。额度在这只 invoke 即将进入 executor 时原子扣一次；还在排队时取消不扣。
+
+`limits.agent_concurrency` 是正整数，省略等于 `1`。它封顶同时进入 executor 的 run 相位 invoke，跨 session、跨 profile。`0`、负数、布尔和非整数 lock 失败。它不封子任务个数，不封 `agent_invocations`，也不封 suite 并发。`run.py` 的扇出上限不能把它抬高。judge 保持串行准入，不占这只额度。调度、取消和 `seal_run` 见 [agent-service](05-runtime/agent-service.md)。
 
 ## 上游 stall
 

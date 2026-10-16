@@ -39,6 +39,8 @@ C  trajectory.jsonl  `trajectory_seal` 赢家写（默认引擎折叠）
 
 轨迹文件 按 invoke 序（Attempt 内 `seq` / `turn_index`）写成**各自**的文件。每一行带一等 `profile_id`：这是 package role（`Agent.session(profile_id)`），不是 chat `role`（user/assistant）。同一 invoke 的 tool / assistant / terminal 共用该值。Hub / Viewer 按文件序展示，用 `profile_id` 区分是谁在说话，**不**按 role 重分组。旧 jsonl 若只有 `terminal.metadata.profile_id`，读侧按 `turn_index` 回填到该轮其它行。
 
+并发的 run 相位 invoke 各自一个 invocation 目录。`metadata.json` 的 `started_at` 与 `finished_at` 是这只后端调用的区间。两只调用重叠与否看这两段时间；只看任务创建时刻不够。`seq` 按 begin 的顺序递增，并且不重复。`record_observation` 写到点名的 `invocation_id`；省略时写这只 session 最近一次已经结束的 invoke。它不写到另一只 session。
+
 `evaluation/observation.jsonl` 密封时 **省略 `user` 行**。judge 提示经常嵌 hidden reference / gold 正文；那份正文不得进 evidence。assistant / thought / tool / terminal / usage 保留。未知 usage 字段省略，不编造 0。准则拆分等 leftover 进 `terminal.extra`，不升格一等列。record 相位密封 Agent 轨迹时 **忽略** evaluate 相位的 invoke。
 
 evaluate 相位的 invoke scratch 写在 `evaluation/` 下（布局字符串只在 `src/ageval/evidence/`），**不**进 `agent/invocations/`。Agent 页与根 `trajectory.jsonl` 看不到这些目录。`--keep-vendor-raw` 才保留该 scratch（与 run 相位 vendor raw 同一旗）。

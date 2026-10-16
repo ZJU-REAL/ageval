@@ -39,7 +39,7 @@ PASS 只经 `bind_evaluation` 进入 Result。`RunTerminal.completed`、轨迹�
 
 这些 invoke 走 **同一** Parent Agent Service 与该 profile 自己的 executor 赢家（ACP、openai-http、anthropic-http、…）。同一 Attempt 上 solver 与 judge **可以** 选不同机制（solver `acp`、judge `openai-http`）。`environment` 仍是 Attempt 级一份赢家；isolated 时 evaluate 相位把该服务绑到打分 Host，所以 ACP `attach_stdio` 进打分环境，HTTP judge 仍在 parent 出站。有名表时 ACP 必须 `session(..., environment=<name>)` 才绑到那一只（run 相位点名或省略名字失败）；`openai-http` / `anthropic-http` 忽略该参数。不要把 Agent Service unix socket bind-mount 进容器。
 
-这些 invoke 不占用 `limits.agent_invocations`（该额度只计 run 相位）。`limits.evaluate_seconds` 封顶整个 evaluate 相位，含这些 invoke。
+这些 invoke 不占用 `limits.agent_invocations`（该额度只计 run 相位），并且仍串行准入，不占 `limits.agent_concurrency`。`limits.evaluate_seconds` 封顶整个 evaluate 相位，含这些 invoke。
 
 约束：
 
