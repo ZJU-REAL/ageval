@@ -94,7 +94,7 @@ ageval results revoke-snapshot <token-or-url>
 | `/agent_profiles/<role>/api_key` | 环境变量名 |
 | `/agent_profiles/<role>/base_url` | 字面 URL 或环境变量名 |
 | `/agent_profiles/<role>/options/<key>` | job binding 覆盖（含 `entry`、插件 `agent` 等；ACP 仍拒绝 `command` / engine 键） |
-| `limits.*` | 三只时钟与 `agent_invocations`（**不可**覆盖 — 见下） |
+| `limits.*` | 三只时钟、`agent_invocations` 与 `agent_concurrency`（**不可**覆盖 — 见下） |
 
 Intent `limits.*` **不能**经 `--set` 覆盖。其它指针在 lock 阶段失败。
 
