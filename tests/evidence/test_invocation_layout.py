@@ -5,7 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ageval.application.suite.suite_usage import usage_from_trajectory
+from ageval.evidence.invocation import read_invocation_payload
 from ageval.evidence.store import AttemptEvidenceStore
+from ageval.evidence.trajectory import turn_rows, write_attempt_trajectory
+from ageval.plugins.agent_result import AgentResult
+from ageval.runtime.agent_service_evidence import seal_invoke_result
 
 
 def test_minimal_fields_present(tmp_path: Path) -> None:
@@ -117,3 +122,43 @@ def test_partial_failure_no_final_response(tmp_path: Path) -> None:
         assert not (h.directory / "final-response.json").exists()
         meta = json.loads((h.directory / "metadata.json").read_text(encoding="utf-8"))
         assert meta["status"] == status
+        assert "usage" not in meta
+        assert "extra" not in meta
+
+
+def test_failed_invoke_usage_lands_on_the_terminal(tmp_path: Path) -> None:
+    store = AttemptEvidenceStore(root=tmp_path / "e", attempt_id="attempt_usage")
+    handle = store.begin_invocation(profile_id="p", executor_kind="acp", model="m")
+    handle.write_request({"messages": [{"role": "user", "content": "hi"}]})
+    result = AgentResult(
+        model="m",
+        text="partial",
+        structured=None,
+        ok=False,
+        error="acp_timeout",
+        usage={"prompt_tokens": 4, "completion_tokens": 1, "cost_usd": 0.02},
+        extra={"usage_partial": True, "usage_source": "prompt_usage+usage_update"},
+    )
+    assert seal_invoke_result(handle, result=result, latency_ms=12.0) is None
+    assert not (handle.directory / "final-response.json").exists()
+    meta = json.loads((handle.directory / "metadata.json").read_text(encoding="utf-8"))
+    assert meta["status"] == "failed"
+    assert meta["error"] == "acp_timeout"
+    assert meta["usage"]["prompt_tokens"] == 4
+    assert meta["extra"]["usage_partial"] is True
+
+    payload = read_invocation_payload(handle.directory)
+    assert payload["ok"] is False
+    assert payload["usage"]["cost_usd"] == 0.02
+    assert payload["extra"]["usage_source"] == "prompt_usage+usage_update"
+    rows = turn_rows(**payload, include_user=True)
+    terminal = next(row for row in rows if row.get("type") == "terminal")
+    assert terminal["ok"] is False
+    assert terminal["usage"]["prompt_tokens"] == 4
+    assert terminal["extra"]["usage_partial"] is True
+
+    path = write_attempt_trajectory(tmp_path / "run", [rows])
+    rolled = usage_from_trajectory(path)
+    assert rolled["prompt_tokens"] == 4
+    assert rolled["completion_tokens"] == 1
+    assert rolled["cost_usd"] == 0.02

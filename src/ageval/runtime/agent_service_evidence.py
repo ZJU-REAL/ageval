@@ -127,6 +127,8 @@ def seal_invoke_result(
             )
         else:
             detail = executor_meta.get("error_detail")
+            usage = getattr(result, "usage", None)
+            extra = getattr(result, "extra", None)
             handle.seal(
                 status=map_error_status(result.error),
                 final_response=None,
@@ -134,6 +136,8 @@ def seal_invoke_result(
                 latency_ms=latency_ms,
                 error_detail=str(detail).strip() if isinstance(detail, str) and detail else None,
                 executor_metadata=executor_meta,
+                usage=usage if isinstance(usage, dict) else None,
+                extra=extra if isinstance(extra, dict) else None,
             )
     except RedactionError:
         return "redaction_failed"

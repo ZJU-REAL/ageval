@@ -86,6 +86,35 @@ class _IdleTimeout(Exception):
 _READONLY_TOOL_KINDS = frozenset({"read", "search", "think", "fetch"})
 
 
+def _usage_source_label(sources: Any) -> str:
+    """Which ACP source produced usage on a terminal that did not finish the prompt."""
+    prompt = isinstance(sources, Mapping) and sources.get("prompt_usage") is True
+    update = isinstance(sources, Mapping) and sources.get("usage_update") is True
+    if prompt and update:
+        return "prompt_usage+usage_update"
+    if prompt:
+        return "prompt_usage"
+    if update:
+        return "usage_update"
+    return "unknown"
+
+
+def _mark_partial_usage(
+    usage: dict[str, Any] | None,
+    extra: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Mark usage cut off before ``session/prompt`` returned.
+
+    Neither source had data: stay null. A normal return does not call this.
+    """
+    if usage is None and extra is None:
+        return None, None
+    bag = dict(extra or {})
+    bag["usage_partial"] = True
+    bag["usage_source"] = _usage_source_label(bag.get("sources"))
+    return usage, bag
+
+
 def _workspace_unchanged(events: tuple[dict[str, Any], ...] | list[dict[str, Any]]) -> bool:
     """True when this prompt's tool events did not change the workspace.
 
@@ -438,6 +467,7 @@ class AcpExecutor(BaseExecutor):
                 error=err,
                 stop=None,
                 error_detail=detail,
+                usage_partial=True,
             )
 
         # Token authority: PromptResponse.usage (may be absent on older agents).
@@ -499,8 +529,26 @@ class AcpExecutor(BaseExecutor):
                 with contextlib_suppress(asyncio.CancelledError, Exception):
                     await prompt_task
 
+    def _normalized_usage(
+        self, *, partial: bool
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """Map this attempt's prompt usage and latest usage_update.
+
+        ``partial`` marks a timeout or protocol failure. A finished prompt
+        leaves the normalized bag unchanged.
+        """
+        if self._client is None:
+            return None, None
+        usage, extra = normalize_acp_usage(
+            prompt_usage=self._client.prompt_usage,
+            usage_update=self._client.latest_usage_update,
+        )
+        if partial:
+            return _mark_partial_usage(usage, extra)
+        return usage, extra
+
     def _timeout_agent_result(self, started: float, *, error: str) -> AgentResult:
-        """Keep in-flight ACP updates; append one timeout lifecycle row."""
+        """Keep in-flight ACP updates, including usage already received."""
         timeout_ev: dict[str, Any] = {
             "type": "lifecycle",
             "phase": "timeout",
@@ -518,6 +566,7 @@ class AcpExecutor(BaseExecutor):
         if error == "acp_idle_timeout" and self._client is not None:
             text = "".join(self._client.text_chunks)
         mapped = self._mapped_events()
+        usage, extra = self._normalized_usage(partial=True)
         return AgentResult(
             model=self.model,
             text=text,
@@ -525,6 +574,8 @@ class AcpExecutor(BaseExecutor):
             ok=False,
             error=error,
             events=(*mapped, timeout_ev),
+            usage=usage,
+            extra=extra,
             metadata=meta,
             repeatable=_workspace_unchanged(mapped),
         )
@@ -537,6 +588,7 @@ class AcpExecutor(BaseExecutor):
         error: str | None,
         stop: Any,
         error_detail: str | None = None,
+        usage_partial: bool = False,
     ) -> AgentResult:
         structured = parse_validated_text_structured(text) if ok else None
         meta: dict[str, Any] = {
@@ -558,12 +610,7 @@ class AcpExecutor(BaseExecutor):
         mapped = self._mapped_events()
         # Dual-source normalize: tokens from PromptResponse.usage; cost/context
         # from latest UsageUpdate. Never maps context.used → prompt_tokens.
-        usage = extra = None
-        if self._client is not None:
-            usage, extra = normalize_acp_usage(
-                prompt_usage=self._client.prompt_usage,
-                usage_update=self._client.latest_usage_update,
-            )
+        usage, extra = self._normalized_usage(partial=usage_partial)
         health = observational_result_health(
             ok=ok,
             usage=usage,
@@ -680,12 +727,18 @@ class AcpExecutor(BaseExecutor):
             )
 
         started = time.monotonic()
+        # This attempt only. A timeout before the prompt coroutine starts must
+        # not reuse the previous turn's usage.
+        if self._client is not None:
+            self._client.latest_usage_update = None
+            self._client.prompt_usage = None
         try:
             result = self._run(self._prompt_once(prompt), timeout=timeout)
         except TimeoutError:
             return self._timeout_result(started, collect_dir)
         except Exception as exc:  # noqa: BLE001
             mapped = self._mapped_events()
+            usage, extra = self._normalized_usage(partial=True)
             return AgentResult(
                 model=self.model,
                 text="",
@@ -702,6 +755,8 @@ class AcpExecutor(BaseExecutor):
                         "source": "acp_adapter",
                     },
                 ),
+                usage=usage,
+                extra=extra,
                 metadata={
                     "executor_kind": "acp",
                     "acp_entry_id": self.entry_id,

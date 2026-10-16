@@ -183,8 +183,15 @@ class InvocationHandle:
         latency_ms: float | None = None,
         error_detail: str | None = None,
         executor_metadata: dict[str, Any] | None = None,
+        usage: dict[str, Any] | None = None,
+        extra: dict[str, Any] | None = None,
     ) -> None:
-        """Atomically finalize metadata (+ optional final-response). Idempotent."""
+        """Atomically finalize metadata (+ optional final-response). Idempotent.
+
+        A non-completed invoke does not write ``final-response.json``. Usage
+        already received is stored on metadata so the record phase can still
+        put it on the trajectory terminal.
+        """
         with self._lock:
             if self.sealed:
                 return
@@ -213,6 +220,11 @@ class InvocationHandle:
                 # What the backend reported about itself; the record phase folds
                 # this into the trajectory turn.
                 meta["executor_metadata"] = executor_metadata
+            if status != "completed":
+                if isinstance(usage, dict) and usage:
+                    meta["usage"] = usage
+                if isinstance(extra, dict) and extra:
+                    meta["extra"] = extra
             try:
                 # Redact first; fail closed only on residual secrets after redaction.
                 cleaned_meta = redact_value(meta, extra_sentinels=self.store.sentinels)

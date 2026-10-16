@@ -134,6 +134,8 @@ tau2-class harness（`minimal-demo` 的 `tau2-dialog-min`、`examples/datasets/t
 
 `AgentResult.usage` 与轨迹文件 `terminal.usage` 同一形状（见 [evidence.md](evidence.md)）：一等 `prompt_tokens` / `completion_tokens` / `cached_tokens` / `cost_usd`（未知省略）。厂商 leftover 与插件袋在兄弟字段 `extra`。`openai-http` 从 Chat Completions `usage` 映射；`anthropic-http` 从 Messages `usage` 映射；ACP 从 `PromptResponse.usage` + `usage_update` 映射。缺 usage 就省略，不编造。usage / extra 是观察，不是 PASS。
 
+ACP 的空闲超时、总超时、EOF 和协议异常走同一次映射，保留当时已经收到的量。有数据时 `extra` 带 `usage_partial: true` 和 `usage_source`。`session/prompt` 正常返回不写这两键。两源都空时 `usage` 和 `extra` 仍省略。invoke 未完成时这袋写在该次 metadata 上，record 放进这一轮 terminal。
+
 ## anthropic-http 原生 tools
 
 kind 名是 `anthropic-http`（api-client，Anthropic Messages）。与 `openai-http` **并列**的独占 `executor` 赢家，不是它的 dialect。SDK `tools=` / `messages=` 仍是 OpenAI 形（见 [03](../03-task-run-and-sdk.md)）；翻译发生在 **这个 executor 边界**，Core 不翻译。
