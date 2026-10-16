@@ -162,8 +162,9 @@ def test_one_stall_thaw_does_not_resume_another(tmp_path: Path) -> None:
     assert ctx.deadline_monotonic == frozen_deadline
     ctx.thaw_phase_clock()
     assert ctx._phase_clock_frozen is False
-    assert ctx.remaining_seconds() is not None
-    assert ctx.remaining_seconds() > 50
+    remaining = ctx.remaining_seconds()
+    assert remaining is not None
+    assert remaining > 50
 
 
 def test_stall_does_not_spend_the_phase_clock(
