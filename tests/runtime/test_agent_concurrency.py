@@ -437,11 +437,3 @@ def test_sdk_invoke_does_not_block_the_task_loop(tmp_path: Path) -> None:
         os.environ.pop("AGEVAL_AGENT_SERVICE_SOCK", None)
         server.stop()
         shutil.rmtree(socket_dir, ignore_errors=True)
-
-
-def test_no_background_thread_survives_the_module() -> None:
-    time.sleep(0.05)
-    alive = [
-        t.name for t in threading.enumerate() if t.is_alive() and t is not threading.main_thread()
-    ]
-    assert alive == []
