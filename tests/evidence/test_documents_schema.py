@@ -205,6 +205,7 @@ def test_summary_and_terminal_follow_omit_none(tmp_path: Path) -> None:
     assert with_clock["profile_id"] == "solver"
     _check({"$ref": "#/$defs/TerminalRow"}, with_clock, defs)
 
+    rejected = False
     try:
         _check(
             {"$ref": "#/$defs/TerminalUsage"},
@@ -212,8 +213,8 @@ def test_summary_and_terminal_follow_omit_none(tmp_path: Path) -> None:
             defs,
         )
     except AssertionError:
-        return
-    raise AssertionError("input_tokens is not a sealed usage field")
+        rejected = True
+    assert rejected
 
 
 def test_generated_typescript_matches_schema() -> None:

@@ -55,17 +55,14 @@ class AuthService:
         display_name = getattr(identity, "name", None) or ""
         avatar_url = getattr(identity, "avatar_url", None) or ""
         github_id = getattr(identity, "id", None)
-        try:
-            upsert = self.orgs.upsert_user_profile
-            if callable(upsert):
-                upsert(
-                    user_id=login,
-                    display_name=str(display_name or ""),
-                    avatar_url=str(avatar_url or ""),
-                    github_id="" if github_id is None else str(github_id),
-                )
-        except Exception:  # noqa: BLE001
-            pass
+        upsert = self.orgs.upsert_user_profile
+        if callable(upsert):
+            upsert(
+                user_id=login,
+                display_name=str(display_name or ""),
+                avatar_url=str(avatar_url or ""),
+                github_id="" if github_id is None else str(github_id),
+            )
         payload: dict[str, Any] = {
             "token": api_token,
             "token_type": "bearer",

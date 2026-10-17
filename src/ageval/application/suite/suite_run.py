@@ -912,7 +912,7 @@ async def _execute_suite_run(
 
     def _emit(event: dict[str, Any]) -> None:
         if on_progress is not None:
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(OSError, RuntimeError, ValueError, TypeError):
                 on_progress(event)
 
     async def _sync_live_share() -> None:

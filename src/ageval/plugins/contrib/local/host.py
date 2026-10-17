@@ -158,7 +158,7 @@ class LocalHost(BaseEnvironment):
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_sec)
         except TimeoutError:
             self._kill_group(process.pid)
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(OSError):
                 await process.wait()
             return ExecResult(exit_code=124, stdout="", stderr="exec timed out", truncated=False)
         truncated = len(stdout) > _MAX_STREAM_BYTES or len(stderr) > _MAX_STREAM_BYTES

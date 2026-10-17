@@ -15,13 +15,13 @@ def _as_plain_mapping(obj: Any) -> dict[str, Any] | None:
         return None
     if isinstance(obj, dict):
         return dict(obj)
-    with contextlib_suppress(Exception):
+    with contextlib_suppress(TypeError, ValueError, AttributeError):
         if hasattr(obj, "model_dump"):
             # exclude_none + no alias → snake_case field names from acp.schema
             dumped = obj.model_dump(exclude_none=True)
             if isinstance(dumped, dict):
                 return dumped
-    with contextlib_suppress(Exception):
+    with contextlib_suppress(TypeError, ValueError, AttributeError):
         if hasattr(obj, "model_dump"):
             dumped = obj.model_dump(by_alias=True, exclude_none=True)
             if isinstance(dumped, dict):

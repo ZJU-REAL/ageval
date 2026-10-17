@@ -167,12 +167,13 @@ def _to_result(
         "llm_backed": llm_backed,
     }
     if hasattr(raw, "model_dump") and callable(raw.model_dump):
+        dumped: Any = None
         try:
             dumped = raw.model_dump()
-            if isinstance(dumped, dict):
-                raw = dumped
-        except Exception:  # noqa: BLE001
-            pass
+        except (TypeError, ValueError, AttributeError):
+            dumped = None
+        if isinstance(dumped, dict):
+            raw = dumped
     if isinstance(raw, dict):
         if "ok" in raw or "text" in raw or "error" in raw:
             structured = raw.get("structured")

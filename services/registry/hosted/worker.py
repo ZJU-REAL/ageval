@@ -244,7 +244,7 @@ def drain_once(
         _execute(state, job, runner=runner, uploader=uploader, secrets_seen=secrets_seen)
     except (KeyboardInterrupt, SystemExit):
         raise
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — the job row is marked failed
         _mark_failed(state, job, exc, secrets_seen)
     return True
 
@@ -309,7 +309,7 @@ def _settle(
                 upload_hosted_suite(state, job, dataset_root, suite_run_id)
             else:
                 uploader(job, dataset_root, suite_run_id)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — upload_error changes the job status
             upload_error = crypto.scrub(str(exc), secrets_seen)
     if canceled:
         status = "canceled"

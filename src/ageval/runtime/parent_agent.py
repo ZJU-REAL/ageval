@@ -410,16 +410,18 @@ class ParentAgentService:
         # The session is already closed; a reporting hook must not resurrect it.
         try:
             self._chain(binding, BEFORE_AGENT_CLOSE, payload)
-        except Exception:
-            _LOG.exception("before_agent_close failed (fail-open) session_id=%s", session_id)
+        except Exception as exc:  # noqa: BLE001 — records agent_close_failed
+            self._note_close_failure("before_agent_close", session_id, exc)
         close = getattr(binding.executor, "close", None)
         if callable(close):
-            with contextlib.suppress(Exception):
+            try:
                 close()
+            except (OSError, RuntimeError, ValueError, TypeError) as exc:
+                self._note_close_failure("executor.close", session_id, exc)
         try:
             self._chain(binding, AFTER_AGENT_CLOSE, payload)
-        except Exception:
-            _LOG.exception("after_agent_close failed (fail-open) session_id=%s", session_id)
+        except Exception as exc:  # noqa: BLE001 — records agent_close_failed
+            self._note_close_failure("after_agent_close", session_id, exc)
         return {"ok": True}
 
     def session_graph(self, session_id: str) -> ExtensionGraph | None:
@@ -769,8 +771,10 @@ class ParentAgentService:
             return
         cancel = getattr(binding.executor, "cancel_invoke", None)
         if callable(cancel):
-            with contextlib.suppress(Exception):
+            try:
                 cancel()
+            except (OSError, RuntimeError, ValueError, TypeError) as exc:
+                self._note_close_failure("cancel_invoke", ticket.session_id, exc)
 
     def record_observation(
         self,
@@ -950,6 +954,18 @@ class ParentAgentService:
         with self._lock:
             if self._stall_freezes == 0:
                 self._phase_clock_frozen = False
+
+    def _note_close_failure(self, slot: str, session_id: str, exc: BaseException) -> None:
+        """A closed session stays closed. The fact is the typed outcome."""
+        self._record_stall_fact(
+            "agent_close_failed",
+            {
+                "slot": slot,
+                "session_id": session_id,
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+        )
+        _LOG.exception("%s failed (fail-open) session_id=%s", slot, session_id)
 
     def _record_stall_fact(self, name: str, detail: dict[str, Any]) -> None:
         callback = self.record_stall_fact

@@ -163,7 +163,7 @@ def _split_none(tp: Any) -> tuple[Any, bool]:
         return tp, False
     if len(rest) == 1:
         return rest[0], True
-    raise TypeError(f"optional evidence field has more than one type: {tp!r}")
+    raise TypeError("evidence_union")
 
 
 def _dataclass_union(tp: Any) -> tuple[type, ...] | None:
@@ -202,7 +202,7 @@ def _scalar_schema(tp: Any) -> dict[str, Any] | None:
     if origin is dict:
         key_t, _value_t = get_args(tp)
         if key_t is not str:
-            raise TypeError(f"evidence document dict keys must be str, got {tp!r}")
+            raise TypeError("evidence_dict_key")
         return {"type": "object", "additionalProperties": True}
     return None
 
@@ -214,18 +214,18 @@ def _type_schema(
     core, has_none = _split_none(tp)
     presence = meta.get("presence")
     if presence == "null" and not has_none:
-        raise TypeError(f"nullable field is not optional: {tp!r}")
+        raise TypeError("evidence_nullable")
     if presence == "omit" and not has_none:
-        raise TypeError(f"omit-none field is not optional: {tp!r}")
+        raise TypeError("evidence_omit")
     if presence is None and has_none:
-        raise TypeError(f"optional field needs presence metadata: {tp!r}")
+        raise TypeError("evidence_presence")
     body_tp = core if has_none else tp
 
     members = _dataclass_union(body_tp)
     if members is not None:
         name = meta.get("union_name")
         if not isinstance(name, str) or not name:
-            raise TypeError(f"dataclass union needs union_name metadata: {tp!r}")
+            raise TypeError("evidence_union_name")
         node: dict[str, Any] = {"$ref": f"#/$defs/{name}"}
         unions = [(name, members)]
         refs = list(members)
@@ -236,7 +236,7 @@ def _type_schema(
     else:
         scalar = _scalar_schema(body_tp)
         if scalar is None:
-            raise TypeError(f"unsupported evidence document type: {tp!r}")
+            raise TypeError("evidence_type")
         node = scalar
         unions = []
         refs = _nested_refs(body_tp)
@@ -286,7 +286,7 @@ def _object_schema(
 def json_schema() -> dict[str, Any]:
     """Draft 2020-12 schema for the three sealed documents and their nested objects."""
     if SUMMARY_SCHEMA_VERSION != "ageval.evidence.summary/1":
-        raise RuntimeError("summary schema version drifted from SummaryDocument")
+        raise RuntimeError("summary_schema_version")
     defs: dict[str, Any] = {}
     pending: list[type] = list(ROOT_DOCUMENTS)
     seen: set[type] = set()

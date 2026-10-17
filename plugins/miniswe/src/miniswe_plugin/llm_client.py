@@ -84,7 +84,7 @@ def _shutdown_pool_sockets(pool: Any) -> None:
     # Public accessor (httpcore 1.x); same objects, but keep if _connections empty.
     try:
         extra = list(getattr(pool, "connections", None) or [])
-    except Exception:
+    except (TypeError, AttributeError):
         extra = []
     for conn in extra:
         if conn not in conns:
@@ -98,9 +98,9 @@ def _shutdown_pool_sockets(pool: Any) -> None:
         if sock is None:
             continue
         # A socket already closed by the peer is not a stall failure.
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(OSError):
             sock.shutdown(_socket.SHUT_RDWR)
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(OSError):
             sock.close()
 
 
@@ -145,10 +145,10 @@ def close_llm_client(client: Any) -> None:
             continue
         try:
             result = closer()
-        except Exception:
+        except (OSError, RuntimeError, ValueError, TypeError):
             continue
         if inspect.isawaitable(result):
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(OSError, RuntimeError, AttributeError):
                 result.close()
 
 
@@ -193,13 +193,13 @@ def recycle_llm_clients() -> None:
     kill_in_flight_llm_clients()
     try:
         import litellm
-    except Exception:
+    except ImportError:
         return
     for attr in ("client_session", "aclient_session"):
         session = getattr(litellm, attr, None)
         if session is not None:
             close_llm_client(session)
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(AttributeError, TypeError):
                 setattr(litellm, attr, None)
     cache = getattr(litellm, "in_memory_llm_clients_cache", None)
     if cache is None:
@@ -210,12 +210,12 @@ def recycle_llm_clients() -> None:
             close_llm_client(client)
     flush = getattr(cache, "flush_cache", None)
     if callable(flush):
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(OSError, RuntimeError, TypeError, AttributeError, ValueError):
             flush()
         return
     clear = getattr(cache, "clear", None)
     if callable(clear):
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(OSError, RuntimeError, TypeError, AttributeError, ValueError):
             clear()
         return
 
@@ -520,12 +520,12 @@ def post_responses_api(
             raise_for_http_status("responses_http", status, body, cause=exc)
         try:
             data = response.json()
-        except Exception as exc:
+        except (json.JSONDecodeError, ValueError) as exc:
             _bad_payload(f"responses_http_bad_json:{response.text[:400]}", exc)
         if not isinstance(data, dict):
             _bad_payload(f"responses_http_not_object:{type(data).__name__}")
         return DirectResponsesResult(data)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — _reraise_transport always raises
         _reraise_transport(exc)
     finally:
         unregister_in_flight_client(client)
@@ -843,7 +843,7 @@ def post_chat_completions(
                 raise_for_http_status("chat_http", status, body, cause=exc)
             try:
                 data = response.json()
-            except Exception as exc:
+            except (json.JSONDecodeError, ValueError) as exc:
                 _bad_payload(f"chat_http_bad_json:{response.text[:400]}", exc)
             if not isinstance(data, dict):
                 _bad_payload(f"chat_http_not_object:{type(data).__name__}")
@@ -876,7 +876,7 @@ def post_chat_completions(
                     break
                 try:
                     obj = json.loads(data_s)
-                except Exception as exc:
+                except json.JSONDecodeError as exc:
                     _bad_payload(f"chat_http_bad_json:{data_s[:400]}", exc)
                 if not isinstance(obj, dict):
                     _bad_payload(f"chat_http_stream_not_object:{type(obj).__name__}")
@@ -886,7 +886,7 @@ def post_chat_completions(
             _bad_payload("chat_http_stream_empty")
         data = assemble_chat_completion_from_stream(chunks)
         return ChatCompletion.model_validate(data)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — _reraise_transport always raises
         _reraise_transport(exc)
     finally:
         unregister_in_flight_client(client)

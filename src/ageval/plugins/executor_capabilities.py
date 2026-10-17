@@ -80,12 +80,9 @@ def _plugin_published_capabilities(kind: str) -> ExecutorCapabilities | None:
     try:
         from ageval.plugins.bootstrap import ensure_bootstrapped
         from ageval.plugins.slots import EXECUTOR
-    except Exception:  # noqa: BLE001
+    except ImportError:
         return None
-    try:
-        reg = ensure_bootstrapped()
-    except Exception:  # noqa: BLE001
-        return None
+    reg = ensure_bootstrapped()
     rec = reg.get_registration(EXECUTOR, kind)
     if rec is None:
         return None
@@ -130,9 +127,9 @@ def _call_describe(obj: Any) -> dict[str, Any] | None:
     except TypeError:
         try:
             out = obj.describe()  # type: ignore[misc]
-        except Exception:  # noqa: BLE001
+        except (TypeError, ValueError, AttributeError):
             return None
-    except Exception:  # noqa: BLE001
+    except (ValueError, AttributeError):
         return None
     return out if isinstance(out, dict) else None
 
@@ -142,7 +139,7 @@ def _factory_return_type(impl: Any) -> Any | None:
         return None
     try:
         hints = get_type_hints(impl)
-    except Exception:  # noqa: BLE001
+    except (TypeError, ValueError, NameError, AttributeError):
         hints = getattr(impl, "__annotations__", {}) or {}
     ret = hints.get("return")
     return ret if isinstance(ret, type) else None

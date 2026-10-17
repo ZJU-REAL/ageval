@@ -85,12 +85,12 @@ def resolve_base_url(explicit: str | None) -> str | None:
 def _config_search_roots() -> list[Path]:
     """Optional minisweagent config roots. A missing package falls through to vendor."""
     roots: list[Path] = []
-    with contextlib.suppress(Exception):
+    with contextlib.suppress(ImportError):
         import minisweagent
 
         roots.append(Path(minisweagent.package_dir) / "config")
         roots.append(Path(minisweagent.__file__).resolve().parent / "config")
-    with contextlib.suppress(Exception):
+    with contextlib.suppress(ImportError):
         from importlib.resources import files
 
         roots.append(Path(str(files("minisweagent").joinpath("config"))))

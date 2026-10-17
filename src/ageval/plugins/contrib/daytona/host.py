@@ -80,7 +80,7 @@ class DaytonaStdio:
                         break
                     raise
         finally:
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(OSError):
                 self._in_r.close()
 
     def _pump_out(self) -> None:
@@ -105,14 +105,14 @@ class DaytonaStdio:
                     break
                 time.sleep(0.05)
         finally:
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(OSError):
                 self._out_w.close()
 
     def terminate(self) -> None:
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(OSError, RuntimeError, ValueError, TypeError):
             self._sandbox.process.delete_session(self._session_id)
         for stream in (self.stdin, self.stdout, self._in_r, self._out_w):
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(OSError):
                 stream.close()
 
     def wait(self, timeout: float | None = None) -> int | None:

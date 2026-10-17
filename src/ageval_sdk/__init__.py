@@ -17,17 +17,16 @@ from ageval_sdk.workflow import bounded_gather, collect_results, first_success
 
 
 def _load_version() -> str:
-    try:
-        from importlib.metadata import version
+    from importlib.metadata import PackageNotFoundError, version
 
+    try:
         return version("ageval-cli")
-    except Exception:
-        pass
-    # Editable / source tree: repo-root VERSION (src/ageval_sdk/__init__.py → parents[2]).
-    version_file = Path(__file__).resolve().parents[2] / "VERSION"
-    if version_file.is_file():
-        return version_file.read_text(encoding="utf-8").strip()
-    return "0.0.0"
+    except PackageNotFoundError:
+        # Editable / source tree: repo-root VERSION (src/ageval_sdk/__init__.py → parents[2]).
+        version_file = Path(__file__).resolve().parents[2] / "VERSION"
+        if version_file.is_file():
+            return version_file.read_text(encoding="utf-8").strip()
+        return "0.0.0"
 
 
 __all__ = [

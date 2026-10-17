@@ -37,7 +37,7 @@ async def run(ctx: AttemptCtx) -> None:
     async def step(name: str, fn: Callable[[], Awaitable[None]]) -> None:
         try:
             await fn()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — records record_step_failed
             ctx.record_fact(
                 "record_step_failed",
                 {"step": name, "error": f"{type(exc).__name__}: {exc}"},

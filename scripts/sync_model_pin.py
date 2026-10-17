@@ -542,7 +542,7 @@ def main() -> int:
     litellm: dict | None = None
     try:
         litellm = json.loads(_get(LITELLM_URL).decode("utf-8"))
-    except Exception:
+    except (OSError, urllib.error.URLError, json.JSONDecodeError, TimeoutError, ValueError):
         litellm = None
     resolved, omitted = resolve_logos(_candidate_labs(models))
     pin = build_pin(models, api, litellm, set(resolved))

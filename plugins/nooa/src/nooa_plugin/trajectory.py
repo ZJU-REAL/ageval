@@ -18,6 +18,8 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
 
+_TAP_ERRORS = (TypeError, ValueError, AttributeError, KeyError, RuntimeError)
+
 SCHEMA = "ageval.trajectory.event/1"
 _SOURCE = "nooa"
 _OPAQUE_CLIP = 8_000
@@ -56,13 +58,13 @@ class EventTap:
         if em is not None:
             on = getattr(em, "on", None)
             if callable(on):
-                with suppress(Exception):
+                with suppress(_TAP_ERRORS):
                     self._unsubs.append(on("*", self._on_event))
             intercept = getattr(em, "intercept", None)
             if callable(intercept):
-                with suppress(Exception):
+                with suppress(_TAP_ERRORS):
                     self._unsubs.append(intercept("llm_call", self._on_llm))
-                with suppress(Exception):
+                with suppress(_TAP_ERRORS):
                     self._unsubs.append(intercept("execute_python", self._on_python))
             self.stats["attached"] = True
         self._install_add_patch()
@@ -87,12 +89,12 @@ class EventTap:
             EventTap._active.append(self)
 
     def _on_event(self, ev: Any) -> None:
-        with suppress(Exception):
+        with suppress(_TAP_ERRORS):
             self._ingest(ev, tag=getattr(ev, "tag", None))
 
     async def _on_llm(self, ctx: Any, nxt: Any) -> Any:
         out = await nxt(ctx)
-        with suppress(Exception):
+        with suppress(_TAP_ERRORS):
             self._capture_llm(out)
         return out
 
@@ -101,7 +103,7 @@ class EventTap:
         t0 = time.monotonic()
         out = await nxt(ctx)
         elapsed_ms = max(0.0, (time.monotonic() - t0) * 1000.0)
-        with suppress(Exception):
+        with suppress(_TAP_ERRORS):
             self._capture_python(out, started_at=started_at, elapsed_ms=elapsed_ms)
         return out
 
@@ -230,13 +232,13 @@ class EventTap:
                 backend = getattr(em, "_backend", None)
                 self.stats["backend_len"] = _safe_len(getattr(backend, "__len__", None), backend)
         for unsub in self._unsubs:
-            with suppress(Exception):
+            with suppress(_TAP_ERRORS):
                 unsub()
         self._unsubs.clear()
         if self in EventTap._active:
             EventTap._active.remove(self)
         if not EventTap._active and EventTap._orig_add is not None:
-            with suppress(Exception):
+            with suppress(_TAP_ERRORS):
                 from nooa.runtime.event_manager import EventManager
 
                 EventManager.add = EventTap._orig_add  # type: ignore[method-assign]
@@ -683,7 +685,7 @@ def _iter_recorded(agent: Any) -> list[tuple[Any, Any]]:
     if callable(items):
         try:
             pairs = items()
-        except Exception:  # noqa: BLE001
+        except _TAP_ERRORS:
             pairs = ()
         if isinstance(pairs, (list, tuple)):
             for pair in pairs:
@@ -694,16 +696,16 @@ def _iter_recorded(agent: Any) -> list[tuple[Any, Any]]:
         try:
             for ev in values() or ():
                 out.append((getattr(ev, "tag", None), ev))
-        except Exception:  # noqa: BLE001
-            pass
+        except _TAP_ERRORS:
+            ev = None
     backend = getattr(em, "_backend", None)
     all_events = getattr(backend, "all_events", None) if backend is not None else None
     if callable(all_events):
         try:
             for ev in all_events():
                 out.append((getattr(ev, "tag", None), ev))
-        except Exception:  # noqa: BLE001
-            pass
+        except _TAP_ERRORS:
+            return out
     return out
 
 
@@ -722,7 +724,7 @@ def _safe_len(fn: Any, obj: Any = None) -> int | None:
         if callable(fn):
             val = fn()
             return len(val) if not isinstance(val, int) else int(val)
-    except Exception:  # noqa: BLE001
+    except _TAP_ERRORS:
         return None
     return None
 
@@ -733,10 +735,10 @@ def _event_to_dict(ev: Any) -> dict[str, Any] | None:
             row = dict(ev)
         elif hasattr(ev, "model_dump") and callable(ev.model_dump):
             dumped: Any = None
-            with suppress(Exception):
+            with suppress(_TAP_ERRORS):
                 dumped = ev.model_dump(mode="json")
             if not isinstance(dumped, dict):
-                with suppress(Exception):
+                with suppress(_TAP_ERRORS):
                     dumped = ev.model_dump()
             row = dumped if isinstance(dumped, dict) else None
             if row is not None:
@@ -752,7 +754,7 @@ def _event_to_dict(ev: Any) -> dict[str, Any] | None:
         if name and "event_type" not in row:
             row["event_type"] = name
         return row
-    except Exception:  # noqa: BLE001
+    except _TAP_ERRORS:
         return {"event_type": type(ev).__name__, "repr": str(ev)[:500]}
 
 
@@ -766,12 +768,12 @@ def _jsonable(value: Any) -> Any:
     if hasattr(value, "model_dump") and callable(value.model_dump):
         try:
             return _jsonable(value.model_dump(mode="json"))
-        except Exception:  # noqa: BLE001
+        except _TAP_ERRORS:
             return str(value)
     if hasattr(value, "value") and not callable(value.value):
         try:
             return _jsonable(value.value)
-        except Exception:  # noqa: BLE001
+        except _TAP_ERRORS:
             return str(value)
     return str(value)
 
@@ -799,7 +801,7 @@ def _as_args(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     if isinstance(value, str) and value.strip():
-        with suppress(Exception):
+        with suppress(json.JSONDecodeError):
             parsed = json.loads(value)
             if isinstance(parsed, dict):
                 return parsed

@@ -203,7 +203,7 @@ class SanitizingProxy:
                         else:
                             self.wfile.write(leftover)
                 finally:
-                    with contextlib.suppress(Exception):
+                    with contextlib.suppress(OSError):
                         resp.close()
 
         self._handler = Handler

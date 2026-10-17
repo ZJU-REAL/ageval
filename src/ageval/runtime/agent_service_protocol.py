@@ -114,7 +114,7 @@ class AgentServiceServer:
                     resp = self._handle(req)
                     _send_msg(conn, resp)
             except Exception as exc:  # noqa: BLE001
-                with contextlib.suppress(Exception):
+                with contextlib.suppress(OSError):
                     _send_msg(
                         conn,
                         {

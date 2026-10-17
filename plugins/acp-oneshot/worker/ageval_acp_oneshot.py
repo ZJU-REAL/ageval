@@ -131,7 +131,7 @@ def _run_oneshot(
         text = "".join(client.text_chunks)
         if any(e.get("type") == "elicitation" for e in client.events[-5:]) and not text:
             ok, error = False, "acp_elicitation_required"
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(OSError, RuntimeError, ValueError, TypeError):
             client.notify("session/cancel", {"sessionId": session_id})
             client.request("session/close", {"sessionId": session_id}, ignore_error=True)
         return {
@@ -289,13 +289,13 @@ class _NdjsonClient:
     def close(self) -> None:
         self._alive = False
         if self._proc.poll() is None:
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(OSError, subprocess.TimeoutExpired):
                 self._proc.terminate()
                 self._proc.wait(timeout=3)
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(OSError):
                 self._proc.kill()
         if self._proc.stdin is not None:
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(OSError):
                 self._proc.stdin.close()
 
     def _send(self, message: dict[str, Any]) -> None:

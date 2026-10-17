@@ -62,7 +62,7 @@ def _ts_type(node: dict[str, Any]) -> str:
         return f"{item}[]"
     if kind == "object" and "properties" not in node:
         return "Record<string, unknown>"
-    raise TypeError(f"cannot render schema node as TypeScript: {node!r}")
+    raise TypeError("evidence_ts_node")
 
 
 def _interface(name: str, node: dict[str, Any]) -> str:
@@ -89,7 +89,7 @@ def render_ts(schema: dict[str, Any] | None = None) -> str:
         elif "oneOf" in node:
             blocks.append(_alias(name, node))
         else:
-            raise TypeError(f"unsupported definition {name}")
+            raise TypeError("evidence_ts_def")
     schema_json = json.dumps(document, indent=2, sort_keys=True)
     blocks.append(f"export const evidenceJsonSchema = {schema_json} as const;")
     return _HEADER + "\n\n".join(blocks) + "\n"
