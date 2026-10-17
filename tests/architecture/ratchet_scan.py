@@ -98,7 +98,7 @@ def _is_re_call(node: ast.AST) -> bool:
 
 
 def _locator_regex(node: ast.AST) -> bool:
-    if not _is_re_call(node):
+    if not isinstance(node, ast.Call) or not _is_re_call(node):
         return False
     for arg in node.args:
         for bit in _string_bits(arg):
