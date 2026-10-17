@@ -263,8 +263,7 @@ class MinisweExecutorSPI(BaseExecutor):
         self.reasoning_effort = spec.reasoning_effort
         self.api = spec.api
         self.extra_body = dict(spec.extra)
-        # ``timeout`` is the HTTP clock (None = do not set one). ``watchdog`` is
-        # the Future abort, already filled with the default cap when omitted.
+        # Both clocks are filled from the table when the spec omits them.
         self.timeout, self.watchdog = transport_clocks(spec)
 
     @staticmethod
@@ -452,7 +451,7 @@ class MinisweExecutorSPI(BaseExecutor):
         # Bypass litellm entirely for HTTP: sticky keep-alive + ignored timeouts
         # left suites hung in _receive_response_headers with no upstream_stall
         # (attempt_1c23ff53 ~4.5min). Both chat and responses use direct httpx.
-        # ``self.timeout`` is the HTTP clock only (None = no client timeout).
+        # ``self.timeout`` is the HTTP clock. Omit on the spec is the table default.
         if self.api == "responses":
             bind_direct_responses_client(
                 model,

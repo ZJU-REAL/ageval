@@ -50,8 +50,8 @@ _GOLDEN = {
         "readers": ["runtime.upstream_stall"],
     },
     "timeout": {
-        "default": "disabled",
-        "zero": "disabled",
+        "default": 180.0,
+        "zero": "reject",
         "integral": False,
         "non_positive": False,
         "stall_freezes_parent": False,
@@ -88,12 +88,16 @@ def test_clocks_snapshot_matches_the_golden() -> None:
     assert clocks_snapshot() == _GOLDEN
 
 
-def test_zero_watchdog_does_not_become_the_default() -> None:
+def test_zero_watchdog_and_timeout_do_not_become_the_default() -> None:
     with pytest.raises(ClockError):
         parse_clock("watchdog", 0)
+    with pytest.raises(ClockError):
+        parse_clock("timeout", 0)
     assert parse_clock("watchdog", None) == 180.0
-    assert parse_clock("timeout", 0) is DISABLED
-    assert parse_clock("timeout", None) is DISABLED
+    assert parse_clock("timeout", None) == 180.0
+    assert parse_clock("idle_timeout", 0) is DISABLED
+    assert parse_clock("idle_timeout", None) is DISABLED
+    assert parse_clock("upstream_stall", 0) is DISABLED
     assert parse_clock("invoke_timeout", 0) == 300.0
     assert parse_clock("invoke_timeout", -1) == 300.0
 

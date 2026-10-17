@@ -19,7 +19,7 @@ from ageval.plugins.errors import PluginContractError
 | `id` | `id` | `str` | 必填。空串拒绝 |
 | `api` | `api` | `str` | `chat`。短名只有 `chat` 与 `responses` |
 | `reasoning.effort` | `reasoning_effort` | `str \| None` | 不发送 |
-| `timeout` | `timeout` | `float \| None` | 不发送 HTTP timeout。`0` 也是省略。负数拒绝。数字在 [`src/ageval/runtime/clocks.py`](../../src/ageval/runtime/clocks.py) 的 `timeout` 行 |
+| `timeout` | `timeout` | `float \| None` | Spec 保持 `None`。省略时 executor 读 [`src/ageval/runtime/clocks.py`](../../src/ageval/runtime/clocks.py) 的 `timeout` 行（180）。`0`、负数、非有限值拒绝 |
 | `watchdog` | `watchdog` | `float \| None` | Spec 保持 `None`。省略时 executor 读同一张表的 `watchdog` 行（180）。`0`、负数、非有限值拒绝 |
 | `extra` | `extra` | mapping | 空 mapping。不并进一等字段 |
 

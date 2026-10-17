@@ -28,18 +28,21 @@ __all__ = [
 ]
 
 
-def transport_clocks(spec: ModelSpec) -> tuple[float | None, float]:
+def transport_clocks(spec: ModelSpec) -> tuple[float, float]:
     """``(http_timeout, watchdog)``.
 
-    HTTP timeout ``None`` means the client has no timeout. An omitted watchdog
-    uses the ``watchdog`` row. Zero and non-finite values fail and do not
+    An omitted clock uses its row. Zero and non-finite values fail and do not
     become that default.
     """
+    try:
+        http_timeout = clock_seconds("timeout", spec.timeout)
+    except ClockError as exc:
+        raise ModelConfigError(f"miniswe_timeout_invalid:{spec.timeout!r}") from exc
     try:
         watchdog = clock_seconds("watchdog", spec.watchdog)
     except ClockError as exc:
         raise ModelConfigError(f"miniswe_watchdog_invalid:{spec.watchdog!r}") from exc
-    return spec.timeout, watchdog
+    return http_timeout, watchdog
 
 
 def wire_body(spec: ModelSpec) -> dict[str, Any]:

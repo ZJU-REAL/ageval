@@ -313,7 +313,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
     def bind_model(self, spec: ModelSpec) -> None:
         self.spec = spec
         self.model = spec.id
-        self.http_timeout = spec.timeout
+        self.http_timeout = clock_seconds("timeout", spec.timeout)
         self.watchdog = clock_seconds("watchdog", spec.watchdog)
         self.extra = dict(spec.extra)
 
@@ -378,7 +378,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
         kind, found = _exchange(
             req,
-            http_timeout=self.http_timeout if self.http_timeout is not None else timeout,
+            http_timeout=self.http_timeout,
             watchdog=self.watchdog,
             invoke_timeout=timeout,
         )
@@ -489,8 +489,6 @@ def _exchange(
     invoke_timeout: float,
 ) -> tuple[str, Any]:
     """POST under the HTTP clock and the watchdog. Expiry is transport, not config."""
-    if http_timeout is None or http_timeout <= 0:
-        http_timeout = watchdog
     join_for = watchdog
     watchdog_ceiling = True
     try:

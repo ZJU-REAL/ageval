@@ -234,25 +234,24 @@ def raise_for_http_status(
     raise error from cause
 
 
-def http_timeout_seconds(timeout: float | None) -> float | None:
-    """Numeric HTTP clock. ``None`` means omit. It does not become 180.
+def http_timeout_seconds(timeout: float | None) -> float:
+    """Positive HTTP clock. Omitted uses the ``timeout`` row. Zero is rejected.
 
-    Zero and negatives are rejected. This path does not import httpx.
+    This path does not import httpx.
     """
-    if timeout is None:
-        return None
-    if isinstance(timeout, bool) or not isinstance(timeout, int | float) or timeout <= 0:
-        raise ValueError(f"miniswe_timeout_invalid:{timeout!r}")
-    return float(timeout)
+    from ageval.runtime.clocks import ClockError, clock_seconds
+
+    try:
+        return clock_seconds("timeout", timeout)
+    except ClockError as exc:
+        raise ValueError(f"miniswe_timeout_invalid:{timeout!r}") from exc
 
 
-def client_timeout(timeout: float | None) -> tuple[Any, float | None]:
+def client_timeout(timeout: float | None) -> tuple[Any, float]:
     """httpx timeout and the numeric value passed alongside it."""
     import httpx
 
     value = http_timeout_seconds(timeout)
-    if value is None:
-        return httpx.Timeout(None), None
     return httpx.Timeout(value, connect=min(30.0, value)), value
 
 
@@ -805,7 +804,6 @@ def post_chat_completions(
 
     # read= timeout → idle gap between streamed chunks (or full-body wait when
     # non-stream). connect stays capped so DNS/TCP failures fail fast.
-    # Preserve canary client_timeout (None = no HTTP clock).
     http_timeout, _timeout_s = client_timeout(timeout)
     client = httpx.Client(
         limits=httpx.Limits(max_keepalive_connections=0, max_connections=10),
@@ -960,9 +958,7 @@ def bind_ephemeral_completion_client(
         # ability to free the gateway socket (watchdog abandons the Future but
         # the orphan keeps ESTAB until we kill_in_flight).
         call_kwargs = dict(kwargs)
-        timeout_s = http_timeout_seconds(timeout)
-        if timeout_s is not None:
-            call_kwargs["timeout"] = timeout_s
+        call_kwargs["timeout"] = http_timeout_seconds(timeout)
         if not pass_client:
             try:
                 return orig(messages, **call_kwargs)

@@ -287,7 +287,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
         self.model = spec.id
         self.api = spec.api
         self.reasoning_effort = spec.reasoning_effort
-        self.http_timeout = spec.timeout
+        self.http_timeout = clock_seconds("timeout", spec.timeout)
         self.watchdog = clock_seconds("watchdog", spec.watchdog)
         self.extra = dict(spec.extra)
         self._invoke_cancel = threading.Event()
@@ -436,9 +436,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
         shorter. Expiry is a repeatable transport error. HTTP and decode
         failures stay on this thread's result, not a second stall path.
         """
-        http_timeout = self.http_timeout if self.http_timeout is not None else timeout
-        if http_timeout is None or http_timeout <= 0:
-            http_timeout = self.watchdog
+        http_timeout = self.http_timeout
         join_for = self.watchdog
         try:
             invoke_cap = float(timeout)

@@ -1,7 +1,7 @@
 """One table of ageval clocks.
 
-Readers take their numbers from ``CLOCKS``. A zero watchdog does not fall
-back to 180, and a disabled timeout does not become that default either.
+Readers take their numbers from ``CLOCKS``. A zero watchdog or request
+timeout is rejected. Stall and idle may still be disabled.
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ class Clock:
 CLOCKS: dict[str, Clock] = {
     "timeout": Clock(
         name="timeout",
-        default=DISABLED,
-        zero="disabled",
+        default=180.0,
+        zero="reject",
         readers=("model.spec",),
     ),
     "watchdog": Clock(

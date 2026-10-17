@@ -181,14 +181,14 @@ def _effort(raw: Any) -> str | None:
 
 
 def _timeout(raw: Any, *, present: bool) -> float | None:
-    """``0`` and omit are both ``None`` (do not send). Negatives are rejected."""
+    """Omit is ``None``. ``0`` and non-finite values fail. There is no unlimited."""
     if not present or raw is None or raw == "":
         return None
-    value = _finite_number(raw, name="timeout")
-    if value < 0:
+    if isinstance(raw, str) and raw.strip().lower() in {"inf", "infinity", "+inf", "unlimited"}:
         _fail(f"model_timeout_invalid:{raw!r}")
-    if value == 0:
-        return None
+    value = _finite_number(raw, name="timeout")
+    if value <= 0 or not math.isfinite(value):
+        _fail(f"model_timeout_invalid:{raw!r}")
     return value
 
 
