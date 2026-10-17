@@ -5,9 +5,11 @@ A ``BaseExecutor`` winner is checked here. ``supports_model`` raises
 cannot meet raises ``PluginContractError``. Neither is an upstream stall.
 
 A yaml-only executor is a factory that is not a ``BaseExecutor`` class, so it
-cannot declare ``extra_allowlist``. Lock warns. ``AGEVAL_STRICT_MODEL_CONTRACT``
-set to ``1``, ``true``, ``yes``, ``on``, or ``strict`` raises
-``PluginContractError`` instead.
+cannot declare ``extra_allowlist``. With the env unset, a ``first-party``
+registration fails the lock. Any other source warns, and the warning says a
+cutoff date is not published. ``AGEVAL_STRICT_MODEL_CONTRACT`` set to ``1``,
+``true``, ``yes``, ``on``, or ``strict`` raises ``PluginContractError``.
+``0``, ``false``, ``no``, or ``off`` keeps the warning.
 """
 
 from __future__ import annotations
@@ -26,18 +28,28 @@ from ageval.plugins.slots import ENVIRONMENT, EXECUTOR
 
 STRICT_MODEL_CONTRACT_ENV = "AGEVAL_STRICT_MODEL_CONTRACT"
 _STRICT_VALUES = frozenset({"1", "true", "yes", "on", "strict"})
+_OFF_VALUES = frozenset({"0", "false", "no", "off"})
+_FIRST_PARTY = "first-party"
 
 
 class YamlOnlyExecutorWarning(UserWarning):
     """Lock could not enforce an extra allowlist for this executor."""
 
 
-def strict_model_contract(override: bool | None = None) -> bool:
-    """True when a yaml-only executor must fail the lock."""
+def strict_model_contract(override: bool | None = None, *, source: str = "") -> bool:
+    """True when a yaml-only executor must fail the lock.
+
+    An explicit override wins. Otherwise the env forces on or off. Unset, a
+    ``first-party`` registration fails and every other source warns.
+    """
     if override is not None:
         return override
     raw = os.environ.get(STRICT_MODEL_CONTRACT_ENV, "").strip().lower()
-    return raw in _STRICT_VALUES
+    if raw in _STRICT_VALUES:
+        return True
+    if raw in _OFF_VALUES:
+        return False
+    return source == _FIRST_PARTY
 
 
 def assert_requires_environment(graph: ExtensionGraph, registry: ExtensionRegistry) -> None:
@@ -98,15 +110,19 @@ def assert_executor_model(
         return
     impl = _executor_impl(graph, registry)
     if impl is None:
-        _yaml_only(winner.plugin_id, strict=strict)
+        # An explicit profile binding rewrites the winner source to "explicit".
+        # Strictness follows the registration row.
+        registration = registry.get_registration(EXECUTOR, winner.plugin_id)
+        source = registration.source if registration is not None else winner.source
+        _yaml_only(winner.plugin_id, strict=strict, source=source)
         return
     model = profile.get("model")
     if not isinstance(model, Mapping):
         return
-    from ageval.config.profiles import _model_options
+    from ageval.config.profiles import model_options
 
-    spec = resolve_model(model, _model_options(profile))
-    impl.supports_model(object.__new__(impl), spec)
+    spec = resolve_model(model, model_options(profile))
+    impl.supports_model(spec)
 
 
 def _executor_impl(graph: ExtensionGraph, registry: ExtensionRegistry) -> type[BaseExecutor] | None:
@@ -120,11 +136,12 @@ def _executor_impl(graph: ExtensionGraph, registry: ExtensionRegistry) -> type[B
     return None
 
 
-def _yaml_only(plugin_id: str, *, strict: bool | None) -> None:
+def _yaml_only(plugin_id: str, *, strict: bool | None, source: str) -> None:
     message = (
-        f"executor {plugin_id!r} has no decorated model contract; extra allowlist is not enforced"
+        f"executor {plugin_id!r} has no decorated model contract; extra allowlist is not enforced. "
+        "A cutoff for third-party factories is not published"
     )
-    if strict_model_contract(strict):
+    if strict_model_contract(strict, source=source):
         raise PluginContractError(message)
     warnings.warn(message, YamlOnlyExecutorWarning, stacklevel=3)
 

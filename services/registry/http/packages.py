@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from pathlib import Path
 
 from services.registry.auth.tokens import TokenInfo
 from services.registry.errors import RegistryAppError
@@ -26,6 +27,7 @@ class PackageHandlers:
             if work is not None:
                 shutil.rmtree(work, ignore_errors=True)
         return json_result(201, payload)
+
     def _release_draft(self, *, dataset_id: str, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -41,6 +43,7 @@ class PackageHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(201, payload)
+
     def _put_package_favorite(self, *, dataset_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.packages.set_favorite(
@@ -49,6 +52,7 @@ class PackageHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _delete_package_favorite(self, *, dataset_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.packages.set_favorite(
@@ -57,6 +61,7 @@ class PackageHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _list_packages(self, *, auth: TokenInfo, qs: dict[str, list[str]]) -> HttpResult:
         try:
             mine_raw = (qs.get("mine") or [""])[0]
@@ -75,6 +80,7 @@ class PackageHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _list_package_versions(
         self, *, dataset_id: str, auth: TokenInfo, qs: dict[str, list[str]]
     ) -> HttpResult:
@@ -98,6 +104,7 @@ class PackageHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _serve_meta(
         self,
         *,
@@ -116,6 +123,7 @@ class PackageHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _serve_content(
         self, *, dataset_id: str, package_digest: str, auth: TokenInfo
     ) -> HttpResult:
@@ -133,6 +141,7 @@ class PackageHandlers:
             stream=fh,
             size=size,
         )
+
     def _serve_package_files_list(
         self,
         *,
@@ -154,6 +163,7 @@ class PackageHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _serve_package_tasks(
         self,
         *,
@@ -185,6 +195,7 @@ class PackageHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _serve_package_file(
         self,
         *,
@@ -208,6 +219,7 @@ class PackageHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _patch_package_display_name(self, *, dataset_id: str, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -247,6 +259,7 @@ class PackageHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _delete_package_release(
         self, *, dataset_id: str, version: str, auth: TokenInfo
     ) -> HttpResult:
@@ -257,6 +270,7 @@ class PackageHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _patch_package_release(
         self, *, dataset_id: str, version: str, auth: TokenInfo
     ) -> HttpResult:

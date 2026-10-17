@@ -1,0 +1,2 @@
+# One owner for the clock table. A later, more specific pattern wins.
+src/ageval/runtime/clocks.py @ffy6511

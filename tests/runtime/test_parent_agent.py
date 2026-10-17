@@ -12,8 +12,8 @@ from tests.helpers.agent_binding import ScriptedBinder, ScriptedExecutor
 
 from ageval.evidence.store import AttemptEvidenceStore
 from ageval.runtime.agent_service_protocol import AgentServiceServer, agent_service_client_call
+from ageval.runtime.clocks import clock_default
 from ageval.runtime.parent_agent import (
-    DEFAULT_INVOKE_TIMEOUT_SECONDS,
     AgentInvocationQuota,
     ParentAgentService,
     resolve_invoke_timeout_seconds,
@@ -28,7 +28,7 @@ def _service(
     limit: int = 2,
     executor: ScriptedExecutor | None = None,
     deadline_monotonic: float | None = None,
-    invoke_timeout_seconds: float = DEFAULT_INVOKE_TIMEOUT_SECONDS,
+    invoke_timeout_seconds: float = clock_default("invoke_timeout"),
     evidence: bool = True,
     offline_env: str = "",
     extra_profiles: tuple[str, ...] = (),
@@ -488,8 +488,8 @@ def test_quota_never_refunds() -> None:
 
 def test_task_declared_invoke_timeout_wins() -> None:
     assert resolve_invoke_timeout_seconds({"agent_timeout_seconds": 12.5}) == 12.5
-    assert resolve_invoke_timeout_seconds({"agent_timeout_seconds": 0}) == (
-        DEFAULT_INVOKE_TIMEOUT_SECONDS
+    assert resolve_invoke_timeout_seconds({"agent_timeout_seconds": 0}) == clock_default(
+        "invoke_timeout"
     )
-    assert resolve_invoke_timeout_seconds({}) == DEFAULT_INVOKE_TIMEOUT_SECONDS
-    assert resolve_invoke_timeout_seconds(None) == DEFAULT_INVOKE_TIMEOUT_SECONDS
+    assert resolve_invoke_timeout_seconds({}) == clock_default("invoke_timeout")
+    assert resolve_invoke_timeout_seconds(None) == clock_default("invoke_timeout")

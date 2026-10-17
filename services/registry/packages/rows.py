@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True, slots=True)
 class ReleaseRow:
     dataset_id: str
@@ -16,6 +17,7 @@ class ReleaseRow:
     created_at: float
     org_id: str | None = None
     uploaded_by: str = ""
+
 
 @dataclass(frozen=True, slots=True)
 class DraftRow:
@@ -45,6 +47,7 @@ class DraftRow:
             org_id=self.org_id,
             uploaded_by=self.uploaded_by,
         )
+
 
 @dataclass(frozen=True, slots=True)
 class DatasetAclRow:

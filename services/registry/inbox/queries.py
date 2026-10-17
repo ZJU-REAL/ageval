@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 UPSERT_SUITE_AGENT_CONSENT = """
 INSERT INTO suite_agent_consents(
     suite_run_id, package_id, granted_by, source, created_at

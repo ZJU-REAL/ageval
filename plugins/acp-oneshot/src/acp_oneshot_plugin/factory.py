@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 
+from acp_oneshot_plugin import PLUGIN_ID
 from acp_oneshot_plugin.container import AcpOneshotBoxExecutor
-from ageval.model import spec_from_factory
+from ageval.model import (
+    ModelSpec,
+    coerce_factory_model,
+    require_model_support,
+    spec_from_factory,
+)
+from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.acp.entry_local import acp_stdio_argv
 from ageval.plugins.contrib.acp.registry import AcpRegistryError, get_entry
+from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.errors import ExtensionMaterializeError
 
 _EXECUTION_MODE = "acp-oneshot"
@@ -33,6 +42,117 @@ def describe_acp_oneshot(*, entry_id: str | None = None) -> dict[str, Any]:
     }
 
 
+@executor_plugin(priority=110, source="installed")
+class AcpOneshotExecutorSPI(BaseExecutor):
+    """Executor SPI. ACP stdio stays in the box; this class owns the model contract."""
+
+    kind = PLUGIN_ID
+    requires_environment = True
+    supported_apis = frozenset({"chat", "responses"})
+    supported_model_fields = frozenset({"id", "api", "reasoning_effort", "extra"})
+    extra_allowlist = frozenset()
+
+    def __init__(
+        self,
+        *,
+        host: Any,
+        placement: Any,
+        options: dict[str, Any] | None = None,
+        profile_id: str | None = None,
+        model: Any = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        package_root: str | None = None,
+    ) -> None:
+        del package_root
+        opts = dict(options or {})
+        entry = str(opts.get("entry") or "").strip()
+        if not entry:
+            raise ExtensionMaterializeError(
+                "acp_entry_required",
+                kind="extension_materialize_failed",
+            )
+        try:
+            descriptor = get_entry(entry)
+        except AcpRegistryError as exc:
+            raise ExtensionMaterializeError(
+                str(exc),
+                kind="extension_materialize_failed",
+            ) from exc
+        if descriptor is None:
+            raise ExtensionMaterializeError(
+                f"unknown acp entry: {entry!r}",
+                kind="extension_materialize_failed",
+            )
+        spec = spec_from_factory(coerce_factory_model(model), opts, default_id="entry-default")
+        self.supports_model(spec)
+        self.bind_model(spec)
+        argv = acp_stdio_argv(
+            entry,
+            list(descriptor.acp_command),
+            model=spec.id,
+            reasoning_effort=spec.reasoning_effort,
+        )
+        self._box = AcpOneshotBoxExecutor(
+            host=host,
+            placement=placement,
+            entry_id=entry,
+            acp_command=argv,
+            model=spec.id,
+            reasoning_effort=spec.reasoning_effort,
+            base_url=base_url if isinstance(base_url, str) else None,
+            api_key_env=api_key if isinstance(api_key, str) else None,
+            profile_id=profile_id,
+            credential_env_names=descriptor.credential_env_names,
+            fixed_env=dict(descriptor.fixed_env),
+            descriptor=descriptor,
+        )
+        self.model = self._box.model
+        self.acp_command = self._box.acp_command
+        self.entry_id = self._box.entry_id
+
+    @classmethod
+    def supports_model(cls, spec: ModelSpec) -> None:
+        require_model_support(
+            spec,
+            supported_apis=cls.supported_apis,
+            supported_model_fields=cls.supported_model_fields,
+            extra_allowlist=cls.extra_allowlist,
+        )
+
+    def bind_model(self, spec: ModelSpec) -> None:
+        self.spec = spec
+        self.reasoning_effort = spec.reasoning_effort
+
+    @staticmethod
+    def describe() -> dict[str, Any]:
+        return describe_acp_oneshot()
+
+    def open(self, **kwargs: Any) -> None:
+        self._box.open(**kwargs)
+
+    def close(self) -> None:
+        self._box.close()
+
+    def invoke(
+        self,
+        prompt: str,
+        *,
+        timeout: float = 60.0,
+        collect_dir: str | None = None,
+        redaction_sentinels: tuple[str, ...] | list[str] | None = None,
+        tools: Sequence[Mapping[str, Any]] | None = None,
+        messages: Sequence[Mapping[str, Any]] | None = None,
+    ) -> Any:
+        del tools, messages
+        return self._box.invoke(
+            prompt,
+            timeout=timeout,
+            collect_dir=collect_dir,
+            redaction_sentinels=redaction_sentinels,
+        )
+
+
 def build_executor(
     *,
     host: Any,
@@ -43,51 +163,18 @@ def build_executor(
     base_url: str | None = None,
     api_key: str | None = None,
     package_root: str | None = None,
-) -> AcpOneshotBoxExecutor:
-    """plugin.yaml exclusive entry: factory receives host + placement from bind_winner."""
-    del package_root
-    opts = dict(options or {})
-    entry = str(opts.get("entry") or "").strip()
-    if not entry:
-        raise ExtensionMaterializeError(
-            "acp_entry_required",
-            kind="extension_materialize_failed",
-        )
-    try:
-        descriptor = get_entry(entry)
-    except AcpRegistryError as exc:
-        raise ExtensionMaterializeError(
-            str(exc),
-            kind="extension_materialize_failed",
-        ) from exc
-    if descriptor is None:
-        raise ExtensionMaterializeError(
-            f"unknown acp entry: {entry!r}",
-            kind="extension_materialize_failed",
-        )
-    spec = spec_from_factory(model, opts, default_id="entry-default")
-    model_s = spec.id
-    effort_s = spec.reasoning_effort
-    argv = acp_stdio_argv(
-        entry,
-        list(descriptor.acp_command),
-        model=model_s,
-        reasoning_effort=effort_s,
-    )
-    return AcpOneshotBoxExecutor(
+) -> AcpOneshotExecutorSPI:
+    """Thin wrapper. plugin.yaml registers ``AcpOneshotExecutorSPI``."""
+    return AcpOneshotExecutorSPI(
         host=host,
         placement=placement,
-        entry_id=entry,
-        acp_command=argv,
-        model=model_s,
-        reasoning_effort=effort_s,
-        base_url=base_url if isinstance(base_url, str) else None,
-        api_key_env=api_key if isinstance(api_key, str) else None,
+        options=options,
         profile_id=profile_id,
-        credential_env_names=descriptor.credential_env_names,
-        fixed_env=dict(descriptor.fixed_env),
-        descriptor=descriptor,
+        model=model,
+        base_url=base_url,
+        api_key=api_key,
+        package_root=package_root,
     )
 
 
-__all__ = ["build_executor", "describe_acp_oneshot"]
+__all__ = ["AcpOneshotExecutorSPI", "build_executor", "describe_acp_oneshot"]

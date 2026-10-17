@@ -8,20 +8,18 @@ request this plugin sends.
 from __future__ import annotations
 
 import copy
-import math
 from collections.abc import Mapping
 from typing import Any
 
 from ageval.model import API_CHAT, API_RESPONSES, ModelConfigError, ModelSpec, resolve_model
+from ageval.runtime.clocks import ClockError, clock_seconds
 
 DEFAULT_MODEL_ID = "openai/gpt-4o-mini"
-DEFAULT_WATCHDOG_SECONDS = 180.0
 
 __all__ = [
     "API_CHAT",
     "API_RESPONSES",
     "DEFAULT_MODEL_ID",
-    "DEFAULT_WATCHDOG_SECONDS",
     "ModelConfigError",
     "ModelSpec",
     "resolve_model",
@@ -30,16 +28,21 @@ __all__ = [
 ]
 
 
-def transport_clocks(spec: ModelSpec) -> tuple[float | None, float]:
+def transport_clocks(spec: ModelSpec) -> tuple[float, float]:
     """``(http_timeout, watchdog)``.
 
-    HTTP timeout ``None`` means the client has no timeout. Watchdog omit uses
-    ``DEFAULT_WATCHDOG_SECONDS``. Zero and non-finite watchdog values fail.
+    An omitted clock uses its row. Zero and non-finite values fail and do not
+    become that default.
     """
-    watchdog = DEFAULT_WATCHDOG_SECONDS if spec.watchdog is None else float(spec.watchdog)
-    if not math.isfinite(watchdog) or watchdog <= 0:
-        raise ModelConfigError(f"miniswe_watchdog_invalid:{watchdog!r}")
-    return spec.timeout, watchdog
+    try:
+        http_timeout = clock_seconds("timeout", spec.timeout)
+    except ClockError as exc:
+        raise ModelConfigError(f"miniswe_timeout_invalid:{spec.timeout!r}") from exc
+    try:
+        watchdog = clock_seconds("watchdog", spec.watchdog)
+    except ClockError as exc:
+        raise ModelConfigError(f"miniswe_watchdog_invalid:{spec.watchdog!r}") from exc
+    return http_timeout, watchdog
 
 
 def wire_body(spec: ModelSpec) -> dict[str, Any]:

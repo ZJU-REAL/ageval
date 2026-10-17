@@ -21,13 +21,13 @@ from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.anthropic_http.usage import normalize_anthropic_http_usage
 from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.http_loopback import is_http_loopback
+from ageval.runtime.clocks import clock_seconds
 
 _DEFAULT_BASE = "https://api.anthropic.com/v1"
 _DEFAULT_KEY_ENV = "ANTHROPIC_API_KEY"
 _DEFAULT_MODEL_ID = "claude-sonnet-4-6"
 _DEFAULT_VERSION = "2023-06-01"
 _DEFAULT_MAX_TOKENS = 4096
-_DEFAULT_WATCHDOG_SECONDS = 180.0
 _SOURCE = "anthropic-http"
 
 
@@ -301,21 +301,20 @@ class AnthropicHTTPExecutor(BaseExecutor):
         self.max_tokens = _as_max_tokens(opts.get("max_tokens"))
         self.anthropic_version = _as_version(opts.get("anthropic_version"))
 
-    def supports_model(self, spec: ModelSpec) -> None:
+    @classmethod
+    def supports_model(cls, spec: ModelSpec) -> None:
         require_model_support(
             spec,
-            supported_apis=self.supported_apis,
-            supported_model_fields=self.supported_model_fields,
-            extra_allowlist=self.extra_allowlist,
+            supported_apis=cls.supported_apis,
+            supported_model_fields=cls.supported_model_fields,
+            extra_allowlist=cls.extra_allowlist,
         )
 
     def bind_model(self, spec: ModelSpec) -> None:
         self.spec = spec
         self.model = spec.id
-        self.http_timeout = spec.timeout
-        self.watchdog = (
-            float(spec.watchdog) if spec.watchdog is not None else _DEFAULT_WATCHDOG_SECONDS
-        )
+        self.http_timeout = clock_seconds("timeout", spec.timeout)
+        self.watchdog = clock_seconds("watchdog", spec.watchdog)
         self.extra = dict(spec.extra)
 
     def close(self) -> None:
@@ -379,7 +378,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
         kind, found = _exchange(
             req,
-            http_timeout=self.http_timeout if self.http_timeout is not None else timeout,
+            http_timeout=self.http_timeout,
             watchdog=self.watchdog,
             invoke_timeout=timeout,
         )
@@ -490,8 +489,6 @@ def _exchange(
     invoke_timeout: float,
 ) -> tuple[str, Any]:
     """POST under the HTTP clock and the watchdog. Expiry is transport, not config."""
-    if http_timeout is None or http_timeout <= 0:
-        http_timeout = watchdog
     join_for = watchdog
     watchdog_ceiling = True
     try:

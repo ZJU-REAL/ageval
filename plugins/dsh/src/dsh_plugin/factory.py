@@ -9,9 +9,13 @@ from __future__ import annotations
 
 import os
 import uuid
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from ageval.model import ModelSpec, coerce_factory_model, require_model_support, spec_from_factory
+from ageval.plugins.base import BaseExecutor
+from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.errors import ExtensionMaterializeError
 from dsh_plugin import PLUGIN_ID
 from dsh_plugin.container import DshBoxExecutor
@@ -136,12 +140,96 @@ def resolve_base_url(explicit: str | None) -> str | None:
     return DEFAULT_BASE_URL
 
 
-def _model_id(model: Any) -> str:
-    from ageval.config.profiles import model_id
+@executor_plugin(priority=110, source="installed")
+class DshExecutorSPI(BaseExecutor):
+    """Executor SPI. The box runs the harness; this class owns the model contract."""
 
-    if model is None:
-        return ""
-    return model_id(model)
+    kind = PLUGIN_ID
+    requires_environment = True
+    supported_apis = frozenset({"chat", "responses"})
+    supported_model_fields = frozenset(
+        {"id", "api", "reasoning_effort", "timeout", "watchdog", "extra"}
+    )
+    extra_allowlist = frozenset()
+
+    def __init__(
+        self,
+        *,
+        options: dict[str, Any] | None = None,
+        host: Any,
+        placement: Any,
+        profile_id: str | None = None,
+        model: Any = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
+    ) -> None:
+        opts = dict(options or {})
+        permission = resolve_permission(opts.get("permission"))
+        max_tokens = resolve_max_tokens(opts.get("max_tokens"))
+        composition = resolve_effective_composition(
+            composition=str(opts.get("composition") or "").strip() or None,
+            permission=permission,
+        )
+        resolve_composition_path(composition)
+        provider = str(opts.get("provider") or DEFAULT_PROVIDER).strip() or DEFAULT_PROVIDER
+        spec = spec_from_factory(coerce_factory_model(model), opts, default_id=DEFAULT_MODEL)
+        self.supports_model(spec)
+        self.bind_model(spec)
+        self._box = DshBoxExecutor(
+            host=host,
+            placement=placement,
+            plugin_root=_plugin_root(),
+            model=spec.id,
+            provider=provider,
+            composition=composition,
+            permission=permission,
+            max_tokens=max_tokens,
+            base_url=base_url if isinstance(base_url, str) else None,
+            api_key_env=api_key if isinstance(api_key, str) else None,
+            session_id=f"ageval-{profile_id or 'solver'}-{uuid.uuid4().hex[:12]}",
+        )
+        self.model = self._box.model
+
+    @classmethod
+    def supports_model(cls, spec: ModelSpec) -> None:
+        require_model_support(
+            spec,
+            supported_apis=cls.supported_apis,
+            supported_model_fields=cls.supported_model_fields,
+            extra_allowlist=cls.extra_allowlist,
+        )
+
+    def bind_model(self, spec: ModelSpec) -> None:
+        self.spec = spec
+        self.reasoning_effort = spec.reasoning_effort
+
+    @staticmethod
+    def describe() -> dict[str, Any]:
+        return describe_dsh()
+
+    def open(self, **kwargs: Any) -> None:
+        self._box.open(**kwargs)
+
+    def close(self) -> None:
+        self._box.close()
+
+    def invoke(
+        self,
+        prompt: str,
+        *,
+        timeout: float = 60.0,
+        collect_dir: str | None = None,
+        redaction_sentinels: tuple[str, ...] | list[str] | None = None,
+        tools: Sequence[Mapping[str, Any]] | None = None,
+        messages: Sequence[Mapping[str, Any]] | None = None,
+    ) -> Any:
+        del tools, messages
+        return self._box.invoke(
+            prompt,
+            timeout=timeout,
+            collect_dir=collect_dir,
+            redaction_sentinels=redaction_sentinels,
+        )
 
 
 def build_executor(
@@ -150,33 +238,19 @@ def build_executor(
     host: Any,
     placement: Any,
     profile_id: str | None = None,
-    model: str | None = None,
+    model: Any = None,
     base_url: str | None = None,
     api_key: str | None = None,
-) -> DshBoxExecutor:
-    """plugin.yaml exclusive entry: factory(**kwargs) → in-box executor."""
-    opts = dict(options or {})
-    permission = resolve_permission(opts.get("permission"))
-    max_tokens = resolve_max_tokens(opts.get("max_tokens"))
-    composition = resolve_effective_composition(
-        composition=str(opts.get("composition") or "").strip() or None,
-        permission=permission,
-    )
-    resolve_composition_path(composition)
-    provider = str(opts.get("provider") or DEFAULT_PROVIDER).strip() or DEFAULT_PROVIDER
-    session_id = f"ageval-{profile_id or 'solver'}-{uuid.uuid4().hex[:12]}"
-    return DshBoxExecutor(
+) -> DshExecutorSPI:
+    """Thin wrapper. plugin.yaml registers ``DshExecutorSPI``."""
+    return DshExecutorSPI(
+        options=options,
         host=host,
         placement=placement,
-        plugin_root=_plugin_root(),
-        model=_model_id(model) or DEFAULT_MODEL,
-        provider=provider,
-        composition=composition,
-        permission=permission,
-        max_tokens=max_tokens,
-        base_url=base_url if isinstance(base_url, str) else None,
-        api_key_env=api_key if isinstance(api_key, str) else None,
-        session_id=session_id,
+        profile_id=profile_id,
+        model=model,
+        base_url=base_url,
+        api_key=api_key,
     )
 
 
@@ -184,6 +258,7 @@ __all__ = [
     "DEFAULT_COMPOSITION",
     "DEFAULT_MODEL",
     "DEFAULT_PROVIDER",
+    "DshExecutorSPI",
     "PERMISSION_ENV",
     "PLUGIN_ID",
     "build_executor",

@@ -24,8 +24,7 @@ _NOOA_SRC = ROOT / "plugins" / "nooa" / "src"
 if str(_NOOA_SRC) not in sys.path:
     sys.path.insert(0, str(_NOOA_SRC))
 
-from nooa_plugin.container import NooaBoxExecutor  # noqa: E402
-from nooa_plugin.factory import build_executor  # noqa: E402
+from nooa_plugin.factory import NooaExecutorSPI, build_executor  # noqa: E402
 
 _FIXED_AGENT = """\
 from typing import Any
@@ -76,6 +75,49 @@ def test_factory_requires_agent_option() -> None:
         build_executor(host=host, placement=host.placement(), options={})
 
 
+def test_lock_rejects_unknown_model_extra(tmp_path: Path) -> None:
+    from tests.helpers.lock import lock_with_profiles
+
+    from ageval.model.errors import ModelConfigError
+    from ageval.plugins.bootstrap import ensure_bootstrapped
+
+    reg = ensure_bootstrapped()
+    saved = reg._injects.get("nooa")
+    reg.exclusive(
+        EXECUTOR, "nooa", NooaExecutorSPI, priority=110, source="installed", is_factory=True
+    )
+    reg.declare_inject(
+        "nooa",
+        (InjectRequirement(service=ENVIRONMENT, capabilities=("exec", "upload")),),
+    )
+    task = tmp_path / "t"
+    task.mkdir()
+    (task / "task.yaml").write_text(
+        "format: ageval.task/1\ntask_id: t\nagent_profiles:\n  - id: solver\n",
+        encoding="utf-8",
+    )
+    (task / "run.py").write_text("async def run(ctx): pass\n", encoding="utf-8")
+    (task / "evaluator.py").write_text("def evaluate(i): return {}\n", encoding="utf-8")
+    try:
+        with pytest.raises(ModelConfigError, match="model_extra_rejected:temperature"):
+            lock_with_profiles(
+                task,
+                "t",
+                {
+                    "solver": {
+                        "executor": "nooa",
+                        "model": {"id": "openai/gpt-4.1-mini", "extra": {"temperature": 1}},
+                        "options": {"agent": "lib.agents:FixedAnswerAgent"},
+                    }
+                },
+            )
+    finally:
+        if saved is None:
+            reg._injects.pop("nooa", None)
+        else:
+            reg._injects["nooa"] = saved
+
+
 def test_factory_returns_box_executor() -> None:
     host = local_box("/nowhere")
     executor = build_executor(
@@ -84,7 +126,7 @@ def test_factory_returns_box_executor() -> None:
         options={"agent": "lib.agents:FixedAnswerAgent"},
         package_root=str(ROOT / "examples" / "core" / "tasks" / "nooa-host-min"),
     )
-    assert isinstance(executor, NooaBoxExecutor)
+    assert isinstance(executor, NooaExecutorSPI)
     assert executor.kind == "nooa"
 
 

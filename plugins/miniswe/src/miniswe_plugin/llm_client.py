@@ -20,6 +20,7 @@ keep-alives and ``client=`` injection mis-routes). POST directly to
 
 from __future__ import annotations
 
+import contextlib
 import inspect
 import json
 import sys
@@ -94,14 +95,11 @@ def _shutdown_pool_sockets(pool: Any) -> None:
         sock = getattr(stream, "_sock", None)
         if sock is None:
             continue
-        try:
+        # A socket already closed by the peer is not a stall failure.
+        with contextlib.suppress(Exception):
             sock.shutdown(_socket.SHUT_RDWR)
-        except Exception:
-            pass
-        try:
+        with contextlib.suppress(Exception):
             sock.close()
-        except Exception:
-            pass
 
 
 def close_llm_client(client: Any) -> None:
@@ -148,10 +146,8 @@ def close_llm_client(client: Any) -> None:
         except Exception:
             continue
         if inspect.isawaitable(result):
-            try:
+            with contextlib.suppress(Exception):
                 result.close()
-            except Exception:
-                pass
 
 
 def register_in_flight_client(client: Any) -> None:
@@ -201,10 +197,8 @@ def recycle_llm_clients() -> None:
         session = getattr(litellm, attr, None)
         if session is not None:
             close_llm_client(session)
-            try:
+            with contextlib.suppress(Exception):
                 setattr(litellm, attr, None)
-            except Exception:
-                pass
     cache = getattr(litellm, "in_memory_llm_clients_cache", None)
     if cache is None:
         return
@@ -214,17 +208,14 @@ def recycle_llm_clients() -> None:
             close_llm_client(client)
     flush = getattr(cache, "flush_cache", None)
     if callable(flush):
-        try:
+        with contextlib.suppress(Exception):
             flush()
-        except Exception:
-            pass
         return
     clear = getattr(cache, "clear", None)
     if callable(clear):
-        try:
+        with contextlib.suppress(Exception):
             clear()
-        except Exception:
-            return
+        return
 
 
 def raise_for_http_status(
@@ -237,33 +228,30 @@ def raise_for_http_status(
     """Raise a terminal config error for schema 4xx, else a transport RuntimeError."""
     code = status if status is not None else "?"
     message = f"{prefix}_{code}:{body}"
-    error: Exception
-    if status in _CONFIG_HTTP_STATUS:
-        error = ModelConfigError(message)
-    else:
-        error = RuntimeError(message)
+    error: Exception = (
+        ModelConfigError(message) if status in _CONFIG_HTTP_STATUS else RuntimeError(message)
+    )
     raise error from cause
 
 
-def http_timeout_seconds(timeout: float | None) -> float | None:
-    """Numeric HTTP clock. ``None`` means omit. It does not become 180.
+def http_timeout_seconds(timeout: float | None) -> float:
+    """Positive HTTP clock. Omitted uses the ``timeout`` row. Zero is rejected.
 
-    Zero and negatives are rejected. This path does not import httpx.
+    This path does not import httpx.
     """
-    if timeout is None:
-        return None
-    if isinstance(timeout, bool) or not isinstance(timeout, int | float) or timeout <= 0:
-        raise ValueError(f"miniswe_timeout_invalid:{timeout!r}")
-    return float(timeout)
+    from ageval.runtime.clocks import ClockError, clock_seconds
+
+    try:
+        return clock_seconds("timeout", timeout)
+    except ClockError as exc:
+        raise ValueError(f"miniswe_timeout_invalid:{timeout!r}") from exc
 
 
-def client_timeout(timeout: float | None) -> tuple[Any, float | None]:
+def client_timeout(timeout: float | None) -> tuple[Any, float]:
     """httpx timeout and the numeric value passed alongside it."""
     import httpx
 
     value = http_timeout_seconds(timeout)
-    if value is None:
-        return httpx.Timeout(None), None
     return httpx.Timeout(value, connect=min(30.0, value)), value
 
 
@@ -472,8 +460,8 @@ def post_responses_api(
     # Optional wire dump for debugging suite-vs-curl hangs.
     dump_dir = __import__("os").environ.get("AGEVAL_MINISWE_DUMP_RESPONSES")
     if dump_dir:
-        from pathlib import Path as _P
         import time as _time
+        from pathlib import Path as _P
 
         root = _P(dump_dir)
         root.mkdir(parents=True, exist_ok=True)
@@ -669,10 +657,13 @@ def assemble_chat_completion_from_stream(
         if not isinstance(c, dict):
             continue
         for ch in c.get("choices") or []:
-            if isinstance(ch, dict) and isinstance(ch.get("delta"), dict):
-                if "reasoning_content" in ch["delta"]:
-                    saw_reasoning = True
-                    break
+            if (
+                isinstance(ch, dict)
+                and isinstance(ch.get("delta"), dict)
+                and "reasoning_content" in ch["delta"]
+            ):
+                saw_reasoning = True
+                break
         if saw_reasoning:
             break
     if reasoning_parts or saw_reasoning:
@@ -813,7 +804,6 @@ def post_chat_completions(
 
     # read= timeout → idle gap between streamed chunks (or full-body wait when
     # non-stream). connect stays capped so DNS/TCP failures fail fast.
-    # Preserve canary client_timeout (None = no HTTP clock).
     http_timeout, _timeout_s = client_timeout(timeout)
     client = httpx.Client(
         limits=httpx.Limits(max_keepalive_connections=0, max_connections=10),
@@ -968,9 +958,7 @@ def bind_ephemeral_completion_client(
         # ability to free the gateway socket (watchdog abandons the Future but
         # the orphan keeps ESTAB until we kill_in_flight).
         call_kwargs = dict(kwargs)
-        timeout_s = http_timeout_seconds(timeout)
-        if timeout_s is not None:
-            call_kwargs["timeout"] = timeout_s
+        call_kwargs["timeout"] = http_timeout_seconds(timeout)
         if not pass_client:
             try:
                 return orig(messages, **call_kwargs)

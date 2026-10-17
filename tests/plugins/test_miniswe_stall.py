@@ -446,7 +446,7 @@ def test_run_agent_retries_the_query_and_not_the_agent(monkeypatch: pytest.Monke
         reset_stall(token)
     assert extra["exit_status"] == "Submitted"
     assert state["runs"] == 1
-    assert state["walls"] == [0]
+    assert state["walls"] == [5]
     assert len(state["calls"]) == 2
     assert state["calls"][0] is state["calls"][1]
     assert state["calls"][0][0]["content"] == "keep"

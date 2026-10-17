@@ -1,6 +1,6 @@
 """Harness model contract: one ``ModelSpec`` for every executor."""
 
-from ageval.model.bind import OMITTED_MODEL, spec_from_factory
+from ageval.model.bind import OMITTED_MODEL, coerce_factory_model, spec_from_factory
 from ageval.model.errors import ModelConfigError
 from ageval.model.spec import (
     API_CHAT,
@@ -18,6 +18,7 @@ __all__ = [
     "API_SHORT_NAMES",
     "MODEL_SPEC_FIELDS",
     "OMITTED_MODEL",
+    "coerce_factory_model",
     "ModelConfigError",
     "ModelSpec",
     "require_model_support",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import contextlib
 import json
 import os
 import uuid
@@ -100,8 +101,6 @@ def _as_nonneg_float(raw: Any, *, name: str, default: float) -> float:
     return value
 
 
-
-
 def _as_optional_bool(raw: Any, *, name: str, default: bool | None) -> bool | None:
     """Parse profile bool; ``None``/empty → ``default`` (``None`` = defer to llm_client)."""
     if raw is None or raw == "":
@@ -120,6 +119,7 @@ def _as_optional_bool(raw: Any, *, name: str, default: bool | None) -> bool | No
         f"miniswe_{name}_invalid:{raw!r}",
         kind="extension_materialize_failed",
     )
+
 
 def resolve_api_key_value(locator: str | None) -> str | None:
     names: list[str] = []
@@ -146,20 +146,17 @@ def resolve_base_url(explicit: str | None) -> str | None:
 
 
 def _config_search_roots() -> list[Path]:
+    """Optional minisweagent config roots. A missing package falls through to vendor."""
     roots: list[Path] = []
-    try:
+    with contextlib.suppress(Exception):
         import minisweagent
 
         roots.append(Path(minisweagent.package_dir) / "config")
         roots.append(Path(minisweagent.__file__).resolve().parent / "config")
-    except Exception:
-        pass
-    try:
+    with contextlib.suppress(Exception):
         from importlib.resources import files
 
         roots.append(Path(str(files("minisweagent").joinpath("config"))))
-    except Exception:
-        pass
     # Last resort: official mini.yaml copied into the plugin (not a ageval-authored prompt).
     roots.append(Path(__file__).resolve().parents[2] / "vendor")
     return roots
@@ -244,21 +241,20 @@ class MinisweExecutorSPI(BaseExecutor):
         # None = leave to llm_client / AGEVAL_MINISWE_CHAT_STREAM.
         # Kept as options.stream (not ModelSpec) so #272 nested model stays intact.
         if self.api == "chat":
-            self.stream = _as_optional_bool(
-                opts.get("stream"), name="stream", default=True
-            )
+            self.stream = _as_optional_bool(opts.get("stream"), name="stream", default=True)
         else:
             self.stream = None
         self.session_id = f"ageval-{self.profile_id or 'solver'}-{uuid.uuid4().hex[:12]}"
         self.execution_location = getattr(host, "kind", None) or "box"
         self._ready = False
 
-    def supports_model(self, spec: ModelSpec) -> None:
+    @classmethod
+    def supports_model(cls, spec: ModelSpec) -> None:
         require_model_support(
             spec,
-            supported_apis=self.supported_apis,
-            supported_model_fields=self.supported_model_fields,
-            extra_allowlist=self.extra_allowlist,
+            supported_apis=cls.supported_apis,
+            supported_model_fields=cls.supported_model_fields,
+            extra_allowlist=cls.extra_allowlist,
         )
 
     def bind_model(self, spec: ModelSpec) -> None:
@@ -267,8 +263,7 @@ class MinisweExecutorSPI(BaseExecutor):
         self.reasoning_effort = spec.reasoning_effort
         self.api = spec.api
         self.extra_body = dict(spec.extra)
-        # ``timeout`` is the HTTP clock (None = do not set one). ``watchdog`` is
-        # the Future abort, already filled with the default cap when omitted.
+        # Both clocks are filled from the table when the spec omits them.
         self.timeout, self.watchdog = transport_clocks(spec)
 
     @staticmethod
@@ -399,11 +394,8 @@ class MinisweExecutorSPI(BaseExecutor):
         # sticky ESTAB that later turns hang on (_receive_response_headers +
         # large Send-Q). Merged last over extra headers except we still
         # allow callers to add other headers alongside.
-        headers = model_kwargs.get("extra_headers")
-        if not isinstance(headers, dict):
-            headers = {}
-        else:
-            headers = dict(headers)
+        raw_headers = model_kwargs.get("extra_headers")
+        headers = dict(raw_headers) if isinstance(raw_headers, dict) else {}
         headers.setdefault("Connection", "close")
         model_kwargs["extra_headers"] = headers
         return model_kwargs
@@ -431,7 +423,8 @@ class MinisweExecutorSPI(BaseExecutor):
                 from minisweagent.models.litellm_response_model import LitellmResponseModel
             except ImportError as exc:
                 raise ExtensionMaterializeError(
-                    "miniswe_package_missing: LitellmResponseModel required for options.api=responses",
+                    "miniswe_package_missing: LitellmResponseModel required "
+                    "for options.api=responses",
                     kind="extension_materialize_failed",
                 ) from exc
             model_cls = LitellmResponseModel
@@ -458,7 +451,7 @@ class MinisweExecutorSPI(BaseExecutor):
         # Bypass litellm entirely for HTTP: sticky keep-alive + ignored timeouts
         # left suites hung in _receive_response_headers with no upstream_stall
         # (attempt_1c23ff53 ~4.5min). Both chat and responses use direct httpx.
-        # ``self.timeout`` is the HTTP clock only (None = no client timeout).
+        # ``self.timeout`` is the HTTP clock. Omit on the spec is the table default.
         if self.api == "responses":
             bind_direct_responses_client(
                 model,
@@ -490,10 +483,10 @@ class MinisweExecutorSPI(BaseExecutor):
             instance_template=instance_template,
             step_limit=self.step_limit,
             cost_limit=self.cost_limit,
-            # Under upstream_stall the parent freezes wall/phase clocks for the
-            # episode. Zero the package wall clock so it cannot race the stall
-            # budget. The Future watchdog is a separate clock (``self.watchdog``).
-            wall_time_limit_seconds=0 if stall is not None else max(0, int(timeout)),
+            # The parent stall freezes wall and phase clocks for the episode.
+            # This package wall stays the parent invoke timeout, so a stuck
+            # agent still ends. The Future watchdog is ``self.watchdog``.
+            wall_time_limit_seconds=max(0, int(timeout)),
         )
         model.query = wrap_model_query(model.query, stall, watchdog=self.watchdog)
         wait = max(1.0, float(timeout))

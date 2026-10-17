@@ -717,10 +717,10 @@ class ResultService:
         Performance consent; other uploaders only stamp provenance. Builtin
         short ids require a platform maintainer (or an approved request).
         """
-        from services.registry.packages.service import agent_preview_from_archive
         from services.registry.packages.dto import (
             package_kind_for_media_type,
         )
+        from services.registry.packages.service import agent_preview_from_archive
 
         from ageval.application.suite.attach_agent_ref import (
             AttachAgentRefError,

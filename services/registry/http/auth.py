@@ -50,4 +50,3 @@ class AuthHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(status, payload)
-

@@ -13,18 +13,22 @@ from datetime import UTC, datetime
 from typing import Any
 
 from ageval.config.profiles import require_upstream_stall_seconds
+from ageval.runtime.clocks import Disabled, clock_default, parse_clock
 
-UPSTREAM_STALL_INTERVAL_SECONDS = 60
-UPSTREAM_STALL_DEFAULT_SECONDS = 3600
+_STALL_INTERVAL_SECONDS = int(clock_default("stall_interval"))
 
 _REASON_LIMIT = 500
 
 
 def budget_seconds(raw: Any) -> int:
-    """Omitted means the default. A present value must already be a valid budget."""
+    """Omitted means the table default. ``0`` is off. A bad value stays a config error."""
     if raw is None:
-        return UPSTREAM_STALL_DEFAULT_SECONDS
-    return require_upstream_stall_seconds(raw, location="options.upstream_stall_seconds")
+        return int(clock_default("upstream_stall"))
+    value = require_upstream_stall_seconds(raw, location="options.upstream_stall_seconds")
+    parsed = parse_clock("upstream_stall", value)
+    if isinstance(parsed, Disabled):
+        return 0
+    return int(parsed)
 
 
 class UpstreamStall:
@@ -97,14 +101,14 @@ class UpstreamStall:
             self._try_count += 1
             if reason:
                 self._reason = reason[:_REASON_LIMIT]
-        if self._remaining() >= UPSTREAM_STALL_INTERVAL_SECONDS:
+        if self._remaining() >= _STALL_INTERVAL_SECONDS:
             return True
         self._finish("budget_exhausted")
         return False
 
     def wait(self) -> None:
-        self._emit("wait", seconds_until_next=UPSTREAM_STALL_INTERVAL_SECONDS)
-        self._sleep(float(UPSTREAM_STALL_INTERVAL_SECONDS))
+        self._emit("wait", seconds_until_next=_STALL_INTERVAL_SECONDS)
+        self._sleep(float(_STALL_INTERVAL_SECONDS))
 
     def end_resumed(self) -> None:
         if not self._open:
@@ -174,8 +178,8 @@ class UpstreamStall:
         return max(0.0, float(self.budget_seconds) - self._spent - live)
 
     def _next_wait(self) -> int:
-        if self._remaining() >= UPSTREAM_STALL_INTERVAL_SECONDS:
-            return UPSTREAM_STALL_INTERVAL_SECONDS
+        if self._remaining() >= _STALL_INTERVAL_SECONDS:
+            return _STALL_INTERVAL_SECONDS
         return 0
 
     def _emit(self, outcome: str, *, seconds_until_next: int) -> None:

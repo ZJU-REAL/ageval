@@ -23,7 +23,6 @@ from services.registry.errors import RegistryAppError
 from services.registry.http.routes import match_route
 from services.registry.spool import extract_multipart_archive, spool_body
 
-
 _ctx: ContextVar[RequestCtx] = ContextVar("registry_http_ctx")
 
 
@@ -140,14 +139,14 @@ def _caught(exc: RegistryAppError) -> HttpResult:
 
 
 # After the helpers above: http.orgs imports those helpers from this module.
-from services.registry.http.auth import AuthHandlers
-from services.registry.http.hosted import HostedHandlers
-from services.registry.http.orgs import OrgHandlers
-from services.registry.http.packages import PackageHandlers
-from services.registry.http.requests import InboxHandlers
-from services.registry.http.results import ResultHandlers
-from services.registry.http.runtimes import RuntimeHandlers
-from services.registry.http.shares import ShareHandlers
+from services.registry.http.auth import AuthHandlers  # noqa: E402
+from services.registry.http.hosted import HostedHandlers  # noqa: E402
+from services.registry.http.orgs import OrgHandlers  # noqa: E402
+from services.registry.http.packages import PackageHandlers  # noqa: E402
+from services.registry.http.requests import InboxHandlers  # noqa: E402
+from services.registry.http.results import ResultHandlers  # noqa: E402
+from services.registry.http.runtimes import RuntimeHandlers  # noqa: E402
+from services.registry.http.shares import ShareHandlers  # noqa: E402
 
 
 class RegistryHttpApi(

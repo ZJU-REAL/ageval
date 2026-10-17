@@ -31,7 +31,7 @@ SDK `tools=` / `messages=` remain OpenAI-shaped. Translation to
 | Name | Default | Purpose |
 | --- | --- | --- |
 | `model` | `{id: claude-sonnet-4-6}` | Nested spec. `supported_apis`: `chat` (Messages, not Responses). `supported_model_fields`: `id`, `api`, `timeout`, `watchdog`, `extra`. `extra_allowlist`: `thinking`. `reasoning.effort` is rejected. |
-| `model.timeout` / `model.watchdog` | invoke timeout / `180` | Same clocks as openai-http. Watchdog expiry is a repeatable transport error. |
+| `model.timeout` / `model.watchdog` | `180` / `180` | Same clocks as openai-http. Omit uses the clock table. `0` is rejected. Watchdog expiry is a repeatable transport error. |
 | `model.extra.thinking` | omit | Copied onto the Messages body. |
 | `options.max_tokens` | `4096` | Required Messages `max_tokens`. Positive int. Non-int values are rejected. |
 | `options.anthropic_version` | `2023-06-01` | `anthropic-version` request header. Non-string values are rejected. |

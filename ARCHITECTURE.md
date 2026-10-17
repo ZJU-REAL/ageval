@@ -156,6 +156,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   │       ├── openai_http/
 │   │       └── anthropic_http/
 │   ├── runtime/
+│   │   ├── clocks.py                # one CLOCKS table for timeout numbers
 │   │   ├── identity.py
 │   │   ├── parent_agent.py          # executor service + host.attach_stdio only
 │   │   ├── task_launch.py           # Control Plane subprocess runs run.py
@@ -218,7 +219,7 @@ src/ageval/
   plugins/decorators.py             # @environment_plugin / @executor_plugin
   plugins/contrib/{acp,docker,local,e2b,daytona,ssh,openai_http,anthropic_http}
   plugins/defaults/                 # or move to contrib/defaults — pick one, not both
-  runtime/{identity,parent_agent,task_launch,task_worker}
+  runtime/{clocks,identity,parent_agent,task_launch,task_worker}
   evaluation/{bind,package_evaluator} + runtime/eval_worker.py
   evidence/{locators,store,trajectory,analysis}
 ```

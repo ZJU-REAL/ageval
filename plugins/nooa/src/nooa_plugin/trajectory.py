@@ -15,7 +15,7 @@ import math
 import time
 from collections.abc import Callable
 from contextlib import suppress
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 SCHEMA = "ageval.trajectory.event/1"
@@ -576,7 +576,7 @@ def _text(seq: int, session_id: str, channel: str, text: str) -> dict[str, Any]:
 
 
 def _utc_now_iso() -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     stamp = now.strftime("%Y-%m-%dT%H:%M:%S")
     if now.microsecond:
         stamp = f"{stamp}.{now.microsecond:06d}".rstrip("0")
@@ -665,8 +665,8 @@ def _parse_iso(value: str) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _event_manager(agent: Any) -> Any | None:

@@ -86,12 +86,13 @@ class _HttpExecutor(BaseExecutor):
     extra_allowlist: frozenset[str] = frozenset()
     bound: ModelSpec | None = None
 
-    def supports_model(self, spec: ModelSpec) -> None:
+    @classmethod
+    def supports_model(cls, spec: ModelSpec) -> None:
         require_model_support(
             spec,
-            supported_apis=self.supported_apis,
-            supported_model_fields=self.supported_model_fields,
-            extra_allowlist=self.extra_allowlist,
+            supported_apis=cls.supported_apis,
+            supported_model_fields=cls.supported_model_fields,
+            extra_allowlist=cls.extra_allowlist,
         )
 
     def bind_model(self, spec: ModelSpec) -> None:

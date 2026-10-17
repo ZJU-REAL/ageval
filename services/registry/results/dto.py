@@ -11,6 +11,7 @@ from services.registry.results.rows import (
     SuiteResultRow,
 )
 
+
 def attempt_to_dict(row: AttemptResultRow) -> dict[str, Any]:
     out: dict[str, Any] = {
         "run_id": row.run_id,
@@ -40,10 +41,12 @@ def attempt_to_dict(row: AttemptResultRow) -> dict[str, Any]:
     out["limit"] = row.limit_name or None
     return out
 
+
 def _load_error_json(raw: str | None) -> Any:
     if not raw:
         return None
     return json.loads(raw)
+
 
 def share_to_dict(row: ResultShareRow) -> dict[str, Any]:
     return {
@@ -53,6 +56,7 @@ def share_to_dict(row: ResultShareRow) -> dict[str, Any]:
         "target_id": row.target_id,
         "created_at": row.created_at,
     }
+
 
 def suite_to_dict(
     row: SuiteResultRow,
@@ -141,6 +145,7 @@ def suite_to_dict(
     ):
         out["amended"] = True
     return out
+
 
 def _run_ids_from_tasks_json(tasks_json: str) -> list[str]:
     try:

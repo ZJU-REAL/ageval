@@ -215,17 +215,16 @@ def test_timeout_forwarded_to_litellm_kwargs() -> None:
         placement=_placement(),
         model=_model(),
     )
-    assert defaulted.timeout is None
+    assert defaulted.spec.timeout is None
+    assert defaulted.timeout == 180.0
     assert defaulted.watchdog == 180.0
     assert "timeout" not in defaulted._litellm_model_kwargs(key=None, base=None)
-    omitted = build_executor(
-        host=SimpleNamespace(kind="local"),
-        placement=_placement(),
-        model=_model(timeout=0),
-    )
-    assert omitted.timeout is None
-    assert omitted.watchdog == 180.0
-    assert "timeout" not in omitted._litellm_model_kwargs(key=None, base=None)
+    with pytest.raises(ModelConfigError, match="model_timeout_invalid"):
+        build_executor(
+            host=SimpleNamespace(kind="local"),
+            placement=_placement(),
+            model=_model(timeout=0),
+        )
 
 
 def test_flat_request_timeout_is_a_config_error() -> None:

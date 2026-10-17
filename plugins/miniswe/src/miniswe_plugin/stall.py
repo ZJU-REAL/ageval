@@ -14,7 +14,6 @@ reuse a CLOSE-WAIT / sticky ESTAB socket with a large Send-Q.
 
 from __future__ import annotations
 
-import math
 import os
 import sys
 import time
@@ -23,7 +22,8 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from typing import Any
 
-from miniswe_plugin.model import DEFAULT_WATCHDOG_SECONDS, ModelConfigError
+from ageval.runtime.clocks import ClockError, clock_seconds
+from miniswe_plugin.model import ModelConfigError
 
 _RETRY_ENV = "MSWEA_MODEL_RETRY_STOP_AFTER_ATTEMPT"
 _POLL_SECONDS = 0.25
@@ -31,19 +31,6 @@ _POLL_SECONDS = 0.25
 
 class StallExhausted(Exception):
     """The parent stall budget was spent on this model query."""
-
-
-_TIMEOUT_HINTS = (
-    "timeout",
-    "timed out",
-    "readtimeout",
-    "connecttimeout",
-    "connecterror",
-    "connectionreset",
-    "remoteprotocolerror",
-    "serverdisconnected",
-    "apitimeouterror",
-)
 
 
 def recycle_llm_clients() -> None:
@@ -57,13 +44,6 @@ def recycle_llm_clients() -> None:
     from miniswe_plugin.llm_client import recycle_llm_clients as _recycle
 
     _recycle()
-
-
-def _looks_like_transport_stall(exc: BaseException) -> bool:
-    name = type(exc).__name__.lower()
-    msg = str(exc).lower()
-    blob = f"{name}:{msg}"
-    return any(hint in blob for hint in _TIMEOUT_HINTS)
 
 
 def _recycle_async() -> None:
@@ -82,18 +62,11 @@ def _recycle_async() -> None:
 
 
 def _require_watchdog(watchdog: float | None) -> float:
-    """Omitted watchdog uses the default cap. Zero and non-finite values fail."""
-    if watchdog is None:
-        return DEFAULT_WATCHDOG_SECONDS
-    if isinstance(watchdog, bool):
-        raise ValueError(f"miniswe_watchdog_invalid:{watchdog!r}")
+    """Omitted watchdog uses the table default. Zero and non-finite values fail."""
     try:
-        cap = float(watchdog)
-    except (TypeError, ValueError) as exc:
+        return clock_seconds("watchdog", watchdog)
+    except ClockError as exc:
         raise ValueError(f"miniswe_watchdog_invalid:{watchdog!r}") from exc
-    if not math.isfinite(cap) or cap <= 0:
-        raise ValueError(f"miniswe_watchdog_invalid:{watchdog!r}")
-    return cap
 
 
 def _call_with_watchdog(
@@ -109,9 +82,10 @@ def _call_with_watchdog(
     exception the stall wrapper can retry after recycling clients. It reads
     the watchdog only, not the HTTP client timeout.
 
-    Independent of upstream_stall freeze / ``wait_excluding_stall`` /
-    ``wall_time_limit_seconds=0``: those only pause the *parent* invoke/phase
-    clocks. This ``fut.result(timeout=…)`` still hard-aborts each LLM attempt.
+    Independent of the parent stall freeze: that pause only stops the parent
+    invoke and phase clocks. The package wall stays the parent invoke timeout
+    as a backstop. This ``fut.result(timeout=…)`` still hard-aborts each LLM
+    attempt.
 
     Important: do **not** use ``with ThreadPoolExecutor`` — its ``__exit__``
     calls ``shutdown(wait=True)`` and would block until the hung query finishes,
@@ -161,8 +135,8 @@ def wrap_model_query(
 ) -> Callable[..., Any]:
     """Retry ``query`` with the same messages while the stall budget allows it.
 
-    ``watchdog`` caps one attempt (seconds). ``None`` uses
-    ``DEFAULT_WATCHDOG_SECONDS``. ``0`` and non-finite values are rejected.
+    ``watchdog`` caps one attempt (seconds). ``None`` uses the ``watchdog``
+    row. ``0`` and non-finite values are rejected.
     """
 
     cap = _require_watchdog(watchdog)

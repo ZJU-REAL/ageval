@@ -17,6 +17,7 @@ from ageval.plugins.contrib.acp.home import home_env
 from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, AcpRegistryError, get_entry
 from ageval.plugins.errors import ExtensionMaterializeError
 from ageval.plugins.protocol import NextFn
+from ageval.runtime.clocks import clock_default
 
 # Runs before the task's own setup.sh (500) and after cheaper box preparation.
 ENSURE_RUNTIME_PRIORITY = 100
@@ -253,7 +254,8 @@ async def _prepare_attempt_home(
         token = _clock_token(ctx)
         raise EnvironmentFailure(token, token)
     remaining = ctx.remaining_seconds()
-    home_timeout = 120.0 if remaining is None else min(120.0, float(remaining))
+    cap = clock_default("acp_home_cap")
+    home_timeout = cap if remaining is None else min(cap, float(remaining))
     try:
         prepared = await prepare_home(
             _box_host(ctx),

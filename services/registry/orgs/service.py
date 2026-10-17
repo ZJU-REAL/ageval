@@ -9,7 +9,6 @@ from typing import Any
 
 from services.registry.access import AccessPolicy
 from services.registry.auth.tokens import TokenInfo
-from services.registry.packages.brand_marks import normalize_icon_github, normalize_icon_key
 from services.registry.clock import now
 from services.registry.errors import RegistryAppError
 from services.registry.orgs.official import is_official_upload_org
@@ -20,11 +19,11 @@ from services.registry.orgs.rows import (
     UserProfileRow,
     normalize_user_id,
 )
+from services.registry.packages.brand_marks import normalize_icon_github, normalize_icon_key
 
 _ORG_NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9_-]{0,62}[a-z0-9])?$")
 _DISPLAY_NAME_MAX = 80
 _DESCRIPTION_MAX = 500
-
 
 
 def org_to_dict(row: OrgRow) -> dict[str, Any]:
@@ -42,6 +41,7 @@ def org_to_dict(row: OrgRow) -> dict[str, Any]:
     if row.icon_github:
         out["icon_github"] = row.icon_github
     return out
+
 
 def membership_to_dict(
     row: MembershipRow,
@@ -62,6 +62,7 @@ def membership_to_dict(
         if profile.github_id:
             out["github_id"] = profile.github_id
     return out
+
 
 def invite_key_to_dict(
     row: OrgInviteKeyRow,
@@ -90,6 +91,7 @@ def invite_key_to_dict(
     if invite_key:
         out["invite_key"] = invite_key
     return out
+
 
 def normalize_display_name(raw: object) -> str:
     if not isinstance(raw, str):

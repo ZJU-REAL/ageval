@@ -73,7 +73,6 @@ ADMIN_SCOPES: frozenset[str] = frozenset(
 )
 
 
-
 @runtime_checkable
 class TokenStoreProtocol(Protocol):
     def hash_token(self, raw: str) -> str: ...

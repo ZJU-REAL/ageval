@@ -19,8 +19,8 @@ from ageval.plugins.errors import PluginContractError
 | `id` | `id` | `str` | 必填。空串拒绝 |
 | `api` | `api` | `str` | `chat`。短名只有 `chat` 与 `responses` |
 | `reasoning.effort` | `reasoning_effort` | `str \| None` | 不发送 |
-| `timeout` | `timeout` | `float \| None` | 不发送 HTTP timeout。`0` 也是省略。负数拒绝 |
-| `watchdog` | `watchdog` | `float \| None` | Spec 保持 `None`。executor 用自己的有限默认值做上限。`0`、负数、非有限值拒绝 |
+| `timeout` | `timeout` | `float \| None` | Spec 保持 `None`。省略时 executor 读 [`src/ageval/runtime/clocks.py`](../../src/ageval/runtime/clocks.py) 的 `timeout` 行（180）。`0`、负数、非有限值拒绝 |
+| `watchdog` | `watchdog` | `float \| None` | Spec 保持 `None`。省略时 executor 读同一张表的 `watchdog` 行（180）。`0`、负数、非有限值拒绝 |
 | `extra` | `extra` | mapping | 空 mapping。不并进一等字段 |
 
 `reasoning` 只认 `effort`。`summary` 等放进 `extra`。`none` 是会发送的 effort 值，不是省略。
@@ -66,7 +66,7 @@ resolve 独占槽赢家
   → resolve_model(profile) → ModelSpec
   → requires_environment 为真：环境赢家必须在，且该 executor 对 environment 的 inject caps 必须由赢家提供
        否则 PluginContractError
-  → 赢家是 BaseExecutor 子类：executor.supports_model(spec)
+  → 赢家是 BaseExecutor 子类：类方法 supports_model(spec)，不构造实例
        api 不在 supported_apis、写出的一等字段不在 supported_model_fields、
        extra 键不在 extra_allowlist（空集拒绝全部）→ ModelConfigError
   → 通过之后才写 lock
@@ -74,12 +74,14 @@ resolve 独占槽赢家
 
 没有装饰类的外置 executor（plugin.yaml 的 factory，不是 `BaseExecutor` 子类，不能声明 allowlist）：
 
-- 默认：`YamlOnlyExecutorWarning`
-- `AGEVAL_STRICT_MODEL_CONTRACT=1`（也接受 `true` / `yes` / `on` / `strict`）：`PluginContractError`
+- 环境变量未设置，且注册 `source` 是 `first-party`：`PluginContractError`
+- 环境变量未设置，其他 `source`：`YamlOnlyExecutorWarning`。警告写明第三方 factory 的截止日期尚未公布
+- `AGEVAL_STRICT_MODEL_CONTRACT=1`（也接受 `true` / `yes` / `on` / `strict`）：不论 source，`PluginContractError`
+- `0` / `false` / `no` / `off`：不论 source，仍是警告
 
 allowlist 在 executor 类上，不在 `ModelSpec` 里。
 
-Current：`resolve_model` 在 profile 解析和 lock 上拒绝字符串 id 与平铺模型键。独占 executor 赢家若是 `BaseExecutor` 子类，lock 调用 `supports_model`，并在 `requires_environment` 未满足时拒绝。一类环境与一类 executor（`local` / `docker` / `e2b` / `ssh` / `daytona` / `acp` / `openai-http` / `anthropic-http`）继承基类并带装饰器。miniswe 使用同一份 `ModelSpec`，经 `load_installed` 进入，不在 builtin 名单里。nooa / dsh / acp-oneshot 仍是 factory，走上面的 yaml-only 警告。
+Current：`resolve_model` 在 profile 解析和 lock 上拒绝字符串 id 与平铺模型键。独占 executor 赢家若是 `BaseExecutor` 子类，lock 调用类方法 `supports_model`，并在 `requires_environment` 未满足时拒绝。一类环境与一类 executor（`local` / `docker` / `e2b` / `ssh` / `daytona` / `acp` / `openai-http` / `anthropic-http`）继承基类并带装饰器。miniswe、nooa、dsh、acp-oneshot 使用同一份 `ModelSpec`，经 `load_installed` 进入，不在 builtin 名单里。仍是普通 factory 的第三方 executor 走上面的警告。
 
 ## BaseEnvironment
 
@@ -109,7 +111,7 @@ Current：`resolve_model` 在 profile 解析和 lock 上拒绝字符串 id 与�
 | `extra_allowlist` | 类属性。必须在类体声明。空集拒绝全部 extra 键 |
 | `invoke` / `close` | 抽象 |
 | `open` | 缺省空操作，返回 `None` |
-| `supports_model` | 不能接受就抛 `ModelConfigError` |
+| `supports_model` | 类方法。lock 不构造实例。不能接受就抛 `ModelConfigError` |
 | `bind_model` | 把校验过的 Spec 写成内部请求参数。`extra` 只留下 allowlist 里的键 |
 
 未实现的抽象方法不能实例化。

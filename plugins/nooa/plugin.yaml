@@ -9,7 +9,7 @@ slots:
   exclusive:
     - id: executor
       priority: 110
-      entry: "nooa_plugin.factory:build_executor"
+      entry: "nooa_plugin.factory:NooaExecutorSPI"
   chain:
     - id: trajectory_collect
       priority: 110

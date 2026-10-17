@@ -29,7 +29,7 @@ First-party environments and executors load from explicit module tuples in `agev
 | `_BUILTIN_ENVIRONMENT_MODULES` | `ageval.plugins.contrib.local.host`, `ageval.plugins.contrib.docker.host`, `ageval.plugins.contrib.e2b.host`, `ageval.plugins.contrib.daytona.host`, `ageval.plugins.contrib.ssh.host` |
 | `_BUILTIN_EXECUTOR_MODULES` | `ageval.plugins.contrib.acp.executor`, `ageval.plugins.contrib.openai_http.executor`, `ageval.plugins.contrib.anthropic_http.executor` |
 
-`miniswe` is not on `_BUILTIN_EXECUTOR_MODULES`. It stays an installed plugin: `plugins/miniswe` loaded by `load_installed_plugins` after `ageval plugin install`. Do not add it to the builtin executor tuple.
+`miniswe`, `nooa`, `dsh`, and `acp-oneshot` are not on `_BUILTIN_EXECUTOR_MODULES`. Each stays an installed plugin loaded by `load_installed_plugins` after `ageval plugin install`. The exclusive entry is the `BaseExecutor` class. Do not add them to the builtin executor tuple.
 
 Commenting out a tuple entry disables that contrib. Adding a builtin means editing the tuple. Do not add a scan or a `@builtin_*` discovery pass.
 
@@ -74,8 +74,8 @@ Registration raises `PluginContractError` (`kind` is `plugin_contract`) and does
 After exclusive winners resolve, and before the lock document is written:
 
 - `requires_environment` true: the environment winner must be bound, and every capability on that executor's `environment` inject must be present. Missing either raises `PluginContractError` (`kind` `plugin_contract`). This is not a stall.
-- A `BaseExecutor` winner with a nested `model:`: `resolve_model`, then `supports_model`. An `api` outside `supported_apis`, an active field outside `supported_model_fields`, or an `extra` key outside `extra_allowlist` (an empty allowlist rejects every key) raises `ModelConfigError`. The lock is not written.
-- A yaml-only executor (a factory that is not a `BaseExecutor` class, so it cannot declare an allowlist): lock warns with `YamlOnlyExecutorWarning`. `AGEVAL_STRICT_MODEL_CONTRACT=1` (also `true`, `yes`, `on`, or `strict`) raises `PluginContractError` instead. Unset warns.
+- A `BaseExecutor` winner with a nested `model:`: `resolve_model`, then the class method `supports_model(spec)`. Lock does not construct an instance. An `api` outside `supported_apis`, an active field outside `supported_model_fields`, or an `extra` key outside `extra_allowlist` (an empty allowlist rejects every key) raises `ModelConfigError`. The lock is not written.
+- A yaml-only executor (a factory that is not a `BaseExecutor` class, so it cannot declare an allowlist): with the env unset, `source: first-party` raises `PluginContractError` and every other source warns with `YamlOnlyExecutorWarning`. The warning says a cutoff date is not published. `AGEVAL_STRICT_MODEL_CONTRACT=1` (also `true`, `yes`, `on`, or `strict`) raises for every source. `0`, `false`, `no`, or `off` keeps the warning.
 
 Registration still does not check `api` or extra keys. An omitted `model` on a class winner is not sent, so `supports_model` is skipped. `requires_environment` is still checked.
 

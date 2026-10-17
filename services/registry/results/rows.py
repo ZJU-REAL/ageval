@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True, slots=True)
 class AttemptResultRow:
     """Sealed Attempt evidence bundle metadata (not a Dataset package)."""
@@ -27,6 +28,7 @@ class AttemptResultRow:
     score: float | None = None
     error_json: str | None = None
     limit_name: str | None = None
+
 
 @dataclass(frozen=True, slots=True)
 class SuiteResultRow:
@@ -58,6 +60,7 @@ class SuiteResultRow:
     task_set_digest: str = ""
     board_listed: bool = False
 
+
 @dataclass(frozen=True, slots=True)
 class ResultShareRow:
     result_kind: str  # attempt | suite
@@ -65,4 +68,3 @@ class ResultShareRow:
     target_type: str  # org | user
     target_id: str
     created_at: float
-

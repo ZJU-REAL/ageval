@@ -10,7 +10,7 @@ slots:
   exclusive:
     - id: executor
       priority: 110
-      entry: "dsh_plugin.factory:build_executor"
+      entry: "dsh_plugin.factory:DshExecutorSPI"
   chain:
     - id: trajectory_collect
       priority: 110

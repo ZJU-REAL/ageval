@@ -21,6 +21,7 @@ class InboxHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _apply_request(self, *, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -51,6 +52,7 @@ class InboxHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _decide_requests(self, *, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -80,6 +82,7 @@ class InboxHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _hide_requests(self, *, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):

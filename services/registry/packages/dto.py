@@ -7,6 +7,7 @@ from typing import Any
 
 from services.registry.packages.rows import ReleaseRow
 
+
 def package_kind_for_media_type(media_type: str) -> str:
     """Derive list/meta ``package_kind`` from the current vnd.ageval types only."""
     from ageval.registry.media_types import (
@@ -22,6 +23,7 @@ def package_kind_for_media_type(media_type: str) -> str:
     if media_type == DATASET_MEDIA_TYPE:
         return "dataset"
     raise ValueError(f"unknown package media_type: {media_type!r}")
+
 
 def release_to_dict(row: ReleaseRow) -> dict[str, Any]:
     out: dict[str, Any] = {

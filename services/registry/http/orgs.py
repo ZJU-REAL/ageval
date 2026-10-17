@@ -14,6 +14,7 @@ class OrgHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _create_org(self, *, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -36,18 +37,21 @@ class OrgHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(201, payload)
+
     def _list_orgs(self, *, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.orgs.list_for_user(auth=auth)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _get_org(self, *, org_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.orgs.get_public(org_id=org_id, auth=auth)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _patch_org(self, *, org_id: str, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -71,6 +75,7 @@ class OrgHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _patch_user(self, *, user_id: str, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -89,12 +94,14 @@ class OrgHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _claim_org(self, *, org_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.orgs.claim(org_id=org_id, auth=auth)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _create_invite_key(self, *, org_id: str, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -110,18 +117,21 @@ class OrgHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(201, payload)
+
     def _list_invite_keys(self, *, org_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.orgs.list_invites(org_id=org_id, auth=auth)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _revoke_invite_key(self, *, org_id: str, key_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.orgs.revoke_invite(org_id=org_id, key_id=key_id, auth=auth)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _join_org_with_invite(self, *, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -134,12 +144,14 @@ class OrgHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _list_org_members(self, *, org_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.orgs.list_members(org_id=org_id, auth=auth)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _add_org_member(self, *, org_id: str, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -154,12 +166,14 @@ class OrgHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(201, payload)
+
     def _remove_org_member(self, *, org_id: str, user_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.orgs.remove_member(org_id=org_id, user_id=user_id, auth=auth)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _patch_org_member(self, *, org_id: str, user_id: str, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -174,6 +188,7 @@ class OrgHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _transfer_org(self, *, org_id: str, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -187,12 +202,14 @@ class OrgHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _leave_org(self, *, org_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.orgs.leave(org_id=org_id, auth=auth)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _delete_org(self, *, org_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.orgs.delete(org_id=org_id, auth=auth)

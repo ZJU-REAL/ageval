@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 INSERT_ORG = """
 INSERT INTO organizations(
     org_id, name, display_name, description, is_claimable, created_at
@@ -16,6 +15,7 @@ VALUES (?, ?, 'owner', ?)
 
 SELECT_ORG = "SELECT * FROM organizations WHERE org_id=?"
 
+
 def update_org_query(*, display_name: bool, description: bool, icons: bool) -> str:
     sets: list[str] = []
     if display_name:
@@ -26,6 +26,7 @@ def update_org_query(*, display_name: bool, description: bool, icons: bool) -> s
         sets.append("icon_key=?")
         sets.append("icon_github=?")
     return f"UPDATE organizations SET {', '.join(sets)} WHERE org_id=?"
+
 
 SELECT_MEMBERSHIP = "SELECT * FROM org_memberships WHERE org_id=? AND user_id=?"
 
@@ -128,9 +129,11 @@ ON CONFLICT(user_id) DO UPDATE SET
     updated_at=excluded.updated_at
 """
 
+
 def select_user_profiles_in_query(n: int) -> str:
     placeholders = ",".join("?" for _ in range(n))
     return f"SELECT * FROM user_profiles WHERE user_id IN ({placeholders})"
+
 
 SCHEMA_STATEMENTS: tuple[str, ...] = (
     """
@@ -180,9 +183,7 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
     """,
 )
 
-SCHEMA_INTEGER_FLAGS: tuple[tuple[str, str], ...] = (
-    ("organizations", "is_claimable"),
-)
+SCHEMA_INTEGER_FLAGS: tuple[tuple[str, str], ...] = (("organizations", "is_claimable"),)
 
 SCHEMA_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("organizations", "description", "TEXT NOT NULL DEFAULT ''"),

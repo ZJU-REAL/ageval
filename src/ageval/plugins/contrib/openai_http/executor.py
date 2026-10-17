@@ -24,11 +24,11 @@ from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.openai_http.usage import normalize_openai_http_usage
 from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.http_loopback import is_http_loopback
+from ageval.runtime.clocks import clock_seconds
 
 _DEFAULT_BASE = "https://api.openai.com/v1"
 _DEFAULT_KEY_ENV = "OPENAI_API_KEY"
 _DEFAULT_MODEL_ID = "gpt-4.1-mini"
-_DEFAULT_WATCHDOG_SECONDS = 180.0
 
 
 def _chat_messages(
@@ -273,12 +273,13 @@ class OpenAIHTTPExecutor(BaseExecutor):
         self.supports_model(spec)
         self.bind_model(spec)
 
-    def supports_model(self, spec: ModelSpec) -> None:
+    @classmethod
+    def supports_model(cls, spec: ModelSpec) -> None:
         require_model_support(
             spec,
-            supported_apis=self.supported_apis,
-            supported_model_fields=self.supported_model_fields,
-            extra_allowlist=self.extra_allowlist,
+            supported_apis=cls.supported_apis,
+            supported_model_fields=cls.supported_model_fields,
+            extra_allowlist=cls.extra_allowlist,
         )
 
     def bind_model(self, spec: ModelSpec) -> None:
@@ -286,10 +287,8 @@ class OpenAIHTTPExecutor(BaseExecutor):
         self.model = spec.id
         self.api = spec.api
         self.reasoning_effort = spec.reasoning_effort
-        self.http_timeout = spec.timeout
-        self.watchdog = (
-            float(spec.watchdog) if spec.watchdog is not None else _DEFAULT_WATCHDOG_SECONDS
-        )
+        self.http_timeout = clock_seconds("timeout", spec.timeout)
+        self.watchdog = clock_seconds("watchdog", spec.watchdog)
         self.extra = dict(spec.extra)
         self._invoke_cancel = threading.Event()
 
@@ -437,9 +436,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
         shorter. Expiry is a repeatable transport error. HTTP and decode
         failures stay on this thread's result, not a second stall path.
         """
-        http_timeout = self.http_timeout if self.http_timeout is not None else timeout
-        if http_timeout is None or http_timeout <= 0:
-            http_timeout = self.watchdog
+        http_timeout = self.http_timeout
         join_for = self.watchdog
         try:
             invoke_cap = float(timeout)

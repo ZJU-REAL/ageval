@@ -16,6 +16,19 @@ from ageval.model.spec import ModelSpec, resolve_model
 OMITTED_MODEL = "entry-default"
 
 
+def coerce_factory_model(model: Any) -> Any:
+    """Wrap a factory string id as ``{"id": ...}``.
+
+    ``None`` and ``entry-default`` stay as they are. This is the factory
+    argument, not a second profile shape. A profile string id still fails.
+    """
+    if isinstance(model, str):
+        text = model.strip()
+        if text and text != OMITTED_MODEL:
+            return {"id": text}
+    return model
+
+
 def spec_from_factory(
     model: Any,
     options: Mapping[str, Any] | None,

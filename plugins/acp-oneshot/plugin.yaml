@@ -6,7 +6,7 @@ slots:
   exclusive:
     - id: executor
       priority: 110
-      entry: "acp_oneshot_plugin.factory:build_executor"
+      entry: "acp_oneshot_plugin.factory:AcpOneshotExecutorSPI"
   chain:
     - id: after_environment_ready
       priority: 100

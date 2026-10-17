@@ -363,7 +363,8 @@ def test_missing_extra_allowlist_fails_registration(
             supported_apis = frozenset({"chat"})
             supported_model_fields = frozenset({"id", "api"})
 
-            def supports_model(self, spec: Any) -> None:
+            @classmethod
+            def supports_model(cls, spec: Any) -> None:
                 del spec
 
             def bind_model(self, spec: Any) -> None:

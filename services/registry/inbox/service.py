@@ -5,11 +5,11 @@ from __future__ import annotations
 import secrets
 from typing import Any
 
+from services.registry.auth.tokens import TokenInfo
+from services.registry.clock import now
 from services.registry.dataset import BOUND_RELEASE
 from services.registry.errors import RegistryAppError
 from services.registry.inbox.maintainers import MAINTAINER_INBOX_ORG, auth_is_maintainer
-from services.registry.auth.tokens import TokenInfo
-from services.registry.clock import now
 from services.registry.inbox.rows import ResourceRequestRow, request_to_dict
 
 REQUEST_KINDS = frozenset({"leaderboard_list", "agent_performance"})

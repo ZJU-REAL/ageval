@@ -52,8 +52,8 @@ def test_omit_rules() -> None:
     assert spec.timeout is None
     assert spec.watchdog is None
     assert spec.extra == {}
-    zero = resolve_model({"id": "m", "timeout": 0})
-    assert zero.timeout is None
+    with pytest.raises(ModelConfigError, match="model_timeout_invalid"):
+        resolve_model({"id": "m", "timeout": 0})
     assert resolve_model({"id": "m", "reasoning": {"effort": "none"}}).reasoning_effort == "none"
     assert resolve_model({"id": "m", "reasoning": {"effort": "max"}}).reasoning_effort == "max"
     assert resolve_model({"id": "m", "api": "CHAT"}).api == "chat"

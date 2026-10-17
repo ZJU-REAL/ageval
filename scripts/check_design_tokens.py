@@ -206,7 +206,10 @@ def check_vars(errors: list[str]) -> None:
         allowed = norm(list(CANONICAL[token]))
         bad = values - allowed
         if bad:
-            errors.append(f"{rel}: {var} holds non-canonical {sorted(bad)} (token '{token}' allows {sorted(allowed)})")
+            errors.append(
+                f"{rel}: {var} holds non-canonical {sorted(bad)} "
+                f"(token '{token}' allows {sorted(allowed)})"
+            )
 
 
 def check_raw_hex(errors: list[str]) -> None:
@@ -219,7 +222,9 @@ def check_raw_hex(errors: list[str]) -> None:
                 continue
             for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
                 if HEX_RE.search(line):
-                    errors.append(f"{rel}:{i}: raw hex outside token files: {HEX_RE.search(line).group(0)}")
+                    errors.append(
+                        f"{rel}:{i}: raw hex outside token files: {HEX_RE.search(line).group(0)}"
+                    )
 
 
 def main() -> int:
