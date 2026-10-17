@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from ageval.model.usage import UsageUnavailable
 from ageval.plugins.contrib.openai_http.executor import OpenAIHTTPExecutor
 from ageval.plugins.executor_capabilities import get_capabilities
 
@@ -357,7 +358,9 @@ def test_omit_tools_keeps_content_path() -> None:
     assert result.ok is True
     assert result.tool_calls == ()
     assert result.structured == {"ok": True}
-    assert result.usage is None
+    assert isinstance(result.usage, UsageUnavailable)
+    assert result.usage.reason == "not_reported"
+    assert not result.usage
     assert "tools" not in captured["body"]
 
 
@@ -491,10 +494,15 @@ def test_watchdog_expiry_is_a_repeatable_transport_error(monkeypatch: pytest.Mon
         model={"id": "mock", "timeout": 30, "watchdog": 0.2},
         base_url="https://api.example.invalid/v1",
     ).invoke("hi", timeout=30)
+    from ageval.model.errors import TransportStall
+
     assert result.ok is False
     assert result.error is not None
     assert "openai_http_watchdog" in result.error
     assert result.repeatable is True
+    assert isinstance(result.failure, TransportStall)
+    assert isinstance(result.usage, UsageUnavailable)
+    assert result.usage.reason == "lost_on_timeout"
 
 
 def test_cancel_stops_the_local_wait(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -569,8 +577,13 @@ def test_http_4xx_is_a_model_config_error(code: int) -> None:
         server.server_close()
     assert hits["n"] == 1
     assert result.ok is False
+    from ageval.model.errors import ModelConfigError
+
     assert result.error == f"ModelConfigError:HTTPError:{code}"
     assert result.repeatable is False
+    assert isinstance(result.failure, ModelConfigError)
+    assert isinstance(result.usage, UsageUnavailable)
+    assert result.usage.reason == "not_reported"
     assert (result.metadata or {}).get("error_kind") == "model_config"
     assert "nope" in str((result.metadata or {}).get("http_error_body"))
 
@@ -584,9 +597,42 @@ def test_http_408_429_and_5xx_stay_repeatable(code: int) -> None:
         server.shutdown()
         server.server_close()
     assert result.ok is False
+    from ageval.model.errors import TransportStall
+
     assert result.error == f"HTTPError:{code}"
     assert result.repeatable is True
+    assert isinstance(result.failure, TransportStall)
+    assert isinstance(result.usage, UsageUnavailable)
+    assert result.usage.reason == "lost_on_timeout"
     assert "error_kind" not in (result.metadata or {})
+
+
+def test_bad_json_is_a_protocol_error() -> None:
+    from ageval.model.errors import ProtocolError
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            raw = b"not-json"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    server, base = _serve(Handler)
+    try:
+        result = OpenAIHTTPExecutor(model={"id": "mock"}, base_url=base).invoke("hi")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert result.ok is False
+    assert result.repeatable is False
+    assert isinstance(result.failure, ProtocolError)
+    assert result.failure.kind == "bad_json"
 
 
 _CATALOG = [

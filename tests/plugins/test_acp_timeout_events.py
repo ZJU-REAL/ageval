@@ -12,10 +12,17 @@ import pytest
 from tests.helpers.box import local_box
 
 from ageval.environments.protocol import Placement
+from ageval.model.usage import UsageUnavailable
 from ageval.plugins.contrib.acp import build_acp_executor
 from ageval.plugins.contrib.acp.client import _AgevalAcpClient
 from ageval.plugins.contrib.acp.executor import AcpExecutor
 from ageval.plugins.errors import ExtensionMaterializeError
+
+
+def _reason(usage: object) -> str:
+    assert isinstance(usage, UsageUnavailable)
+    return usage.reason
+
 
 _TOOL = {
     "type": "session_update",
@@ -66,7 +73,8 @@ def test_timeout_returns_mapped_tool_events(monkeypatch: pytest.MonkeyPatch) -> 
     assert result.ok is False
     assert result.error == "acp_timeout"
     assert result.repeatable is False
-    assert result.usage is None
+    assert _reason(result.usage) == "lost_on_timeout"
+    assert not result.usage
     assert result.extra is None
     assert any(ev.get("kind") == "tool" for ev in result.events)
     assert any(ev.get("phase") == "timeout" for ev in result.events)
@@ -79,7 +87,8 @@ def test_timeout_writes_vendor_jsonl(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     _timeout_run(ex, client, monkeypatch)
     result = ex.invoke("hi", timeout=1, collect_dir=str(tmp_path))
     assert result.error == "acp_timeout"
-    assert result.usage is None
+    assert _reason(result.usage) == "lost_on_timeout"
+    assert not result.usage
     assert result.extra is None
     assert any(ev.get("kind") == "tool" for ev in result.events)
     vendor = (tmp_path / "acp_events.jsonl").read_text(encoding="utf-8")
@@ -141,7 +150,8 @@ def test_idle_timeout_ends_a_silent_prompt(monkeypatch: pytest.MonkeyPatch) -> N
     )
     assert result.metadata is not None
     assert result.metadata.get("idle_timeout_seconds") == 0.2
-    assert result.usage is None
+    assert _reason(result.usage) == "lost_on_timeout"
+    assert not result.usage
     assert result.extra is None
 
 
@@ -165,7 +175,8 @@ def test_wall_timeout_still_caps_a_longer_idle(monkeypatch: pytest.MonkeyPatch) 
     result = ex.invoke("hi", timeout=0.3)
     elapsed = time.monotonic() - started
     assert result.error == "acp_timeout"
-    assert result.usage is None
+    assert _reason(result.usage) == "lost_on_timeout"
+    assert not result.usage
     assert result.extra is None
     assert elapsed < 2.0
 
@@ -201,9 +212,12 @@ class _UsageUpdate:
 
 
 def _assert_update_only(result: object) -> None:
+    from ageval.model.usage import UsageUnavailable
+
     usage = getattr(result, "usage", None)
     extra = getattr(result, "extra", None)
-    assert isinstance(usage, dict)
+    assert isinstance(usage, UsageUnavailable)
+    assert usage.reason == "partial"
     assert isinstance(extra, dict)
     assert usage["cost_usd"] == 0.02
     assert "prompt_tokens" not in usage
@@ -316,7 +330,8 @@ def test_eof_without_usage_stays_null(monkeypatch: pytest.MonkeyPatch) -> None:
     _armed(ex, conn, monkeypatch)
     result = ex.invoke("hi", timeout=5)
     assert result.error == "acp_unexpected_eof"
-    assert result.usage is None
+    assert _reason(result.usage) == "not_reported"
+    assert not result.usage
     assert result.extra is None
 
 

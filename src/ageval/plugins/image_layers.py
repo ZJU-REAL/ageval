@@ -120,25 +120,36 @@ def graph_plugin_options(graph: ExtensionGraph) -> dict[str, dict[str, Any]]:
     return found
 
 
+def _acp_bake_entry(raw: Mapping[str, Any]) -> str:
+    """The bake pin. Only ``entry`` changes the layer body.
+
+    Profile bags can also carry ``model``. That key is not an ``AcpOptions``
+    field, and lock still rejects it on the executor. Layer planning drops
+    every key the bake does not read, then parses ``entry`` the same way.
+    """
+    import dataclasses
+
+    from ageval.plugins.contrib.acp.options import AcpOptions
+    from ageval.plugins.options import coerce_options
+
+    known = {item.name for item in dataclasses.fields(AcpOptions)}
+    bound = {str(key): value for key, value in raw.items() if str(key) in known}
+    return str(coerce_options(AcpOptions, bound).entry)
+
+
 def _apply_bound_options(
     layers: Iterable[ImageLayer],
     options_by_plugin: Mapping[str, Mapping[str, Any]],
 ) -> tuple[ImageLayer, ...]:
     """Fill ACP's bake body with the bound ``options.entry`` pins."""
     from ageval.plugins.contrib.acp.bake import render_bake_body
-    from ageval.plugins.errors import ExtensionMaterializeError
 
     out: list[ImageLayer] = []
     for layer in layers:
         if layer.plugin_id != "acp":
             out.append(layer)
             continue
-        entry = str((options_by_plugin.get("acp") or {}).get("entry") or "").strip()
-        if not entry:
-            raise ExtensionMaterializeError(
-                "acp_entry_required",
-                kind="extension_materialize_failed",
-            )
+        entry = _acp_bake_entry(options_by_plugin.get("acp") or {})
         out.append(
             ImageLayer(
                 plugin_id=layer.plugin_id,

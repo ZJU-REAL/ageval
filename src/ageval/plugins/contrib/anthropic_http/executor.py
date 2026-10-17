@@ -16,18 +16,25 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
+from ageval.model.errors import (
+    ModelConfigError,
+    ProtocolError,
+    TransportStall,
+    http_status_is_config_error,
+)
+from ageval.model.usage import LOST_ON_TIMEOUT, adopt_usage
 from ageval.plugins.agent_result import AgentResult
 from ageval.plugins.base import BaseExecutor
+from ageval.plugins.contrib.anthropic_http.options import AnthropicHTTPOptions
 from ageval.plugins.contrib.anthropic_http.usage import normalize_anthropic_http_usage
 from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.http_loopback import is_http_loopback
+from ageval.plugins.options import coerce_options, mapping_for_model
 from ageval.runtime.clocks import clock_seconds
 
 _DEFAULT_BASE = "https://api.anthropic.com/v1"
 _DEFAULT_KEY_ENV = "ANTHROPIC_API_KEY"
 _DEFAULT_MODEL_ID = "claude-sonnet-4-6"
-_DEFAULT_VERSION = "2023-06-01"
-_DEFAULT_MAX_TOKENS = 4096
 _SOURCE = "anthropic-http"
 
 
@@ -238,39 +245,6 @@ def _parse_thought(blocks: Any) -> str:
     return "\n".join(parts)
 
 
-def _as_max_tokens(raw: Any) -> int:
-    if raw is None or raw == "":
-        return _DEFAULT_MAX_TOKENS
-    if isinstance(raw, bool) or not isinstance(raw, int):
-        from ageval.plugins.errors import ExtensionMaterializeError
-
-        raise ExtensionMaterializeError(
-            "anthropic_max_tokens_invalid",
-            kind="extension_materialize_failed",
-        )
-    if raw < 1:
-        from ageval.plugins.errors import ExtensionMaterializeError
-
-        raise ExtensionMaterializeError(
-            "anthropic_max_tokens_invalid",
-            kind="extension_materialize_failed",
-        )
-    return raw
-
-
-def _as_version(raw: Any) -> str:
-    if raw is None or raw == "":
-        return _DEFAULT_VERSION
-    if not isinstance(raw, str) or not raw.strip():
-        from ageval.plugins.errors import ExtensionMaterializeError
-
-        raise ExtensionMaterializeError(
-            "anthropic_version_invalid",
-            kind="extension_materialize_failed",
-        )
-    return raw.strip()
-
-
 @executor_plugin(priority=120, source="first-party")
 class AnthropicHTTPExecutor(BaseExecutor):
     """Messages API executor. No box. Thinking travels in ``extra.thinking``."""
@@ -280,6 +254,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
     supported_apis = frozenset({"chat"})
     supported_model_fields = frozenset({"id", "api", "timeout", "watchdog", "extra"})
     extra_allowlist = frozenset({"thinking"})
+    Options = AnthropicHTTPOptions
 
     def __init__(
         self,
@@ -294,12 +269,18 @@ class AnthropicHTTPExecutor(BaseExecutor):
         del profile_id
         self.base_url = base_url.strip() if isinstance(base_url, str) and base_url.strip() else None
         self.api_key_env = api_key.strip() if isinstance(api_key, str) and api_key.strip() else None
-        opts = options if isinstance(options, Mapping) else {}
-        spec = spec_from_factory(model, opts, default_id=_DEFAULT_MODEL_ID)
+        raw = mapping_for_model(options)
+        spec = spec_from_factory(model, raw, default_id=_DEFAULT_MODEL_ID)
         self.supports_model(spec)
         self.bind_model(spec)
-        self.max_tokens = _as_max_tokens(opts.get("max_tokens"))
-        self.anthropic_version = _as_version(opts.get("anthropic_version"))
+        parsed = (
+            options
+            if isinstance(options, AnthropicHTTPOptions)
+            else coerce_options(AnthropicHTTPOptions, raw)
+        )
+        self.options = parsed
+        self.max_tokens = parsed.max_tokens
+        self.anthropic_version = parsed.anthropic_version
 
     @classmethod
     def supports_model(cls, spec: ModelSpec) -> None:
@@ -383,35 +364,73 @@ class AnthropicHTTPExecutor(BaseExecutor):
             invoke_timeout=timeout,
         )
         if kind == "watchdog":
+            message = f"TimeoutError:anthropic_http_watchdog:{self.watchdog:g}"
             return AgentResult(
                 model=self.model,
                 text="",
                 structured=None,
                 ok=False,
-                error=f"TimeoutError:anthropic_http_watchdog:{self.watchdog:g}",
+                error=message,
                 metadata={"executor_kind": "anthropic-http"},
+                failure=TransportStall(message, kind="watchdog"),
+                usage=LOST_ON_TIMEOUT,
+            )
+        if kind == "protocol":
+            message = f"ProtocolError:{found}"
+            return AgentResult(
+                model=self.model,
+                text="",
+                structured=None,
+                ok=False,
+                error=message,
+                metadata={"executor_kind": "anthropic-http"},
+                repeatable=False,
+                failure=ProtocolError(message, kind=str(found or "bad_json")),
             )
         if kind == "http":
             assert isinstance(found, dict)
+            code = int(found["http_code"])
+            if http_status_is_config_error(code):
+                message = f"ModelConfigError:HTTPError:{code}"
+                return AgentResult(
+                    model=self.model,
+                    text="",
+                    structured=None,
+                    ok=False,
+                    error=message,
+                    metadata={
+                        "executor_kind": "anthropic-http",
+                        "http_error_body": found.get("http_body"),
+                        "error_kind": ModelConfigError.kind,
+                    },
+                    repeatable=False,
+                    failure=ModelConfigError(message),
+                )
+            message = f"HTTPError:{code}"
             return AgentResult(
                 model=self.model,
                 text="",
                 structured=None,
                 ok=False,
-                error=f"HTTPError:{found['http_code']}",
+                error=message,
                 metadata={
                     "executor_kind": "anthropic-http",
                     "http_error_body": found.get("http_body"),
                 },
+                failure=TransportStall(message, kind="http"),
+                usage=LOST_ON_TIMEOUT,
             )
         if kind == "transport":
+            message = str(found)
             return AgentResult(
                 model=self.model,
                 text="",
                 structured=None,
                 ok=False,
-                error=str(found),
+                error=message,
                 metadata={"executor_kind": "anthropic-http"},
+                failure=TransportStall(message, kind="transport"),
+                usage=LOST_ON_TIMEOUT,
             )
         raw = found if isinstance(found, dict) else {}
         blocks = raw.get("content") if isinstance(raw, dict) else None
@@ -475,7 +494,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
             error=None,
             events=tuple(events),
             tool_calls=tool_calls,
-            usage=usage,
+            usage=adopt_usage(usage),
             extra=extra,
             metadata={"executor_kind": "anthropic-http"},
         )
@@ -507,7 +526,9 @@ def _exchange(
         except urllib.error.HTTPError as exc:
             box["http_code"] = exc.code
             box["http_body"] = exc.read().decode("utf-8", errors="replace")[:800]
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+        except json.JSONDecodeError:
+            box["protocol"] = "bad_json"
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
             box["transport"] = type(exc).__name__
 
     worker = threading.Thread(target=_post, name="anthropic-http", daemon=True)
@@ -519,6 +540,8 @@ def _exchange(
         )
     if "http_code" in box:
         return "http", box
+    if "protocol" in box:
+        return "protocol", box["protocol"]
     if "transport" in box:
         return "transport", box["transport"]
     return "ok", box.get("raw")

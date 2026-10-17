@@ -165,6 +165,69 @@ def test_merge_suite_usage_refreshes_from_local_runs(tmp_path: Path) -> None:
     assert out["usage"]["completion_tokens"] == 20
 
 
+def test_partial_usage_is_counted_beside_valid_usage_and_not_billed(tmp_path: Path) -> None:
+    path = tmp_path / "trajectory.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "type": "terminal",
+                "usage": {"prompt_tokens": 10, "completion_tokens": 2, "cost_usd": 0.01},
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "type": "terminal",
+                "usage": {
+                    "unavailable": "partial",
+                    "prompt_tokens": 99,
+                    "completion_tokens": 50,
+                    "cost_usd": 9,
+                },
+            }
+        )
+        + "\n"
+        + json.dumps({"type": "terminal", "usage": {"unavailable": "lost_on_timeout"}})
+        + "\n",
+        encoding="utf-8",
+    )
+    got = usage_from_trajectory(path)
+    assert got["prompt_tokens"] == 10
+    assert got["completion_tokens"] == 2
+    assert got["cost_usd"] == 0.01
+    assert got["usage_unavailable"] == {"partial": 1, "lost_on_timeout": 1}
+
+    billed = {"prompt_tokens": 10, "completion_tokens": 2, "cost_usd": 0.01}
+    partial_only = {"usage_unavailable": {"partial": 1}}
+    mixed = {**billed, "usage_unavailable": {"partial": 2}}
+    bag = aggregate_usage([billed, partial_only, mixed], overlay="x", pin=None)
+    assert bag is not None
+    assert bag["prompt_tokens"] == 20
+    assert bag["completion_tokens"] == 4
+    assert bag["cost_usd"] == 0.02
+    assert bag["questions_with_usage"] == 2
+    assert bag["questions_usage_unavailable"] == 2
+    assert bag["usage_unavailable"] == {"partial": 3}
+    assert bag["n_attempts_with_tokens"] == 2
+    assert bag["prompt_tokens"] / bag["n_attempts_with_tokens"] == 10
+
+
+def test_unavailable_only_returns_a_bag_without_zero_tokens() -> None:
+    bag = aggregate_usage(
+        [{"usage_unavailable": {"lost_on_timeout": 1}}],
+        overlay="x",
+        pin=None,
+    )
+    assert bag is not None
+    assert "prompt_tokens" not in bag
+    assert "completion_tokens" not in bag
+    assert "cost_usd" not in bag
+    assert bag["questions_with_usage"] == 0
+    assert bag["questions_usage_unavailable"] == 1
+    assert bag["n_attempts_with_tokens"] == 0
+    assert bag["usage_unavailable"] == {"lost_on_timeout": 1}
+
+
 def test_estimate_cost_usd_none_without_tokens() -> None:
     assert (
         estimate_cost_usd(

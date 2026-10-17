@@ -55,7 +55,8 @@ def test_omit_rules() -> None:
     with pytest.raises(ModelConfigError, match="model_timeout_invalid"):
         resolve_model({"id": "m", "timeout": 0})
     assert resolve_model({"id": "m", "reasoning": {"effort": "none"}}).reasoning_effort == "none"
-    assert resolve_model({"id": "m", "reasoning": {"effort": "max"}}).reasoning_effort == "max"
+    with pytest.raises(ModelConfigError, match="concrete tier"):
+        resolve_model({"id": "m", "reasoning": {"effort": "max"}})
     assert resolve_model({"id": "m", "api": "CHAT"}).api == "chat"
     assert resolve_model({"id": "m", "api": "Responses"}).api == "responses"
 

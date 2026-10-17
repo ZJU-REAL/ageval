@@ -38,9 +38,16 @@ def _as_float(val: Any) -> float | None:
 
 
 def usage_from_mapping(usage: Mapping[str, Any] | None) -> dict[str, Any]:
-    """First-class token/cost fields from a sealed terminal.usage object."""
+    """First-class token/cost fields from a sealed terminal.usage object.
+
+    An ``unavailable`` reason drops the token fields. Partial numbers stay on
+    the trajectory and are not a bill.
+    """
     if not isinstance(usage, Mapping):
         return {}
+    reason = usage.get("unavailable")
+    if isinstance(reason, str) and reason.strip():
+        return {"unavailable": reason.strip()}
     prompt = _as_int(usage.get("prompt_tokens"))
     if prompt is None:
         prompt = _as_int(usage.get("input_tokens"))
@@ -111,6 +118,7 @@ def usage_from_trajectory(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
     parts: list[dict[str, Any]] = []
+    unavailable: dict[str, int] = {}
     try:
         with path.open("r", encoding="utf-8", errors="replace") as fh:
             for line in fh:
@@ -126,11 +134,18 @@ def usage_from_trajectory(path: Path) -> dict[str, Any]:
                 parsed = usage_from_mapping(
                     obj.get("usage") if isinstance(obj.get("usage"), dict) else None
                 )
+                reason = parsed.get("unavailable")
+                if isinstance(reason, str):
+                    unavailable[reason] = unavailable.get(reason, 0) + 1
+                    continue
                 if parsed:
                     parts.append(parsed)
     except OSError:
         return {}
-    return _sum_usage_parts(parts)
+    out = _sum_usage_parts(parts)
+    if unavailable:
+        out["usage_unavailable"] = unavailable
+    return out
 
 
 def duration_s_from_run_dir(run_dir: Path) -> float | None:
@@ -236,12 +251,27 @@ def aggregate_usage(
     saw_prompt = False
     saw_completion = False
     saw_cached = False
+    questions_with_usage = 0
+    questions_usage_unavailable = 0
+    unavailable: dict[str, int] = {}
     for part in parts:
+        hist = part.get("usage_unavailable")
+        if isinstance(hist, Mapping) and hist:
+            questions_usage_unavailable += 1
+            for reason, count in hist.items():
+                if (
+                    isinstance(reason, str)
+                    and isinstance(count, int)
+                    and not isinstance(count, bool)
+                ):
+                    unavailable[reason] = unavailable.get(reason, 0) + count
         p = _as_int(part.get("prompt_tokens"))
         c = _as_int(part.get("completion_tokens"))
         k = _as_int(part.get("cached_tokens"))
         usd = _as_float(part.get("cost_usd"))
         dur = _as_float(part.get("duration_s"))
+        if p is not None or c is not None or k is not None or usd is not None:
+            questions_with_usage += 1
         if p is not None or c is not None:
             n_tokens += 1
         if p is not None:
@@ -259,12 +289,22 @@ def aggregate_usage(
         if dur is not None:
             duration += dur
             n_duration += 1
-    if not saw_prompt and not saw_completion and n_cost == 0 and n_duration == 0:
+    if (
+        not saw_prompt
+        and not saw_completion
+        and n_cost == 0
+        and n_duration == 0
+        and not unavailable
+    ):
         return None
     bag: dict[str, Any] = {
         "n_attempts_with_tokens": n_tokens,
         "n_attempts_with_cost": n_cost,
+        "questions_with_usage": questions_with_usage,
+        "questions_usage_unavailable": questions_usage_unavailable,
     }
+    if unavailable:
+        bag["usage_unavailable"] = unavailable
     if saw_prompt:
         bag["prompt_tokens"] = prompt
     if saw_completion:

@@ -207,13 +207,11 @@ sys.stdout.write(json.dumps({
 
 def ensure_runtime(**kwargs: Any) -> Any:
     """Factory: bind the entry and its credential locator, return the handler."""
-    options = dict(kwargs.get("options") or {})
-    entry_id = str(options.get("entry") or "").strip()
-    if not entry_id:
-        raise ExtensionMaterializeError(
-            "acp_entry_required",
-            kind="extension_materialize_failed",
-        )
+    from ageval.plugins.contrib.acp.options import AcpOptions
+    from ageval.plugins.options import coerce_options
+
+    options = kwargs.get("options") or {}
+    entry_id = coerce_options(AcpOptions, options).entry
     try:
         descriptor = get_entry(entry_id)
     except AcpRegistryError as exc:

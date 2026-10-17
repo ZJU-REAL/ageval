@@ -127,6 +127,38 @@ def test_codex_overlay_toml_with_provider() -> None:
     assert 'env_key = "OPENAI_API_KEY"' in text
 
 
+def test_codex_overlay_resolves_locator_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("litellm_base_url", "https://gateway.example/v1")
+    files = overlays_for_entry(
+        "codex",
+        _job(
+            entry="codex",
+            model="litellm/glm-5.3",
+            api_key="OPENAI_API_KEY",
+            base_url="litellm_base_url",
+        ),
+    )
+    text = next(item.payload for item in files if item.dest == ".codex/config.toml")
+    assert isinstance(text, str)
+    assert 'base_url = "https://gateway.example/v1"' in text
+
+
+def test_codex_overlay_omits_unset_locator_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("litellm_base_url", raising=False)
+    files = overlays_for_entry(
+        "codex",
+        _job(
+            entry="codex",
+            model="litellm/glm-5.3",
+            api_key="OPENAI_API_KEY",
+            base_url="litellm_base_url",
+        ),
+    )
+    text = next(item.payload for item in files if item.dest == ".codex/config.toml")
+    assert isinstance(text, str)
+    assert "base_url" not in text
+
+
 def test_claude_overlay_settings_json() -> None:
     files = overlays_for_entry("claude-code", _job(entry="claude-code", model="glm-5.3"))
     assert files[0].dest == ".claude/settings.json"

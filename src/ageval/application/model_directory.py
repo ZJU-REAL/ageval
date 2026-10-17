@@ -6,92 +6,22 @@ Not a billed invoice, not PASS. Missing pin → no estimate.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
-_PIN_REL = Path("apps/shared/lib/model-pin/pin.json")
+from ageval.model.pin import _peel_prefix, join_overlay
 
-
-def _repo_root() -> Path:
-    # src/ageval/application/model_directory.py → repo
-    return Path(__file__).resolve().parents[3]
+__all__ = [
+    "directory_price",
+    "estimate_cost_usd",
+    "join_overlay",
+    "load_model_pin",
+]
 
 
 def load_model_pin() -> dict[str, Any] | None:
-    path = _repo_root() / _PIN_REL
-    if not path.is_file():
-        return None
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    if not isinstance(raw, dict) or raw.get("format") != "ageval.model-pin/1":
-        return None
-    return raw
+    from ageval.model.pin import load_model_pin as _load
 
-
-def _peel_prefix(value: str, prefixes: list[str]) -> str | None:
-    for prefix in prefixes:
-        if not prefix:
-            continue
-        if prefix.endswith("-"):
-            if value.startswith(prefix) and len(value) > len(prefix):
-                return value[len(prefix) :]
-            continue
-        token = f"{prefix}/"
-        if value.startswith(token):
-            return value[len(token) :]
-    return None
-
-
-def _overlay_candidates(overlay: str, prefixes: list[str]) -> list[str]:
-    text = overlay.strip()
-    out: list[str] = []
-    seen: set[str] = set()
-
-    def add(value: str) -> None:
-        next_ = value.strip().strip("/")
-        if not next_ or next_ in seen:
-            return
-        seen.add(next_)
-        out.append(next_)
-
-    add(text)
-    once = _peel_prefix(text, prefixes)
-    if once:
-        add(once)
-        twice = _peel_prefix(once, prefixes)
-        if twice:
-            add(twice)
-    parts = [p for p in text.split("/") if p]
-    if parts:
-        add(parts[-1])
-    if len(parts) >= 2:
-        add("/".join(parts[-2:]))
-    return out
-
-
-def join_overlay(overlay: str, pin: dict[str, Any] | None) -> str | None:
-    text = overlay.strip()
-    if not text or not pin:
-        return None
-    alias = str((pin.get("aliases") or {}).get(text) or "").strip()
-    models = pin.get("models") or {}
-    if alias and alias in models:
-        return alias
-    lookup = pin.get("lookup") or {}
-    prefixes = list(pin.get("prefixes") or [])
-    for candidate in _overlay_candidates(text, prefixes):
-        unique: list[str] = []
-        local: set[str] = set()
-        for item in lookup.get(candidate) or []:
-            if item in models and item not in local:
-                local.add(item)
-                unique.append(item)
-        if len(unique) == 1:
-            return unique[0]
-    return None
+    return _load()
 
 
 def directory_price(

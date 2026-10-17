@@ -9,6 +9,7 @@ import pytest
 from tests.helpers.box import local_box
 
 from ageval.environments.protocol import Placement
+from ageval.model.usage import Usage
 from ageval.plugins.agent_result import AgentResult
 from ageval.plugins.contrib.acp.client import _AgevalAcpClient
 from ageval.plugins.contrib.acp.executor import AcpExecutor
@@ -246,7 +247,7 @@ def test_existing_acp_usage_skips_journal(monkeypatch: pytest.MonkeyPatch, tmp_p
             text="done",
             structured=None,
             ok=True,
-            usage={"prompt_tokens": 3, "completion_tokens": 1},
+            usage=Usage(prompt_tokens=3, completion_tokens=1),
             extra={"sources": {"prompt_usage": True, "usage_update": False}},
         )
 

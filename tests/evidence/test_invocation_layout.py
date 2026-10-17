@@ -9,6 +9,7 @@ from ageval.application.suite.suite_usage import usage_from_trajectory
 from ageval.evidence.invocation import read_invocation_payload
 from ageval.evidence.store import AttemptEvidenceStore
 from ageval.evidence.trajectory import turn_rows, write_attempt_trajectory
+from ageval.model.usage import Usage
 from ageval.plugins.agent_result import AgentResult
 from ageval.runtime.agent_service_evidence import seal_invoke_result
 
@@ -136,7 +137,7 @@ def test_failed_invoke_usage_lands_on_the_terminal(tmp_path: Path) -> None:
         structured=None,
         ok=False,
         error="acp_timeout",
-        usage={"prompt_tokens": 4, "completion_tokens": 1, "cost_usd": 0.02},
+        usage=Usage(prompt_tokens=4, completion_tokens=1, cost_usd=0.02),
         extra={"usage_partial": True, "usage_source": "prompt_usage+usage_update"},
     )
     assert seal_invoke_result(handle, result=result, latency_ms=12.0) is None

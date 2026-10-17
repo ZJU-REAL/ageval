@@ -170,13 +170,35 @@ def test_api_responses_omits_unset_effort() -> None:
     assert "reasoning" not in kwargs
 
 
+def test_invoke_timeout_seals_lost_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AGEVAL_OFFLINE_AGENT", raising=False)
+    spi = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        model=_model(),
+    )
+
+    def boom(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise TimeoutError("miniswe_timeout")
+
+    monkeypatch.setattr(spi, "_run_agent", boom)
+    result = spi.invoke("hi")
+    from ageval.model.usage import UsageUnavailable
+
+    assert result.ok is False
+    assert result.error == "miniswe_timeout"
+    assert isinstance(result.usage, UsageUnavailable)
+    assert result.usage.reason == "lost_on_timeout"
+    assert not result.usage
+
+
 def test_api_chat_respects_explicit_effort() -> None:
     spi = build_executor(
         host=SimpleNamespace(kind="local"),
         placement=_placement(),
-        model=_model(api="chat", reasoning={"effort": "max"}),
+        model=_model(api="chat", reasoning={"effort": "high"}),
     )
-    assert spi._litellm_model_kwargs(key=None, base=None)["reasoning_effort"] == "max"
+    assert spi._litellm_model_kwargs(key=None, base=None)["reasoning_effort"] == "high"
 
 
 def test_invalid_api_option() -> None:

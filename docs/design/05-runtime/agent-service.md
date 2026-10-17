@@ -89,7 +89,7 @@ executor 返回的 `ok` 不是 true、且这次结果可以重试时，这次 in
 - 预算是 profile `options.upstream_stall_seconds`（省略时取 [`clocks.py`](../../../src/ageval/runtime/clocks.py) 的 `upstream_stall`，3600；`0` 关掉）。间隔是 `stall_interval`，60 秒。同一次 invoke 只扣一次 `agent_invocations`。
 - stall 期间 run 的 `wall_time_seconds` 或 evaluate 的 `evaluate_seconds` 不走，worker 等待跟着延长。
 - wall 已到期、额度已用完、redaction 失败、offline forced 这些发生在 executor 之前，立刻拒绝，不显示 `upstream_stall`。
-- HTTP executor 的 4xx，除 408 与 429 外，是模型配置错误，不进入 stall。408、429 和其它非 ok 仍可重试。ACP 只在这条 prompt 还没改 workspace 时，于同一 session 重发；改过则 `repeatable: false`，一行 `not_repeatable`，不等待。
+- HTTP executor 的 4xx，除 408 与 429 外，是模型配置错误，不进入 stall。408、429 和其它非 ok 仍可重试。ACP 的超时、空闲超时、unexpected EOF 和协议/传输错误是 `TransportStall`；只在这条 prompt 还没改 workspace 时，于同一 session 重发；改过则 `repeatable: false`，一行 `not_repeatable`，不等待。
 - miniswe 的 stall 包住进程内当前模型查询，不新开 agent，并关掉该包自己的短 tenacity。内层预算用尽（`stall_exhausted`）时外层不再开一轮。
 - 证据是一条 `upstream_stall` 事实。stall 不是 PASS，也不是 `result.json` 的 status。
 
@@ -148,11 +148,13 @@ tau2-class harness（`minimal-demo` 的 `tau2-dialog-min`、`examples/datasets/t
 
 `openai-http` 的 executor events 用 Core 合同：`kind: tool` + `phase: start` + `tool_call_id` / `function_name` / `args`。环境观察是 `phase: update`（source `ageval`），不是 HTTP 响应的一部分。
 
-`AgentResult.usage` 与轨迹文件 `terminal.usage` 同一形状（见 [evidence.md](evidence.md)）：一等 `prompt_tokens` / `completion_tokens` / `cached_tokens` / `cost_usd`（未知省略）。厂商 leftover 与插件袋在兄弟字段 `extra`。`openai-http` 从 Chat Completions `usage` 映射；`anthropic-http` 从 Messages `usage` 映射；ACP 从 `PromptResponse.usage` + `usage_update` 映射。缺 usage 就省略，不编造。usage / extra 是观察，不是 PASS。
+`AgentResult.usage` 必填，是 `Usage` 或 `UsageUnavailable`。轨迹 `terminal.usage` 是同一份密封 dict（见 [evidence.md](evidence.md)）：一等 `prompt_tokens` / `completion_tokens` / `cached_tokens` / `cost_usd` 只在后端报告了该量时出现。没有报告、时钟打断前没有数字、usage 载荷解析失败、或超时前只收到一部分，写成 `unavailable`，理由是 `not_reported` / `lost_on_timeout` / `parse_failed` / `partial`。不写 JSON null，不把缺量编成 0。厂商 leftover 与插件袋在兄弟字段 `extra`。`openai-http` 从 Chat Completions `usage` 映射；`anthropic-http` 从 Messages `usage` 映射；ACP 从 `PromptResponse.usage` + `usage_update` 映射。usage / extra 是观察，不是 PASS。
 
-ACP 的空闲超时、总超时、EOF 和协议异常走同一次映射，保留当时已经收到的量。有数据时 `extra` 带 `usage_partial: true` 和 `usage_source`。`session/prompt` 正常返回不写这两键。两源都空时 `usage` 和 `extra` 仍省略。invoke 未完成时这袋写在该次 metadata 上，record 放进这一轮 terminal。
+`partial` 可以带上已经收到的量。suite 合计不把这些量算进 token、费用或均价，另计 `questions_with_usage` 与 `questions_usage_unavailable`，并给出理由直方图 `usage_unavailable`。
 
-Entry 可以声明 `usage_journal`：Attempt HOME 下的一个目录、要累加的 JSONL 记录、以及源字段到 `prompt_tokens` / `completion_tokens` / `cached_tokens` / `cost_usd` 的对应。ACP 没有一等 usage 时，执行器读这个目录里的会话文件并累加。`extra.sources.session_journal` 为 true。正常返回不写 `usage_partial` / `usage_source`。超时、EOF 和协议异常再写 `usage_partial: true` 与 `usage_source: session_journal`。目录不存在或没有匹配记录时仍省略。ACP 已经给出一等 usage 时不读这份日志。
+ACP 的空闲超时、总超时、EOF 和协议异常走同一次映射，保留当时已经收到的量。有数据时理由是 `partial`，`extra` 带 `usage_partial: true` 和 `usage_source`。没有数字的超时是 `lost_on_timeout`。`session/prompt` 正常返回不写这两键；没有数字时理由是 `not_reported`。invoke 未完成时这袋写在该次 metadata 上，record 放进这一轮 terminal。
+
+Entry 可以声明 `usage_journal`：Attempt HOME 下的一个目录、要累加的 JSONL 记录、以及源字段到 `prompt_tokens` / `completion_tokens` / `cached_tokens` / `cost_usd` 的对应。ACP 没有一等 usage 时，执行器读这个目录里的会话文件并累加。`extra.sources.session_journal` 为 true。正常返回不写 `usage_partial` / `usage_source`。超时、EOF 和协议异常再写 `usage_partial: true` 与 `usage_source: session_journal`。目录不存在或没有匹配记录时理由仍是 `not_reported`（超时且没有数字则是 `lost_on_timeout`）。ACP 已经给出一等 usage 时不读这份日志。
 
 ## anthropic-http 原生 tools
 
@@ -167,8 +169,7 @@ kind 名是 `anthropic-http`（api-client，Anthropic Messages）。与 `openai-
 | `messages` | OpenAI 形历史：`tool_calls` → `tool_use` 块；role `tool` → `tool_result`（可合并连续条） |
 | capability | `tools: native`，`session: new-only`，`execution_mode: api-client` |
 | 凭证 | 同 HTTP executor 规则。`api_key` 缺省 locator `ANTHROPIC_API_KEY`。loopback 空钥省略 `x-api-key` |
-| `options.max_tokens` | 必发。缺省 `4096`。非正整数则拒绝 |
-| `options.anthropic_version` | 请求头。缺省 `2023-06-01`。非字符串则拒绝 |
+| `options` | 冻结 `AnthropicHTTPOptions`。字段与缺省见 [16](../16-model.md) 的 Executor options |
 | `model` | 嵌套 Spec，字段表见 [16](../16-model.md)。本 executor 只接受 `api: chat`。`extra.thinking` 原样进入 Messages JSON。`reasoning.effort` 不在支持字段里。`timeout` / `watchdog` 与 openai-http 同一对时钟 |
 
 `thinking` 块映成 thought 事件（`channel: thought`）。events 合同与 openai-http 相同（`source: anthropic-http`）。
@@ -200,7 +201,7 @@ kind 名是 `anthropic-http`（api-client，Anthropic Messages）。与 `openai-
 
 运行时 entry 表是包内 `acp_entries.json`，再并上 `$AGEVAL_HOME/acp-entries.json`（未设置 `AGEVAL_HOME` 时目录是 `~/.ageval`）。文件不存在就不并。家目录里的 `entry_id` 与包内 id 相同则失败，不覆盖包内那一行。官方 Attempt 镜像的 `install-executors.sh` 和 `acp-entries.lock.json` 只收包内 entry。`--agent` 和内置卡仍只用包内 id；家目录文件不是 harness 卡。
 
-0. **lock overlay（Attempt HOME，不拷宿主）。** lock 已有 `model` / `api_key` locator / 可选 `base_url`。箱子 `start` 之后、`attach_stdio` 之前，ACP contrib 按 **entry** 写成该引擎自己的配置文件（Pi：`.pi/agent/models.json` + `settings.json`；OpenCode：`.config/opencode/opencode.json`；Codex：`.codex/config.toml`（Attempt 已隔离，写 `sandbox_mode = danger-full-access`，禁止再套一层 bwrap）；Claude Code：`.claude/settings.json`）。`entry-default` 不写。locator **值**不进文件（Pi `$ENV`、OpenCode `{env:NAME}`）。**禁止**从宿主 `~/.pi` / `~/.config` 拷 catalog。local / docker / e2b 同一条 Attempt HOME。Claude Code 同时把 lock 的 `model` 投影进 attach env（`ANTHROPIC_MODEL`；有 `base_url` 时再写 `ANTHROPIC_DEFAULT_*` / `CLAUDE_CODE_SUBAGENT_MODEL`）。Codex ACP 默认 `workspace-write`（bwrap）；Attempt 里投影 `INITIAL_AGENT_MODE=agent-full-access`，并写 `.codex/models.json` + `model_catalog_json`（slug 等于 `model`）。grok-build 仍 argv `--model`。
+0. **lock overlay（Attempt HOME，不拷宿主）。** lock 已有 `model` / `api_key` locator / 可选 `base_url`。箱子 `start` 之后、`attach_stdio` 之前，ACP contrib 按 **entry** 写成该引擎自己的配置文件（Pi：`.pi/agent/models.json` + `settings.json`；OpenCode：`.config/opencode/opencode.json`；Codex：`.codex/config.toml`（Attempt 已隔离，写 `sandbox_mode = danger-full-access`，禁止再套一层 bwrap）；Claude Code：`.claude/settings.json`）。`entry-default` 不写。Pi 与 OpenCode 只写 locator 引用（`$ENV`、`{env:NAME}`），不写密钥。Codex 的 `base_url` 在写 overlay 时把 locator 名解析成 URL；环境变量未设置则省略该键。**禁止**从宿主 `~/.pi` / `~/.config` 拷 catalog。local / docker / e2b 同一条 Attempt HOME。Claude Code 同时把 lock 的 `model` 投影进 attach env（`ANTHROPIC_MODEL`；有 `base_url` 时再写 `ANTHROPIC_DEFAULT_*` / `CLAUDE_CODE_SUBAGENT_MODEL`）。Codex ACP 默认 `workspace-write`（bwrap）；Attempt 里投影 `INITIAL_AGENT_MODE=agent-full-access`，并写 `.codex/models.json` + `model_catalog_json`（slug 等于 `model`）。grok-build 仍 argv `--model`。
 1. 读 `options.entry`（如 `pi`）→ 需要哪些环境内二进制（`pi`、`pi-acp`、…）以及 entry 表钉死的包版本。
 2. `host.exec` 先对每个钉死包跑 `npm ls -g --depth=0`，版本必须相等；再对必需命令做 realpath，必须等于该包 `package.json` 的 `bin`。Mode 1 的必需命令是 `engine_command` 和 `acp_command[0]`；Mode 2/3 只查 `acp_command[0]`。detect 列表里的别名缺失，或别名指到另一份文件，都不算失败。这两项都过了才做一次 stdio JSON-RPC `initialize`（不是 `session/prompt`），argv[0] 是通过检查的绝对路径，后面的参数保持声明。这取代了把 `versions` 留空、只看 PATH 名字的脚本。同名但协议不是 stdio ACP（例如只开 TCP 的旧 `opencode`）算未命中。
 3. **三项都齐就跳过。** docker 上题包配方已叠 ACP `image_layers`、且版本、realpath、stdio `initialize` 都命中时，不跑 `install_command`。版本或 realpath 不对，按 **ACP entry 自己的** `install_command` `exec` 一次，再探一次。安装退出非零则 `acp_runtime_install_failed`，不再探，不 `initialize`，不 `attach_stdio`。第二次仍不对则 `acp_runtime_missing`，同样停。版本和 realpath 已齐、只有 `initialize` 失败时不安装。失败 = environment 相位失败。不把「怎么装 opencode」下放到 environment 插件。invoke 禁止把 `npm i` / 浮动 `npx` 当 happy path。

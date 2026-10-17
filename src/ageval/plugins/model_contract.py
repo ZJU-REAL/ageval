@@ -6,10 +6,11 @@ cannot meet raises ``PluginContractError``. Neither is an upstream stall.
 
 A yaml-only executor is a factory that is not a ``BaseExecutor`` class, so it
 cannot declare ``extra_allowlist``. With the env unset, a ``first-party``
-registration fails the lock. Any other source warns, and the warning says a
-cutoff date is not published. ``AGEVAL_STRICT_MODEL_CONTRACT`` set to ``1``,
-``true``, ``yes``, ``on``, or ``strict`` raises ``PluginContractError``.
-``0``, ``false``, ``no``, or ``off`` keeps the warning.
+registration fails the lock. Any other source warns until 2027-01-15.
+On that date the warning becomes a hard reject, including when the env is
+off. ``AGEVAL_STRICT_MODEL_CONTRACT`` set to ``1``, ``true``, ``yes``,
+``on``, or ``strict`` raises ``PluginContractError``. ``0``, ``false``,
+``no``, or ``off`` keeps the warning only before the cutoff.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from __future__ import annotations
 import os
 import warnings
 from collections.abc import Mapping
+from datetime import date
 from typing import Any
 
 from ageval.model.spec import resolve_model
@@ -30,20 +32,29 @@ STRICT_MODEL_CONTRACT_ENV = "AGEVAL_STRICT_MODEL_CONTRACT"
 _STRICT_VALUES = frozenset({"1", "true", "yes", "on", "strict"})
 _OFF_VALUES = frozenset({"0", "false", "no", "off"})
 _FIRST_PARTY = "first-party"
+YAML_ONLY_CUTOFF = date(2027, 1, 15)
 
 
 class YamlOnlyExecutorWarning(UserWarning):
     """Lock could not enforce an extra allowlist for this executor."""
 
 
+def _today() -> date:
+    """Clock for the yaml-only cutoff. Tests replace this."""
+    return date.today()
+
+
 def strict_model_contract(override: bool | None = None, *, source: str = "") -> bool:
     """True when a yaml-only executor must fail the lock.
 
-    An explicit override wins. Otherwise the env forces on or off. Unset, a
+    An explicit override wins. After 2027-01-15 every source fails, including
+    when the env is off. Before that date the env forces on or off. Unset, a
     ``first-party`` registration fails and every other source warns.
     """
     if override is not None:
         return override
+    if _today() >= YAML_ONLY_CUTOFF:
+        return True
     raw = os.environ.get(STRICT_MODEL_CONTRACT_ENV, "").strip().lower()
     if raw in _STRICT_VALUES:
         return True
@@ -139,7 +150,7 @@ def _executor_impl(graph: ExtensionGraph, registry: ExtensionRegistry) -> type[B
 def _yaml_only(plugin_id: str, *, strict: bool | None, source: str) -> None:
     message = (
         f"executor {plugin_id!r} has no decorated model contract; extra allowlist is not enforced. "
-        "A cutoff for third-party factories is not published"
+        "Third-party yaml-only factories are rejected after 2027-01-15"
     )
     if strict_model_contract(strict, source=source):
         raise PluginContractError(message)

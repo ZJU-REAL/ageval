@@ -20,6 +20,7 @@ from ageval.cli.run_output import (
     print_human,
     use_json_stdout,
     use_progress_bar,
+    write_result_file,
 )
 
 
@@ -254,6 +255,16 @@ def register(app: typer.Typer) -> None:
                 ),
             ),
         ] = False,
+        result_file: Annotated[
+            Path | None,
+            typer.Option(
+                "--result-file",
+                help=(
+                    "Also write the result document as JSON to this path. "
+                    "Stdout stays human or --json."
+                ),
+            ),
+        ] = None,
         install_dir: Annotated[
             Path | None,
             typer.Option(
@@ -378,6 +389,8 @@ def register(app: typer.Typer) -> None:
                         )
                     )
                 summary = result.as_dict()
+                if result_file is not None:
+                    write_result_file(summary, result_file)
                 if machine:
                     dump_json(summary)
                 else:
@@ -457,6 +470,8 @@ def register(app: typer.Typer) -> None:
                     "cancelled": bool(suite_summary.get("cancelled")),
                 },
             )
+            if result_file is not None:
+                write_result_file(suite_summary, result_file)
             if machine:
                 dump_json(suite_summary)
             else:

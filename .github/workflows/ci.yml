@@ -120,6 +120,10 @@ jobs:
         if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
         run: uv run python scripts/check_builtin_agents.py
 
+      - name: Executor option tables
+        if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
+        run: uv run python scripts/gen_param_tables.py --check
+
       # Offline core: no Docker L1, no real agent CLIs, no registry suite.
       - name: Pytest (core, exclude registry)
         if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'

@@ -15,9 +15,10 @@ from typing import Any
 from ageval.model import ModelSpec, coerce_factory_model, require_model_support, spec_from_factory
 from ageval.plugins.base import BaseExecutor
 from ageval.plugins.decorators import executor_plugin
-from ageval.plugins.errors import ExtensionMaterializeError
+from ageval.plugins.options import coerce_options, mapping_for_model
 from nooa_plugin import PLUGIN_ID
 from nooa_plugin.container import NooaBoxExecutor
+from nooa_plugin.options import NooaOptions
 
 _DEFAULT_MODEL_ID = "openai/gpt-4.1-mini"
 
@@ -80,6 +81,7 @@ class NooaExecutorSPI(BaseExecutor):
         {"id", "api", "reasoning_effort", "timeout", "watchdog", "extra"}
     )
     extra_allowlist = frozenset()
+    Options = NooaOptions
 
     def __init__(
         self,
@@ -94,23 +96,19 @@ class NooaExecutorSPI(BaseExecutor):
         package_root: str | None = None,
     ) -> None:
         del profile_id
-        opts = dict(options or {})
-        agent_ref = opts.get("agent")
-        if not agent_ref or not str(agent_ref).strip():
-            raise ExtensionMaterializeError(
-                "nooa_options_agent_required",
-                kind="extension_materialize_failed",
-            )
-        spec = spec_from_factory(coerce_factory_model(model), opts, default_id=_DEFAULT_MODEL_ID)
+        raw = mapping_for_model(options)
+        spec = spec_from_factory(coerce_factory_model(model), raw, default_id=_DEFAULT_MODEL_ID)
         self.supports_model(spec)
         self.bind_model(spec)
+        parsed = options if isinstance(options, NooaOptions) else coerce_options(NooaOptions, raw)
+        self.options = parsed
         self._box = NooaBoxExecutor(
             host=host,
             placement=placement,
             plugin_root=_plugin_root(),
             package_root=package_root,
-            agent_ref=str(agent_ref).strip(),
-            method=str(opts.get("method") or "run").strip() or "run",
+            agent_ref=parsed.agent,
+            method=parsed.method,
             model=spec.id,
             base_url=base_url if isinstance(base_url, str) else None,
             api_key_env=api_key if isinstance(api_key, str) else None,

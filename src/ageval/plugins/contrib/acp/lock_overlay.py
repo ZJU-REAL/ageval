@@ -48,20 +48,20 @@ def split_model(model: str) -> tuple[str | None, str]:
 
 def _entry_id(row: Mapping[str, Any]) -> str | None:
     options = row.get("options")
-    if isinstance(options, Mapping):
-        raw = str(options.get("entry") or "").strip()
-        if raw:
-            return raw
+    if isinstance(options, Mapping) and "entry" in options:
+        raw = options["entry"]
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
     for ext in row.get("extensions") or ():
         if not isinstance(ext, Mapping):
             continue
         if str(ext.get("plugin") or "") != "acp":
             continue
         nested = ext.get("options")
-        if isinstance(nested, Mapping):
-            raw = str(nested.get("entry") or "").strip()
-            if raw:
-                return raw
+        if isinstance(nested, Mapping) and "entry" in nested:
+            raw = nested["entry"]
+            if isinstance(raw, str) and raw.strip():
+                return raw.strip()
     return None
 
 
@@ -103,6 +103,20 @@ def _opencode_env_ref(locator: str | None) -> str | None:
     if not locator:
         return None
     return f"{{env:{locator}}}"
+
+
+def _codex_base_url(raw: Any) -> str | None:
+    """Literal URL, or a locator name resolved from the environment.
+
+    Codex config.toml has no env indirection for ``base_url``. An unset
+    locator omits the key. Pi and OpenCode keep their own locator syntax.
+    """
+    from ageval.config.locator import parse_locked_base_url, resolve_if_set
+
+    loc = parse_locked_base_url(raw)
+    if loc is None:
+        return None
+    return resolve_if_set(loc)
 
 
 def _is_http_url(raw: Any) -> bool:
@@ -276,9 +290,9 @@ def build_codex_overlays(rows: list[Mapping[str, Any]]) -> list[OverlayFile]:
         loc = _locator_name(row.get("api_key"))
         if loc:
             env_key = loc
-        raw_base = row.get("base_url")
-        if _is_http_url(raw_base):
-            base_url = str(raw_base).strip()
+        resolved = _codex_base_url(row.get("base_url"))
+        if resolved:
+            base_url = resolved
     if model is None:
         return []
     catalog_path = f"{HOME_PATH}/.codex/models.json"

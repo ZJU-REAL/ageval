@@ -24,7 +24,7 @@ from typing import Any
 
 from ageval.evidence.redaction import RedactionError
 from ageval.evidence.store import AttemptEvidenceStore, InvocationHandle
-from ageval.model.errors import http_error_reason_is_config_error
+from ageval.model.errors import TransportStall
 from ageval.plugins.protocol import ExtensionGraph
 from ageval.plugins.slots import (
     AFTER_AGENT_CLOSE,
@@ -885,7 +885,9 @@ class ParentAgentService:
             row = {}
         if isinstance(row, Mapping):
             options = executor_plugin_options(row)
-        raw = options.get("upstream_stall_seconds")
+        from ageval.plugins.options import stall_budget_raw
+
+        raw = stall_budget_raw(self.binder, row if isinstance(row, Mapping) else {}, options)
         phase = "evaluate" if self._run_sealed else "run"
         return UpstreamStall(
             budget_seconds=budget_seconds(raw),
@@ -1068,8 +1070,7 @@ def _result_ok(result: Any) -> bool:
 def _result_repeatable(result: Any) -> bool:
     if not bool(getattr(result, "repeatable", True)):
         return False
-    # A 4xx other than 408/429 is a model config error from any HTTP executor.
-    return not http_error_reason_is_config_error(_result_reason(result))
+    return isinstance(getattr(result, "failure", None), TransportStall)
 
 
 def _result_reason(result: Any) -> str:

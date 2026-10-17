@@ -13,19 +13,26 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from ageval.config.errors import ConfigError
 from ageval.model import ModelSpec, coerce_factory_model, require_model_support, spec_from_factory
 from ageval.plugins.base import BaseExecutor
 from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.errors import ExtensionMaterializeError
+from ageval.plugins.options import coerce_options, mapping_for_model
 from dsh_plugin import PLUGIN_ID
 from dsh_plugin.container import DshBoxExecutor
+from dsh_plugin.options import (
+    DEFAULT_COMPOSITION,
+    DEFAULT_PROVIDER,
+    SANDBOXED_COMPOSITION,
+    DshOptions,
+    parse_composition,
+    parse_max_tokens,
+    parse_permission,
+)
 
 DEFAULT_MODEL = "deepseek-v4-flash"
-DEFAULT_PROVIDER = "deepseek-official"
-DEFAULT_COMPOSITION = "slim"
-SANDBOXED_COMPOSITION = "sandboxed"
 PERMISSION_ENV = "DSH_PERMISSION_MODE"
-PERMISSION_MODES = frozenset({"read-only", "workspace-write", "danger-full-access"})
 _CREDENTIAL_ENV_NAMES = (
     "DEEPSEEK_API_KEY",
     "deepseek_api_key",
@@ -54,14 +61,18 @@ def _plugin_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def _composition_slug(name: str | None) -> str:
-    slug = (name or DEFAULT_COMPOSITION).strip() or DEFAULT_COMPOSITION
-    if "/" in slug or "\\" in slug or slug.startswith("."):
+def _materialize(parse: Any, raw: Any) -> Any:
+    try:
+        return parse(raw)
+    except ConfigError as exc:
         raise ExtensionMaterializeError(
-            f"dsh_composition_invalid:{slug}",
+            exc.message,
             kind="extension_materialize_failed",
-        )
-    return slug
+        ) from exc
+
+
+def _composition_slug(name: str | None) -> str:
+    return _materialize(parse_composition, name)
 
 
 def resolve_composition_path(name: str | None) -> Path:
@@ -77,36 +88,12 @@ def resolve_composition_path(name: str | None) -> Path:
 
 def resolve_max_tokens(raw: Any) -> int | None:
     """Validate ``options.max_tokens``. Omit / blank / null → no harness override."""
-    if raw is None:
-        return None
-    if isinstance(raw, str) and not raw.strip():
-        return None
-    if isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
-        raise ExtensionMaterializeError(
-            f"dsh_max_tokens_invalid:{raw!r}",
-            kind="extension_materialize_failed",
-        )
-    return raw
+    return _materialize(parse_max_tokens, raw)
 
 
 def resolve_permission(raw: Any) -> str | None:
     """Validate ``options.permission``. Omit / blank → None (keep slim)."""
-    if raw is None:
-        return None
-    if not isinstance(raw, str):
-        raise ExtensionMaterializeError(
-            f"dsh_permission_invalid:{raw!r}",
-            kind="extension_materialize_failed",
-        )
-    value = raw.strip()
-    if not value:
-        return None
-    if value not in PERMISSION_MODES:
-        raise ExtensionMaterializeError(
-            f"dsh_permission_invalid:{value}",
-            kind="extension_materialize_failed",
-        )
-    return value
+    return _materialize(parse_permission, raw)
 
 
 def resolve_effective_composition(*, composition: str | None, permission: str | None) -> str:
@@ -151,6 +138,7 @@ class DshExecutorSPI(BaseExecutor):
         {"id", "api", "reasoning_effort", "timeout", "watchdog", "extra"}
     )
     extra_allowlist = frozenset()
+    Options = DshOptions
 
     def __init__(
         self,
@@ -163,18 +151,20 @@ class DshExecutorSPI(BaseExecutor):
         base_url: str | None = None,
         api_key: str | None = None,
     ) -> None:
-        opts = dict(options or {})
-        permission = resolve_permission(opts.get("permission"))
-        max_tokens = resolve_max_tokens(opts.get("max_tokens"))
+        raw = mapping_for_model(options)
+        spec = spec_from_factory(coerce_factory_model(model), raw, default_id=DEFAULT_MODEL)
+        self.supports_model(spec)
+        self.bind_model(spec)
+        parsed = options if isinstance(options, DshOptions) else coerce_options(DshOptions, raw)
+        self.options = parsed
+        permission = parsed.permission
+        max_tokens = parsed.max_tokens
         composition = resolve_effective_composition(
-            composition=str(opts.get("composition") or "").strip() or None,
+            composition=parsed.composition,
             permission=permission,
         )
         resolve_composition_path(composition)
-        provider = str(opts.get("provider") or DEFAULT_PROVIDER).strip() or DEFAULT_PROVIDER
-        spec = spec_from_factory(coerce_factory_model(model), opts, default_id=DEFAULT_MODEL)
-        self.supports_model(spec)
-        self.bind_model(spec)
+        provider = parsed.provider
         self._box = DshBoxExecutor(
             host=host,
             placement=placement,

@@ -12,11 +12,13 @@ from pathlib import Path
 from typing import Any
 
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
+from ageval.model.usage import LOST_ON_TIMEOUT, adopt_usage
 from ageval.plugins.agent_result import AgentResult, parse_validated_text_structured
 from ageval.plugins.base import BaseExecutor
 from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.errors import ExtensionMaterializeError
 from ageval.plugins.http_loopback import is_http_loopback
+from ageval.plugins.options import coerce_options, mapping_for_model
 from ageval.runtime.upstream_stall import current_stall
 from miniswe_plugin import PLUGIN_ID
 from miniswe_plugin.env import ProtocolEnv
@@ -26,6 +28,7 @@ from miniswe_plugin.llm_client import (
     chat_model_for_openai_compat_gateway,
 )
 from miniswe_plugin.model import DEFAULT_MODEL_ID, transport_clocks, wire_body
+from miniswe_plugin.options import MinisweOptions
 from miniswe_plugin.stall import (
     StallExhausted,
     install_single_package_attempt,
@@ -53,72 +56,6 @@ def describe_miniswe() -> dict[str, Any]:
 
 def _offline() -> bool:
     return os.environ.get("AGEVAL_OFFLINE_AGENT") == "1"
-
-
-def _as_positive_int(raw: Any, *, name: str, default: int) -> int:
-    if raw is None or raw == "":
-        return default
-    if isinstance(raw, bool) or not isinstance(raw, int | float | str):
-        raise ExtensionMaterializeError(
-            f"miniswe_{name}_invalid:{raw!r}",
-            kind="extension_materialize_failed",
-        )
-    try:
-        value = int(raw)
-    except (TypeError, ValueError) as exc:
-        raise ExtensionMaterializeError(
-            f"miniswe_{name}_invalid:{raw!r}",
-            kind="extension_materialize_failed",
-        ) from exc
-    if value < 0:
-        raise ExtensionMaterializeError(
-            f"miniswe_{name}_invalid:{raw!r}",
-            kind="extension_materialize_failed",
-        )
-    return value
-
-
-def _as_nonneg_float(raw: Any, *, name: str, default: float) -> float:
-    if raw is None or raw == "":
-        return default
-    if isinstance(raw, bool) or not isinstance(raw, int | float | str):
-        raise ExtensionMaterializeError(
-            f"miniswe_{name}_invalid:{raw!r}",
-            kind="extension_materialize_failed",
-        )
-    try:
-        value = float(raw)
-    except (TypeError, ValueError) as exc:
-        raise ExtensionMaterializeError(
-            f"miniswe_{name}_invalid:{raw!r}",
-            kind="extension_materialize_failed",
-        ) from exc
-    if value < 0:
-        raise ExtensionMaterializeError(
-            f"miniswe_{name}_invalid:{raw!r}",
-            kind="extension_materialize_failed",
-        )
-    return value
-
-
-def _as_optional_bool(raw: Any, *, name: str, default: bool | None) -> bool | None:
-    """Parse profile bool; ``None``/empty → ``default`` (``None`` = defer to llm_client)."""
-    if raw is None or raw == "":
-        return default
-    if isinstance(raw, bool):
-        return raw
-    if isinstance(raw, (int, float)) and raw in (0, 1):
-        return bool(raw)
-    if isinstance(raw, str):
-        low = raw.strip().lower()
-        if low in {"1", "true", "yes", "on"}:
-            return True
-        if low in {"0", "false", "no", "off"}:
-            return False
-    raise ExtensionMaterializeError(
-        f"miniswe_{name}_invalid:{raw!r}",
-        kind="extension_materialize_failed",
-    )
 
 
 def resolve_api_key_value(locator: str | None) -> str | None:
@@ -209,6 +146,7 @@ class MinisweExecutorSPI(BaseExecutor):
         {"id", "api", "reasoning_effort", "timeout", "watchdog", "extra"}
     )
     extra_allowlist = frozenset({"reasoning", "provider"})
+    Options = MinisweOptions
 
     def __init__(
         self,
@@ -224,26 +162,24 @@ class MinisweExecutorSPI(BaseExecutor):
         **_kwargs: Any,
     ) -> None:
         del plugin_id
-        opts = dict(options or {})
+        raw = mapping_for_model(options)
         self.host = host
         self.placement = placement
-        self.options = opts
         self.profile_id = profile_id
-        spec = spec_from_factory(model, opts, default_id=DEFAULT_MODEL_ID)
+        spec = spec_from_factory(model, raw, default_id=DEFAULT_MODEL_ID)
         self.supports_model(spec)
         self.bind_model(spec)
+        parsed = (
+            options if isinstance(options, MinisweOptions) else coerce_options(MinisweOptions, raw)
+        )
+        self.options = parsed
         self.base_url = base_url if isinstance(base_url, str) else None
         self.api_key_env = api_key if isinstance(api_key, str) else None
-        self.step_limit = _as_positive_int(opts.get("step_limit"), name="step_limit", default=30)
-        self.cost_limit = _as_nonneg_float(opts.get("cost_limit"), name="cost_limit", default=0.0)
-        self.cmd_timeout = _as_positive_int(opts.get("cmd_timeout"), name="cmd_timeout", default=30)
+        self.step_limit = parsed.step_limit
+        self.cost_limit = parsed.cost_limit
+        self.cmd_timeout = parsed.cmd_timeout
         # Chat Completions default to SSE streaming; Responses ignores this.
-        # None = leave to llm_client / AGEVAL_MINISWE_CHAT_STREAM.
-        # Kept as options.stream (not ModelSpec) so #272 nested model stays intact.
-        if self.api == "chat":
-            self.stream = _as_optional_bool(opts.get("stream"), name="stream", default=True)
-        else:
-            self.stream = None
+        self.stream = parsed.stream if self.api == "chat" else None
         self.session_id = f"ageval-{self.profile_id or 'solver'}-{uuid.uuid4().hex[:12]}"
         self.execution_location = getattr(host, "kind", None) or "box"
         self._ready = False
@@ -312,6 +248,7 @@ class MinisweExecutorSPI(BaseExecutor):
                 structured=None,
                 ok=False,
                 error="stall_exhausted",
+                usage=LOST_ON_TIMEOUT,
                 metadata={
                     "plugin": PLUGIN_ID,
                     "session_id": self.session_id,
@@ -335,6 +272,7 @@ class MinisweExecutorSPI(BaseExecutor):
                 structured=None,
                 ok=False,
                 error="miniswe_timeout",
+                usage=LOST_ON_TIMEOUT,
                 metadata={"plugin": PLUGIN_ID, "session_id": self.session_id},
             )
         except Exception as exc:  # noqa: BLE001
@@ -375,7 +313,7 @@ class MinisweExecutorSPI(BaseExecutor):
             ok=ok,
             error=None if ok else (status or "miniswe_error"),
             events=mapped,
-            usage=usage,
+            usage=adopt_usage(usage),
             metadata=metadata,
         )
 

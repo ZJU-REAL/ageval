@@ -31,12 +31,18 @@ A kind that cannot `exec` / `upload` fails at `ageval lock`, not mid-invoke.
 
 `options` merge: profile `options` then this plugin's `extensions` row (last wins).
 
+<!-- ageval:param-table executor=dsh -->
 | Name | Default | Purpose |
 | --- | --- | --- |
-| `options.composition` | `slim` | Bundled `compositions/<name>.cordis.yml`. Path separators and leading `.` are rejected. Setting `permission` with omit/`slim` switches to `sandboxed`. |
-| `options.permission` | unset | `read-only` / `workspace-write` / `danger-full-access`. Omit → unrestricted slim tools. Invalid values are rejected when applied. Sets `DSH_PERMISSION_MODE`. File-tool writes are fenced; bash redirect can still write. |
-| `options.max_tokens` | unset | Omit / blank / `null` → do not pass `max_tokens` (adapter default). A positive int is forwarded. `≤0`, bool, string, float values are rejected. |
-| `options.provider` | `deepseek-official` | Provider id on `initialize`. |
+| `options.composition` | slim | Bundled compositions/<name>.cordis.yml. Path separators and a leading dot are rejected. Setting permission with omit or slim switches to sandboxed. |
+| `options.permission` | unset | read-only, workspace-write, or danger-full-access. Omit keeps unrestricted slim tools. Invalid values are rejected. Sets DSH_PERMISSION_MODE. File-tool writes are fenced; bash redirect can still write. |
+| `options.max_tokens` | unset | Omit, blank, or null does not pass max_tokens. A positive int is forwarded. A non-positive int, bool, string, or float is rejected. |
+| `options.provider` | deepseek-official | Provider id on initialize. |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
+
+| Name | Default | Purpose |
+| --- | --- | --- |
 | `model` | `deepseek-v4-flash` | Passed on `initialize`. |
 | `api_key` | `DEEPSEEK_API_KEY` / `deepseek_api_key` / `litellm_api_key` | Env **locator name**. Projected as `DEEPSEEK_API_KEY`. Omit on loopback `base_url` (`127.0.0.1` / `localhost` / `::1`). |
 | `base_url` | `DEEPSEEK_BASE_URL` / `deepseek_base_url` | Projected as `DEEPSEEK_BASE_URL`. Defaults to the official `https://api.deepseek.com`; no cross-provider fallbacks. |

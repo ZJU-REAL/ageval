@@ -7,6 +7,7 @@ from typing import Any
 
 from acp_oneshot_plugin import PLUGIN_ID
 from acp_oneshot_plugin.container import AcpOneshotBoxExecutor
+from acp_oneshot_plugin.options import AcpOneshotOptions
 from ageval.model import (
     ModelSpec,
     coerce_factory_model,
@@ -18,6 +19,7 @@ from ageval.plugins.contrib.acp.entry_local import acp_stdio_argv
 from ageval.plugins.contrib.acp.registry import AcpRegistryError, get_entry
 from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.errors import ExtensionMaterializeError
+from ageval.plugins.options import coerce_options, mapping_for_model
 
 _EXECUTION_MODE = "acp-oneshot"
 
@@ -51,6 +53,7 @@ class AcpOneshotExecutorSPI(BaseExecutor):
     supported_apis = frozenset({"chat", "responses"})
     supported_model_fields = frozenset({"id", "api", "reasoning_effort", "extra"})
     extra_allowlist = frozenset()
+    Options = AcpOneshotOptions
 
     def __init__(
         self,
@@ -65,13 +68,17 @@ class AcpOneshotExecutorSPI(BaseExecutor):
         package_root: str | None = None,
     ) -> None:
         del package_root
-        opts = dict(options or {})
-        entry = str(opts.get("entry") or "").strip()
-        if not entry:
-            raise ExtensionMaterializeError(
-                "acp_entry_required",
-                kind="extension_materialize_failed",
-            )
+        raw = mapping_for_model(options)
+        spec = spec_from_factory(coerce_factory_model(model), raw, default_id="entry-default")
+        self.supports_model(spec)
+        self.bind_model(spec)
+        parsed = (
+            options
+            if isinstance(options, AcpOneshotOptions)
+            else coerce_options(AcpOneshotOptions, raw)
+        )
+        self.options = parsed
+        entry = parsed.entry
         try:
             descriptor = get_entry(entry)
         except AcpRegistryError as exc:
@@ -84,9 +91,6 @@ class AcpOneshotExecutorSPI(BaseExecutor):
                 f"unknown acp entry: {entry!r}",
                 kind="extension_materialize_failed",
             )
-        spec = spec_from_factory(coerce_factory_model(model), opts, default_id="entry-default")
-        self.supports_model(spec)
-        self.bind_model(spec)
         argv = acp_stdio_argv(
             entry,
             list(descriptor.acp_command),

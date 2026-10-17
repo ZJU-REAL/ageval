@@ -124,11 +124,19 @@ def format_duration_ms(ms: float | None) -> str:
     return f"{minutes}m {seconds:02d}s" if seconds else f"{minutes}m"
 
 
+def result_document_text(payload: Mapping[str, Any]) -> str:
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+
+
 def dump_json(payload: Mapping[str, Any]) -> None:
-    sys.stdout.write(
-        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
-    )
+    sys.stdout.write(result_document_text(payload))
     sys.stdout.flush()
+
+
+def write_result_file(payload: Mapping[str, Any], path: Path) -> None:
+    """Write the same result document ``--json`` prints, to ``path``."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(result_document_text(payload), encoding="utf-8")
 
 
 def print_human(text: str, *, stream: TextIO | None = None) -> None:

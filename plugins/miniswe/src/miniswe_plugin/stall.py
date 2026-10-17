@@ -22,8 +22,8 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from typing import Any
 
+from ageval.model.errors import TransportStall
 from ageval.runtime.clocks import ClockError, clock_seconds
-from miniswe_plugin.model import ModelConfigError
 
 _RETRY_ENV = "MSWEA_MODEL_RETRY_STOP_AFTER_ATTEMPT"
 _POLL_SECONDS = 0.25
@@ -153,7 +153,11 @@ def wrap_model_query(
             try:
                 result = _call_with_watchdog(query, messages, kwargs, cap)
             except Exception as exc:
-                if exc.__class__.__name__ == "FormatError" or isinstance(exc, ModelConfigError):
+                # A read timeout arrives as TimeoutError. Classify it here so
+                # the retry decision stays isinstance(TransportStall).
+                if isinstance(exc, TimeoutError):
+                    exc = TransportStall(f"TimeoutError:{exc}", kind="timeout")
+                if not isinstance(exc, TransportStall):
                     stall.end_resumed()
                     raise
                 reason = f"{type(exc).__name__}:{exc}"

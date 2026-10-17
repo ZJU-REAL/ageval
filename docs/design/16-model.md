@@ -8,11 +8,11 @@ from ageval.plugins.base import BaseEnvironment, BaseExecutor
 from ageval.plugins.errors import PluginContractError
 ```
 
-`src/ageval/model/` 解析。`src/ageval/plugins/base.py` 是环境与 executor 的基类。`api_key` 与 `base_url` 留在 profile 上，是 locator，不是 Model 字段。
+`src/ageval/model/` 解析。`src/ageval/plugins/base.py` 是环境与 executor 的基类。`api_key` 与 `base_url` 留在 profile 上，是 locator，不是 Model 字段。lock 用 `ageval.config.locator` 把 `base_url` 解析一次：`HttpUrl` 或 `EnvLocator`。锁文件仍写 URL 或 locator 名，不写密钥。
 
 ## 字段
 
-`resolve_model(model, options=None)` 只接受嵌套 mapping。字符串 id 拒绝。`options` 里的平铺模型字段（`api`、`reasoning_effort`、`timeout`、`request_timeout`、`watchdog`、`extra_body`）拒绝，不翻译进 Spec。其它 option 键是 executor 旋钮，解析时忽略。
+`resolve_model(model, options=None)` 只接受嵌套 mapping。字符串 id 拒绝。`options` 里的平铺模型字段（`api`、`reasoning_effort`、`timeout`、`request_timeout`、`watchdog`、`extra_body`）拒绝，不翻译进 Spec。一等 executor 的其余 option 键由该类的冻结 `Options` 解析。不认识的键在 lock 拒绝，并在编辑距离足够近时写出最近的字段名。没有 `Options` 的 yaml-only factory 在截止日期前仍只警告。
 
 | YAML | Spec 字段 | 类型 | 省略 |
 | --- | --- | --- | --- |
@@ -25,7 +25,7 @@ from ageval.plugins.errors import PluginContractError
 
 `reasoning` 只认 `effort`。`summary` 等放进 `extra`。`none` 是会发送的 effort 值，不是省略。
 
-配置文件写出 `reasoning.effort` 时，用该模型文档里的最高档。常见档名是 `xhigh` 或 `max`。解析器不把档名收成枚举：档名由模型决定。
+配置文件写出具体档名。`reasoning.effort: max` 是别名：lock 先把模型 id 按 pin 的 alias、prefix、lookup 收成唯一的 canonical id，再改写成该行 `reasoning_options` 里最后一档 effort。锁里记下的是这一档，不是未解析的别名。对不上 pin，或该行没有 effort 列表，lock 失败，并提示改成具体档。不静默降档。其它档名原样保留，不收成枚举。`none` 仍是会发送的值。最高档本身就叫 `max` 时，锁里记下的就是这个档名。
 
 `extra` 是厂商键，原样保留。这里没有网关名单。`extra` 不能改写一等字段，所以这些键拒绝：`id`、`api`、`timeout`、`watchdog`、`reasoning_effort`，以及 `extra.reasoning.effort`。
 
@@ -75,11 +75,86 @@ resolve 独占槽赢家
 没有装饰类的外置 executor（plugin.yaml 的 factory，不是 `BaseExecutor` 子类，不能声明 allowlist）：
 
 - 环境变量未设置，且注册 `source` 是 `first-party`：`PluginContractError`
-- 环境变量未设置，其他 `source`：`YamlOnlyExecutorWarning`。警告写明第三方 factory 的截止日期尚未公布
+- 环境变量未设置，其他 `source`：`YamlOnlyExecutorWarning`。警告写明第三方 yaml-only factory 在 2027-01-15 之后拒绝
 - `AGEVAL_STRICT_MODEL_CONTRACT=1`（也接受 `true` / `yes` / `on` / `strict`）：不论 source，`PluginContractError`
-- `0` / `false` / `no` / `off`：不论 source，仍是警告
+- `0` / `false` / `no` / `off`：截止日期前仍是警告。2027-01-15 起不论该环境变量，一律 `PluginContractError`
 
 allowlist 在 executor 类上，不在 `ModelSpec` 里。
+
+## Executor options
+
+下表由 `scripts/gen_param_tables.py` 从各 executor 的 `Options` 与 `CLOCKS` 生成。lock 调用 `Options.parse`。
+
+### openai-http
+
+<!-- ageval:param-table executor=openai-http -->
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
+
+### anthropic-http
+
+<!-- ageval:param-table executor=anthropic-http -->
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `options.max_tokens` | 4096 | Required Messages max_tokens. Positive int. Non-int values are rejected. |
+| `options.anthropic_version` | 2023-06-01 | anthropic-version request header. Non-string values are rejected. |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
+
+### acp
+
+<!-- ageval:param-table executor=acp -->
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `options.entry` | *(required)* | ACP entry id. Shipped: codex, claude-code, pi, opencode, grok-build. Missing fails lock with acp_entry_required. |
+| `options.idle_timeout_seconds` | unset | Stall ceiling during session/prompt. Any session_update or request_permission resets it. Unset or a non-positive value leaves only the wall-clock invoke timeout. Fires acp_idle_timeout. Non-numeric fails lock with acp_idle_timeout_invalid. |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
+
+### miniswe
+
+<!-- ageval:param-table executor=miniswe -->
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `options.stream` | `true` on `api: chat` | Chat Completions use SSE when true. false sends one JSON body. An omitted key is true, so AGEVAL_MINISWE_CHAT_STREAM=0 does not turn a profile run off. Responses ignores this. |
+| `options.step_limit` | 30 | Agent step cap. 0 is unlimited. Negative values are rejected. |
+| `options.cost_limit` | 0 | Cost cap. 0 is unlimited. Negative values are rejected. |
+| `options.cmd_timeout` | 30 | Seconds per host.exec bash action. Negative values are rejected. |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
+
+### nooa
+
+<!-- ageval:param-table executor=nooa -->
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `options.agent` | *(required)* | Package-local module:Class (subclass nooa.Agent, or a deterministic class). Missing fails lock with nooa_options_agent_required. |
+| `options.method` | run | Method invoked on that class. |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
+
+### dsh
+
+<!-- ageval:param-table executor=dsh -->
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `options.composition` | slim | Bundled compositions/<name>.cordis.yml. Path separators and a leading dot are rejected. Setting permission with omit or slim switches to sandboxed. |
+| `options.permission` | unset | read-only, workspace-write, or danger-full-access. Omit keeps unrestricted slim tools. Invalid values are rejected. Sets DSH_PERMISSION_MODE. File-tool writes are fenced; bash redirect can still write. |
+| `options.max_tokens` | unset | Omit, blank, or null does not pass max_tokens. A positive int is forwarded. A non-positive int, bool, string, or float is rejected. |
+| `options.provider` | deepseek-official | Provider id on initialize. |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
+
+### acp-oneshot
+
+<!-- ageval:param-table executor=acp-oneshot -->
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `options.entry` | *(required)* | ACP entry id (codex, claude-code, pi, opencode, grok-build). Missing or unknown fails materialize. |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
 
 Current：`resolve_model` 在 profile 解析和 lock 上拒绝字符串 id 与平铺模型键。独占 executor 赢家若是 `BaseExecutor` 子类，lock 调用类方法 `supports_model`，并在 `requires_environment` 未满足时拒绝。一类环境与一类 executor（`local` / `docker` / `e2b` / `ssh` / `daytona` / `acp` / `openai-http` / `anthropic-http`）继承基类并带装饰器。miniswe、nooa、dsh、acp-oneshot 使用同一份 `ModelSpec`，经 `load_installed` 进入，不在 builtin 名单里。仍是普通 factory 的第三方 executor 走上面的警告。
 

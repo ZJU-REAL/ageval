@@ -12,6 +12,7 @@ from tests.helpers.agent_binding import ScriptedBinder, ScriptedExecutor
 
 from ageval.attempt.ctx import AttemptCtx
 from ageval.evidence.store import AttemptEvidenceStore
+from ageval.model.errors import ProtocolError, TransportStall, http_status_is_config_error
 from ageval.plugins.agent_result import AgentResult
 from ageval.plugins.protocol import ExtensionGraph, HandlerRef
 from ageval.plugins.registry import ExtensionRegistry
@@ -38,6 +39,14 @@ class _Clock:
 
 
 def _result(*, ok: bool, error: str | None = None, repeatable: bool = True) -> AgentResult:
+    failure = None
+    if not ok and error and error.startswith("HTTPError:"):
+        try:
+            code = int(error.split(":", 1)[1])
+        except ValueError:
+            code = 0
+        if code and not http_status_is_config_error(code):
+            failure = TransportStall(error, kind="http")
     return AgentResult(
         model="scripted-model",
         text="ok" if ok else "",
@@ -45,6 +54,7 @@ def _result(*, ok: bool, error: str | None = None, repeatable: bool = True) -> A
         ok=ok,
         error=error,
         repeatable=repeatable,
+        failure=failure,
     )
 
 
@@ -443,3 +453,35 @@ def test_chains_run_once_around_the_retry(tmp_path: Path) -> None:
 def test_http_result_is_repeatable_unless_marked() -> None:
     failed = AgentResult(model="m", text="", structured=None, ok=False, error="HTTPError:503")
     assert failed.repeatable is True
+
+
+def test_protocol_error_does_not_stall(tmp_path: Path) -> None:
+    bad = AgentResult(
+        model="m",
+        text="",
+        structured=None,
+        ok=False,
+        error="ProtocolError:bad_json",
+        failure=ProtocolError("bad json", kind="bad_json"),
+    )
+    backend = ScriptedExecutor(script=[bad, _result(ok=True)])
+    service, clock, _events, _labels, _facts = _service(tmp_path, backend)
+
+    answer = service.invoke(session_id=_open(service), prompt="once")
+
+    assert answer["ok"] is False
+    assert answer["error"] == "ProtocolError:bad_json"
+    assert clock.sleeps == []
+    assert backend.prompts == ["once"]
+
+
+def test_error_string_without_transport_stall_does_not_retry(tmp_path: Path) -> None:
+    bare = AgentResult(model="m", text="", structured=None, ok=False, error="HTTPError:503")
+    backend = ScriptedExecutor(script=[bare, _result(ok=True)])
+    service, clock, _events, _labels, _facts = _service(tmp_path, backend)
+
+    answer = service.invoke(session_id=_open(service), prompt="once")
+
+    assert answer["ok"] is False
+    assert clock.sleeps == []
+    assert backend.prompts == ["once"]

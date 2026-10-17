@@ -176,6 +176,16 @@ def test_runner_env_has_one_provider_key(tmp_path: Path, monkeypatch: pytest.Mon
     assert "--model" not in argv
     assert "--json" in argv
     assert captured["cwd"] == str(tmp_path)
+    assert "--result-file" in argv
+
+    def noisy(argv: list[str], **kwargs: object) -> _Proc:
+        del kwargs
+        path = Path(argv[argv.index("--result-file") + 1])
+        path.write_text('{"suite_run_id":"from-file"}\n', encoding="utf-8")
+        return _Proc("log line\n{not json\n")
+
+    noisy_result = AgevalCliRunner(popen=noisy).run(prepared, should_cancel=lambda: False)
+    assert noisy_result.suite_run_id == "from-file"
     popped = False
 
     def refuse(argv: list[str], **kwargs: object) -> _Proc:

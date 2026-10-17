@@ -7,7 +7,6 @@ Native ``tools=`` is first-class; omit the catalog to keep the content path.
 
 from __future__ import annotations
 
-import copy
 import json
 import os
 import threading
@@ -18,12 +17,21 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
-from ageval.model.errors import ModelConfigError, http_status_is_config_error
+from ageval.model.errors import (
+    ModelConfigError,
+    ProtocolError,
+    TransportStall,
+    http_status_is_config_error,
+)
+from ageval.model.usage import LOST_ON_TIMEOUT, NOT_REPORTED, adopt_usage
+from ageval.model.wire import chat_body, responses_body
 from ageval.plugins.agent_result import AgentResult
 from ageval.plugins.base import BaseExecutor
+from ageval.plugins.contrib.openai_http.options import OpenAIHTTPOptions
 from ageval.plugins.contrib.openai_http.usage import normalize_openai_http_usage
 from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.http_loopback import is_http_loopback
+from ageval.plugins.options import coerce_options, mapping_for_model
 from ageval.runtime.clocks import clock_seconds
 
 _DEFAULT_BASE = "https://api.openai.com/v1"
@@ -255,6 +263,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
     )
     extra_allowlist = frozenset({"provider"})
     concurrent_sessions = True
+    Options = OpenAIHTTPOptions
 
     def __init__(
         self,
@@ -269,9 +278,15 @@ class OpenAIHTTPExecutor(BaseExecutor):
         del profile_id
         self.base_url = base_url.strip() if isinstance(base_url, str) and base_url.strip() else None
         self.api_key_env = api_key.strip() if isinstance(api_key, str) and api_key.strip() else None
-        spec = spec_from_factory(model, options, default_id=_DEFAULT_MODEL_ID)
+        raw = mapping_for_model(options)
+        spec = spec_from_factory(model, raw, default_id=_DEFAULT_MODEL_ID)
         self.supports_model(spec)
         self.bind_model(spec)
+        self.options = (
+            options
+            if isinstance(options, OpenAIHTTPOptions)
+            else coerce_options(OpenAIHTTPOptions, raw)
+        )
 
     @classmethod
     def supports_model(cls, spec: ModelSpec) -> None:
@@ -344,10 +359,21 @@ class OpenAIHTTPExecutor(BaseExecutor):
                 repeatable=False,
             )
         if kind == "watchdog":
+            message = f"TimeoutError:openai_http_watchdog:{self.watchdog:g}"
             return self._result(
                 ok=False,
-                error=f"TimeoutError:openai_http_watchdog:{self.watchdog:g}",
+                error=message,
                 effort=effort,
+                failure=TransportStall(message, kind="watchdog"),
+            )
+        if kind == "protocol":
+            message = f"ProtocolError:{found}"
+            return self._result(
+                ok=False,
+                error=message,
+                effort=effort,
+                failure=ProtocolError(message, kind=str(found or "bad_json")),
+                repeatable=False,
             )
         if kind == "http":
             assert isinstance(found, dict)
@@ -356,21 +382,31 @@ class OpenAIHTTPExecutor(BaseExecutor):
             if http_status_is_config_error(code):
                 # The gateway rejected the request itself; resending cannot help.
                 meta["error_kind"] = ModelConfigError.kind
+                message = f"ModelConfigError:HTTPError:{code}"
                 return self._result(
                     ok=False,
-                    error=f"ModelConfigError:HTTPError:{code}",
+                    error=message,
                     effort=effort,
                     metadata=meta,
                     repeatable=False,
+                    failure=ModelConfigError(message),
                 )
+            message = f"HTTPError:{code}"
             return self._result(
                 ok=False,
-                error=f"HTTPError:{code}",
+                error=message,
                 effort=effort,
                 metadata=meta,
+                failure=TransportStall(message, kind="http"),
             )
         if kind == "transport":
-            return self._result(ok=False, error=str(found), effort=effort)
+            message = str(found)
+            return self._result(
+                ok=False,
+                error=message,
+                effort=effort,
+                failure=TransportStall(message, kind="transport"),
+            )
         raw = found if isinstance(found, dict) else {}
         if responses:
             text, thought, tool_calls = _responses_text_and_calls(raw)
@@ -392,7 +428,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
             error=None,
             events=tuple(events),
             tool_calls=tool_calls,
-            usage=usage,
+            usage=adopt_usage(usage),
             extra=usage_extra,
             metadata=self._meta(effort, actual=effort),
         )
@@ -420,13 +456,11 @@ class OpenAIHTTPExecutor(BaseExecutor):
             }
         if catalog:
             payload["tools"] = _responses_tools(catalog) if responses else catalog
-        if self.extra:
-            payload.update(copy.deepcopy(self.extra))
-        if effort:
-            if responses:
-                payload["reasoning"] = {"effort": effort}
-            else:
-                payload["reasoning_effort"] = effort
+        wire = responses_body(self.spec) if responses else chat_body(self.spec)
+        # The HTTP clock is ``http_timeout``. The JSON body does not repeat it.
+        wire.pop("timeout", None)
+        payload.update(wire)
+        del effort
         return payload
 
     def _exchange(self, req: urllib.request.Request, *, timeout: float) -> tuple[str, Any]:
@@ -455,7 +489,9 @@ class OpenAIHTTPExecutor(BaseExecutor):
             except urllib.error.HTTPError as exc:
                 box["http_code"] = exc.code
                 box["http_body"] = exc.read().decode("utf-8", errors="replace")[:800]
-            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+            except json.JSONDecodeError:
+                box["protocol"] = "bad_json"
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
                 box["transport"] = type(exc).__name__
 
         worker = threading.Thread(target=_post, name="openai-http", daemon=True)
@@ -476,6 +512,8 @@ class OpenAIHTTPExecutor(BaseExecutor):
             )
         if "http_code" in box:
             return "http", box
+        if "protocol" in box:
+            return "protocol", box["protocol"]
         if "transport" in box:
             return "transport", box["transport"]
         return "ok", box.get("raw")
@@ -488,6 +526,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
         effort: str | None,
         metadata: dict[str, Any] | None = None,
         repeatable: bool = True,
+        failure: BaseException | None = None,
     ) -> AgentResult:
         return AgentResult(
             model=self.model,
@@ -497,6 +536,8 @@ class OpenAIHTTPExecutor(BaseExecutor):
             error=error,
             metadata=self._meta(effort, actual=None, extra=metadata),
             repeatable=repeatable,
+            failure=failure,
+            usage=LOST_ON_TIMEOUT if isinstance(failure, TransportStall) else NOT_REPORTED,
         )
 
     def _meta(

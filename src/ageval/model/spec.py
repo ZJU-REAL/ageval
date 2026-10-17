@@ -117,10 +117,16 @@ def _from_nested(raw: Mapping[str, Any]) -> ModelSpec:
         _fail("model_unknown:" + ",".join(unknown))
     if "id" not in raw:
         _fail("model_id_invalid:None")
+    model_id = _model_id(raw.get("id"))
+    effort = _reasoning(raw.get("reasoning"), present="reasoning" in raw)
+    if effort == "max":
+        from ageval.model.pin import resolve_effort_max
+
+        effort = resolve_effort_max(model_id, strict=False)
     return ModelSpec(
-        id=_model_id(raw.get("id")),
+        id=model_id,
         api=_api(raw.get("api")),
-        reasoning_effort=_reasoning(raw.get("reasoning"), present="reasoning" in raw),
+        reasoning_effort=effort,
         timeout=_timeout(raw.get("timeout"), present="timeout" in raw),
         watchdog=_watchdog(raw.get("watchdog"), present="watchdog" in raw),
         extra=_extra(raw.get("extra"), present="extra" in raw),
