@@ -77,12 +77,13 @@ class NeedsBox(BaseExecutor):
     supported_model_fields = frozenset({"id", "api", "extra"})
     extra_allowlist = frozenset()
 
-    def supports_model(self, spec: ModelSpec) -> None:
+    @classmethod
+    def supports_model(cls, spec: ModelSpec) -> None:
         require_model_support(
             spec,
-            supported_apis=self.supported_apis,
-            supported_model_fields=self.supported_model_fields,
-            extra_allowlist=self.extra_allowlist,
+            supported_apis=cls.supported_apis,
+            supported_model_fields=cls.supported_model_fields,
+            extra_allowlist=cls.extra_allowlist,
         )
 
     def bind_model(self, spec: ModelSpec) -> None:
@@ -136,15 +137,15 @@ def test_valid_nested_profile_locks_after_supports_model(
     order: list[str] = []
     real_supports = OpenAIHTTPExecutor.supports_model
 
-    def spy_supports(self: OpenAIHTTPExecutor, spec: ModelSpec) -> None:
+    def spy_supports(spec: ModelSpec) -> None:
         order.append("supports_model")
-        real_supports(self, spec)
+        real_supports(spec)
 
     def spy_lock(graph: Any) -> dict[str, Any]:
         order.append("write_lock")
         return extension_graph_to_lock(graph)
 
-    monkeypatch.setattr(OpenAIHTTPExecutor, "supports_model", spy_supports)
+    monkeypatch.setattr(OpenAIHTTPExecutor, "supports_model", staticmethod(spy_supports))
     monkeypatch.setattr("ageval.plugins.lock_bind.extension_graph_to_lock", spy_lock)
     locked = _lock(
         tmp_path,
@@ -332,6 +333,33 @@ def test_yaml_only_executor_strict_mode_is_plugin_contract(
     monkeypatch.setenv("AGEVAL_STRICT_MODEL_CONTRACT", "1")
     with pytest.raises(PluginContractError, match="no decorated model contract"):
         _lock(tmp_path, {"executor": "yaml-exec", "model": {"id": "m"}})
+
+
+def test_first_party_yaml_only_fails_when_env_unset(
+    tmp_path: Path, registry: ExtensionRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def build_yaml(**_kwargs: Any) -> object:
+        return object()
+
+    monkeypatch.delenv("AGEVAL_STRICT_MODEL_CONTRACT", raising=False)
+    registry.exclusive(EXECUTOR, "yaml-exec", build_yaml, source="first-party", is_factory=True)
+    with pytest.raises(PluginContractError, match="no decorated model contract"):
+        _lock(tmp_path, {"executor": "yaml-exec", "model": {"id": "m"}})
+
+
+def test_installed_yaml_only_warns_that_cutoff_is_unpublished(
+    tmp_path: Path, registry: ExtensionRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def build_yaml(**_kwargs: Any) -> object:
+        return object()
+
+    monkeypatch.delenv("AGEVAL_STRICT_MODEL_CONTRACT", raising=False)
+    registry.exclusive(EXECUTOR, "yaml-exec", build_yaml, source="installed", is_factory=True)
+    with pytest.warns(
+        YamlOnlyExecutorWarning, match="cutoff for third-party factories is not published"
+    ):
+        locked = _lock(tmp_path, {"executor": "yaml-exec", "model": {"id": "m"}})
+    assert locked.extension_bindings["solver"]["slots"]["executor"]["plugin"] == "yaml-exec"
 
 
 def test_yaml_only_strict_off_still_warns(

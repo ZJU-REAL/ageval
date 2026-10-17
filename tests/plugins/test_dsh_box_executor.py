@@ -25,8 +25,7 @@ _DSH_SRC = ROOT / "plugins" / "dsh" / "src"
 if str(_DSH_SRC) not in sys.path:
     sys.path.insert(0, str(_DSH_SRC))
 
-from dsh_plugin.container import DshBoxExecutor  # noqa: E402
-from dsh_plugin.factory import build_executor, resolve_max_tokens  # noqa: E402
+from dsh_plugin.factory import DshExecutorSPI, build_executor, resolve_max_tokens  # noqa: E402
 
 
 class SpyHost:
@@ -72,7 +71,7 @@ def test_factory_returns_box_executor() -> None:
         model="deepseek-v4-flash",
         api_key="litellm_api_key",
     )
-    assert isinstance(executor, DshBoxExecutor)
+    assert isinstance(executor, DshExecutorSPI)
     assert executor.kind == "dsh"
 
 

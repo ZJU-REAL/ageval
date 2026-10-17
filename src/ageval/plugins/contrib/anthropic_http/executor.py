@@ -301,12 +301,13 @@ class AnthropicHTTPExecutor(BaseExecutor):
         self.max_tokens = _as_max_tokens(opts.get("max_tokens"))
         self.anthropic_version = _as_version(opts.get("anthropic_version"))
 
-    def supports_model(self, spec: ModelSpec) -> None:
+    @classmethod
+    def supports_model(cls, spec: ModelSpec) -> None:
         require_model_support(
             spec,
-            supported_apis=self.supported_apis,
-            supported_model_fields=self.supported_model_fields,
-            extra_allowlist=self.extra_allowlist,
+            supported_apis=cls.supported_apis,
+            supported_model_fields=cls.supported_model_fields,
+            extra_allowlist=cls.extra_allowlist,
         )
 
     def bind_model(self, spec: ModelSpec) -> None:

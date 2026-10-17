@@ -619,7 +619,7 @@ def require_upstream_stall_seconds(raw: Any, *, location: str) -> int:
     return raw
 
 
-def _model_options(profile: Mapping[str, Any]) -> dict[str, Any]:
+def model_options(profile: Mapping[str, Any]) -> dict[str, Any]:
     """Profile options plus extension options, so flat model keys cannot hide."""
     opts: dict[str, Any] = {}
     raw = profile.get("options")
@@ -643,7 +643,7 @@ def _assert_nested_model(profile: Mapping[str, Any], *, location: str) -> None:
     from ageval.model import ModelConfigError, resolve_model
 
     model = profile.get("model")
-    options = _model_options(profile)
+    options = model_options(profile)
     try:
         if model is None:
             resolve_model({"id": "omitted"}, options)

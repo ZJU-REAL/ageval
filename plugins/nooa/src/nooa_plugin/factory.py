@@ -8,12 +8,18 @@ locators projected into the exec env at invoke time.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from ageval.model import ModelSpec, coerce_factory_model, require_model_support, spec_from_factory
+from ageval.plugins.base import BaseExecutor
+from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.errors import ExtensionMaterializeError
 from nooa_plugin import PLUGIN_ID
 from nooa_plugin.container import NooaBoxExecutor
+
+_DEFAULT_MODEL_ID = "openai/gpt-4.1-mini"
 
 _BASE_URL_ENV_FALLBACKS = (
     "OPENAI_BASE_URL",
@@ -63,12 +69,94 @@ def resolve_base_url(explicit: str | None) -> str | None:
     return None
 
 
-def _model_id(model: Any) -> str:
-    from ageval.config.profiles import model_id
+@executor_plugin(priority=110, source="installed")
+class NooaExecutorSPI(BaseExecutor):
+    """Executor SPI. The box runs the worker; this class owns the model contract."""
 
-    if model is None:
-        return ""
-    return model_id(model)
+    kind = PLUGIN_ID
+    requires_environment = True
+    supported_apis = frozenset({"chat", "responses"})
+    supported_model_fields = frozenset(
+        {"id", "api", "reasoning_effort", "timeout", "watchdog", "extra"}
+    )
+    extra_allowlist = frozenset()
+
+    def __init__(
+        self,
+        *,
+        options: dict[str, Any] | None = None,
+        host: Any,
+        placement: Any,
+        profile_id: str | None = None,
+        model: Any = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        package_root: str | None = None,
+    ) -> None:
+        del profile_id
+        opts = dict(options or {})
+        agent_ref = opts.get("agent")
+        if not agent_ref or not str(agent_ref).strip():
+            raise ExtensionMaterializeError(
+                "nooa_options_agent_required",
+                kind="extension_materialize_failed",
+            )
+        spec = spec_from_factory(coerce_factory_model(model), opts, default_id=_DEFAULT_MODEL_ID)
+        self.supports_model(spec)
+        self.bind_model(spec)
+        self._box = NooaBoxExecutor(
+            host=host,
+            placement=placement,
+            plugin_root=_plugin_root(),
+            package_root=package_root,
+            agent_ref=str(agent_ref).strip(),
+            method=str(opts.get("method") or "run").strip() or "run",
+            model=spec.id,
+            base_url=base_url if isinstance(base_url, str) else None,
+            api_key_env=api_key if isinstance(api_key, str) else None,
+        )
+        self.model = self._box.model
+
+    @classmethod
+    def supports_model(cls, spec: ModelSpec) -> None:
+        require_model_support(
+            spec,
+            supported_apis=cls.supported_apis,
+            supported_model_fields=cls.supported_model_fields,
+            extra_allowlist=cls.extra_allowlist,
+        )
+
+    def bind_model(self, spec: ModelSpec) -> None:
+        self.spec = spec
+        self.reasoning_effort = spec.reasoning_effort
+
+    @staticmethod
+    def describe() -> dict[str, Any]:
+        return describe_nooa()
+
+    def open(self, **kwargs: Any) -> None:
+        self._box.open(**kwargs)
+
+    def close(self) -> None:
+        self._box.close()
+
+    def invoke(
+        self,
+        prompt: str,
+        *,
+        timeout: float = 60.0,
+        collect_dir: str | None = None,
+        redaction_sentinels: tuple[str, ...] | list[str] | None = None,
+        tools: Sequence[Mapping[str, Any]] | None = None,
+        messages: Sequence[Mapping[str, Any]] | None = None,
+    ) -> Any:
+        del tools, messages
+        return self._box.invoke(
+            prompt,
+            timeout=timeout,
+            collect_dir=collect_dir,
+            redaction_sentinels=redaction_sentinels,
+        )
 
 
 def build_executor(
@@ -77,35 +165,27 @@ def build_executor(
     host: Any,
     placement: Any,
     profile_id: str | None = None,
-    model: str | None = None,
+    model: Any = None,
     base_url: str | None = None,
     api_key: str | None = None,
     package_root: str | None = None,
-) -> NooaBoxExecutor:
-    """plugin.yaml exclusive entry: factory(**kwargs) → in-box executor."""
-    del profile_id
-    opts = dict(options or {})
-    agent_ref = opts.get("agent")
-    if not agent_ref or not str(agent_ref).strip():
-        raise ExtensionMaterializeError(
-            "nooa_options_agent_required",
-            kind="extension_materialize_failed",
-        )
-    return NooaBoxExecutor(
+) -> NooaExecutorSPI:
+    """Thin wrapper. plugin.yaml registers ``NooaExecutorSPI``."""
+    return NooaExecutorSPI(
+        options=options,
         host=host,
         placement=placement,
-        plugin_root=_plugin_root(),
+        profile_id=profile_id,
+        model=model,
+        base_url=base_url,
+        api_key=api_key,
         package_root=package_root,
-        agent_ref=str(agent_ref).strip(),
-        method=str(opts.get("method") or "run").strip() or "run",
-        model=_model_id(model) or "openai/gpt-4.1-mini",
-        base_url=base_url if isinstance(base_url, str) else None,
-        api_key_env=api_key if isinstance(api_key, str) else None,
     )
 
 
 __all__ = [
     "PLUGIN_ID",
+    "NooaExecutorSPI",
     "build_executor",
     "describe_nooa",
     "resolve_api_key_value",

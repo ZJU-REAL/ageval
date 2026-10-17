@@ -33,7 +33,7 @@ slots:
   exclusive:
     - id: executor
       priority: 110
-      entry: "my_mech.factory:build_executor"
+      entry: "my_mech.factory:MyMechExecutorSPI"
   chain:
     - id: trajectory_collect
       priority: 110
@@ -63,8 +63,11 @@ Do not import docker/e2b/ssh from ACP.
 
 ## Executor
 
-Host factory: `build_executor(**kwargs)`. Common kwargs: `options`, `profile_id`,
-`model`, `base_url`, `api_key` (locator name), `host`, `placement`, `package_root`.
+The exclusive entry is the `BaseExecutor` subclass (`@executor_plugin`).
+`build_executor(**kwargs)` may remain a thin wrapper. Common kwargs: `options`,
+`profile_id`, `model`, `base_url`, `api_key` (locator name), `host`, `placement`,
+`package_root`. A string `model` is wrapped as `{"id": ...}` before
+`spec_from_factory`. `entry-default` and omit use the executor default id.
 
 ACP attaches with `host.attach_stdio`. dsh / nooa run a baked (or uploaded)
 worker with `host.exec` and `host.upload`. Missing capability → lock fails.

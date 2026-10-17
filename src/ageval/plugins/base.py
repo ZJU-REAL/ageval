@@ -65,9 +65,13 @@ class BaseExecutor(ABC):
     supported_model_fields: frozenset[str]
     extra_allowlist: frozenset[str]
 
+    @classmethod
     @abstractmethod
-    def supports_model(self, spec: ModelSpec) -> None:
-        """Raise ``ModelConfigError`` when this executor cannot accept ``spec``."""
+    def supports_model(cls, spec: ModelSpec) -> None:
+        """Raise ``ModelConfigError`` when this executor cannot accept ``spec``.
+
+        Lock calls this on the class and does not construct an instance.
+        """
 
     @abstractmethod
     def bind_model(self, spec: ModelSpec) -> None:
