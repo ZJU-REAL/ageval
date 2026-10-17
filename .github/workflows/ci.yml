@@ -129,6 +129,10 @@ jobs:
         if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
         run: uv run python scripts/gen_evidence_ts.py --check
 
+      - name: Example effort
+        if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
+        run: uv run python scripts/check_example_effort.py
+
       # Offline core: no Docker L1, no real agent CLIs, no registry suite.
       - name: Pytest (core, exclude registry)
         if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'

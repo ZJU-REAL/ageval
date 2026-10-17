@@ -7,7 +7,7 @@ agent_profiles:
       id: dashscope/glm-5.2
       api: responses
       reasoning:
-        effort: xhigh
+        effort: max
       timeout: 120
       watchdog: 300
       extra:

@@ -20,6 +20,7 @@ uv run python scripts/check_builtin_plugins.py
 uv run python scripts/check_builtin_agents.py
 uv run python scripts/gen_param_tables.py --check
 uv run python scripts/gen_evidence_ts.py --check
+uv run python scripts/check_example_effort.py
 
 export AGEVAL_OFFLINE_AGENT=1
 export AGEVAL_SKIP_DOCKER=1

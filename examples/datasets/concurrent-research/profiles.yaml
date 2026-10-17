@@ -7,7 +7,7 @@ agent_profiles:
     model:
       id: glm-5.3
       reasoning:
-        effort: minimal
+        effort: max
     api_key: ${glm_coding_api_key}
     base_url: https://open.bigmodel.cn/api/coding/paas/v4
     extensions:

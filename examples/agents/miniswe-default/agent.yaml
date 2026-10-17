@@ -12,7 +12,7 @@ binding:
     id: dashscope/glm-5.2
     api: responses
     reasoning:
-      effort: xhigh
+      effort: max
   api_key: ${litellm_api_key}
   base_url: ${litellm_base_url}
   extensions:
