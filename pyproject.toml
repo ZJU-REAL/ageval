@@ -97,7 +97,7 @@ dev = [
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tests", "plugins", "services", "scripts"]
 extend-exclude = ["docs", "specs", "examples"]
 
 [tool.ruff.lint]

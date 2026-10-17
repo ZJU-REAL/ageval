@@ -233,13 +233,16 @@ If an outward surface already has a `#digits` Issue trace, **delete it before me
 | **`git push`** (especially a branch that will merge to `main`) | **Yes.** The relevant jobs in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) pass locally first. |
 | **Opening or updating a PR, cutting a release, tagging, publishing** | **Required.** Confirm the CI jobs that will fire will pass, then push / open the PR / release. |
 
-Before helping with a push, a PR, or a release, an agent **must not** skip the gate because "it imports locally" or "only docs changed". Run the **CI-equivalent commands** for the paths below, or say which ones already passed. Fix failures before pushing.
+Before helping with a push, a PR, or a release, an agent **must not** skip the gate because "it imports locally" or "only docs changed". Run [`scripts/check.sh`](scripts/check.sh) for a Python change, or the matching job below, and say which commands already passed. Fix failures before pushing.
+
+`python-core`, `python-plugins`, and `python-registry` rewrite the same `.venv`. Run them one after another. `scripts/check.sh` does that and restores `--extra nooa --extra dsh --extra miniswe` when it exits. Pre-commit runs ruff only.
 
 ### CI gates (path-filtered parallel jobs)
 
 | Job | Trigger paths (summary) | Local equivalent |
 | --- | --- | --- |
-| `python-core` | `src/` `sdk/` `tests/` `examples/` `services/` `docker/` `scripts/` `pyproject.toml` `uv.lock` `VERSION` … | Python core, below |
+| `python-core` | `src/` `tests/` `plugins/` `examples/` `services/` `docker/` `scripts/` `pyproject.toml` `uv.lock` `VERSION` … | Python core, below |
+| `python-plugins` | Same as core | Plugin extras, below |
 | `python-registry` | Same as core (parallel; `tests/registry` only) | `uv sync --frozen --extra registry` + `pytest tests/registry` |
 | `viewer-app` | `apps/viewer/**` `apps/shared/**` | `pnpm --dir apps/viewer install --frozen-lockfile && pnpm --dir apps/viewer lint && pnpm --dir apps/viewer build` |
 | `hub-app` | `apps/hub/**` `apps/shared/**` | `pnpm --dir apps/hub install --frozen-lockfile && pnpm --dir apps/hub lint && pnpm --dir apps/hub build` |
@@ -253,8 +256,8 @@ Default CI has **no** real Docker e2e, **no** real Agent/API e2e, and **no** rea
 
 ```bash
 uv sync --frozen
-uv run ruff format --check src tests
-uv run ruff check src tests
+uv run ruff format --check src tests plugins services scripts
+uv run ruff check src tests plugins services scripts
 uv run pyright
 export AGEVAL_OFFLINE_AGENT=1 AGEVAL_SKIP_DOCKER=1
 export AGEVAL_SKIP_REAL_CODEX=1 AGEVAL_SKIP_REAL_PI=1
@@ -262,6 +265,19 @@ export AGEVAL_SKIP_REAL_OPENCODE=1 AGEVAL_SKIP_REAL_ACP=1
 # The pytest --ignore list must match job python-core in .github/workflows/ci.yml
 uv run pytest --ignore=tests/registry -q
 ```
+
+#### Python plugins (`python-plugins`)
+
+```bash
+uv sync --frozen --extra miniswe --extra nooa --extra dsh
+export AGEVAL_OFFLINE_AGENT=1 AGEVAL_SKIP_DOCKER=1
+export AGEVAL_SKIP_REAL_CODEX=1 AGEVAL_SKIP_REAL_PI=1
+export AGEVAL_SKIP_REAL_OPENCODE=1 AGEVAL_SKIP_REAL_ACP=1
+export AGEVAL_REQUIRE_PLUGIN_DEPS=1
+uv run pytest tests/plugins -q
+```
+
+`AGEVAL_REQUIRE_PLUGIN_DEPS=1` turns a `could not import` skip into a failure. `python-core` does not set it, so a checkout without those extras still skips.
 
 #### Python registry (`python-registry`)
 
@@ -272,7 +288,7 @@ uv run pytest tests/registry -q
 ```
 
 If the change touches docker, a real Agent, e2b, or ssh, run the extra checks the Issue or the related tests name. Those are **not** in default CI.
-Branch protection required checks must include the job names above.
+The required-check list in branch protection is an admin setting. It should name the jobs above once a person turns that on. This repo change does not edit that setting.
 
 ## Related entry points
 

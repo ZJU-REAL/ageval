@@ -5,8 +5,8 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from services.registry.orgs import queries as Q
 from services.registry.clock import now
+from services.registry.orgs import queries as Q
 from services.registry.orgs.protocol import OrgStoreProtocol
 from services.registry.orgs.rows import (
     MembershipRow,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+
 @dataclass(frozen=True, slots=True)
 class ResourceRequestRow:
     request_id: str
@@ -19,6 +20,7 @@ class ResourceRequestRow:
     decided_at: float | None = None
     decided_by: str = ""
     canonical_model: str = ""
+
 
 def request_to_dict(row: ResourceRequestRow) -> dict[str, Any]:
     out: dict[str, Any] = {

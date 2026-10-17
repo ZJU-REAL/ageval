@@ -174,11 +174,8 @@ def build_index_from_archive(archive: bytes, *, package_digest: str) -> PackageF
     ):
         for info in tar.getmembers():
             name = info.name
-            if not name or name.endswith("/"):
-                # directory member may have trailing slash
-                path = name.rstrip("/")
-            else:
-                path = name
+            # directory member may have trailing slash
+            path = name.rstrip("/") if not name or name.endswith("/") else name
             if not path or path.startswith("/") or ".." in path.split("/"):
                 continue
             if info.isdir():

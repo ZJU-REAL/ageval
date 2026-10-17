@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import os
 
-from services.registry.orgs.rows import (
-    normalize_user_id,
-)
 from services.registry.auth.tokens import (
     TokenInfo,
+)
+from services.registry.orgs.rows import (
+    normalize_user_id,
 )
 
 ENV_MAINTAINERS = "AGEVAL_REGISTRY_MAINTAINERS"

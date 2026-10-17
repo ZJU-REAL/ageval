@@ -68,4 +68,3 @@ class RuntimeHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
-

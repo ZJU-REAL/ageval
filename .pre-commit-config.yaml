@@ -1,0 +1,14 @@
+# Fast local gate. The full CI equivalent is scripts/check.sh.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --check src tests plugins services scripts
+        language: system
+        pass_filenames: false
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check src tests plugins services scripts
+        language: system
+        pass_filenames: false

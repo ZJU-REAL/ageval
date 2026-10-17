@@ -5,8 +5,8 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from services.registry.results import queries as Q
 from services.registry.clock import now
+from services.registry.results import queries as Q
 from services.registry.results.protocol import ResultStoreProtocol
 from services.registry.results.rows import (
     AttemptResultRow,
@@ -464,4 +464,3 @@ class ResultStore(ResultStoreProtocol):
                 (result_kind, result_id, *orgs),
             )
             return cur.fetchone() is not None
-

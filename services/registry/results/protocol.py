@@ -100,4 +100,3 @@ class ResultStoreProtocol(Protocol):
         user_id: str,
         user_orgs: set[str],
     ) -> bool: ...
-

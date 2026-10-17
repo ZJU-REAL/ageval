@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from pathlib import Path
 
 from services.registry.auth.tokens import TokenInfo
 from services.registry.errors import RegistryAppError
@@ -82,30 +83,35 @@ class ShareHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _get_snapshot_share(self, *, token: str) -> HttpResult:
         try:
             payload = self.state.shares.get(token)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _get_snapshot_attempt(self, *, token: str, run_id: str) -> HttpResult:
         try:
             payload = self.state.shares.attempt_meta(token, run_id)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _list_snapshot_attempt_files(self, *, token: str, run_id: str) -> HttpResult:
         try:
             payload = self.state.shares.list_attempt_files(token, run_id)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _read_snapshot_attempt_file(self, *, token: str, run_id: str, file_path: str) -> HttpResult:
         try:
             payload = self.state.shares.read_attempt_file(token, run_id, file_path)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _revoke_snapshot_share(self, *, token: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.shares.revoke(token, auth=auth)

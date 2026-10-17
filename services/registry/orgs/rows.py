@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True, slots=True)
 class OrgRow:
     org_id: str
@@ -15,12 +16,14 @@ class OrgRow:
     icon_key: str = ""
     icon_github: str = ""
 
+
 @dataclass(frozen=True, slots=True)
 class MembershipRow:
     org_id: str
     user_id: str
     role: str
     created_at: float
+
 
 @dataclass(frozen=True, slots=True)
 class UserProfileRow:
@@ -32,6 +35,7 @@ class UserProfileRow:
     github_id: str
     description: str
     updated_at: float
+
 
 @dataclass(frozen=True, slots=True)
 class OrgInviteKeyRow:

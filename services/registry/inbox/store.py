@@ -5,8 +5,8 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from services.registry.inbox import queries as Q
 from services.registry.clock import now
+from services.registry.inbox import queries as Q
 from services.registry.inbox.protocol import InboxStoreProtocol
 from services.registry.inbox.rows import ResourceRequestRow
 from services.registry.orgs.rows import (

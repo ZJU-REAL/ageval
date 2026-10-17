@@ -43,11 +43,13 @@ class ShareStore(ShareStoreProtocol):
                 conn.commit()
             except self._adapter.integrity_error as exc:
                 raise ValueError("snapshot share already exists") from exc
+
     def get_snapshot_share(self, token: str) -> SnapshotShareRow | None:
         with self._connect() as conn:
             cur = self._exec(conn, Q.SELECT_SNAPSHOT_SHARE, (token,))
             found = cur.fetchone()
             return self._snapshot_share_row(found) if found else None
+
     def find_snapshot_share(
         self, *, owner_user_id: str, suite_run_id: str, run_id: str
     ) -> SnapshotShareRow | None:
@@ -59,6 +61,7 @@ class ShareStore(ShareStoreProtocol):
             )
             found = cur.fetchone()
             return self._snapshot_share_row(found) if found else None
+
     def delete_snapshot_share(self, token: str) -> SnapshotShareRow:
         with self._connect() as conn:
             cur = self._exec(conn, Q.SELECT_SNAPSHOT_SHARE, (token,))
@@ -69,6 +72,7 @@ class ShareStore(ShareStoreProtocol):
             self._exec(conn, Q.DELETE_SNAPSHOT_SHARE, (token,))
             conn.commit()
             return row
+
     def count_snapshot_share_blob_refs(self, blob_digest: str) -> int:
         with self._connect() as conn:
             cur = self._exec(conn, Q.COUNT_SNAPSHOT_SHARE_BLOB, (blob_digest,))

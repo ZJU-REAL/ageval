@@ -85,6 +85,7 @@ WHERE result_kind=? AND result_id=? AND target_type='user' AND target_id=?
 LIMIT 1
 """
 
+
 def list_attempts_query(
     *,
     dataset_id: str | None = None,
@@ -107,6 +108,7 @@ def list_attempts_query(
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     return f"SELECT * FROM attempt_results {where} ORDER BY created_at DESC", params
 
+
 def list_suites_query(
     *,
     dataset_id: str | None = None,
@@ -122,9 +124,11 @@ def list_suites_query(
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     return f"SELECT * FROM suite_results {where} ORDER BY created_at DESC", params
 
+
 def select_attempts_in_query(n: int) -> str:
     placeholders = ",".join("?" for _ in range(n))
     return f"SELECT * FROM attempt_results WHERE run_id IN ({placeholders})"
+
 
 def select_result_shared_orgs_query(n: int) -> str:
     placeholders = ",".join("?" for _ in range(n))
@@ -134,6 +138,7 @@ def select_result_shared_orgs_query(n: int) -> str:
                   AND target_id IN ({placeholders})
                 LIMIT 1
                 """
+
 
 SCHEMA_STATEMENTS: tuple[str, ...] = (
     """
@@ -180,9 +185,7 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
     """,
 )
 
-SCHEMA_INTEGER_FLAGS: tuple[tuple[str, str], ...] = (
-    ("suite_results", "board_listed"),
-)
+SCHEMA_INTEGER_FLAGS: tuple[tuple[str, str], ...] = (("suite_results", "board_listed"),)
 
 SCHEMA_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("suite_results", "config_json", "TEXT NOT NULL DEFAULT '{}'"),

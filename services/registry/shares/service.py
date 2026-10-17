@@ -19,11 +19,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from services.registry.auth.tokens import TokenInfo
+from services.registry.clock import now
 from services.registry.content.blob_io import read_blob, sha256_file
 from services.registry.errors import RegistryAppError
 from services.registry.shares.rows import SnapshotShareFileRow, SnapshotShareRow
-from services.registry.auth.tokens import TokenInfo
-from services.registry.clock import now
 
 from ageval.evidence.locators import run_locator, suite_run_locator
 from ageval.registry.media_types import SHARE_SNAPSHOT_MEDIA_TYPE

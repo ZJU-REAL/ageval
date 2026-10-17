@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from pathlib import Path
 
 from services.registry.auth.tokens import TokenInfo
 from services.registry.errors import RegistryAppError
@@ -31,6 +32,7 @@ class ResultHandlers:
             if work is not None:
                 shutil.rmtree(work, ignore_errors=True)
         return json_result(201, payload)
+
     def _list_attempts(self, *, auth: TokenInfo, qs: dict[str, list[str]]) -> HttpResult:
         try:
             payload = self.state.results.list_attempts(
@@ -42,12 +44,14 @@ class ResultHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _serve_attempt_meta(self, *, run_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.results.serve_attempt_meta(run_id=run_id, auth=auth)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _serve_attempt_content(self, *, run_id: str, auth: TokenInfo) -> HttpResult:
         try:
             fh, size, row = self.state.results.serve_attempt_content(run_id=run_id, auth=auth)
@@ -62,12 +66,14 @@ class ResultHandlers:
             stream=fh,
             size=size,
         )
+
     def _serve_attempt_files_list(self, *, run_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.results.list_attempt_files(run_id=run_id, auth=auth)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _serve_attempt_file(self, *, run_id: str, file_path: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.results.read_attempt_file(
@@ -76,6 +82,7 @@ class ResultHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _upload_suite(self, *, auth: TokenInfo) -> HttpResult:
         work: Path | None = None
         try:
@@ -91,6 +98,7 @@ class ResultHandlers:
             if work is not None:
                 shutil.rmtree(work, ignore_errors=True)
         return json_result(201, payload)
+
     def _append_suite_slot(self, *, suite_run_id: str, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -102,6 +110,7 @@ class ResultHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _list_suites(self, *, auth: TokenInfo, qs: dict[str, list[str]]) -> HttpResult:
         try:
             board_raw = (qs.get("board") or [""])[0]
@@ -117,12 +126,14 @@ class ResultHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _serve_suite_meta(self, *, suite_run_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.results.serve_suite_meta(suite_run_id=suite_run_id, auth=auth)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _serve_suite_content(self, *, suite_run_id: str, auth: TokenInfo) -> HttpResult:
         try:
             fh, size, row = self.state.results.serve_suite_content(
@@ -139,6 +150,7 @@ class ResultHandlers:
             stream=fh,
             size=size,
         )
+
     def _list_result_shares(
         self, *, result_kind: str, result_id: str, auth: TokenInfo
     ) -> HttpResult:
@@ -149,6 +161,7 @@ class ResultHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _add_result_share(self, *, result_kind: str, result_id: str, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -164,6 +177,7 @@ class ResultHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(201, payload)
+
     def _remove_result_share(
         self, *, result_kind: str, result_id: str, auth: TokenInfo
     ) -> HttpResult:
@@ -181,12 +195,14 @@ class ResultHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _delete_attempt(self, *, run_id: str, auth: TokenInfo) -> HttpResult:
         try:
             payload = self.state.results.delete_attempt(run_id=run_id, auth=auth)
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _delete_suite(
         self, *, suite_run_id: str, auth: TokenInfo, qs: dict[str, list[str]]
     ) -> HttpResult:
@@ -200,6 +216,7 @@ class ResultHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _patch_attempt(self, *, run_id: str, auth: TokenInfo) -> HttpResult:
         visibility = self._visibility_body()
         if isinstance(visibility, HttpResult):
@@ -211,6 +228,7 @@ class ResultHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _attach_suite_agent(self, *, suite_run_id: str, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):
@@ -236,6 +254,7 @@ class ResultHandlers:
         except RegistryAppError as exc:
             return _caught(exc)
         return json_result(200, payload)
+
     def _patch_suite(self, *, suite_run_id: str, auth: TokenInfo) -> HttpResult:
         visibility = self._visibility_body()
         if isinstance(visibility, HttpResult):

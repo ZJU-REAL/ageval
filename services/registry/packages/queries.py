@@ -15,6 +15,7 @@ SELECT_RELEASE_BY_VERSION = "SELECT * FROM releases WHERE dataset_id=? AND versi
 
 SELECT_RELEASE_BY_DIGEST = "SELECT * FROM releases WHERE dataset_id=? AND package_digest=?"
 
+
 def list_releases_query(
     *,
     dataset_id_prefix: str | None = None,
@@ -39,6 +40,7 @@ def list_releases_query(
     sql = f"SELECT * FROM releases {where} ORDER BY dataset_id, version"
     return sql, params
 
+
 def list_versions_query(dataset_id: str, *, include_private: bool = False) -> tuple[str, list[Any]]:
     clauses = ["dataset_id = ?"]
     params: list[Any] = [dataset_id]
@@ -46,6 +48,7 @@ def list_versions_query(dataset_id: str, *, include_private: bool = False) -> tu
         clauses.append("visibility = 'public'")
     where = " AND ".join(clauses)
     return f"SELECT * FROM releases WHERE {where} ORDER BY version", params
+
 
 UPSERT_PACKAGE_TASK_SUMMARY = """
 INSERT INTO package_task_summaries(
@@ -185,12 +188,14 @@ ON CONFLICT(user_id, dataset_id) DO NOTHING
 
 DELETE_PACKAGE_FAVORITE = "DELETE FROM package_favorites WHERE user_id=? AND dataset_id=?"
 
+
 def select_package_download_counts_query(n: int) -> str:
     placeholders = ",".join("?" for _ in range(n))
     return (
         "SELECT dataset_id, download_count FROM package_download_counts "
         f"WHERE dataset_id IN ({placeholders})"
     )
+
 
 def select_package_favorite_counts_query(n: int) -> str:
     placeholders = ",".join("?" for _ in range(n))
@@ -199,12 +204,14 @@ def select_package_favorite_counts_query(n: int) -> str:
         f"WHERE dataset_id IN ({placeholders}) GROUP BY dataset_id"
     )
 
+
 def select_package_favorites_for_user_query(n: int) -> str:
     placeholders = ",".join("?" for _ in range(n))
     return (
         "SELECT dataset_id FROM package_favorites "
         f"WHERE user_id=? AND dataset_id IN ({placeholders})"
     )
+
 
 SCHEMA_STATEMENTS: tuple[str, ...] = (
     """

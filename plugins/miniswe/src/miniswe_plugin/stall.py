@@ -33,19 +33,6 @@ class StallExhausted(Exception):
     """The parent stall budget was spent on this model query."""
 
 
-_TIMEOUT_HINTS = (
-    "timeout",
-    "timed out",
-    "readtimeout",
-    "connecttimeout",
-    "connecterror",
-    "connectionreset",
-    "remoteprotocolerror",
-    "serverdisconnected",
-    "apitimeouterror",
-)
-
-
 def recycle_llm_clients() -> None:
     """Drop cached litellm HTTP clients so the next query opens a fresh connection.
 
@@ -57,13 +44,6 @@ def recycle_llm_clients() -> None:
     from miniswe_plugin.llm_client import recycle_llm_clients as _recycle
 
     _recycle()
-
-
-def _looks_like_transport_stall(exc: BaseException) -> bool:
-    name = type(exc).__name__.lower()
-    msg = str(exc).lower()
-    blob = f"{name}:{msg}"
-    return any(hint in blob for hint in _TIMEOUT_HINTS)
 
 
 def _recycle_async() -> None:

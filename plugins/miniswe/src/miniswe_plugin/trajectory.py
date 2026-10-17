@@ -99,9 +99,7 @@ def to_ageval_trajectory_events(
                 code = int(rc)
             except (TypeError, ValueError):
                 code = 1
-            content = str(
-                raw.get("output") or raw.get("content") or extra.get("raw_output") or ""
-            )
+            content = str(raw.get("output") or raw.get("content") or extra.get("raw_output") or "")
             raw_output = extra.get("raw_output")
             if raw_output is None:
                 raw_output = extra.get("output")
@@ -137,9 +135,7 @@ def to_ageval_trajectory_events(
                     summary = item.get("summary")
                     if isinstance(summary, list):
                         bits = [
-                            str(s.get("text") or s)
-                            for s in summary
-                            if isinstance(s, (dict, str))
+                            str(s.get("text") or s) for s in summary if isinstance(s, (dict, str))
                         ]
                         if bits:
                             thought = " ".join(bits).strip()[-8000:]

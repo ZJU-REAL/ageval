@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True, slots=True)
 class SnapshotShareRow:
     """Read link. Not a suite visibility or result_shares row.

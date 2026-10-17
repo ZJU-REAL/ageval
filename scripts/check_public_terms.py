@@ -112,7 +112,11 @@ def main() -> int:
             if line_allowed(raw):
                 continue
             for phrase in BANNED:
-                pat = phrase if phrase.startswith("(?") or phrase.startswith(r"(") else re.escape(phrase)
+                pat = (
+                    phrase
+                    if phrase.startswith("(?") or phrase.startswith(r"(")
+                    else re.escape(phrase)
+                )
                 if re.search(pat, raw):
                     hits.append(f"{rel}:{i}: {phrase!r}")
             for phrase, _ in SOFT:

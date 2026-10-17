@@ -8,7 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from services.registry.access import AccessPolicy
+from services.registry.auth.tokens import TokenInfo
+from services.registry.clock import now
 from services.registry.content.blob_io import read_blob, sha256_file
+from services.registry.dataset import DRAFT_SLOT, is_draft_version
+from services.registry.errors import RegistryAppError
 from services.registry.packages.brand_marks import normalize_icon_github, normalize_icon_key
 from services.registry.packages.builtin_agents import (
     builtin_agent_item,
@@ -23,19 +27,15 @@ from services.registry.packages.builtin_plugins import (
     builtin_plugin_items,
     is_builtin_plugin_id,
 )
-from services.registry.dataset import DRAFT_SLOT, is_draft_version
-from services.registry.errors import RegistryAppError
-from services.registry.paging import page_slice
-from services.registry.auth.tokens import TokenInfo
-from services.registry.packages.rows import (
-    DraftRow,
-    ReleaseRow,
-)
 from services.registry.packages.dto import (
     package_kind_for_media_type,
     release_to_dict,
 )
-from services.registry.clock import now
+from services.registry.packages.rows import (
+    DraftRow,
+    ReleaseRow,
+)
+from services.registry.paging import page_slice
 
 
 def overlay_kind(dataset_id: str, package_kind: str | None) -> str | None:
@@ -633,8 +633,8 @@ class PackageService:
         version: str | None = None,
         package_kind: str | None = None,
     ) -> dict[str, Any]:
-        from services.registry.packages.builtin_plugins import builtin_list_files
         from services.registry.content.files import get_or_build_index
+        from services.registry.packages.builtin_plugins import builtin_list_files
 
         kind = overlay_kind(dataset_id, package_kind)
         if kind == "plugin":
@@ -714,7 +714,6 @@ class PackageService:
         version: str | None = None,
         package_kind: str | None = None,
     ) -> dict[str, Any]:
-        from services.registry.packages.builtin_plugins import builtin_read_file
         from services.registry.content.files import (
             MAX_FILE_BYTES,
             PackageFileNotFound,
@@ -724,6 +723,7 @@ class PackageService:
             normalize_package_path,
             read_member,
         )
+        from services.registry.packages.builtin_plugins import builtin_read_file
 
         kind = overlay_kind(dataset_id, package_kind)
         if kind == "plugin":

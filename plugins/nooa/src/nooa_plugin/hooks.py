@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from nooa_plugin import PLUGIN_ID
-
 
 async def trajectory_collect(ctx: Any, value: Any, nxt: Any) -> Any:
     """Map native nooa dumps. Do not claim already-mapped foreign events."""

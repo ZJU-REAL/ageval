@@ -1,5 +1,6 @@
 # Path-filtered parallel CI:
 #   python-core     — ruff / pyright / offline pytest (excludes tests/registry)
+#   python-plugins  — plugin extras; import skips are failures
 #   python-registry — offline pytest tests/registry only
 #   viewer-app / hub-app — pnpm lint + build
 #   website         — pnpm build
@@ -46,6 +47,7 @@ jobs:
             python:
               - 'src/**'
               - 'tests/**'
+              - 'plugins/**'
               - 'examples/**'
               - 'services/**'
               - 'docker/**'
@@ -100,11 +102,11 @@ jobs:
 
       - name: Ruff format
         if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
-        run: uv run ruff format --check src tests
+        run: uv run ruff format --check src tests plugins services scripts
 
       - name: Ruff check
         if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests plugins services scripts
 
       - name: Pyright
         if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
@@ -132,6 +134,47 @@ jobs:
           uv run pytest \
             --ignore=tests/registry \
             -q
+
+  python-plugins:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Skip (no Python-relevant paths)
+        if: needs.changes.outputs.python != 'true' && needs.changes.outputs.workflow != 'true'
+        run: |
+          echo "Skipping python-plugins (SPA/docs-only or unrelated paths)."
+
+      - name: Checkout
+        if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Python
+        if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
+        run: uv python install 3.12
+
+      - name: Install plugin extras (frozen)
+        if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
+        run: uv sync --frozen --extra miniswe --extra nooa --extra dsh
+
+      # Plugin tests must not pass by skipping a missing extra.
+      - name: Pytest (plugins)
+        if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
+        env:
+          AGEVAL_OFFLINE_AGENT: "1"
+          AGEVAL_SKIP_DOCKER: "1"
+          AGEVAL_SKIP_REAL_CODEX: "1"
+          AGEVAL_SKIP_REAL_PI: "1"
+          AGEVAL_SKIP_REAL_OPENCODE: "1"
+          AGEVAL_SKIP_REAL_ACP: "1"
+          AGEVAL_REQUIRE_PLUGIN_DEPS: "1"
+        run: uv run pytest tests/plugins -q
 
   python-registry:
     needs: changes
