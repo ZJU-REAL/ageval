@@ -14,6 +14,6 @@ agent_profiles:
     model:
       id: dashscope/deepseek-v4-flash
       reasoning:
-        effort: xhigh
+        effort: max
     api_key: ${litellm_api_key}
     base_url: ${litellm_base_url}

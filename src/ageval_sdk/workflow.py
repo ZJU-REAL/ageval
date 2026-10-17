@@ -40,7 +40,7 @@ async def bounded_gather[T](
                 return await aw
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — gather slot returns the exception object
                 return exc
         finally:
             sem.release()

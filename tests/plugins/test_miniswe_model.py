@@ -239,7 +239,7 @@ def test_example_profile_resolves() -> None:
     spec = resolve_model(row["model"], options)
     assert spec.id == "dashscope/glm-5.2"
     assert spec.api == "responses"
-    assert spec.reasoning_effort == "xhigh"
+    assert spec.reasoning_effort == "max"
     assert spec.timeout == 120.0
     assert spec.watchdog == 300.0
     assert spec.extra["reasoning"] == {"summary": "auto"}

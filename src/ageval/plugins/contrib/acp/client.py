@@ -132,7 +132,7 @@ class _AgevalAcpClient:
             "source": "acp",
         }
         # Prefer typed dump when available (full structured update).
-        with contextlib_suppress(Exception):
+        with contextlib_suppress(TypeError, ValueError, AttributeError):
             if hasattr(update, "model_dump"):
                 dumped = update.model_dump(by_alias=True, exclude_none=True)
                 if isinstance(dumped, dict):

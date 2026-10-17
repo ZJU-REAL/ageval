@@ -14,7 +14,12 @@ from pathlib import Path
 from typing import Any
 
 from ageval.evidence.locators import portable_run_locator
-from ageval.evidence.redaction import assert_clean, redact_value, scan_for_secrets
+from ageval.evidence.redaction import (
+    RedactionError,
+    assert_clean,
+    redact_value,
+    scan_for_secrets,
+)
 from ageval.evidence.store import is_sealed_invocation, parse_jsonl_recover
 
 EXPORT_SCHEMA = "ageval.trajectory.export/1"
@@ -125,7 +130,7 @@ def export_trajectory(
                 cleaned = redact_value(data, extra_sentinels=extra_sentinels or ())
                 try:
                     assert_clean(cleaned, extra_sentinels=extra_sentinels or ())
-                except Exception:
+                except RedactionError:
                     return ExportResult(
                         False, "", 0, error=f"secret_residual_after_redact:{inv.name}:{name}"
                     )

@@ -13,7 +13,7 @@ import pytest
 from services.registry.app import build_default_state, make_handler
 
 from ageval.application.composition import build_agent_commands
-from ageval.registry.client import RegistryClient
+from ageval.registry.client import RegistryClient, RegistryError
 from ageval.registry.media_types import AGENT_MEDIA_TYPE
 
 _agents = build_agent_commands()
@@ -47,7 +47,7 @@ def env(registry_server, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dic
     home.mkdir()
     monkeypatch.setenv("AGEVAL_HOME", str(home))
     client = RegistryClient(registry_server["url"], token=registry_server["token"])
-    with contextlib.suppress(Exception):  # already created
+    with contextlib.suppress(RegistryError):  # already created
         client.create_org(name=TEST_ORG, display_name="Test Org")
     return {"url": registry_server["url"], "token": registry_server["token"], "home": str(home)}
 

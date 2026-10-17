@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import tarfile
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,19 @@ from services.registry.packages.rows import (
     ReleaseRow,
 )
 from services.registry.paging import page_slice
+
+from ageval.config.errors import ConfigError
+from ageval.plugins.manifest import PluginManifestError
+
+_PREVIEW_ERRORS = (
+    OSError,
+    EOFError,
+    tarfile.TarError,
+    ConfigError,
+    PluginManifestError,
+    ValueError,
+    TypeError,
+)
 
 
 def overlay_kind(dataset_id: str, package_kind: str | None) -> str | None:
@@ -596,12 +610,12 @@ class PackageService:
         if kind == "plugin":
             data = read_blob(self.blobs, row.blob_digest, prefix="packages")
             if data is not None:
-                with contextlib.suppress(Exception):
+                with contextlib.suppress(*_PREVIEW_ERRORS):
                     payload["plugin_preview"] = _plugin_preview_from_archive(data)
         elif kind == "agent":
             data = read_blob(self.blobs, row.blob_digest, prefix="packages")
             if data is not None:
-                with contextlib.suppress(Exception):
+                with contextlib.suppress(*_PREVIEW_ERRORS):
                     payload["agent_preview"] = agent_preview_from_archive(data)
         return payload
 

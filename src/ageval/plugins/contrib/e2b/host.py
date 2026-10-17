@@ -61,7 +61,7 @@ class E2BStdio:
                 if callable(send):
                     send(chunk.decode("utf-8", errors="replace"))
         finally:
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(OSError):
                 self._in_r.close()
 
     def _pump_out(self) -> None:
@@ -74,7 +74,7 @@ class E2BStdio:
                 self._out_w.write(payload)
                 self._out_w.flush()
         finally:
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(OSError):
                 self._out_w.close()
 
     def terminate(self) -> None:
@@ -82,7 +82,7 @@ class E2BStdio:
         if callable(kill):
             kill()
         for stream in (self.stdin, self.stdout, self._in_r, self._out_w):
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(OSError):
                 stream.close()
 
     def wait(self, timeout: float | None = None) -> int | None:

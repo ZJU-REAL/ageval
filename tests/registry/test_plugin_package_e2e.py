@@ -10,7 +10,7 @@ import pytest
 from services.registry.app import build_default_state, make_handler
 
 from ageval.application.composition import build_plugin_commands
-from ageval.registry.client import RegistryClient
+from ageval.registry.client import RegistryClient, RegistryError
 from ageval.registry.credentials import write_credentials
 from ageval.registry.plugin_package import PLUGIN_MEDIA_TYPE
 
@@ -41,7 +41,7 @@ def _ensure_org(url: str, token: str) -> None:
     client = RegistryClient(url, token=token)
     try:
         client.create_org(name=TEST_ORG, display_name="Test Org")
-    except Exception:
+    except RegistryError:
         return
 
 

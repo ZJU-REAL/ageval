@@ -9,6 +9,7 @@ target anywhere in this file.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import threading
 import time
@@ -17,6 +18,8 @@ from contextlib import suppress as contextlib_suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
+
+from acp.exceptions import RequestError
 
 from ageval import __version__ as AGEVAL_VERSION
 from ageval.environments.protocol import Placement, StdioTransport
@@ -490,7 +493,7 @@ class AcpExecutor(BaseExecutor):
         if self._client.prompt_usage is not None:
             event_prompt_usage: dict[str, Any] = self._client.prompt_usage
             if prompt_usage_raw is not None and hasattr(prompt_usage_raw, "model_dump"):
-                with contextlib_suppress(Exception):
+                with contextlib_suppress(TypeError, ValueError, AttributeError):
                     dumped_prompt = prompt_usage_raw.model_dump(by_alias=True, exclude_none=True)
                     if isinstance(dumped_prompt, dict):
                         event_prompt_usage = dumped_prompt
@@ -533,14 +536,21 @@ class AcpExecutor(BaseExecutor):
                 assert self._client is not None
                 remaining = idle - (time.monotonic() - self._client.last_activity_monotonic)
                 if remaining <= 0:
-                    with contextlib_suppress(Exception):
+                    with contextlib_suppress(OSError, RuntimeError, ValueError, TypeError):
                         await self._cancel()
                     raise _IdleTimeout()
                 await asyncio.wait({prompt_task}, timeout=min(0.2, remaining))
         finally:
             if not prompt_task.done():
                 prompt_task.cancel()
-                with contextlib_suppress(asyncio.CancelledError, Exception):
+                with contextlib_suppress(
+                    asyncio.CancelledError,
+                    RequestError,
+                    OSError,
+                    RuntimeError,
+                    ValueError,
+                    TypeError,
+                ):
                     await prompt_task
 
     def _normalized_usage(
@@ -698,7 +708,7 @@ class AcpExecutor(BaseExecutor):
 
     def _timeout_result(self, started: float, collect_dir: str | None) -> AgentResult:
         """Keep in-flight ACP updates; do not replace them with a lone timeout row."""
-        with contextlib_suppress(Exception):
+        with contextlib_suppress(OSError, RuntimeError, concurrent.futures.CancelledError):
             self._run(self._cancel(), timeout=5.0)
         self._write_vendor(collect_dir)
         return self._timeout_agent_result(started, error="acp_timeout")
@@ -830,7 +840,7 @@ class AcpExecutor(BaseExecutor):
 
     async def _cancel(self) -> None:
         if self._conn is not None and self._acp_session_id is not None:
-            with contextlib_suppress(Exception):
+            with contextlib_suppress(OSError, RuntimeError, ValueError, TypeError):
                 await self._conn.cancel(session_id=self._acp_session_id)
 
     def prepare_invoke(self) -> None:
@@ -852,13 +862,13 @@ class AcpExecutor(BaseExecutor):
             self._closed = True
         try:
             if self._loop is not None:
-                with contextlib_suppress(Exception):
+                with contextlib_suppress(OSError, RuntimeError, concurrent.futures.CancelledError):
                     self._run(self._shutdown(), timeout=10.0)
                 self._stop_loop()
         finally:
             # The box owns the process; dropping the pipe is our whole part.
             if self._pipe is not None:
-                with contextlib_suppress(Exception):
+                with contextlib_suppress(OSError, RuntimeError, ValueError, TypeError):
                     self._pipe.terminate()
             self._conn = None
             self._pipe = None
@@ -867,9 +877,9 @@ class AcpExecutor(BaseExecutor):
     async def _shutdown(self) -> None:
         """End the ACP session and leave no task behind on the private loop."""
         if self._conn is not None and self._acp_session_id is not None:
-            with contextlib_suppress(Exception):
+            with contextlib_suppress(RequestError, OSError, RuntimeError, ValueError, TypeError):
                 await self._conn.close_session(session_id=self._acp_session_id)
-            with contextlib_suppress(Exception):
+            with contextlib_suppress(RequestError, OSError, RuntimeError, ValueError, TypeError):
                 await self._conn.close()
         pending = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         for task in pending:
@@ -885,5 +895,5 @@ class AcpExecutor(BaseExecutor):
         loop.call_soon_threadsafe(loop.stop)
         if thread is not None:
             thread.join(timeout=5.0)
-        with contextlib_suppress(Exception):
+        with contextlib_suppress(OSError, RuntimeError):
             loop.close()

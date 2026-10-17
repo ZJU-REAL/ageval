@@ -105,10 +105,11 @@ There is no product `executor: mock`. A `FakeHost` or an empty `AgentService` is
 
 ### 4. No defensive programming
 
-Write the straight path. A failure fails.
+Write the straight path. A failure fails. Do not swallow an exception. A boundary turns the failure into a typed error and surfaces it (the evaluate boundary records a phase failure and still seals; that case stays).
 
+- Catch a concrete type, or re-raise. A bare `except Exception` that passes, continues, or returns a default is forbidden. `contextlib.suppress(Exception)` is the same swallow.
+- A boundary that already records a typed outcome (phase ERROR, cleanup warning, fail-open fact, worker envelope that marks the job failed, or an explicit re-raise) names that outcome on the `except` line. It does not disappear.
 - Do not build a friendly error-code table for every old field. An unknown key is rejected, with one message.
-- Do not catch `Exception` and continue as `{"status":"ERROR"}` (the evaluate boundary records a phase failure; that case is the exception).
 - Do not add an unproven probe or a compatibility layer. A non-ok executor invoke stalls until `options.upstream_stall_seconds` (omitted means 3600; `0` disables), then fails once. The retry interval is 60 seconds and is not a field.
 - Missing capability or `attach_stdio`: lock fails once. A parent refusal before the executor runs (wall clock already exhausted, invocation quota already exhausted, redaction failure, offline forced) fails that invoke once and does not stall.
 
@@ -259,6 +260,9 @@ uv sync --frozen
 uv run ruff format --check src tests plugins services scripts
 uv run ruff check src tests plugins services scripts
 uv run pyright
+uv run python scripts/gen_param_tables.py --check
+uv run python scripts/gen_evidence_ts.py --check
+uv run python scripts/check_example_effort.py
 export AGEVAL_OFFLINE_AGENT=1 AGEVAL_SKIP_DOCKER=1
 export AGEVAL_SKIP_REAL_CODEX=1 AGEVAL_SKIP_REAL_PI=1
 export AGEVAL_SKIP_REAL_OPENCODE=1 AGEVAL_SKIP_REAL_ACP=1

@@ -36,7 +36,11 @@ def _postgres() -> RegistryStores | None:
     try:
         psycopg = __import__("psycopg")
         psycopg.connect(url).close()
-    except Exception:
+    except ImportError:
+        return None
+    except Exception as exc:  # noqa: BLE001 — non-psycopg errors propagate
+        if not exc.__class__.__module__.startswith("psycopg"):
+            raise
         return None
     return open_stores(adapter=PostgresAdapter(url))
 
@@ -137,7 +141,11 @@ def test_postgres_token_roundtrip_against_live_types() -> None:
         pytest.skip("postgres daemon absent")
     try:
         __import__("psycopg").connect(url).close()
-    except Exception:
+    except ImportError:
+        pytest.skip("postgres daemon absent")
+    except Exception as exc:  # noqa: BLE001 — non-psycopg errors propagate
+        if not exc.__class__.__module__.startswith("psycopg"):
+            raise
         pytest.skip("postgres daemon absent")
     tokens = PostgresTokenStore(url)
     raw = "ageval-registry-token-type-probe"

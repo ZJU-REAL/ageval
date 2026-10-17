@@ -158,7 +158,7 @@ def test_miniswe_loopback_does_not_emit_missing_credential(
     )
     try:
         spi._run_agent("ping", timeout=1)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — dead port must not be the credential error
         assert "miniswe_missing_credential" not in str(exc)
 
 

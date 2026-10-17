@@ -9,7 +9,7 @@ agent_profiles:
     model:
       id: zai-coding-cn/glm-5.3
       reasoning:
-        effort: xhigh
+        effort: max
     api_key: ${ZHIPU_API_KEY}
     options:
       entry: pi

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verify ageval"
+  short_description: "Loopback lock/run; skips are not run"
+  default_prompt: "Use $verify-ageval to lock and run minimal-demo against the loopback gateway. Report a skipped credential check as not run, never passed."

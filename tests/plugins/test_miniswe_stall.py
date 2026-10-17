@@ -797,14 +797,14 @@ def test_close_llm_client_shutdown_unblocks_recv(monkeypatch: pytest.MonkeyPatch
         while not stop["x"]:
             try:
                 conn, _ = srv.accept()
-            except Exception:
+            except OSError:
                 continue
             # absorb request forever
             try:
                 while not stop["x"]:
                     time.sleep(0.2)
             finally:
-                with contextlib.suppress(Exception):
+                with contextlib.suppress(OSError):
                     conn.close()
 
     import threading
@@ -981,7 +981,7 @@ def test_responses_blackhole_shut_rdwr_and_future_timeout() -> None:
         while not stop["x"]:
             try:
                 conn, _ = srv.accept()
-            except Exception:
+            except OSError:
                 continue
 
             def absorb(c: socket.socket) -> None:
@@ -989,12 +989,12 @@ def test_responses_blackhole_shut_rdwr_and_future_timeout() -> None:
                     while not stop["x"]:
                         try:
                             data = c.recv(65536)
-                        except Exception:
+                        except OSError:
                             break
                         if not data:
                             time.sleep(0.05)
                 finally:
-                    with contextlib.suppress(Exception):
+                    with contextlib.suppress(OSError):
                         c.close()
 
             threading.Thread(target=absorb, args=(conn,), daemon=True).start()
@@ -1017,8 +1017,8 @@ def test_responses_blackhole_shut_rdwr_and_future_timeout() -> None:
                 headers={"Content-Type": "application/json", "Connection": "close"},
                 content=json.dumps({"model": "m", "input": "hi"}).encode(),
             )
-        except Exception:
-            pass
+        except (httpx.HTTPError, OSError):
+            return
         finally:
             plain["ok"] = True
 
@@ -1046,8 +1046,8 @@ def test_responses_blackhole_shut_rdwr_and_future_timeout() -> None:
                 headers={"Content-Type": "application/json", "Connection": "close"},
                 content=json.dumps({"model": "m", "input": "hi"}).encode(),
             )
-        except Exception:
-            pass
+        except (httpx.HTTPError, OSError):
+            return
         finally:
             shut["ok"] = True
 
