@@ -35,12 +35,15 @@ projected into the parent HTTP client; they never enter the lock.
 `options` merge: profile `options` then this plugin's `extensions` row (last wins).
 These limits are agent knobs, not Model fields.
 
+<!-- ageval:param-table executor=miniswe -->
 | Name | Default | Purpose |
 | --- | --- | --- |
-| `options.stream` | `true` on `api: chat` | Chat Completions use SSE. `false` sends one JSON body. An omitted key is treated as `true`, so `AGEVAL_MINISWE_CHAT_STREAM=0` does not turn a profile run off. Responses ignores this. |
-| `options.step_limit` | `30` | Agent step cap. `0` = unlimited. Negative / non-int values are rejected. |
-| `options.cost_limit` | `0` | Cost cap. `0` = unlimited. Negative values are rejected. |
-| `options.cmd_timeout` | `30` | Seconds per `host.exec` bash action. |
+| `options.stream` | `true` on `api: chat` | Chat Completions use SSE when true. false sends one JSON body. An omitted key is true, so AGEVAL_MINISWE_CHAT_STREAM=0 does not turn a profile run off. Responses ignores this. |
+| `options.step_limit` | 30 | Agent step cap. 0 is unlimited. Negative values are rejected. |
+| `options.cost_limit` | 0 | Cost cap. 0 is unlimited. Negative values are rejected. |
+| `options.cmd_timeout` | 30 | Seconds per host.exec bash action. Negative values are rejected. |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
 
 ## Model
 

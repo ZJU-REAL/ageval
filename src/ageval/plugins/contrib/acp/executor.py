@@ -49,6 +49,7 @@ from ageval.plugins.contrib.acp.hooks import (
     store_entry_argv0,
     stored_entry_argv0,
 )
+from ageval.plugins.contrib.acp.options import AcpOptions
 from ageval.plugins.contrib.acp.registry import AcpEntryDescriptor, AcpRegistryError, get_entry
 from ageval.plugins.contrib.acp.trajectory_map import acp_session_events_to_ageval
 from ageval.plugins.contrib.acp.usage import _as_plain_mapping, normalize_acp_usage
@@ -58,23 +59,8 @@ from ageval.plugins.contrib.acp.usage_journal import (
     sum_journal_files,
 )
 from ageval.plugins.decorators import executor_plugin
-from ageval.runtime.clocks import ClockError, Disabled, clock_default, parse_clock
-
-
-def _idle_timeout_seconds(raw: Any) -> float | None:
-    """``options.idle_timeout_seconds``: unset / ≤0 disables; garbage fails closed."""
-    try:
-        parsed = parse_clock("idle_timeout", raw)
-    except ClockError:
-        from ageval.plugins.errors import ExtensionMaterializeError
-
-        raise ExtensionMaterializeError(
-            "acp_idle_timeout_invalid",
-            kind="extension_materialize_failed",
-        ) from None
-    if isinstance(parsed, Disabled):
-        return None
-    return parsed
+from ageval.plugins.options import coerce_options, mapping_for_model
+from ageval.runtime.clocks import clock_default
 
 
 class _IdleTimeout(Exception):
@@ -159,6 +145,7 @@ class AcpExecutor(BaseExecutor):
     supported_apis = frozenset({"chat"})
     supported_model_fields = frozenset({"id", "api", "reasoning_effort"})
     extra_allowlist = frozenset()
+    Options = AcpOptions
 
     def __init__(
         self,
@@ -178,32 +165,31 @@ class AcpExecutor(BaseExecutor):
         **_kwargs: Any,
     ) -> None:
         del profile_id
-        opts = dict(options) if isinstance(options, Mapping) else {}
+        raw = mapping_for_model(options)
+        parsed: AcpOptions | None
+        if isinstance(options, AcpOptions):
+            parsed = options
+        elif raw or entry_id is None:
+            parsed = coerce_options(AcpOptions, raw, enforce_required=entry_id is None)
+        else:
+            parsed = None
         if entry_id is None:
-            raw_entry = opts.get("entry")
-            entry_id = (
-                raw_entry.strip() if isinstance(raw_entry, str) and raw_entry.strip() else None
-            )
-            if entry_id is None:
-                from ageval.plugins.errors import ExtensionMaterializeError
-
-                raise ExtensionMaterializeError(
-                    "acp_entry_required",
-                    kind="extension_materialize_failed",
-                )
-            spec = spec_from_factory(model, opts, default_id="entry-default")
+            assert parsed is not None
+            entry_id = parsed.entry
+            spec = spec_from_factory(model, raw, default_id="entry-default")
             self.supports_model(spec)
             self.bind_model(spec)
-            if idle_timeout_seconds is None:
-                idle_timeout_seconds = _idle_timeout_seconds(opts.get("idle_timeout_seconds"))
         elif isinstance(model, Mapping):
-            spec = spec_from_factory(model, opts, default_id="entry-default")
+            spec = spec_from_factory(model, raw, default_id="entry-default")
             self.supports_model(spec)
             self.bind_model(spec)
         else:
             self.model = model if isinstance(model, str) and model.strip() else "entry-default"
             effort = reasoning_effort.strip() if isinstance(reasoning_effort, str) else None
             self.reasoning_effort = effort or None
+        if idle_timeout_seconds is None and parsed is not None:
+            idle_timeout_seconds = parsed.idle_timeout_seconds
+        self.options = parsed if parsed is not None else AcpOptions(entry=entry_id)
         if api_key_env is None and isinstance(api_key, str) and api_key.strip():
             api_key_env = api_key.strip()
         self.entry_id = entry_id

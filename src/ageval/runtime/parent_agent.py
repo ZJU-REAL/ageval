@@ -885,7 +885,9 @@ class ParentAgentService:
             row = {}
         if isinstance(row, Mapping):
             options = executor_plugin_options(row)
-        raw = options.get("upstream_stall_seconds")
+        from ageval.plugins.options import stall_budget_raw
+
+        raw = stall_budget_raw(self.binder, row if isinstance(row, Mapping) else {}, options)
         phase = "evaluate" if self._run_sealed else "run"
         return UpstreamStall(
             budget_seconds=budget_seconds(raw),

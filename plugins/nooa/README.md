@@ -29,10 +29,16 @@ A kind that cannot `exec` / `upload` fails at `ageval lock`, not mid-invoke.
 
 `options` merge: profile `options` then this plugin's `extensions` row (last wins).
 
+<!-- ageval:param-table executor=nooa -->
 | Name | Default | Purpose |
 | --- | --- | --- |
-| `options.agent` | *(required)* | Package-local `module:Class` (subclass `nooa.Agent`, or a deterministic class). Missing → lock `nooa_options_agent_required`. |
-| `options.method` | `run` | Method invoked on that class. |
+| `options.agent` | *(required)* | Package-local module:Class (subclass nooa.Agent, or a deterministic class). Missing fails lock with nooa_options_agent_required. |
+| `options.method` | run | Method invoked on that class. |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
+
+| Name | Default | Purpose |
+| --- | --- | --- |
 | `model` | `openai/gpt-4.1-mini` | Model id projected into the worker. |
 | `api_key` | `OPENAI_API_KEY` / `litellm_api_key` | Env **locator name**. Value never enters the lock. Omit on loopback `base_url` (`127.0.0.1` / `localhost` / `::1`). |
 | `base_url` | `OPENAI_BASE_URL` / `litellm_base_url` / `AGEVAL_OPENAI_BASE_URL` | OpenAI-compatible base projected as `OPENAI_BASE_URL`. |

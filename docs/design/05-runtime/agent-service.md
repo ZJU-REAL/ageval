@@ -167,8 +167,7 @@ kind 名是 `anthropic-http`（api-client，Anthropic Messages）。与 `openai-
 | `messages` | OpenAI 形历史：`tool_calls` → `tool_use` 块；role `tool` → `tool_result`（可合并连续条） |
 | capability | `tools: native`，`session: new-only`，`execution_mode: api-client` |
 | 凭证 | 同 HTTP executor 规则。`api_key` 缺省 locator `ANTHROPIC_API_KEY`。loopback 空钥省略 `x-api-key` |
-| `options.max_tokens` | 必发。缺省 `4096`。非正整数则拒绝 |
-| `options.anthropic_version` | 请求头。缺省 `2023-06-01`。非字符串则拒绝 |
+| `options` | 冻结 `AnthropicHTTPOptions`。字段与缺省见 [16](../16-model.md) 的 Executor options |
 | `model` | 嵌套 Spec，字段表见 [16](../16-model.md)。本 executor 只接受 `api: chat`。`extra.thinking` 原样进入 Messages JSON。`reasoning.effort` 不在支持字段里。`timeout` / `watchdog` 与 openai-http 同一对时钟 |
 
 `thinking` 块映成 thought 事件（`channel: thought`）。events 合同与 openai-http 相同（`source: anthropic-http`）。

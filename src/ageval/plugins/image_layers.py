@@ -126,19 +126,15 @@ def _apply_bound_options(
 ) -> tuple[ImageLayer, ...]:
     """Fill ACP's bake body with the bound ``options.entry`` pins."""
     from ageval.plugins.contrib.acp.bake import render_bake_body
-    from ageval.plugins.errors import ExtensionMaterializeError
+    from ageval.plugins.contrib.acp.options import AcpOptions
+    from ageval.plugins.options import coerce_options
 
     out: list[ImageLayer] = []
     for layer in layers:
         if layer.plugin_id != "acp":
             out.append(layer)
             continue
-        entry = str((options_by_plugin.get("acp") or {}).get("entry") or "").strip()
-        if not entry:
-            raise ExtensionMaterializeError(
-                "acp_entry_required",
-                kind="extension_materialize_failed",
-            )
+        entry = coerce_options(AcpOptions, options_by_plugin.get("acp") or {}).entry
         out.append(
             ImageLayer(
                 plugin_id=layer.plugin_id,

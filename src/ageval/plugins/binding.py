@@ -10,10 +10,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from ageval.config.errors import ConfigError
 from ageval.model.errors import ModelConfigError
+from ageval.plugins.base import BaseExecutor
 from ageval.plugins.errors import ExtensionMaterializeError, ExtensionPluginNotFoundError
+from ageval.plugins.options import parse_options
 from ageval.plugins.protocol import ExtensionGraph
 from ageval.plugins.registry import ExtensionRegistry
+from ageval.plugins.slots import EXECUTOR
 
 # Factory id → accepted kwarg names (None = pass the whole context).
 _accepted_names: dict[int, frozenset[str] | None] = {}
@@ -68,10 +72,19 @@ def bind_winner(
             f"factory for plugin {winner.plugin_id!r} slot {slot!r} is not callable",
             kind="extension_materialize_failed",
         )
-    bound_options = dict(winner.options or {}) if options is None else dict(options)
+    bound_options: Any = dict(winner.options or {}) if options is None else dict(options)
+    impl = registration.impl
+    options_cls = getattr(impl, "Options", None)
+    if (
+        slot == EXECUTOR
+        and isinstance(impl, type)
+        and issubclass(impl, BaseExecutor)
+        and isinstance(options_cls, type)
+    ):
+        bound_options = parse_options(options_cls, bound_options)
     try:
-        return registration.impl(options=bound_options, **_accepted(registration.impl, context))
-    except (ExtensionMaterializeError, ModelConfigError):
+        return impl(options=bound_options, **_accepted(impl, context))
+    except (ExtensionMaterializeError, ModelConfigError, ConfigError):
         raise
     except Exception as exc:  # noqa: BLE001 — one bind failure, no retry
         raise ExtensionMaterializeError(

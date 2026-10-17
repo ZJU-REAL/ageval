@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -355,9 +356,7 @@ def test_installed_yaml_only_warns_that_cutoff_is_unpublished(
 
     monkeypatch.delenv("AGEVAL_STRICT_MODEL_CONTRACT", raising=False)
     registry.exclusive(EXECUTOR, "yaml-exec", build_yaml, source="installed", is_factory=True)
-    with pytest.warns(
-        YamlOnlyExecutorWarning, match="cutoff for third-party factories is not published"
-    ):
+    with pytest.warns(YamlOnlyExecutorWarning, match="2027-01-15"):
         locked = _lock(tmp_path, {"executor": "yaml-exec", "model": {"id": "m"}})
     assert locked.extension_bindings["solver"]["slots"]["executor"]["plugin"] == "yaml-exec"
 
@@ -371,6 +370,19 @@ def test_yaml_only_strict_off_still_warns(
     registry.exclusive(EXECUTOR, "yaml-exec", build_yaml, source="test", is_factory=True)
     monkeypatch.setenv("AGEVAL_STRICT_MODEL_CONTRACT", "0")
     with pytest.warns(YamlOnlyExecutorWarning, match="yaml-exec"):
+        _lock(tmp_path, {"executor": "yaml-exec", "model": {"id": "m"}})
+
+
+def test_yaml_only_is_rejected_on_the_cutoff(
+    tmp_path: Path, registry: ExtensionRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def build_yaml(**_kwargs: Any) -> object:
+        return object()
+
+    monkeypatch.setattr("ageval.plugins.model_contract._today", lambda: date(2027, 1, 15))
+    monkeypatch.setenv("AGEVAL_STRICT_MODEL_CONTRACT", "0")
+    registry.exclusive(EXECUTOR, "yaml-exec", build_yaml, source="installed", is_factory=True)
+    with pytest.raises(PluginContractError, match="2027-01-15"):
         _lock(tmp_path, {"executor": "yaml-exec", "model": {"id": "m"}})
 
 

@@ -24,9 +24,15 @@ Do not write `executor: pi`. A box without `attach_stdio` still lock-fails
 
 `options` merge: profile `options` then this plugin's `extensions` row (last wins). Same entry ids as ACP.
 
+<!-- ageval:param-table executor=acp-oneshot -->
 | Name | Default | Purpose |
 | --- | --- | --- |
-| `options.entry` | *(required)* | ACP entry id (`codex`, `claude-code`, `pi`, `opencode`, `grok-build`). Missing / unknown → lock `extension_materialize_failed`. |
+| `options.entry` | *(required)* | ACP entry id (codex, claude-code, pi, opencode, grok-build). Missing or unknown fails materialize. |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
+
+| Name | Default | Purpose |
+| --- | --- | --- |
 | `model.id` | `entry-default` | Nested `model:` only. Session model id. |
 | `model.reasoning.effort` | unset | Applied when the entry advertises a reasoning selector. Omit to keep the entry default. |
 | `api_key` | unset | Env **locator name** projected into the **exec** env. Value never enters the lock. |

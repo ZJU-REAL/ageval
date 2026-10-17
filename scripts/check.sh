@@ -18,6 +18,7 @@ uv run ruff check src tests plugins services scripts
 uv run pyright
 uv run python scripts/check_builtin_plugins.py
 uv run python scripts/check_builtin_agents.py
+uv run python scripts/gen_param_tables.py --check
 
 export AGEVAL_OFFLINE_AGENT=1
 export AGEVAL_SKIP_DOCKER=1

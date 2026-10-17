@@ -21,9 +21,11 @@ from ageval.model import ModelSpec, require_model_support, spec_from_factory
 from ageval.model.errors import ModelConfigError, http_status_is_config_error
 from ageval.plugins.agent_result import AgentResult
 from ageval.plugins.base import BaseExecutor
+from ageval.plugins.contrib.openai_http.options import OpenAIHTTPOptions
 from ageval.plugins.contrib.openai_http.usage import normalize_openai_http_usage
 from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.http_loopback import is_http_loopback
+from ageval.plugins.options import coerce_options, mapping_for_model
 from ageval.runtime.clocks import clock_seconds
 
 _DEFAULT_BASE = "https://api.openai.com/v1"
@@ -255,6 +257,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
     )
     extra_allowlist = frozenset({"provider"})
     concurrent_sessions = True
+    Options = OpenAIHTTPOptions
 
     def __init__(
         self,
@@ -269,9 +272,15 @@ class OpenAIHTTPExecutor(BaseExecutor):
         del profile_id
         self.base_url = base_url.strip() if isinstance(base_url, str) and base_url.strip() else None
         self.api_key_env = api_key.strip() if isinstance(api_key, str) and api_key.strip() else None
-        spec = spec_from_factory(model, options, default_id=_DEFAULT_MODEL_ID)
+        raw = mapping_for_model(options)
+        spec = spec_from_factory(model, raw, default_id=_DEFAULT_MODEL_ID)
         self.supports_model(spec)
         self.bind_model(spec)
+        self.options = (
+            options
+            if isinstance(options, OpenAIHTTPOptions)
+            else coerce_options(OpenAIHTTPOptions, raw)
+        )
 
     @classmethod
     def supports_model(cls, spec: ModelSpec) -> None:

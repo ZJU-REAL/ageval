@@ -236,7 +236,7 @@ def _validate_acp_profile(
     from ageval.config.profiles import plugin_row_options
 
     options = plugin_row_options(profile, "acp")
-    entry = options.get("entry")
+    entry = options["entry"] if "entry" in options else None  # noqa: SIM401
     if not isinstance(entry, str) or not entry.strip():
         raise ConfigError(
             ERROR_INVALID_SCHEMA,

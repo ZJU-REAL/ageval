@@ -390,6 +390,7 @@ class ConfigCore:
         from ageval.plugins.errors import ExtensionRegistryError, PluginContractError
         from ageval.plugins.lock_bind import extension_graph_to_lock
         from ageval.plugins.model_contract import assert_executor_model
+        from ageval.plugins.options import assert_profile_options
         from ageval.plugins.plugin_requires import PluginRequiresError
         from ageval.plugins.protocol import intent_from_profile
         from ageval.plugins.resolve import resolve as resolve_extensions
@@ -430,6 +431,7 @@ class ConfigCore:
             # Model contract before the lock fragment exists. A reject here
             # does not write a lock and does not enter upstream stall.
             assert_executor_model(profile, graph, registry)
+            assert_profile_options(profile, graph, registry, location=where)
             out[pid] = extension_graph_to_lock(graph)
         return out or None
 

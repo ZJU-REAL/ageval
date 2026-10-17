@@ -48,20 +48,20 @@ def split_model(model: str) -> tuple[str | None, str]:
 
 def _entry_id(row: Mapping[str, Any]) -> str | None:
     options = row.get("options")
-    if isinstance(options, Mapping):
-        raw = str(options.get("entry") or "").strip()
-        if raw:
-            return raw
+    if isinstance(options, Mapping) and "entry" in options:
+        raw = options["entry"]
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
     for ext in row.get("extensions") or ():
         if not isinstance(ext, Mapping):
             continue
         if str(ext.get("plugin") or "") != "acp":
             continue
         nested = ext.get("options")
-        if isinstance(nested, Mapping):
-            raw = str(nested.get("entry") or "").strip()
-            if raw:
-                return raw
+        if isinstance(nested, Mapping) and "entry" in nested:
+            raw = nested["entry"]
+            if isinstance(raw, str) and raw.strip():
+                return raw.strip()
     return None
 
 

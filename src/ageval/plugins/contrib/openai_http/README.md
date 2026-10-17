@@ -19,6 +19,12 @@ box is required; this executor does not inject `environment`.
 
 `options` merge: profile `options` then this plugin's `extensions` row (last wins).
 
+<!-- ageval:param-table executor=openai-http -->
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
+
 | Name | Default | Purpose |
 | --- | --- | --- |
 | `model` | `{id: gpt-4.1-mini}` | Nested spec. Field table: `docs/design/16-model.md`. `supported_apis`: `chat`, `responses`. `supported_model_fields`: `id`, `api`, `reasoning_effort`, `timeout`, `watchdog`, `extra`. `extra_allowlist`: `provider` (empty would reject every extra key). |
