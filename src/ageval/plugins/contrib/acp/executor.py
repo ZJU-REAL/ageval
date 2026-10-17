@@ -21,6 +21,7 @@ from typing import Any
 from ageval import __version__ as AGEVAL_VERSION
 from ageval.environments.protocol import Placement, StdioTransport
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
+from ageval.model.errors import TransportStall
 from ageval.model.usage import adopt_usage
 from ageval.plugins.agent_result import (
     AgentResult,
@@ -76,6 +77,16 @@ _READONLY_TOOL_KINDS = frozenset({"read", "search", "think", "fetch"})
 _JOURNAL_PARTIAL = frozenset(
     {"acp_idle_timeout", "acp_timeout", "acp_unexpected_eof", "acp_protocol_error"}
 )
+
+# Non-ok kinds the parent may stall-retry when the workspace is still unchanged.
+_TRANSPORT_STALL_ERRORS = _JOURNAL_PARTIAL
+
+
+def _acp_transport_stall(error: str | None) -> TransportStall | None:
+    """Typed failure so parent stall-retries ACP transport non-ok (like HTTP)."""
+    if error is None or error not in _TRANSPORT_STALL_ERRORS:
+        return None
+    return TransportStall(error, kind=error)
 
 
 def _usage_source_label(sources: Any) -> str:
@@ -581,6 +592,7 @@ class AcpExecutor(BaseExecutor):
             extra=extra,
             metadata=meta,
             repeatable=_workspace_unchanged(mapped),
+            failure=_acp_transport_stall(error),
         )
 
     def _result(
@@ -635,6 +647,7 @@ class AcpExecutor(BaseExecutor):
             extra=extra,
             metadata=meta,
             repeatable=_workspace_unchanged(mapped),
+            failure=_acp_transport_stall(error),
         )
 
     def _ensure_session(self, *, timeout: float) -> str | None:
@@ -731,6 +744,7 @@ class AcpExecutor(BaseExecutor):
                 error=err,
                 events=(event,),
                 metadata=meta,
+                failure=_acp_transport_stall(err),
             )
 
         started = time.monotonic()
@@ -769,6 +783,7 @@ class AcpExecutor(BaseExecutor):
                     "acp_entry_id": self.entry_id,
                 },
                 repeatable=_workspace_unchanged(mapped),
+                failure=_acp_transport_stall("acp_protocol_error"),
             )
         else:
             self._write_vendor(collect_dir)

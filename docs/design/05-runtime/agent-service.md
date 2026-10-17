@@ -89,7 +89,7 @@ executor 返回的 `ok` 不是 true、且这次结果可以重试时，这次 in
 - 预算是 profile `options.upstream_stall_seconds`（省略时取 [`clocks.py`](../../../src/ageval/runtime/clocks.py) 的 `upstream_stall`，3600；`0` 关掉）。间隔是 `stall_interval`，60 秒。同一次 invoke 只扣一次 `agent_invocations`。
 - stall 期间 run 的 `wall_time_seconds` 或 evaluate 的 `evaluate_seconds` 不走，worker 等待跟着延长。
 - wall 已到期、额度已用完、redaction 失败、offline forced 这些发生在 executor 之前，立刻拒绝，不显示 `upstream_stall`。
-- HTTP executor 的 4xx，除 408 与 429 外，是模型配置错误，不进入 stall。408、429 和其它非 ok 仍可重试。ACP 只在这条 prompt 还没改 workspace 时，于同一 session 重发；改过则 `repeatable: false`，一行 `not_repeatable`，不等待。
+- HTTP executor 的 4xx，除 408 与 429 外，是模型配置错误，不进入 stall。408、429 和其它非 ok 仍可重试。ACP 的超时、空闲超时、unexpected EOF 和协议/传输错误是 `TransportStall`；只在这条 prompt 还没改 workspace 时，于同一 session 重发；改过则 `repeatable: false`，一行 `not_repeatable`，不等待。
 - miniswe 的 stall 包住进程内当前模型查询，不新开 agent，并关掉该包自己的短 tenacity。内层预算用尽（`stall_exhausted`）时外层不再开一轮。
 - 证据是一条 `upstream_stall` 事实。stall 不是 PASS，也不是 `result.json` 的 status。
 

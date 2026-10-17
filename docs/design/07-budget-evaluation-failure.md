@@ -31,7 +31,7 @@ executor 运行之前的拒绝立刻返回，不进入 stall，也不显示 `ups
 三种 executor 的一次 invoke 大小不同：
 
 - `openai-http` 与 `anthropic-http`：一次 invoke 是一次请求。读超时、连接失败、408、429 和 5xx 是 `TransportStall`，父进程只在 `isinstance(failure, TransportStall)` 且 `repeatable` 时 stall。除此之外的 4xx 是 `ModelConfigError`，`repeatable` 为 false。坏 JSON 是 `ProtocolError`。动作解析失败是 `FormatError`。这三类不 stall。结果上仍留状态码字符串，给证据事实用。父进程不靠错误字符串分类。
-- ACP：仅当这条 prompt 还没有改过 workspace 时，在同一 session 上重发。已经改过则 `repeatable: false`。
+- ACP：超时、空闲超时、unexpected EOF 和协议/传输错误是 `TransportStall`；父进程只在 `isinstance(failure, TransportStall)` 且这条 prompt 还没有改过 workspace（`repeatable`）时，在同一 session 上重发。已经改过则 `repeatable: false`。
 - miniswe：一次 invoke 是整段 agent。stall 包住进程内当前这一次模型查询。消息留在进程里，恢复后重发这一次查询，不新开 agent。这个集成关掉 mini-swe-agent 自己的 10 次、4–60 秒 tenacity，两段等待不叠。预算属于这一次 parent invoke。内层把预算用完时带 `stall_exhausted`，外层不再开一轮。
 
 预算用尽：invoke 按失败 invoke 返回，Attempt 照今天的失败收场，cleanup 照跑。不给半成品 workspace 打分。最终 CLI 行仍是 PASS / FAIL / ERROR。
