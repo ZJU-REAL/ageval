@@ -1,12 +1,12 @@
-"""Model configuration errors.
+"""Executor failure families.
 
-A ``ModelConfigError`` means the profile is wrong. Lock fails. Callers must
-not treat it as a transport failure or send it through upstream stall.
+The parent stall retries only ``TransportStall``. A wrong profile is
+``ModelConfigError``. A body the client cannot decode is ``ProtocolError``.
+An action the harness cannot parse is ``FormatError``. None of those three
+enter the stall loop.
 """
 
 from __future__ import annotations
-
-import re
 
 
 class ModelConfigError(Exception):
@@ -16,6 +16,33 @@ class ModelConfigError(Exception):
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
+        self.message = message
+
+
+class TransportStall(Exception):
+    """A transport failure the parent may stall-retry."""
+
+    def __init__(self, message: str, *, kind: str = "transport") -> None:
+        super().__init__(message)
+        self.kind = kind
+        self.message = message
+
+
+class ProtocolError(Exception):
+    """A provider payload the client cannot decode. Not a stall."""
+
+    def __init__(self, message: str, *, kind: str = "protocol") -> None:
+        super().__init__(message)
+        self.kind = kind
+        self.message = message
+
+
+class FormatError(Exception):
+    """An action or tool payload the harness cannot parse. Not a stall."""
+
+    def __init__(self, message: str, *, kind: str = "format") -> None:
+        super().__init__(message)
+        self.kind = kind
         self.message = message
 
 
@@ -31,9 +58,3 @@ def http_status_is_config_error(code: int) -> bool:
     succeed, so it must not go through upstream stall.
     """
     return 400 <= code < 500 and code not in _RETRYABLE_4XX
-
-
-def http_error_reason_is_config_error(reason: str) -> bool:
-    """Classify an executor ``HTTPError:<code>`` reason string."""
-    match = re.match(r"^(?:ModelConfigError:)?HTTPError:(\d{3})\b", reason or "")
-    return bool(match) and http_status_is_config_error(int(match.group(1)))

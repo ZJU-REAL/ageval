@@ -16,6 +16,12 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
+from ageval.model.errors import (
+    ModelConfigError,
+    ProtocolError,
+    TransportStall,
+    http_status_is_config_error,
+)
 from ageval.plugins.agent_result import AgentResult
 from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.anthropic_http.options import AnthropicHTTPOptions
@@ -357,35 +363,70 @@ class AnthropicHTTPExecutor(BaseExecutor):
             invoke_timeout=timeout,
         )
         if kind == "watchdog":
+            message = f"TimeoutError:anthropic_http_watchdog:{self.watchdog:g}"
             return AgentResult(
                 model=self.model,
                 text="",
                 structured=None,
                 ok=False,
-                error=f"TimeoutError:anthropic_http_watchdog:{self.watchdog:g}",
+                error=message,
                 metadata={"executor_kind": "anthropic-http"},
+                failure=TransportStall(message, kind="watchdog"),
+            )
+        if kind == "protocol":
+            message = f"ProtocolError:{found}"
+            return AgentResult(
+                model=self.model,
+                text="",
+                structured=None,
+                ok=False,
+                error=message,
+                metadata={"executor_kind": "anthropic-http"},
+                repeatable=False,
+                failure=ProtocolError(message, kind=str(found or "bad_json")),
             )
         if kind == "http":
             assert isinstance(found, dict)
+            code = int(found["http_code"])
+            if http_status_is_config_error(code):
+                message = f"ModelConfigError:HTTPError:{code}"
+                return AgentResult(
+                    model=self.model,
+                    text="",
+                    structured=None,
+                    ok=False,
+                    error=message,
+                    metadata={
+                        "executor_kind": "anthropic-http",
+                        "http_error_body": found.get("http_body"),
+                        "error_kind": ModelConfigError.kind,
+                    },
+                    repeatable=False,
+                    failure=ModelConfigError(message),
+                )
+            message = f"HTTPError:{code}"
             return AgentResult(
                 model=self.model,
                 text="",
                 structured=None,
                 ok=False,
-                error=f"HTTPError:{found['http_code']}",
+                error=message,
                 metadata={
                     "executor_kind": "anthropic-http",
                     "http_error_body": found.get("http_body"),
                 },
+                failure=TransportStall(message, kind="http"),
             )
         if kind == "transport":
+            message = str(found)
             return AgentResult(
                 model=self.model,
                 text="",
                 structured=None,
                 ok=False,
-                error=str(found),
+                error=message,
                 metadata={"executor_kind": "anthropic-http"},
+                failure=TransportStall(message, kind="transport"),
             )
         raw = found if isinstance(found, dict) else {}
         blocks = raw.get("content") if isinstance(raw, dict) else None
@@ -481,7 +522,9 @@ def _exchange(
         except urllib.error.HTTPError as exc:
             box["http_code"] = exc.code
             box["http_body"] = exc.read().decode("utf-8", errors="replace")[:800]
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+        except json.JSONDecodeError:
+            box["protocol"] = "bad_json"
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
             box["transport"] = type(exc).__name__
 
     worker = threading.Thread(target=_post, name="anthropic-http", daemon=True)
@@ -493,6 +536,8 @@ def _exchange(
         )
     if "http_code" in box:
         return "http", box
+    if "protocol" in box:
+        return "protocol", box["protocol"]
     if "transport" in box:
         return "transport", box["transport"]
     return "ok", box.get("raw")

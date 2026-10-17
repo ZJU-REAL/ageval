@@ -27,10 +27,12 @@ import sys
 import threading
 from typing import Any, NoReturn
 
-from miniswe_plugin.model import ModelConfigError
-
-# Schema / auth / not-found failures are configuration. 408, 429, and 5xx stay transport.
-_CONFIG_HTTP_STATUS = frozenset({400, 401, 403, 404, 422})
+from ageval.model.errors import (
+    ModelConfigError,
+    ProtocolError,
+    TransportStall,
+    http_status_is_config_error,
+)
 
 # Ephemeral OpenAI/httpx clients live only in the query thread's locals. When the
 # stall watchdog fires ``Future.result(timeout=…)``, ``recycle_llm_clients`` only
@@ -225,13 +227,28 @@ def raise_for_http_status(
     *,
     cause: BaseException | None = None,
 ) -> NoReturn:
-    """Raise a terminal config error for schema 4xx, else a transport RuntimeError."""
+    """Raise ``ModelConfigError`` for a non-retryable 4xx, else ``TransportStall``."""
     code = status if status is not None else "?"
     message = f"{prefix}_{code}:{body}"
-    error: Exception = (
-        ModelConfigError(message) if status in _CONFIG_HTTP_STATUS else RuntimeError(message)
-    )
-    raise error from cause
+    if status is not None and http_status_is_config_error(status):
+        raise ModelConfigError(message) from cause
+    raise TransportStall(message, kind="http") from cause
+
+
+def _reraise_transport(exc: BaseException) -> NoReturn:
+    """Turn an httpx read/connect failure into ``TransportStall``. Other errors pass through."""
+    import httpx
+
+    if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
+        raise TransportStall(f"{type(exc).__name__}:{exc}", kind="transport") from exc
+    raise exc
+
+
+def _bad_payload(message: str, exc: BaseException | None = None) -> NoReturn:
+    error = ProtocolError(message, kind="bad_json")
+    if exc is None:
+        raise error
+    raise error from exc
 
 
 def http_timeout_seconds(timeout: float | None) -> float:
@@ -504,10 +521,12 @@ def post_responses_api(
         try:
             data = response.json()
         except Exception as exc:
-            raise RuntimeError(f"responses_http_bad_json:{response.text[:400]}") from exc
+            _bad_payload(f"responses_http_bad_json:{response.text[:400]}", exc)
         if not isinstance(data, dict):
-            raise RuntimeError(f"responses_http_not_object:{type(data).__name__}")
+            _bad_payload(f"responses_http_not_object:{type(data).__name__}")
         return DirectResponsesResult(data)
+    except Exception as exc:
+        _reraise_transport(exc)
     finally:
         unregister_in_flight_client(client)
         close_llm_client(client)
@@ -825,9 +844,9 @@ def post_chat_completions(
             try:
                 data = response.json()
             except Exception as exc:
-                raise RuntimeError(f"chat_http_bad_json:{response.text[:400]}") from exc
+                _bad_payload(f"chat_http_bad_json:{response.text[:400]}", exc)
             if not isinstance(data, dict):
-                raise RuntimeError(f"chat_http_not_object:{type(data).__name__}")
+                _bad_payload(f"chat_http_not_object:{type(data).__name__}")
             return ChatCompletion.model_validate(data)
 
         t0 = time.perf_counter()
@@ -858,15 +877,17 @@ def post_chat_completions(
                 try:
                     obj = json.loads(data_s)
                 except Exception as exc:
-                    raise RuntimeError(f"chat_http_bad_json:{data_s[:400]}") from exc
+                    _bad_payload(f"chat_http_bad_json:{data_s[:400]}", exc)
                 if not isinstance(obj, dict):
-                    raise RuntimeError(f"chat_http_stream_not_object:{type(obj).__name__}")
+                    _bad_payload(f"chat_http_stream_not_object:{type(obj).__name__}")
                 chunks.append(obj)
 
         if not chunks:
-            raise RuntimeError("chat_http_stream_empty")
+            _bad_payload("chat_http_stream_empty")
         data = assemble_chat_completion_from_stream(chunks)
         return ChatCompletion.model_validate(data)
+    except Exception as exc:
+        _reraise_transport(exc)
     finally:
         unregister_in_flight_client(client)
         close_llm_client(client)

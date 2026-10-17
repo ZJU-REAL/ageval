@@ -7,7 +7,6 @@ literal ``http(s)`` URL (lock stores the URL). Bare locator names are rejected.
 
 from __future__ import annotations
 
-import os
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -47,17 +46,9 @@ def is_locator_name(raw: str) -> bool:
 
 def expand_base_url_locator(raw: str, *, location: str) -> str:
     """Unwrap ``${NAME}`` to ``NAME``; keep an ``http(s)`` URL as a literal."""
-    name = parse_env_ref(raw)
-    if name is not None:
-        return name
-    text = raw.strip()
-    if is_http_url(text):
-        return text
-    raise ConfigError(
-        ERROR_INVALID_SCHEMA,
-        "profile.base_url must be ${ENV_NAME} or an http(s) URL",
-        location=location,
-    )
+    from ageval.config.locator import locked_base_url, parse_base_url
+
+    return locked_base_url(parse_base_url(raw, location=location))
 
 
 def resolve_locked_base_url(
@@ -67,26 +58,21 @@ def resolve_locked_base_url(
     location: str = "/agent_profiles/base_url",
 ) -> str | None:
     """Turn a locked ``base_url`` (locator name or URL) into a URL at spawn."""
-    if raw is None or not str(raw).strip():
-        return None
-    text = str(raw).strip()
-    if is_http_url(text):
-        return text
-    if not is_locator_name(text):
+    from ageval.config.locator import EnvLocator, HttpUrl, parse_locked_base_url, resolve
+
+    loc = parse_locked_base_url(raw)
+    if loc is None:
+        if raw is None or not str(raw).strip():
+            return None
         raise ConfigError(
             ERROR_INVALID_SCHEMA,
             "locked base_url must be an env locator name or an http(s) URL",
             location=location,
         )
-    env = os.environ if environ is None else environ
-    val = env.get(text)
-    if not val or not str(val).strip():
-        raise ConfigError(
-            ERROR_INVALID_SCHEMA,
-            f"profile.base_url ${{{text}}} is unset (set it in process env or package/repo .env)",
-            location=location,
-        )
-    return str(val).strip()
+    if isinstance(loc, HttpUrl):
+        return loc.value
+    assert isinstance(loc, EnvLocator)
+    return resolve(loc, environ=environ, location=location)
 
 
 def expand_profile_env_refs(

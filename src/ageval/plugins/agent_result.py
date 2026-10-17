@@ -27,6 +27,8 @@ class AgentResult:
     tool_calls: tuple[dict[str, Any], ...] = ()
     # False when this prompt must not be sent again (the workspace already changed).
     repeatable: bool = True
+    # The parent stall retries only when this is a TransportStall and repeatable.
+    failure: BaseException | None = None
 
 
 class AgentExecutor(Protocol):

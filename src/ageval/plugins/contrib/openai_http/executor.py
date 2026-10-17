@@ -18,7 +18,12 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
-from ageval.model.errors import ModelConfigError, http_status_is_config_error
+from ageval.model.errors import (
+    ModelConfigError,
+    ProtocolError,
+    TransportStall,
+    http_status_is_config_error,
+)
 from ageval.plugins.agent_result import AgentResult
 from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.openai_http.options import OpenAIHTTPOptions
@@ -353,10 +358,21 @@ class OpenAIHTTPExecutor(BaseExecutor):
                 repeatable=False,
             )
         if kind == "watchdog":
+            message = f"TimeoutError:openai_http_watchdog:{self.watchdog:g}"
             return self._result(
                 ok=False,
-                error=f"TimeoutError:openai_http_watchdog:{self.watchdog:g}",
+                error=message,
                 effort=effort,
+                failure=TransportStall(message, kind="watchdog"),
+            )
+        if kind == "protocol":
+            message = f"ProtocolError:{found}"
+            return self._result(
+                ok=False,
+                error=message,
+                effort=effort,
+                failure=ProtocolError(message, kind=str(found or "bad_json")),
+                repeatable=False,
             )
         if kind == "http":
             assert isinstance(found, dict)
@@ -365,21 +381,31 @@ class OpenAIHTTPExecutor(BaseExecutor):
             if http_status_is_config_error(code):
                 # The gateway rejected the request itself; resending cannot help.
                 meta["error_kind"] = ModelConfigError.kind
+                message = f"ModelConfigError:HTTPError:{code}"
                 return self._result(
                     ok=False,
-                    error=f"ModelConfigError:HTTPError:{code}",
+                    error=message,
                     effort=effort,
                     metadata=meta,
                     repeatable=False,
+                    failure=ModelConfigError(message),
                 )
+            message = f"HTTPError:{code}"
             return self._result(
                 ok=False,
-                error=f"HTTPError:{code}",
+                error=message,
                 effort=effort,
                 metadata=meta,
+                failure=TransportStall(message, kind="http"),
             )
         if kind == "transport":
-            return self._result(ok=False, error=str(found), effort=effort)
+            message = str(found)
+            return self._result(
+                ok=False,
+                error=message,
+                effort=effort,
+                failure=TransportStall(message, kind="transport"),
+            )
         raw = found if isinstance(found, dict) else {}
         if responses:
             text, thought, tool_calls = _responses_text_and_calls(raw)
@@ -464,7 +490,9 @@ class OpenAIHTTPExecutor(BaseExecutor):
             except urllib.error.HTTPError as exc:
                 box["http_code"] = exc.code
                 box["http_body"] = exc.read().decode("utf-8", errors="replace")[:800]
-            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+            except json.JSONDecodeError:
+                box["protocol"] = "bad_json"
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
                 box["transport"] = type(exc).__name__
 
         worker = threading.Thread(target=_post, name="openai-http", daemon=True)
@@ -485,6 +513,8 @@ class OpenAIHTTPExecutor(BaseExecutor):
             )
         if "http_code" in box:
             return "http", box
+        if "protocol" in box:
+            return "protocol", box["protocol"]
         if "transport" in box:
             return "transport", box["transport"]
         return "ok", box.get("raw")
@@ -497,6 +527,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
         effort: str | None,
         metadata: dict[str, Any] | None = None,
         repeatable: bool = True,
+        failure: BaseException | None = None,
     ) -> AgentResult:
         return AgentResult(
             model=self.model,
@@ -506,6 +537,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
             error=error,
             metadata=self._meta(effort, actual=None, extra=metadata),
             repeatable=repeatable,
+            failure=failure,
         )
 
     def _meta(

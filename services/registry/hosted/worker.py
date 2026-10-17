@@ -87,6 +87,19 @@ def child_environ(
     return env
 
 
+def suite_id_from_result_file(path: Path) -> str:
+    """Read ``suite_run_id`` from the JSON document ``--result-file`` writes."""
+    if not path.is_file():
+        return ""
+    try:
+        obj = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return ""
+    if isinstance(obj, dict) and isinstance(obj.get("suite_run_id"), str):
+        return obj["suite_run_id"]
+    return ""
+
+
 def parse_suite_run_id(stdout: str) -> str:
     """Last JSON object in stdout that carries ``suite_run_id``."""
     text = stdout or ""
@@ -165,6 +178,8 @@ class AgevalCliRunner:
             "--max-concurrent-tasks",
             str(prepared.max_concurrent_tasks),
             "--json",
+            "--result-file",
+            str(prepared.work_dir / "ageval-result.json"),
         ]
         if prepared.task_id:
             argv.extend(["--task", prepared.task_id])
@@ -198,8 +213,10 @@ class AgevalCliRunner:
             stop.set()
             thread.join(timeout=1)
         exit_code = int(proc.returncode if proc.returncode is not None else 2)
-        suite_run_id = parse_suite_run_id(stdout or "") or discover_suite_run_id(
-            prepared.dataset_root
+        suite_run_id = (
+            suite_id_from_result_file(prepared.work_dir / "ageval-result.json")
+            or parse_suite_run_id(stdout or "")
+            or discover_suite_run_id(prepared.dataset_root)
         )
         return RunResult(
             exit_code=exit_code,

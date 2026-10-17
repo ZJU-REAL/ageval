@@ -105,6 +105,20 @@ def _opencode_env_ref(locator: str | None) -> str | None:
     return f"{{env:{locator}}}"
 
 
+def _codex_base_url(raw: Any) -> str | None:
+    """Literal URL, or a locator name resolved from the environment.
+
+    Codex config.toml has no env indirection for ``base_url``. An unset
+    locator omits the key. Pi and OpenCode keep their own locator syntax.
+    """
+    from ageval.config.locator import parse_locked_base_url, resolve_if_set
+
+    loc = parse_locked_base_url(raw)
+    if loc is None:
+        return None
+    return resolve_if_set(loc)
+
+
 def _is_http_url(raw: Any) -> bool:
     text = str(raw or "").strip().lower()
     return text.startswith("http://") or text.startswith("https://")
@@ -276,9 +290,9 @@ def build_codex_overlays(rows: list[Mapping[str, Any]]) -> list[OverlayFile]:
         loc = _locator_name(row.get("api_key"))
         if loc:
             env_key = loc
-        raw_base = row.get("base_url")
-        if _is_http_url(raw_base):
-            base_url = str(raw_base).strip()
+        resolved = _codex_base_url(row.get("base_url"))
+        if resolved:
+            base_url = resolved
     if model is None:
         return []
     catalog_path = f"{HOME_PATH}/.codex/models.json"

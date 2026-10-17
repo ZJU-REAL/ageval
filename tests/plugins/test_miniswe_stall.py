@@ -15,6 +15,8 @@ from typing import Any
 
 import pytest
 
+from ageval.model.errors import FormatError, TransportStall
+
 ROOT = Path(__file__).resolve().parents[2]
 _SRC = ROOT / "plugins" / "miniswe" / "src"
 if str(_SRC) not in sys.path:
@@ -76,7 +78,7 @@ def test_wrapper_retries_the_same_messages() -> None:
         seen.append(msgs)
         calls["n"] += 1
         if calls["n"] == 1:
-            raise RuntimeError("HTTPError:503")
+            raise TransportStall("HTTPError:503", kind="http")
         return {"role": "assistant", "content": "ok"}
 
     wrapped = wrap_model_query(query, stall)
@@ -209,7 +211,7 @@ def test_any_failure_recycles_clients_before_stall_wait(monkeypatch: pytest.Monk
     def query(_messages: object, **_kwargs: object) -> dict[str, str]:
         calls["n"] += 1
         if calls["n"] == 1:
-            raise RuntimeError("HTTPError:503")
+            raise TransportStall("HTTPError:503", kind="http")
         return {"role": "assistant", "content": "ok"}
 
     wrap_model_query(query, stall)([])
@@ -251,9 +253,6 @@ def test_http_429_still_stalls() -> None:
 
 
 def test_format_error_is_not_a_stall() -> None:
-    class FormatError(Exception):
-        pass
-
     stall, clock, events = _stall(3600)
 
     def query(_messages: object, **_kwargs: object) -> dict[str, str]:
@@ -266,16 +265,13 @@ def test_format_error_is_not_a_stall() -> None:
 
 
 def test_format_error_after_a_wait_closes_the_stall() -> None:
-    class FormatError(Exception):
-        pass
-
     stall, clock, events = _stall(3600)
     calls = {"n": 0}
 
     def query(_messages: object, **_kwargs: object) -> dict[str, str]:
         calls["n"] += 1
         if calls["n"] == 1:
-            raise RuntimeError("HTTPError:503")
+            raise TransportStall("HTTPError:503", kind="http")
         raise FormatError("bad actions")
 
     with pytest.raises(FormatError):
@@ -293,7 +289,7 @@ def test_spent_budget_raises_without_another_query() -> None:
 
     def query(_messages: object, **_kwargs: object) -> dict[str, str]:
         calls["n"] += 1
-        raise RuntimeError("HTTPError:503")
+        raise TransportStall("HTTPError:503", kind="http")
 
     with pytest.raises(StallExhausted):
         wrap_model_query(query, stall)([{"role": "user", "content": "x"}])
@@ -379,7 +375,7 @@ def _install_fakes(monkeypatch: pytest.MonkeyPatch, *, failures: int) -> dict[st
             state["messages"] = messages
             if self.fail_remaining:
                 self.fail_remaining -= 1
-                raise RuntimeError("HTTPError:503")
+                raise TransportStall("HTTPError:503", kind="http")
             return {"role": "assistant", "content": "ok", "extra": {"actions": [], "cost": 0}}
 
         def format_message(self, **kwargs: object) -> dict[str, object]:

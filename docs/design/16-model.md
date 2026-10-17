@@ -8,7 +8,7 @@ from ageval.plugins.base import BaseEnvironment, BaseExecutor
 from ageval.plugins.errors import PluginContractError
 ```
 
-`src/ageval/model/` 解析。`src/ageval/plugins/base.py` 是环境与 executor 的基类。`api_key` 与 `base_url` 留在 profile 上，是 locator，不是 Model 字段。
+`src/ageval/model/` 解析。`src/ageval/plugins/base.py` 是环境与 executor 的基类。`api_key` 与 `base_url` 留在 profile 上，是 locator，不是 Model 字段。lock 用 `ageval.config.locator` 把 `base_url` 解析一次：`HttpUrl` 或 `EnvLocator`。锁文件仍写 URL 或 locator 名，不写密钥。
 
 ## 字段
 

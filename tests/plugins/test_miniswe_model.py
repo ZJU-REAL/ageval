@@ -216,8 +216,10 @@ def test_config_http_status_is_terminal() -> None:
     for status in (400, 401, 403, 404, 422):
         with pytest.raises(ModelConfigError, match=f"chat_http_{status}"):
             raise_for_http_status("chat_http", status, "bad schema")
+    from ageval.model.errors import TransportStall
+
     for status in (408, 429, 500, 503):
-        with pytest.raises(RuntimeError, match=f"responses_http_{status}"):
+        with pytest.raises(TransportStall, match=f"responses_http_{status}"):
             raise_for_http_status("responses_http", status, "later")
 
 
