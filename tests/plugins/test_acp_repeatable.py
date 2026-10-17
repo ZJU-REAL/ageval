@@ -74,6 +74,12 @@ class _StopConn:
             self.client.record(dict(ev))
         return SimpleNamespace(stop_reason="refusal", usage=None)
 
+    async def close_session(self, **kwargs: object) -> None:
+        del kwargs
+
+    async def close(self) -> None:
+        return None
+
 
 def _armed(
     ex: AcpExecutor,

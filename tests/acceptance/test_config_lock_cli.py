@@ -76,6 +76,8 @@ def test_override_changes_digest() -> None:
         TASK,
         "--set",
         '/agent_profiles/solver/model/id="other-model"',
+        "--set",
+        '/agent_profiles/solver/model/reasoning/effort="high"',
     )
     assert base.returncode == 0 and over.returncode == 0
     b = json.loads(base.stdout)
