@@ -83,7 +83,15 @@ def bind_winner(
     ):
         bound_options = parse_options(options_cls, bound_options)
     try:
-        return impl(options=bound_options, **_accepted(impl, context))
+        # Factories do not share one signature. ``options`` is always passed;
+        # ``_accepted`` drops context keys the factory did not declare.
+        # Call the registry attribute (typed Any). ``impl`` is narrowed to a
+        # BaseExecutor subclass on the parse branch, and that class constructor
+        # has no ``options`` parameter.
+        return registration.impl(
+            options=bound_options,
+            **_accepted(registration.impl, context),
+        )
     except (ExtensionMaterializeError, ModelConfigError, ConfigError):
         raise
     except Exception as exc:  # noqa: BLE001 — one bind failure, no retry

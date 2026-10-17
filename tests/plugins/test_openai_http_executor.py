@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from ageval.model.usage import UsageUnavailable
 from ageval.plugins.contrib.openai_http.executor import OpenAIHTTPExecutor
 from ageval.plugins.executor_capabilities import get_capabilities
 
@@ -357,7 +358,9 @@ def test_omit_tools_keeps_content_path() -> None:
     assert result.ok is True
     assert result.tool_calls == ()
     assert result.structured == {"ok": True}
-    assert result.usage is None
+    assert isinstance(result.usage, UsageUnavailable)
+    assert result.usage.reason == "not_reported"
+    assert not result.usage
     assert "tools" not in captured["body"]
 
 
@@ -498,6 +501,8 @@ def test_watchdog_expiry_is_a_repeatable_transport_error(monkeypatch: pytest.Mon
     assert "openai_http_watchdog" in result.error
     assert result.repeatable is True
     assert isinstance(result.failure, TransportStall)
+    assert isinstance(result.usage, UsageUnavailable)
+    assert result.usage.reason == "lost_on_timeout"
 
 
 def test_cancel_stops_the_local_wait(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -577,6 +582,8 @@ def test_http_4xx_is_a_model_config_error(code: int) -> None:
     assert result.error == f"ModelConfigError:HTTPError:{code}"
     assert result.repeatable is False
     assert isinstance(result.failure, ModelConfigError)
+    assert isinstance(result.usage, UsageUnavailable)
+    assert result.usage.reason == "not_reported"
     assert (result.metadata or {}).get("error_kind") == "model_config"
     assert "nope" in str((result.metadata or {}).get("http_error_body"))
 
@@ -595,6 +602,8 @@ def test_http_408_429_and_5xx_stay_repeatable(code: int) -> None:
     assert result.error == f"HTTPError:{code}"
     assert result.repeatable is True
     assert isinstance(result.failure, TransportStall)
+    assert isinstance(result.usage, UsageUnavailable)
+    assert result.usage.reason == "lost_on_timeout"
     assert "error_kind" not in (result.metadata or {})
 
 

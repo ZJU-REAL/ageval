@@ -63,7 +63,7 @@ agent_profiles:
 
 role 上可选 `label`。缺省：ACP 用 `options.entry`，其它路径用 `executor`。**不要**把 `options.agent` 当展示名。`--agent` 与 `--profiles` 互斥。`--model` 须配合 `--agent`，写入这次运行的 `model.id`。
 
-`model` 是嵌套对象。可以整段不写。写成字符串，或在 `options` 里平铺 `api`、`reasoning_effort`、`timeout`、`request_timeout`、`watchdog`、`extra_body`，lock 会失败。可选字段是 `api`（`chat` 或 `responses`）、`reasoning.effort`、`timeout`、`watchdog`、`extra`。没写的字段不会发到请求里。`options.upstream_stall_seconds` 省略是 3600，`0` 关闭这段等待。重试间隔固定 60 秒，不是配置字段。
+`model` 是嵌套对象。可以整段不写。写成字符串，或在 `options` 里平铺 `api`、`reasoning_effort`、`timeout`、`request_timeout`、`watchdog`、`extra_body`，lock 会失败。可选字段是 `api`（`chat` 或 `responses`）、`reasoning.effort`、`timeout`、`watchdog`、`extra`。没写的字段不会发到请求里。`reasoning.effort: max` 是别名：lock 把它改写成该模型 pin 里最高的 effort 档。pin 对不上这个模型，或该行没有 effort 列表，lock 失败。`options.upstream_stall_seconds` 省略是 3600，`0` 关闭这段等待。重试间隔固定 60 秒，不是配置字段。
 
 可选 `overlays` 是该 role 在 Hub 上的发布文件集（路径必须以 `overlays/` 开头）。列出的文件只能含 locator，不能含密钥。
 

@@ -22,6 +22,7 @@ from ageval.model.errors import (
     TransportStall,
     http_status_is_config_error,
 )
+from ageval.model.usage import LOST_ON_TIMEOUT, adopt_usage
 from ageval.plugins.agent_result import AgentResult
 from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.anthropic_http.options import AnthropicHTTPOptions
@@ -372,6 +373,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
                 error=message,
                 metadata={"executor_kind": "anthropic-http"},
                 failure=TransportStall(message, kind="watchdog"),
+                usage=LOST_ON_TIMEOUT,
             )
         if kind == "protocol":
             message = f"ProtocolError:{found}"
@@ -416,6 +418,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
                     "http_error_body": found.get("http_body"),
                 },
                 failure=TransportStall(message, kind="http"),
+                usage=LOST_ON_TIMEOUT,
             )
         if kind == "transport":
             message = str(found)
@@ -427,6 +430,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
                 error=message,
                 metadata={"executor_kind": "anthropic-http"},
                 failure=TransportStall(message, kind="transport"),
+                usage=LOST_ON_TIMEOUT,
             )
         raw = found if isinstance(found, dict) else {}
         blocks = raw.get("content") if isinstance(raw, dict) else None
@@ -490,7 +494,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
             error=None,
             events=tuple(events),
             tool_calls=tool_calls,
-            usage=usage,
+            usage=adopt_usage(usage),
             extra=extra,
             metadata={"executor_kind": "anthropic-http"},
         )

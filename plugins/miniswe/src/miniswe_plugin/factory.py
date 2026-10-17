@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
+from ageval.model.usage import LOST_ON_TIMEOUT, adopt_usage
 from ageval.plugins.agent_result import AgentResult, parse_validated_text_structured
 from ageval.plugins.base import BaseExecutor
 from ageval.plugins.decorators import executor_plugin
@@ -247,6 +248,7 @@ class MinisweExecutorSPI(BaseExecutor):
                 structured=None,
                 ok=False,
                 error="stall_exhausted",
+                usage=LOST_ON_TIMEOUT,
                 metadata={
                     "plugin": PLUGIN_ID,
                     "session_id": self.session_id,
@@ -270,6 +272,7 @@ class MinisweExecutorSPI(BaseExecutor):
                 structured=None,
                 ok=False,
                 error="miniswe_timeout",
+                usage=LOST_ON_TIMEOUT,
                 metadata={"plugin": PLUGIN_ID, "session_id": self.session_id},
             )
         except Exception as exc:  # noqa: BLE001
@@ -310,7 +313,7 @@ class MinisweExecutorSPI(BaseExecutor):
             ok=ok,
             error=None if ok else (status or "miniswe_error"),
             events=mapped,
-            usage=usage,
+            usage=adopt_usage(usage),
             metadata=metadata,
         )
 

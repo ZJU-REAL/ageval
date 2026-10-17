@@ -18,6 +18,8 @@ from datetime import UTC, datetime
 from ageval.attempt.ctx import AttemptCtx
 from ageval.attempt.phases import cleanup, environment, evaluate, record, run
 from ageval.evaluation.error_record import error_record_from_exception
+from ageval.evidence.invariants import SealInvariantError, assert_sealed_invariants
+from ageval.evidence.trajectory import TRAJECTORY_FILENAME
 
 _ATTEMPT_PHASES = frozenset({"environment", "run", "evaluate", "record"})
 
@@ -72,6 +74,7 @@ async def run_attempt(ctx: AttemptCtx) -> None:
                         "record_warning",
                         {"error": f"{type(exc).__name__}: {exc}"},
                     )
+            _assert_sealed(ctx)
         await _timed(ctx, cleanup.PHASE, cleanup.run)
 
 
@@ -105,7 +108,28 @@ async def run_regrade(ctx: AttemptCtx) -> None:
                         "record_warning",
                         {"error": f"{type(exc).__name__}: {exc}"},
                     )
+            _assert_sealed(ctx)
         await _timed(ctx, cleanup.PHASE, cleanup.run)
+
+
+def _assert_sealed(ctx: AttemptCtx) -> None:
+    """Check the trajectory seal before cleanup. A missing file is not a second failure.
+
+    Record stubs and a seal step that never wrote the file leave no trajectory.
+    Those cases already have a phase or record fact. A written trajectory that
+    breaks the seal is its own fact, and does not replace an earlier phase.
+    """
+    root = ctx.evidence.root
+    if not (root / TRAJECTORY_FILENAME).is_file():
+        return
+    try:
+        assert_sealed_invariants(root, keep_vendor_raw=ctx.keep_vendor_raw)
+    except SealInvariantError as exc:
+        ctx.record_fact("seal_invariant_failed", {"error": str(exc)})
+        if _failed_phase(ctx) is None:
+            _note_phase_failed(ctx, exc)
+        else:
+            ctx.record_fact("record_warning", {"error": f"seal_invariant: {exc}"})
 
 
 def _seal_solver_profile(ctx: AttemptCtx) -> None:

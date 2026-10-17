@@ -7,11 +7,10 @@ request this plugin sends.
 
 from __future__ import annotations
 
-import copy
-from collections.abc import Mapping
 from typing import Any
 
 from ageval.model import API_CHAT, API_RESPONSES, ModelConfigError, ModelSpec, resolve_model
+from ageval.model.wire import chat_body, responses_body
 from ageval.runtime.clocks import ClockError, clock_seconds
 
 DEFAULT_MODEL_ID = "openai/gpt-4o-mini"
@@ -48,24 +47,11 @@ def transport_clocks(spec: ModelSpec) -> tuple[float, float]:
 def wire_body(spec: ModelSpec) -> dict[str, Any]:
     """Body fields taken from the spec. Unset effort and timeout are absent.
 
-    Chat sends ``reasoning_effort`` only when effort is set. Responses sends
-    ``reasoning.effort``, merged over ``extra.reasoning``, with effort last.
-    ``extra`` is copied first so a first-class value wins.
+    Chat and responses share ``ageval.model.wire``. ``extra`` is copied first
+    so a first-class value wins.
     """
-    body: dict[str, Any] = copy.deepcopy(dict(spec.extra))
     if spec.api == API_CHAT:
-        if spec.reasoning_effort is not None:
-            body["reasoning_effort"] = spec.reasoning_effort
-    elif spec.api == API_RESPONSES:
-        if spec.reasoning_effort is not None:
-            current = body.get("reasoning")
-            if current is not None and not isinstance(current, Mapping):
-                raise ModelConfigError(f"miniswe_model_reasoning_invalid:{current!r}")
-            merged: dict[str, Any] = dict(current) if isinstance(current, Mapping) else {}
-            merged["effort"] = spec.reasoning_effort
-            body["reasoning"] = merged
-    else:
-        raise ModelConfigError(f"miniswe_api_invalid:{spec.api!r}")
-    if spec.timeout is not None:
-        body["timeout"] = float(spec.timeout)
-    return body
+        return chat_body(spec)
+    if spec.api == API_RESPONSES:
+        return responses_body(spec)
+    raise ModelConfigError(f"miniswe_api_invalid:{spec.api!r}")

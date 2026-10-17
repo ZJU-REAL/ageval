@@ -21,6 +21,7 @@ from typing import Any
 from ageval import __version__ as AGEVAL_VERSION
 from ageval.environments.protocol import Placement, StdioTransport
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
+from ageval.model.usage import adopt_usage
 from ageval.plugins.agent_result import (
     AgentResult,
     observational_result_health,
@@ -576,7 +577,7 @@ class AcpExecutor(BaseExecutor):
             ok=False,
             error=error,
             events=(*mapped, timeout_ev),
-            usage=usage,
+            usage=adopt_usage(usage, timeout=True),
             extra=extra,
             metadata=meta,
             repeatable=_workspace_unchanged(mapped),
@@ -613,9 +614,10 @@ class AcpExecutor(BaseExecutor):
         # Dual-source normalize: tokens from PromptResponse.usage; cost/context
         # from latest UsageUpdate. Never maps context.used → prompt_tokens.
         usage, extra = self._normalized_usage(partial=usage_partial)
+        adopted = adopt_usage(usage, partial=usage_partial)
         health = observational_result_health(
             ok=ok,
-            usage=usage,
+            usage=adopted,
             extra=extra,
             actual_model=self._actual_model,
             events=mapped,
@@ -629,7 +631,7 @@ class AcpExecutor(BaseExecutor):
             ok=ok,
             error=error,
             events=mapped,
-            usage=usage,
+            usage=adopted,
             extra=extra,
             metadata=meta,
             repeatable=_workspace_unchanged(mapped),
@@ -760,7 +762,7 @@ class AcpExecutor(BaseExecutor):
                         "source": "acp_adapter",
                     },
                 ),
-                usage=usage,
+                usage=adopt_usage(usage, partial=True),
                 extra=extra,
                 metadata={
                     "executor_kind": "acp",
@@ -803,9 +805,13 @@ class AcpExecutor(BaseExecutor):
             merged["sources"] = sources
         if result.error in _JOURNAL_PARTIAL:
             usage, merged_out = _mark_partial_usage(usage, merged)
+            adopted = adopt_usage(
+                usage, timeout=result.error in {"acp_timeout", "acp_idle_timeout"}, partial=True
+            )
         else:
             merged_out = merged or None
-        return replace(result, usage=usage, extra=merged_out)
+            adopted = adopt_usage(usage)
+        return replace(result, usage=adopted, extra=merged_out)
 
     async def _cancel(self) -> None:
         if self._conn is not None and self._acp_session_id is not None:

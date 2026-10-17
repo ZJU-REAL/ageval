@@ -9,6 +9,7 @@ import contextlib
 from typing import Any
 
 from ageval.evidence.redaction import RedactionError
+from ageval.model.usage import LOST_ON_TIMEOUT, NOT_REPORTED, to_sealed_document
 
 
 def map_error_status(error: str | None) -> str:
@@ -29,12 +30,18 @@ def seal_failure(
 ) -> None:
     if handle is None:
         return
+    reason = (
+        LOST_ON_TIMEOUT
+        if status == "timeout" or error in {"TimeoutExpired", "timeout"}
+        else NOT_REPORTED
+    )
     with contextlib.suppress(RedactionError):
         handle.seal(
             status=status,
             final_response=None,
             error=error,
             latency_ms=latency_ms,
+            usage=reason.to_sealed(),
         )
 
 
@@ -105,6 +112,7 @@ def seal_invoke_result(
 
     executor_meta = getattr(result, "metadata", None)
     executor_meta = dict(executor_meta) if isinstance(executor_meta, dict) else {}
+    sealed_usage = to_sealed_document(getattr(result, "usage", None))
     try:
         if result.ok:
             handle.seal(
@@ -114,7 +122,7 @@ def seal_invoke_result(
                     "structured_output": (
                         result.structured if isinstance(result.structured, dict) else None
                     ),
-                    "usage": getattr(result, "usage", None),
+                    "usage": sealed_usage,
                     "extra": getattr(result, "extra", None),
                     "session": {
                         "reusable": False,
@@ -127,7 +135,6 @@ def seal_invoke_result(
             )
         else:
             detail = executor_meta.get("error_detail")
-            usage = getattr(result, "usage", None)
             extra = getattr(result, "extra", None)
             handle.seal(
                 status=map_error_status(result.error),
@@ -136,7 +143,7 @@ def seal_invoke_result(
                 latency_ms=latency_ms,
                 error_detail=str(detail).strip() if isinstance(detail, str) and detail else None,
                 executor_metadata=executor_meta,
-                usage=usage if isinstance(usage, dict) else None,
+                usage=sealed_usage,
                 extra=extra if isinstance(extra, dict) else None,
             )
     except RedactionError:

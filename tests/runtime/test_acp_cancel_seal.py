@@ -116,6 +116,7 @@ def test_acp_future_cancel_seals_and_exports(tmp_path: Path, monkeypatch) -> Non
         meta = json.loads((directories[0] / "metadata.json").read_text(encoding="utf-8"))
         assert meta["status"] == "cancelled"
         assert meta["error"] == "invoke_cancelled"
+        assert meta["usage"]["unavailable"] == "not_reported"
         exported = export_trajectory(store.root, tmp_path / "export")
         assert exported.ok, exported.error
         assert exported.invocation_count == 1
@@ -158,6 +159,7 @@ def test_asyncio_cancelled_error_seals_as_invoke_cancelled(tmp_path: Path) -> No
     assert reply["error"] == "invoke_cancelled"
     meta = json.loads((store.list_invocations()[0] / "metadata.json").read_text(encoding="utf-8"))
     assert meta["status"] == "cancelled"
+    assert meta["usage"]["unavailable"] == "not_reported"
     exported = export_trajectory(store.root, tmp_path / "export")
     assert exported.ok, exported.error
 

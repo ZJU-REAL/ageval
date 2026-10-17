@@ -36,7 +36,8 @@ def parse_stall(raw: Any) -> int:
     return int(parsed)
 
 
-def stall_field() -> dataclasses.Field[int]:
+def stall_field() -> Any:
+    """Dataclass field for ``upstream_stall_seconds``. The clock table owns the default."""
     return dataclasses.field(
         default_factory=stall_default,
         metadata={

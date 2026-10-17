@@ -6,6 +6,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from ageval.model.usage import (
+    NOT_REPORTED,
+    Usage,
+    UsageUnavailable,
+    adopt_usage,
+    is_measured_usage,
+)
+
 RESULT_HEALTH_NOOP_TURN: str = "noop_turn"
 
 
@@ -19,7 +27,7 @@ class AgentResult:
     stderr: str = ""
     events: tuple[dict[str, Any], ...] = ()
     source_refs: tuple[dict[str, str], ...] = ()
-    usage: dict[str, Any] | None = None
+    usage: Usage | UsageUnavailable = NOT_REPORTED
     extra: dict[str, Any] | None = None
     # ACP / executor metadata (lock-safe, no secrets).
     metadata: dict[str, Any] | None = None
@@ -29,6 +37,10 @@ class AgentResult:
     repeatable: bool = True
     # The parent stall retries only when this is a TransportStall and repeatable.
     failure: BaseException | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.usage, Usage | UsageUnavailable):
+            object.__setattr__(self, "usage", adopt_usage(self.usage))
 
 
 class AgentExecutor(Protocol):
@@ -74,13 +86,13 @@ def _is_tool_event(event: Mapping[str, Any]) -> bool:
 def observational_result_health(
     *,
     ok: bool,
-    usage: Mapping[str, Any] | None,
+    usage: Any,
     actual_model: Any,
     events: Sequence[Mapping[str, Any]] | None,
     extra: Mapping[str, Any] | None = None,
 ) -> str | None:
     """Flag banner-only ok turns. Observational — never a PASS source."""
-    if not ok or usage is not None or extra is not None or actual_model is not None:
+    if not ok or is_measured_usage(usage) or extra is not None or actual_model is not None:
         return None
     for event in events or ():
         if isinstance(event, Mapping) and _is_tool_event(event):

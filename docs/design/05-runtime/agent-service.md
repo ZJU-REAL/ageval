@@ -148,11 +148,13 @@ tau2-class harness（`minimal-demo` 的 `tau2-dialog-min`、`examples/datasets/t
 
 `openai-http` 的 executor events 用 Core 合同：`kind: tool` + `phase: start` + `tool_call_id` / `function_name` / `args`。环境观察是 `phase: update`（source `ageval`），不是 HTTP 响应的一部分。
 
-`AgentResult.usage` 与轨迹文件 `terminal.usage` 同一形状（见 [evidence.md](evidence.md)）：一等 `prompt_tokens` / `completion_tokens` / `cached_tokens` / `cost_usd`（未知省略）。厂商 leftover 与插件袋在兄弟字段 `extra`。`openai-http` 从 Chat Completions `usage` 映射；`anthropic-http` 从 Messages `usage` 映射；ACP 从 `PromptResponse.usage` + `usage_update` 映射。缺 usage 就省略，不编造。usage / extra 是观察，不是 PASS。
+`AgentResult.usage` 必填，是 `Usage` 或 `UsageUnavailable`。轨迹 `terminal.usage` 是同一份密封 dict（见 [evidence.md](evidence.md)）：一等 `prompt_tokens` / `completion_tokens` / `cached_tokens` / `cost_usd` 只在后端报告了该量时出现。没有报告、时钟打断前没有数字、usage 载荷解析失败、或超时前只收到一部分，写成 `unavailable`，理由是 `not_reported` / `lost_on_timeout` / `parse_failed` / `partial`。不写 JSON null，不把缺量编成 0。厂商 leftover 与插件袋在兄弟字段 `extra`。`openai-http` 从 Chat Completions `usage` 映射；`anthropic-http` 从 Messages `usage` 映射；ACP 从 `PromptResponse.usage` + `usage_update` 映射。usage / extra 是观察，不是 PASS。
 
-ACP 的空闲超时、总超时、EOF 和协议异常走同一次映射，保留当时已经收到的量。有数据时 `extra` 带 `usage_partial: true` 和 `usage_source`。`session/prompt` 正常返回不写这两键。两源都空时 `usage` 和 `extra` 仍省略。invoke 未完成时这袋写在该次 metadata 上，record 放进这一轮 terminal。
+`partial` 可以带上已经收到的量。suite 合计不把这些量算进 token、费用或均价，另计 `questions_with_usage` 与 `questions_usage_unavailable`，并给出理由直方图 `usage_unavailable`。
 
-Entry 可以声明 `usage_journal`：Attempt HOME 下的一个目录、要累加的 JSONL 记录、以及源字段到 `prompt_tokens` / `completion_tokens` / `cached_tokens` / `cost_usd` 的对应。ACP 没有一等 usage 时，执行器读这个目录里的会话文件并累加。`extra.sources.session_journal` 为 true。正常返回不写 `usage_partial` / `usage_source`。超时、EOF 和协议异常再写 `usage_partial: true` 与 `usage_source: session_journal`。目录不存在或没有匹配记录时仍省略。ACP 已经给出一等 usage 时不读这份日志。
+ACP 的空闲超时、总超时、EOF 和协议异常走同一次映射，保留当时已经收到的量。有数据时理由是 `partial`，`extra` 带 `usage_partial: true` 和 `usage_source`。没有数字的超时是 `lost_on_timeout`。`session/prompt` 正常返回不写这两键；没有数字时理由是 `not_reported`。invoke 未完成时这袋写在该次 metadata 上，record 放进这一轮 terminal。
+
+Entry 可以声明 `usage_journal`：Attempt HOME 下的一个目录、要累加的 JSONL 记录、以及源字段到 `prompt_tokens` / `completion_tokens` / `cached_tokens` / `cost_usd` 的对应。ACP 没有一等 usage 时，执行器读这个目录里的会话文件并累加。`extra.sources.session_journal` 为 true。正常返回不写 `usage_partial` / `usage_source`。超时、EOF 和协议异常再写 `usage_partial: true` 与 `usage_source: session_journal`。目录不存在或没有匹配记录时理由仍是 `not_reported`（超时且没有数字则是 `lost_on_timeout`）。ACP 已经给出一等 usage 时不读这份日志。
 
 ## anthropic-http 原生 tools
 

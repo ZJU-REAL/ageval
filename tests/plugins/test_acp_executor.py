@@ -10,6 +10,7 @@ import pytest
 from tests.helpers.box import local_box
 
 from ageval.environments.protocol import Placement
+from ageval.model.usage import UsageUnavailable
 from ageval.plugins.agent_result import (
     RESULT_HEALTH_NOOP_TURN,
     observational_result_health,
@@ -171,7 +172,9 @@ def test_result_health_noop_turn() -> None:
     ex._actual_model = None
     result = ex._result(text="pi v0.83.0 banner", ok=True, error=None, stop="end_turn")
     assert result.ok is True
-    assert result.usage is None
+    assert isinstance(result.usage, UsageUnavailable)
+    assert result.usage.reason == "not_reported"
+    assert not result.usage
     assert result.metadata is not None
     assert result.metadata["result_health"] == RESULT_HEALTH_NOOP_TURN
     assert result.metadata["actual_model"] is None

@@ -25,7 +25,7 @@ from ageval.plugins.errors import PluginContractError
 
 `reasoning` 只认 `effort`。`summary` 等放进 `extra`。`none` 是会发送的 effort 值，不是省略。
 
-配置文件写出 `reasoning.effort` 时，用该模型文档里的最高档。常见档名是 `xhigh` 或 `max`。解析器不把档名收成枚举：档名由模型决定。
+配置文件写出具体档名。`reasoning.effort: max` 是别名：lock 先把模型 id 按 pin 的 alias、prefix、lookup 收成唯一的 canonical id，再改写成该行 `reasoning_options` 里最后一档 effort。锁里记下的是这一档，不是未解析的别名。对不上 pin，或该行没有 effort 列表，lock 失败，并提示改成具体档。不静默降档。其它档名原样保留，不收成枚举。`none` 仍是会发送的值。最高档本身就叫 `max` 时，锁里记下的就是这个档名。
 
 `extra` 是厂商键，原样保留。这里没有网关名单。`extra` 不能改写一等字段，所以这些键拒绝：`id`、`api`、`timeout`、`watchdog`、`reasoning_effort`，以及 `extra.reasoning.effort`。
 

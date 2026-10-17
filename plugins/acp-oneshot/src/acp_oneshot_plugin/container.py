@@ -257,7 +257,13 @@ class AcpOneshotBoxExecutor:
         ok = bool(payload.get("ok", False))
         text = str(payload.get("text") or "")
         error = str(payload["error"]) if payload.get("error") else None
-        usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else None
+        from ageval.model.usage import adopt_usage
+
+        raw_usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else None
+        usage = adopt_usage(
+            raw_usage,
+            timeout=error in {"acp_timeout", "acp_idle_timeout"},
+        )
         actual_model = payload.get("actual_model") or self.model
         health = observational_result_health(
             ok=ok,

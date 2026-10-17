@@ -306,6 +306,20 @@ def test_extra_body_and_max_tokens() -> None:
     assert captured["version"] == "2023-06-01"
 
 
+def test_watchdog_seals_lost_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "ageval.plugins.contrib.anthropic_http.executor._exchange",
+        lambda *_args, **_kwargs: ("watchdog", None),
+    )
+    result = AnthropicHTTPExecutor(base_url="http://127.0.0.1:9/v1").invoke("hi")
+    from ageval.model.usage import UsageUnavailable
+
+    assert result.ok is False
+    assert isinstance(result.usage, UsageUnavailable)
+    assert result.usage.reason == "lost_on_timeout"
+    assert not result.usage
+
+
 def test_invalid_extra_body() -> None:
     from ageval.model import ModelConfigError
     from ageval.plugins.contrib.anthropic_http import build_anthropic_http_executor

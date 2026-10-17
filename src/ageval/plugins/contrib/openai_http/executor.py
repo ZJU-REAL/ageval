@@ -7,7 +7,6 @@ Native ``tools=`` is first-class; omit the catalog to keep the content path.
 
 from __future__ import annotations
 
-import copy
 import json
 import os
 import threading
@@ -24,6 +23,8 @@ from ageval.model.errors import (
     TransportStall,
     http_status_is_config_error,
 )
+from ageval.model.usage import LOST_ON_TIMEOUT, NOT_REPORTED, adopt_usage
+from ageval.model.wire import chat_body, responses_body
 from ageval.plugins.agent_result import AgentResult
 from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.openai_http.options import OpenAIHTTPOptions
@@ -427,7 +428,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
             error=None,
             events=tuple(events),
             tool_calls=tool_calls,
-            usage=usage,
+            usage=adopt_usage(usage),
             extra=usage_extra,
             metadata=self._meta(effort, actual=effort),
         )
@@ -455,13 +456,11 @@ class OpenAIHTTPExecutor(BaseExecutor):
             }
         if catalog:
             payload["tools"] = _responses_tools(catalog) if responses else catalog
-        if self.extra:
-            payload.update(copy.deepcopy(self.extra))
-        if effort:
-            if responses:
-                payload["reasoning"] = {"effort": effort}
-            else:
-                payload["reasoning_effort"] = effort
+        wire = responses_body(self.spec) if responses else chat_body(self.spec)
+        # The HTTP clock is ``http_timeout``. The JSON body does not repeat it.
+        wire.pop("timeout", None)
+        payload.update(wire)
+        del effort
         return payload
 
     def _exchange(self, req: urllib.request.Request, *, timeout: float) -> tuple[str, Any]:
@@ -538,6 +537,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
             metadata=self._meta(effort, actual=None, extra=metadata),
             repeatable=repeatable,
             failure=failure,
+            usage=LOST_ON_TIMEOUT if isinstance(failure, TransportStall) else NOT_REPORTED,
         )
 
     def _meta(

@@ -174,6 +174,7 @@ class ConfigCore:
 
         provenance = self._effective_provenance(merged, dataset_provenance, resolution)
         profiles_rows = list(merged["agent_profiles"])
+        _rewrite_effort_max(profiles_rows)
         role_ids = [str(row.get("id")) for row in profiles_rows if row.get("id") is not None]
         job_overlay = project_job_overlay(
             {rid: row for rid, row in ((str(r.get("id")), r) for r in profiles_rows)},
@@ -434,6 +435,22 @@ class ConfigCore:
             assert_profile_options(profile, graph, registry, location=where)
             out[pid] = extension_graph_to_lock(graph)
         return out or None
+
+
+def _rewrite_effort_max(profiles_rows: list[Any]) -> None:
+    """Store the pin's highest effort tier when a profile wrote ``max``."""
+    from ageval.model.errors import ModelConfigError
+    from ageval.model.pin import rewrite_profile_effort_max
+
+    for row in profiles_rows:
+        if not isinstance(row, dict):
+            continue
+        pid = str(row.get("id") or "").strip()
+        where = f"/agent_profiles/{pid}/model/reasoning/effort" if pid else "/agent_profiles"
+        try:
+            rewrite_profile_effort_max(row)
+        except ModelConfigError as exc:
+            raise ConfigError("model_config", exc.message, location=where) from exc
 
 
 _ISOLATED_EVALUATE_KINDS = frozenset({"docker"})
