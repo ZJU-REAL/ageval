@@ -23,6 +23,7 @@ def test_omitted_phase_clocks_take_the_defaults() -> None:
     limits = thaw(locked.limits)
     assert limits["wall_time_seconds"] == 60
     assert limits["agent_invocations"] == 1
+    assert limits["agent_concurrency"] == 1
     assert limits["environment_seconds"] == 600
     assert limits["evaluate_seconds"] == 600
 
@@ -45,6 +46,7 @@ def test_authored_phase_clocks_are_kept(tmp_path: Path) -> None:
     limits = thaw(locked.limits)
     assert limits["environment_seconds"] == 12
     assert limits["evaluate_seconds"] == 34
+    assert limits["agent_concurrency"] == 1
 
 
 def test_unknown_limits_key_is_one_message(tmp_path: Path) -> None:
@@ -63,3 +65,32 @@ def test_unknown_limits_key_is_one_message(tmp_path: Path) -> None:
     message = str(caught.value)
     assert message.count("unknown limits keys") == 1
     assert "environment_actions" in message
+
+
+@pytest.mark.parametrize("raw", ["0", "-1", "1.5", "true"])
+def test_agent_concurrency_rejects_non_positive_integers(tmp_path: Path, raw: str) -> None:
+    root = tmp_path / "pkg"
+    root.mkdir()
+    text = (CONFIG_MIN / "tasks" / "minimal" / "task.yaml").read_text(encoding="utf-8")
+    text = text.replace(
+        "agent_invocations: 1\n", f"agent_invocations: 1\n  agent_concurrency: {raw}\n"
+    )
+    (root / "task.yaml").write_text(text, encoding="utf-8")
+    (root / "run.py").write_text("#\n", encoding="utf-8")
+    (root / "evaluator.py").write_text("#\n", encoding="utf-8")
+    with pytest.raises(ConfigError) as caught:
+        lock_standalone(root, "minimal", job=job_document({"solver": dict(SOLVER)}))
+    assert caught.value.error_code == "invalid_schema"
+    assert "/limits/agent_concurrency" in str(caught.value)
+
+
+def test_agent_concurrency_keeps_an_explicit_positive_value(tmp_path: Path) -> None:
+    root = tmp_path / "pkg"
+    root.mkdir()
+    text = (CONFIG_MIN / "tasks" / "minimal" / "task.yaml").read_text(encoding="utf-8")
+    text = text.replace("agent_invocations: 1\n", "agent_invocations: 1\n  agent_concurrency: 4\n")
+    (root / "task.yaml").write_text(text, encoding="utf-8")
+    (root / "run.py").write_text("#\n", encoding="utf-8")
+    (root / "evaluator.py").write_text("#\n", encoding="utf-8")
+    locked = lock_standalone(root, "minimal", job=job_document({"solver": dict(SOLVER)}))
+    assert thaw(locked.limits)["agent_concurrency"] == 4

@@ -413,6 +413,7 @@ def _agent_service(
         attempt_id=attempt_id,
         binder=binder,
         agent_invocation_limit=int(limits["agent_invocations"]),
+        agent_concurrency=int(limits["agent_concurrency"]),
         evidence_store=evidence,
         invoke_timeout_seconds=resolve_invoke_timeout_seconds(parameters),
     )

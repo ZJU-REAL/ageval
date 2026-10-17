@@ -21,7 +21,7 @@ created
 ## 相位
 
 1. **environment** — `host.start`（docker 在此消化 `image_layers`，含 ACP 绑定 entry），upload `data/`，链 `after_environment_ready`（ACP 探测；bake 已匹配则跳过安装）、`environment_setup`（`setup.sh`，末槽，不是 provision phase）。
-2. **run** — 子进程调 `run.py`。Agent invoke 走 parent socket。结束时停 Agent Service 并 `mark_writers_stopped`。
+2. **run** — 子进程调 `run.py`。Agent invoke 走 parent socket。结束时 `seal_run` 去掉排队的 solver invoke、取消并排干在途的 solver 执行，再 `mark_writers_stopped`。Agent Service 仍留给 evaluate。
 3. **evaluate** — 停 writer 之后 upload `evaluation/`，环境内跑 `evaluator.py`，`bind_evaluation`。
 4. **record** — collect/enrich → 引擎写 `trajectory.jsonl`。
 5. **cleanup** — `try/finally` 里 `host.stop`。失败记 warning，不改已绑定分数。
@@ -34,6 +34,7 @@ created
 2. Evaluator 不得与可写 Agent/`run.py` writer 并发面对同一评测输入。
 3. cleanup 必须可从超时/取消/异常进入。
 4. Campaign 只调度格点，不与 `run.py` 内 scheduler 合并。
+5. `seal_run` 排干 solver 的排队与在途执行之后，才 `mark_writers_stopped`，才 upload gold。
 
 ## 续跑、换格、重评分
 

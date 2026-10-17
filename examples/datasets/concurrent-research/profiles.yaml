@@ -1,0 +1,15 @@
+format: ageval.profiles/1
+environment: local
+
+agent_profiles:
+  solver:
+    executor: openai-http
+    model:
+      id: glm-5.3
+      reasoning:
+        effort: minimal
+    api_key: ${glm_coding_api_key}
+    base_url: https://open.bigmodel.cn/api/coding/paas/v4
+    extensions:
+      - plugin: openai-http
+      - plugin: local

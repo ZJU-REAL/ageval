@@ -1,0 +1,9 @@
+format: ageval.dataset/1
+dataset_id: official/concurrent-research
+version: "0.1.0"
+description: >
+  One Attempt, several child sessions. A coordinator fans research out,
+  waits for the children, and writes one report. This is an integration
+  smoke for session concurrency, not a benchmark score.
+tasks:
+  root: tasks

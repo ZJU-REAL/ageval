@@ -95,6 +95,22 @@ executor 返回的 `ok` 不是 true、且这次结果可以重试时，这次 in
 
 Agent Service **跨 evaluate 保持**（或 reopen）：`evaluator.py` 才能 `Agent.session`。run 结束停的是 **solver writer**（该相位已打开的 profile 不得再 invoke），不是把整段服务拆掉再打分。gold 已经在打分 Host；solver 不得在 gold 之后 invoke。Attempt 结束（cleanup / `run_attempt` finally）才停服务。
 
+## 并发调度
+
+Accept 循环接到一帧就交给处理线程，下一帧不必等这只 invoke 结束。SDK 用异步传输。只把阻塞调用丢进线程、parent 仍一帧一帧处理，不算这条路径完成。
+
+run 相位的一只 invoke 有四个状态：admitted（已进入 parent）、queued、running、terminal。排队的可以取消，不调用 executor。`limits.agent_invocations` 在即将调用 executor 时原子扣一次。同一次 invoke 的 upstream stall 重试不另扣。排队期间被取消不扣。wall 已到期、额度已用完、redaction 失败、offline forced 仍在 executor 之前拒绝，不 stall。
+
+`limits.agent_concurrency` 封顶同时处于 running 的 run 相位 executor invoke。省略等于 1。同一 session 按到达顺序串行；占这只额度的是正在跑的那一只。不同 session 可以重叠到这只额度，包括同一个 profile。evaluate 相位的 judge 保持串行准入，不占 `agent_concurrency`，也不占 `agent_invocations`。
+
+执行器要重叠，须声明自己可以在不同 session 上并发（`concurrent_sessions`）。没有声明时，第二只会造成重叠的 invoke 在效果前拒绝，错误 `executor_not_concurrent`。不把这种执行器悄悄当成已经并发，也不把进程留在取消之外。`openai-http` 与 `executor: acp`（每个 session 自己的 entry 进程）声明可以重叠。其它执行器在重叠发生前被拒绝。
+
+取消走另一帧 `op: cancel`，带这只 invoke 的 `request_id`。parent 去掉排队项，或要求执行器取消并等到这只 invoke 进入 terminal 再应答。丢掉 socket、取消 Python task、或仍在跑的 `to_thread` 不算排干。`openai-http` 停止本地等待和 stall 重试，不把稍后到达的响应写成这次结果；不声称远端推理已中止。ACP 发协议 `session/cancel`，并在现有关闭路径上结束自己持有的 entry 进程。
+
+`seal_run` 拒绝新的 solver 工作，去掉排队的 solver invoke，取消并排干在途的 solver 执行，然后 run 相位才 `mark_writers_stopped`。harvest、gold upload、evaluate 都在这之后。服务仍在，evaluate 的 judge 仍可开 session。worker 正常返回、崩溃、超时、用户取消、cleanup 都走这条所有权。
+
+每只 invoke 自己的 stall。相位时钟的冻结按只计数：一只恢复不得把另一只还开着的冻结清掉。证据里的 invocation id、observation、usage、错误按 session 与 invocation 归位。并发 begin 的 `seq` 不重复。
+
 ## evaluate 相位的 attach 目标与环境内 socket
 
 `executor: acp` 仍 `inject: [service: environment]`，parent 仍是唯一 JSON-RPC client。缺省（同一环境）attach 目标就是 run 那只 Host，与今日相同。

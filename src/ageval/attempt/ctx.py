@@ -7,6 +7,7 @@ PASS enters exactly once, through ``bind_evaluation``.
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -81,6 +82,8 @@ class AttemptCtx:
     _writers_stopped: bool = False
     _phase_clock_frozen: bool = False
     _frozen_remaining: float | None = None
+    _clock_holds: int = 0
+    _clock_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     # --- verdict -------------------------------------------------------------
 
@@ -123,22 +126,31 @@ class AttemptCtx:
         and the eval worker re-read that snapshot, so the original deadline does
         not kill them during the stall.
         """
-        if self._phase_clock_frozen:
-            return
-        self._frozen_remaining = self.remaining_seconds()
-        self._phase_clock_frozen = True
+        with self._clock_lock:
+            self._clock_holds += 1
+            if self._phase_clock_frozen:
+                return
+            self._frozen_remaining = self.remaining_seconds()
+            self._phase_clock_frozen = True
 
     def thaw_phase_clock(self) -> None:
-        """Resume the phase clock from the snapshot ``freeze_phase_clock`` took."""
-        if not self._phase_clock_frozen:
-            return
-        remaining = self._frozen_remaining
-        self._phase_clock_frozen = False
-        self._frozen_remaining = None
-        if remaining is None:
-            self.deadline_monotonic = None
-        else:
-            self.deadline_monotonic = time.monotonic() + remaining
+        """Resume the phase clock from the snapshot ``freeze_phase_clock`` took.
+
+        A second open stall keeps the snapshot. The deadline moves only when
+        the last stall releases it.
+        """
+        with self._clock_lock:
+            if self._clock_holds > 0:
+                self._clock_holds -= 1
+            if self._clock_holds != 0 or not self._phase_clock_frozen:
+                return
+            remaining = self._frozen_remaining
+            self._phase_clock_frozen = False
+            self._frozen_remaining = None
+            if remaining is None:
+                self.deadline_monotonic = None
+            else:
+                self.deadline_monotonic = time.monotonic() + remaining
         self._push_agent_deadline()
 
     def _push_agent_deadline(self) -> None:

@@ -137,6 +137,36 @@ def test_http_error_retries_then_returns_the_success(tmp_path: Path) -> None:
     ]
 
 
+def test_one_stall_thaw_does_not_resume_another(tmp_path: Path) -> None:
+    ctx = AttemptCtx(
+        run_id="r",
+        trial_id="t",
+        attempt_id="a",
+        lock=None,  # type: ignore[arg-type]
+        profile_id="solver",
+        bindings=ExtensionGraph(profile_id="solver"),
+        registry=ExtensionRegistry(),
+        services=ServiceTable(),
+        host=object(),  # type: ignore[arg-type]
+        evidence=AttemptEvidenceStore(root=tmp_path / "run", attempt_id="a", run_id="r"),
+        cancellation=CancellationSignal(),
+        task_root=tmp_path,
+        dataset_root=tmp_path,
+    )
+    ctx.deadline_monotonic = time.monotonic() + 100.0
+    ctx.freeze_phase_clock()
+    ctx.freeze_phase_clock()
+    frozen_deadline = ctx.deadline_monotonic
+    ctx.thaw_phase_clock()
+    assert ctx._phase_clock_frozen is True
+    assert ctx.deadline_monotonic == frozen_deadline
+    ctx.thaw_phase_clock()
+    assert ctx._phase_clock_frozen is False
+    remaining = ctx.remaining_seconds()
+    assert remaining is not None
+    assert remaining > 50
+
+
 def test_stall_does_not_spend_the_phase_clock(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -62,6 +62,7 @@ DEFAULTS: dict[str, Any] = {
         "environment_seconds": 600,
         "evaluate_seconds": 600,
         "agent_invocations": 1,
+        "agent_concurrency": 1,
     },
     "artifacts": {
         "publishable": [],

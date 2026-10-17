@@ -65,6 +65,22 @@ from ageval_sdk import (
 
 evaluate 相位同样可以用 SDK：`evaluator.py` 是 parent 子进程（与 `run.py` 一样），gold 已 upload 之后可以 `Agent.session(<role>).invoke`（role 须在同一份 `profiles.yaml` 里，且不得复用 solver 的 key locator）。invoke 走本机 Parent Agent Service；ACP `attach_stdio` 打当时的 environment 服务（isolated = 打分 Host）。有 `evaluation.environments` 时，ACP / 环境内 exec 必须 `Agent.session(id, environment=<name>)`（未知名、run 相位点名、或省略名字一次失败 `unknown_evaluate_environment`，不 start）。省略 `environment=` 只在无名表时等于今日单只打分 Host。`executor: openai-http` / `anthropic-http` 忽略 `environment=`（出站仍在 parent）。密封进 `evaluation/observation.jsonl`，省略 `user` 行。`evaluator.py` **不得** bind PASS；仍返回 `{status, score, metrics}`。不调 `Agent.session` = 无 observation 文件。invoke kwargs 仍不得改 `profile_id` / executor。SDK **仍然** 没有 `host.start` / `host.upload` / `host.stop` / `dockerfile=`。
 
+## 一次 Attempt 里的并发 session
+
+`Agent.session`、`invoke`、`record_observation`、`close` 走异步 unix 帧，不占任务的事件循环。不同 session 的 invoke 可以重叠，包括绑在同一个 profile 上的 session。每只 session 保住自己的消息历史。session 不是新的隔离边界：actor 放置和文件系统权限仍是原来的那一套。
+
+同一 session 上的 invoke 按到达顺序一次一个。`close` 和取消可以在这只 session 还有 invoke 时送到 parent。
+
+`bounded_gather(aws, *, limit)` 按输入顺序收回全部结果。`limit` 是同时进行的 awaitable 个数，可以是一整段子模型/工具循环。子任务抛出的 `Exception` 留在对应槽里，已经完成的兄弟还在。调用方决定残缺结果够不够。`timeout`（秒）是这一批的共同截止。到期时已完成的值和已经写下的证据留下，未完成的槽是 `TimeoutError`，其余工作停掉并排干，调用方继续。研究策略和合成属于题包。
+
+取消 `bounded_gather` 本身时，`CancelledError` 向外传，不进结果列表。
+
+`first_success(aws, *, limit=None, accept=None)` 在并发上限内取第一只可接受的结果。`limit` 省略表示 SDK 不再加一顶帽子（Runtime 的 `agent_concurrency` 仍在）。没有 `accept` 时，成功指没抛异常，不是题做对了，也不是 PASS。要比 invoke 应答，写成 `accept=lambda reply: reply.get("ok") is True`。`ok: false` 在这只谓词下不能赢。被拒绝的结果和异常都不赢。全部结束仍没有可接受结果时抛 `RuntimeError("no acceptable result")`。有赢家时，取消并排干未完成的子任务，包括还没进入 `limit` 的那些。
+
+按完成顺序消费、以及完成一只再补一只，用 `asyncio.wait(..., return_when=asyncio.FIRST_COMPLETED)` 或 `asyncio.as_completed`。没被取消的任务继续跑。完成可以再开一只子任务。SDK 不另做调度器。
+
+这些帮助函数不读 lock，也不能抬高 `limits.agent_concurrency`。
+
 脚本阶梯用 Runtime 注入的 `inputs["scoring"]`（不是 SDK 类型、不是第二套 docker 客户端）：
 
 ```python
