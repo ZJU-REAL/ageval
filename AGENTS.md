@@ -259,6 +259,8 @@ uv sync --frozen
 uv run ruff format --check src tests plugins services scripts
 uv run ruff check src tests plugins services scripts
 uv run pyright
+uv run python scripts/gen_param_tables.py --check
+uv run python scripts/gen_evidence_ts.py --check
 export AGEVAL_OFFLINE_AGENT=1 AGEVAL_SKIP_DOCKER=1
 export AGEVAL_SKIP_REAL_CODEX=1 AGEVAL_SKIP_REAL_PI=1
 export AGEVAL_SKIP_REAL_OPENCODE=1 AGEVAL_SKIP_REAL_ACP=1

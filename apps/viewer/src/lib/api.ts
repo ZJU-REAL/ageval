@@ -1,3 +1,5 @@
+import type { PhaseTimingDocument, TerminalUsage } from "@ageval/shared/lib/evidence.gen";
+
 export type Job = {
   job_id: string;
   job_name: string;
@@ -138,14 +140,8 @@ export type Trial = {
   dataset_ref?: string | null;
   /** Attempt-grain observational bag from summary.extra; omit when empty. */
   extra?: Record<string, unknown> | null;
-  /** Wall-time phases (environment/run/evaluate/record/cleanup) */
-  phase_timing?: {
-    schema?: string;
-    phases?: Array<{ id: string; label?: string; duration_ms?: number }>;
-    total_ms?: number;
-    started_at?: string | null;
-    finished_at?: string | null;
-  } | null;
+  /** Wall-time phases (environment/run/evaluate/record/cleanup). Wire shape is generated. */
+  phase_timing?: PhaseTimingDocument | null;
   /** Aggregated token segments for Harbor-style bar (when usage present) */
   token_timing?: {
     schema?: string;
@@ -187,7 +183,8 @@ export type TrajectoryStep = {
   profile_id?: string | null;
   model?: string | null;
   line?: number;
-  usage?: Record<string, unknown> | null;
+  /** Sealed terminal usage, plus legacy keys a reader may still see. */
+  usage?: (TerminalUsage & Record<string, unknown>) | null;
   extra?: Record<string, unknown> | null;
   metadata?: Record<string, unknown> | null;
   /** tool_call / observation (observational; not PASS) */

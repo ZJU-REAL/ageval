@@ -15,6 +15,8 @@
 | `agent/` | run 相位 invoke 级观察 |
 | `evaluation/` | gold 不在此树的 Attempt 侧；环境内 gold 是时间切开。`evaluator_raw.json` 默认不留。检查脚本是 dataset 文件，不拷进这棵树 |
 
+`summary.json`、`result.json` 和轨迹 `terminal` 行的线型在 `src/ageval/evidence/documents.py`。`scripts/gen_evidence_ts.py` 从这些 dataclass 导出 JSON Schema，并生成 `apps/shared/lib/evidence.gen.ts`。`--check` 拒绝漂移。不要再手写一份同形 TypeScript。Trial 上的 `input_tokens` / `output_tokens` 是展示投影，不是这组线型。
+
 `Result.logs` / `evidence_path` 指向该树。
 
 轨迹是观察事实，不是分数。export：`ageval evidence <logs> --out …`（再脱敏，不改分）。

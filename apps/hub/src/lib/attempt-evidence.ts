@@ -889,8 +889,8 @@ export function parseTrajectoryJsonl(text: string): TrajectoryStep[] {
       error: rec.error != null ? String(rec.error) : null,
       line: i + 1,
       usage:
-        rec.usage && typeof rec.usage === "object"
-          ? (rec.usage as Record<string, unknown>)
+        rec.usage && typeof rec.usage === "object" && !Array.isArray(rec.usage)
+          ? (rec.usage as NonNullable<TrajectoryStep["usage"]>)
           : null,
       extra: terminalExtra(rec),
       metadata:

@@ -221,7 +221,7 @@ src/ageval/
   plugins/defaults/                 # or move to contrib/defaults — pick one, not both
   runtime/{clocks,identity,parent_agent,task_launch,task_worker}
   evaluation/{bind,package_evaluator} + runtime/eval_worker.py
-  evidence/{locators,store,trajectory,analysis}
+  evidence/{locators,store,trajectory,documents,analysis}
 ```
 
 **Deliberately not built (deleted in Current; Target must not bring them back):**
@@ -236,6 +236,7 @@ src/ageval/
 | Path / pattern | Notes |
 | --- | --- |
 | `.ageval/` | runs, suite-runs, local plugin cache, credentials |
+| `apps/shared/lib/evidence.gen.ts` | generated from `evidence/documents.py`; `scripts/gen_evidence_ts.py --check` |
 | `.venv/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/` | toolchain |
 | `dist/`, `*.egg-info/` | build artifacts |
 
@@ -257,7 +258,7 @@ src/ageval/
 | `plugins/defaults/` | `environment_setup` recognizes `setup.sh`; default winners for `evaluation_runtime` / `trajectory_seal` | Fake executor; PASS |
 | `runtime/` | identity, parent Agent Service, task-worker subprocess, cancel/timeout | Box implementations, scoring |
 | `evaluation/` | Barrier order, in-environment runner, flat Result | Task scoring algorithms |
-| `evidence/` | store / redaction / layer-C `trajectory.jsonl` / analysis artifact paths | Vendor protocol parsing; PASS |
+| `evidence/` | store / redaction / layer-C `trajectory.jsonl` / sealed document schema / analysis artifact paths | Vendor protocol parsing; PASS |
 | `registry/` + `services/registry/` | PackageRef, publish, verified cache; standalone HTTP | PASS; handing store credentials to the CLI |
 | `ageval_sdk` | Task types and thin helpers | Control Plane internal types, verdict |
 | `examples/` | Trusted regression datasets | Claiming a full upstream suite |

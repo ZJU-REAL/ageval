@@ -56,6 +56,7 @@ jobs:
               - 'uv.lock'
               - 'VERSION'
               - '.python-version'
+              - 'apps/shared/lib/evidence.gen.ts'
             viewer_app:
               - 'apps/viewer/**'
               - 'apps/shared/**'
@@ -123,6 +124,10 @@ jobs:
       - name: Executor option tables
         if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
         run: uv run python scripts/gen_param_tables.py --check
+
+      - name: Evidence TypeScript
+        if: needs.changes.outputs.python == 'true' || needs.changes.outputs.workflow == 'true'
+        run: uv run python scripts/gen_evidence_ts.py --check
 
       # Offline core: no Docker L1, no real agent CLIs, no registry suite.
       - name: Pytest (core, exclude registry)
