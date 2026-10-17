@@ -40,6 +40,7 @@ from ageval.plugins.contrib.docker.attempt.build import (
     build_official_image,
     host_platform,
 )
+from ageval.runtime.clocks import clock_default
 
 BASE_TAG = "ageval-attempt:base"
 GHCR_ATTEMPT_IMAGE = "ghcr.io/zju-real/ageval-attempt"
@@ -326,7 +327,7 @@ def _build_named(
         args.extend(["--build-arg", item])
     args.append(str(context_root))
     try:
-        built = docker(*args, timeout=3600.0)
+        built = docker(*args, timeout=clock_default("docker_build"))
     finally:
         if generated is not None:
             generated.unlink(missing_ok=True)

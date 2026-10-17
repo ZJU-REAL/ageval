@@ -19,8 +19,8 @@ from ageval.plugins.errors import PluginContractError
 | `id` | `id` | `str` | 必填。空串拒绝 |
 | `api` | `api` | `str` | `chat`。短名只有 `chat` 与 `responses` |
 | `reasoning.effort` | `reasoning_effort` | `str \| None` | 不发送 |
-| `timeout` | `timeout` | `float \| None` | 不发送 HTTP timeout。`0` 也是省略。负数拒绝 |
-| `watchdog` | `watchdog` | `float \| None` | Spec 保持 `None`。executor 用自己的有限默认值做上限。`0`、负数、非有限值拒绝 |
+| `timeout` | `timeout` | `float \| None` | 不发送 HTTP timeout。`0` 也是省略。负数拒绝。数字在 [`src/ageval/runtime/clocks.py`](../../src/ageval/runtime/clocks.py) 的 `timeout` 行 |
+| `watchdog` | `watchdog` | `float \| None` | Spec 保持 `None`。省略时 executor 读同一张表的 `watchdog` 行（180）。`0`、负数、非有限值拒绝 |
 | `extra` | `extra` | mapping | 空 mapping。不并进一等字段 |
 
 `reasoning` 只认 `effort`。`summary` 等放进 `extra`。`none` 是会发送的 effort 值，不是省略。

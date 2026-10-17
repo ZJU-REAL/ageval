@@ -18,7 +18,7 @@
 
 executor invoke 的 `ok` 不是 true 时，Parent 进入 upstream stall，而不是第一次失败就结束 Attempt。stall 停在 `ParentAgentService.invoke`。`before_agent_invoke` 与 `after_agent_invoke` 仍各跑一次，自己不转重试。没有名为 `invoke` 的槽。
 
-`options.upstream_stall_seconds` 写在该 executor 已经在读的 profile `options` 上（与 miniswe 的 `options.step_limit` 同一处）。省略等于 `3600`。`0` 关掉 stall，第一次失败立刻返回，进度上不出现 `upstream_stall`。负数或非整数拒绝。重试间隔固定 60 秒，不是字段。
+`options.upstream_stall_seconds` 写在该 executor 已经在读的 profile `options` 上（与 miniswe 的 `options.step_limit` 同一处）。省略等于 [`src/ageval/runtime/clocks.py`](../../src/ageval/runtime/clocks.py) 里 `upstream_stall` 的 3600。`0` 关掉 stall，第一次失败立刻返回，进度上不出现 `upstream_stall`。负数或非整数拒绝。重试间隔是同一张表的 `stall_interval`（60 秒），不是字段。
 
 stall 期间当前相位的时钟不走。run 冻住 `limits.wall_time_seconds`，evaluate 里的 judge invoke 冻住 `limits.evaluate_seconds`。task worker 和 eval worker 的等待按同一段时间延长。只把 `deadline_monotonic` 往后推不够：这两处若在入口把剩余秒数抓住一次，原到期仍会杀掉 worker。环境启动不 stall。
 

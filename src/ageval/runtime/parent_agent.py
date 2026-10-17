@@ -41,6 +41,7 @@ from ageval.runtime.agent_service_evidence import (
     seal_invoke_result,
     write_invoke_request,
 )
+from ageval.runtime.clocks import clock_default
 from ageval.runtime.offline import is_offline_agent
 from ageval.runtime.upstream_stall import UpstreamStall, bind_stall, budget_seconds, reset_stall
 
@@ -52,8 +53,6 @@ def _utc_now() -> datetime:
 _LOG = logging.getLogger(__name__)
 _THREAD_LOOPS = threading.local()
 
-# Per-invoke ceiling when the task declares none.
-DEFAULT_INVOKE_TIMEOUT_SECONDS = 300.0
 # Parent-egress judges: environment= does not attach. In-box exec (oneshot / dsh)
 # still targets the named scoring host.
 _PARENT_EGRESS_EXECUTORS = frozenset({"openai-http", "anthropic-http"})
@@ -62,16 +61,21 @@ _PARENT_EGRESS_EXECUTORS = frozenset({"openai-http", "anthropic-http"})
 def resolve_invoke_timeout_seconds(
     params: dict[str, Any] | None = None,
     *,
-    default: float = DEFAULT_INVOKE_TIMEOUT_SECONDS,
+    default: float | None = None,
 ) -> float:
-    """Read ``parameters.agent_timeout_seconds``; non-positive falls back."""
+    """Read ``parameters.agent_timeout_seconds``; non-positive falls back.
+
+    The fallback is the ``invoke_timeout`` row. Garbage stays on that fallback
+    and is not rejected.
+    """
+    fallback = clock_default("invoke_timeout") if default is None else float(default)
     data = params if isinstance(params, dict) else {}
     raw = data.get("agent_timeout_seconds")
     try:
         value = float(raw)  # type: ignore[arg-type]
     except (TypeError, ValueError):
-        return float(default)
-    return value if value > 0 else float(default)
+        return fallback
+    return value if value > 0 else fallback
 
 
 @dataclass
@@ -153,7 +157,7 @@ class ParentAgentService:
     evidence_store: AttemptEvidenceStore | None = None
     # Current phase clock (monotonic seconds); checked before each external invoke.
     deadline_monotonic: float | None = None
-    invoke_timeout_seconds: float = DEFAULT_INVOKE_TIMEOUT_SECONDS
+    invoke_timeout_seconds: float = clock_default("invoke_timeout")
     # First run-phase limit only. Evaluate-phase refusals do not call it.
     on_limit_reached: Any = None
     offline_env: str = "AGEVAL_OFFLINE_AGENT"
@@ -190,7 +194,7 @@ class ParentAgentService:
         if self.invoke_quota is None:
             self.invoke_quota = AgentInvocationQuota(limit=self.agent_invocation_limit)
         timeout = float(self.invoke_timeout_seconds)
-        self.invoke_timeout_seconds = timeout if timeout > 0 else DEFAULT_INVOKE_TIMEOUT_SECONDS
+        self.invoke_timeout_seconds = timeout if timeout > 0 else clock_default("invoke_timeout")
         if int(self.agent_concurrency) < 1:
             raise ValueError("agent_concurrency must be >= 1")
         self.agent_concurrency = int(self.agent_concurrency)

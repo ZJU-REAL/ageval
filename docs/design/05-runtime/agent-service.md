@@ -86,7 +86,7 @@ run.py / evaluator.py  Agent.session(profile).invoke
 
 executor 返回的 `ok` 不是 true、且这次结果可以重试时，这次 invoke 进入 upstream stall，而不是第一次失败就结束 Attempt。规则、预算和 CLI 见 [07](../07-budget-evaluation-failure.md)。要点：
 
-- 预算是 profile `options.upstream_stall_seconds`（省略 `3600`，`0` 关掉）。间隔固定 60 秒。同一次 invoke 只扣一次 `agent_invocations`。
+- 预算是 profile `options.upstream_stall_seconds`（省略时取 [`clocks.py`](../../../src/ageval/runtime/clocks.py) 的 `upstream_stall`，3600；`0` 关掉）。间隔是 `stall_interval`，60 秒。同一次 invoke 只扣一次 `agent_invocations`。
 - stall 期间 run 的 `wall_time_seconds` 或 evaluate 的 `evaluate_seconds` 不走，worker 等待跟着延长。
 - wall 已到期、额度已用完、redaction 失败、offline forced 这些发生在 executor 之前，立刻拒绝，不显示 `upstream_stall`。
 - HTTP executor 的 4xx，除 408 与 429 外，是模型配置错误，不进入 stall。408、429 和其它非 ok 仍可重试。ACP 只在这条 prompt 还没改 workspace 时，于同一 session 重发；改过则 `repeatable: false`，一行 `not_repeatable`，不等待。

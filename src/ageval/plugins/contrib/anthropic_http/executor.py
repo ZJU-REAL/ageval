@@ -21,13 +21,13 @@ from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.anthropic_http.usage import normalize_anthropic_http_usage
 from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.http_loopback import is_http_loopback
+from ageval.runtime.clocks import clock_seconds
 
 _DEFAULT_BASE = "https://api.anthropic.com/v1"
 _DEFAULT_KEY_ENV = "ANTHROPIC_API_KEY"
 _DEFAULT_MODEL_ID = "claude-sonnet-4-6"
 _DEFAULT_VERSION = "2023-06-01"
 _DEFAULT_MAX_TOKENS = 4096
-_DEFAULT_WATCHDOG_SECONDS = 180.0
 _SOURCE = "anthropic-http"
 
 
@@ -314,9 +314,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
         self.spec = spec
         self.model = spec.id
         self.http_timeout = spec.timeout
-        self.watchdog = (
-            float(spec.watchdog) if spec.watchdog is not None else _DEFAULT_WATCHDOG_SECONDS
-        )
+        self.watchdog = clock_seconds("watchdog", spec.watchdog)
         self.extra = dict(spec.extra)
 
     def close(self) -> None:

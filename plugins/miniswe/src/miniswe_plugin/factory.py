@@ -484,10 +484,10 @@ class MinisweExecutorSPI(BaseExecutor):
             instance_template=instance_template,
             step_limit=self.step_limit,
             cost_limit=self.cost_limit,
-            # Under upstream_stall the parent freezes wall/phase clocks for the
-            # episode. Zero the package wall clock so it cannot race the stall
-            # budget. The Future watchdog is a separate clock (``self.watchdog``).
-            wall_time_limit_seconds=0 if stall is not None else max(0, int(timeout)),
+            # The parent stall freezes wall and phase clocks for the episode.
+            # This package wall stays the parent invoke timeout, so a stuck
+            # agent still ends. The Future watchdog is ``self.watchdog``.
+            wall_time_limit_seconds=max(0, int(timeout)),
         )
         model.query = wrap_model_query(model.query, stall, watchdog=self.watchdog)
         wait = max(1.0, float(timeout))

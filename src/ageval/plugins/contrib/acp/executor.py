@@ -58,29 +58,23 @@ from ageval.plugins.contrib.acp.usage_journal import (
     sum_journal_files,
 )
 from ageval.plugins.decorators import executor_plugin
+from ageval.runtime.clocks import ClockError, Disabled, clock_default, parse_clock
 
 
 def _idle_timeout_seconds(raw: Any) -> float | None:
     """``options.idle_timeout_seconds``: unset / ≤0 disables; garbage fails closed."""
-    if raw is None or raw == "":
-        return None
-    if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
-        from ageval.plugins.errors import ExtensionMaterializeError
-
-        raise ExtensionMaterializeError(
-            "acp_idle_timeout_invalid",
-            kind="extension_materialize_failed",
-        )
     try:
-        value = float(raw)
-    except (TypeError, ValueError):
+        parsed = parse_clock("idle_timeout", raw)
+    except ClockError:
         from ageval.plugins.errors import ExtensionMaterializeError
 
         raise ExtensionMaterializeError(
             "acp_idle_timeout_invalid",
             kind="extension_materialize_failed",
         ) from None
-    return value if value > 0 else None
+    if isinstance(parsed, Disabled):
+        return None
+    return parsed
 
 
 class _IdleTimeout(Exception):
@@ -667,7 +661,10 @@ class AcpExecutor(BaseExecutor):
             if self._conn is not None and self._acp_session_id is not None:
                 return None
         try:
-            self._run(self._attach_and_init(), timeout=min(timeout, 120.0))
+            self._run(
+                self._attach_and_init(),
+                timeout=min(timeout, clock_default("acp_home_cap")),
+            )
         except RuntimeError as exc:
             # Bare kind raised by _attach_and_init; no extra detail to carry.
             self._last_error_detail = None
