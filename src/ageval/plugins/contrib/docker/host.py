@@ -35,6 +35,12 @@ from ageval.environments.protocol import (
     Placement,
 )
 from ageval.plugins.base import BaseEnvironment
+from ageval.plugins.contrib.docker.compose_parity import (
+    AttemptParity,
+    is_runtime_compose,
+    prepare_runtime_compose,
+    resolve_attempt_parity,
+)
 from ageval.plugins.contrib.docker.images import (
     daemon_available,
     docker,
@@ -124,6 +130,12 @@ class DockerHost(BaseEnvironment):
         self._user = _box_user(opts.get("user"))
         self._python_version = _box_python_version(opts.get("python_version"))
         self._egress = _text(opts.get("egress"))
+        self._network_mode_set = "network_mode" in opts
+        self._network_mode = opts.get("network_mode")
+        self._cap_add_set = "cap_add" in opts
+        self._cap_add = opts.get("cap_add")
+        self._main_environment_set = "main_environment" in opts
+        self._main_environment = opts.get("main_environment")
         raw_allow = opts.get("egress_allowlist") or ()
         if isinstance(raw_allow, (list, tuple)):
             self._egress_allowlist = tuple(str(item) for item in raw_allow if str(item).strip())
@@ -133,6 +145,7 @@ class DockerHost(BaseEnvironment):
         self._proxy_url: str | None = None
         self._container: str | None = None
         self._compose_project: str | None = None
+        self._compose_runtime: Path | None = None
         self._image: str | None = None
         self._started = False
         self._stopped = False
@@ -151,6 +164,8 @@ class DockerHost(BaseEnvironment):
     async def start(self, *, force_build: bool = False) -> None:
         if self._started:
             raise EnvironmentFailure("environment_already_started", "docker box already started")
+        parity = self._attempt_parity()
+        self._reject_service_network(parity)
         self._prepare_work_root()
         tag, _digest = resolve_image(
             task_root=self._task_root or self._repo_root,
@@ -162,12 +177,15 @@ class DockerHost(BaseEnvironment):
             python_version=self._python_version,
         )
         self._image = tag
-        # Sidecars come up first: the Attempt container joins their network, so
-        # a service is reachable by name and nothing needs an orchestrator.
+        # Sidecars come up first. The Attempt joins their project network, so a
+        # service is reachable by name. service:<name> instead shares that
+        # sidecar's network namespace: localhost is the sidecar's localhost.
         network = self._network
         if self._compose_file is not None:
             self._compose_up()
             network = f"{self._compose_project}_default"
+        if parity.service is not None:
+            network = f"container:{self._sidecar_container_id(parity.service)}"
         name = f"ageval-{uuid.uuid4().hex[:12]}"
         extra_run = self._start_egress_proxy()
         started = docker(
@@ -181,6 +199,7 @@ class DockerHost(BaseEnvironment):
             "no-new-privileges",
             "--network",
             network,
+            *self._parity_run_flags(parity),
             *extra_run,
             *self._volume_flags(),
             "-w",
@@ -210,6 +229,7 @@ class DockerHost(BaseEnvironment):
         self._stop_egress_proxy()
         if self._compose_project is not None:
             self._compose("down", "-v")
+        self._discard_compose_runtime()
         if self._container is not None:
             docker("rm", "-f", self._container, timeout=120.0)
         if delete and self._root.is_dir():
@@ -451,26 +471,89 @@ class DockerHost(BaseEnvironment):
 
     # --- compose sidecars ----------------------------------------------------
 
+    def _attempt_parity(self) -> AttemptParity:
+        return resolve_attempt_parity(
+            task_root=self._task_root,
+            compose_file=self._compose_file,
+            options=self._parity_options(),
+        )
+
+    def _parity_options(self) -> dict[str, object]:
+        """Only keys the caller actually set. Omitted keys fall through to the file."""
+        options: dict[str, object] = {}
+        if self._network_mode_set:
+            options["network_mode"] = self._network_mode
+        if self._cap_add_set:
+            options["cap_add"] = self._cap_add
+        if self._main_environment_set:
+            options["main_environment"] = self._main_environment
+        return options
+
+    def _reject_service_network(self, parity: AttemptParity) -> None:
+        if parity.service is None:
+            return
+        if self._compose_file is None:
+            raise EnvironmentFailure(
+                "environment_start_failed",
+                f"network_mode service:{parity.service} requires environment/compose.yaml",
+            )
+        if self._egress == "llm":
+            raise EnvironmentFailure(
+                "environment_options_invalid",
+                "network_mode service:* cannot be combined with egress: llm",
+            )
+
+    def _parity_run_flags(self, parity: AttemptParity) -> list[str]:
+        flags: list[str] = []
+        for cap in parity.cap_add:
+            flags.extend(["--cap-add", cap])
+        for key, value in parity.environment:
+            flags.extend(["-e", f"{key}={value}"])
+        return flags
+
+    def _sidecar_container_id(self, service: str) -> str:
+        result = self._compose("ps", "-q", service)
+        lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+        if result.returncode != 0 or len(lines) != 1:
+            raise EnvironmentFailure(
+                "environment_start_failed",
+                f"compose service {service!r} did not yield one running container",
+            )
+        return lines[0]
+
     def _compose_up(self) -> None:
         project = f"ageval-{uuid.uuid4().hex[:10]}"
         self._compose_project = project
+        assert self._compose_file is not None
+        runtime = prepare_runtime_compose(self._task_root / self._compose_file, project)
+        if is_runtime_compose(runtime):
+            self._compose_runtime = runtime
         result = self._compose("up", "-d")
         if result.returncode != 0:
+            self._compose("down", "-v")
+            self._discard_compose_runtime()
             self._compose_project = None
             raise EnvironmentFailure(
                 "environment_compose_failed",
                 f"docker compose up failed: {(result.stderr or result.stdout).strip()[-500:]}",
             )
 
+    def _discard_compose_runtime(self) -> None:
+        path = self._compose_runtime
+        self._compose_runtime = None
+        if path is not None and is_runtime_compose(path):
+            path.unlink(missing_ok=True)
+
     def _compose(self, *args: str) -> subprocess.CompletedProcess[str]:
         assert self._compose_file is not None
         assert self._compose_project is not None
+        compose_path = self._compose_runtime or (self._task_root / self._compose_file)
         return docker(
             "compose",
             "-p",
             self._compose_project,
             "-f",
-            str(self._task_root / self._compose_file),
+            str(compose_path),
             *args,
         )
 
@@ -487,13 +570,14 @@ class DockerHost(BaseEnvironment):
                 f"no compose project is up; exec(service={service!r}) is unavailable",
             )
         assert self._compose_file is not None
+        compose_path = self._compose_runtime or (self._task_root / self._compose_file)
         return await self._run_docker(
             [
                 "compose",
                 "-p",
                 self._compose_project,
                 "-f",
-                str(self._task_root / self._compose_file),
+                str(compose_path),
                 "exec",
                 "-T",
                 service,
