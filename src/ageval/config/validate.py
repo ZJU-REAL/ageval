@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, TypedDict
 
 from ageval.config.capabilities import CapabilityCatalog
 from ageval.config.constants import (
@@ -446,7 +446,15 @@ def _validate_artifacts(artifacts: Any) -> set[str]:
     return artifact_ids
 
 
-def _normalize_collect(raw: Any) -> list[dict[str, Any]]:
+class _CollectRow(TypedDict, total=False):
+    path: str
+    service: str
+    command: str
+    timeout_sec: int | float
+    exclude: list[str]
+
+
+def _normalize_collect(raw: Any) -> list[_CollectRow]:
     """Return lock rows for ``evaluation.collect``. An empty list stores nothing."""
     if not isinstance(raw, list):
         raise ConfigError(
@@ -457,7 +465,7 @@ def _normalize_collect(raw: Any) -> list[dict[str, Any]]:
     return [_one_collect(item, f"/evaluation/collect/{idx}") for idx, item in enumerate(raw)]
 
 
-def _one_collect(item: Any, loc: str) -> dict[str, Any]:
+def _one_collect(item: Any, loc: str) -> _CollectRow:
     if not isinstance(item, dict):
         raise ConfigError(
             ERROR_INVALID_SCHEMA,
@@ -480,7 +488,7 @@ def _one_collect(item: Any, loc: str) -> dict[str, Any]:
             "evaluation.collect item requires path or command",
             location=loc,
         )
-    row: dict[str, Any] = {}
+    row: _CollectRow = {}
     if path is not None:
         row["path"] = path
     if service is not None:

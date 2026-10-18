@@ -1,8 +1,9 @@
-"""Regrade a finished Attempt from its harvested ``task-artifacts/``.
+"""Regrade a finished Attempt from its harvested snapshots.
 
 Mints a new Attempt, skips the agent run, and evaluates with the dataset's
 current gold and evaluator. The source directory, including ``result.json``,
-is only read.
+is only read. ``task-artifacts/`` and ``verifier-collect/`` are copied forward.
+Collect commands are not run again.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ from ageval.config.model import locked_to_summary, thaw
 from ageval.evaluation.bind import bind_result
 from ageval.evaluation.error_record import error_record
 from ageval.evidence.locators import resolve_attempt_run_dir
-from ageval.evidence.store import AGENT_BOX_REL, TASK_ARTIFACTS_REL
+from ageval.evidence.store import AGENT_BOX_REL, TASK_ARTIFACTS_REL, VERIFIER_COLLECT_REL
 from ageval.plugins.binding import bind_winner
 from ageval.plugins.bootstrap import ensure_bootstrapped
 from ageval.plugins.image_layers import layers_for_graph
@@ -141,6 +142,7 @@ async def _regrade_one(
     )
     evidence.write_lock_summary(locked.summary())
     _copy_task_artifacts(source, evidence.path(TASK_ARTIFACTS_REL))
+    _copy_optional_tree(source / VERIFIER_COLLECT_REL, evidence.path(VERIFIER_COLLECT_REL))
 
     registry = ensure_bootstrapped()
     profile_id = _selected_profile_id(lock)
@@ -309,6 +311,12 @@ def _harvest_message(reason: str, missing: tuple[str, ...]) -> str:
 
 def _copy_task_artifacts(source_run: Path, dest: Path) -> None:
     src = source_run / TASK_ARTIFACTS_REL
+    shutil.copytree(src, dest, symlinks=True)
+
+
+def _copy_optional_tree(src: Path, dest: Path) -> None:
+    if not src.is_dir():
+        return
     shutil.copytree(src, dest, symlinks=True)
 
 

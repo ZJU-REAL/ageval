@@ -34,6 +34,7 @@ from ageval.environments.protocol import (
     EnvironmentFailure,
     ExecResult,
     Placement,
+    reject_foreign_service,
 )
 from ageval.plugins.base import BaseEnvironment
 from ageval.plugins.decorators import environment_plugin
@@ -210,8 +211,9 @@ class SSHHost(BaseEnvironment):
             timeout_sec=timeout_sec,
         )
 
-    async def upload(self, source: Path, dest: str) -> None:
+    async def upload(self, source: Path, dest: str, *, service: str | None = None) -> None:
         self._assert_started()
+        reject_foreign_service(service, kind="ssh", verb="upload")
         src = Path(source).expanduser()
         if not src.exists():
             raise EnvironmentFailure(
@@ -245,8 +247,9 @@ class SSHHost(BaseEnvironment):
                 timeout_sec=300.0,
             )
 
-    async def download(self, source: str, dest: Path) -> None:
+    async def download(self, source: str, dest: Path, *, service: str | None = None) -> None:
         self._assert_started()
+        reject_foreign_service(service, kind="ssh", verb="download")
         remote = self._remote_path(source)
         if self._container is not None:
             await self._ssh(

@@ -72,6 +72,8 @@ class AttemptCtx:
     deadline_monotonic: float | None = None
     keep_workspace: bool = False
     keep_vendor_raw: bool = False
+    # Regrade replays verifier-collect bytes and does not run collect commands.
+    regrade: bool = False
     summary_extra: dict[str, Any] | None = None
     on_phase: PhaseObserver | None = None
     phase_facts: list[PhaseFact] = field(default_factory=list)
