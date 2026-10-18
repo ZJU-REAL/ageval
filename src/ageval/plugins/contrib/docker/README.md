@@ -22,7 +22,7 @@ ACP / `run.py` / Core never see `container_id`.
 | capabilities | `exec`, `upload`, `download`, `attach_stdio`, `uid_gid`, `path_views`, `compose`: yes |
 | inject | — |
 
-`attach_stdio` is `docker exec -i`. Compose sidecars join the Attempt network by service name.
+`attach_stdio` is `docker exec -i`. With `environment/compose.yaml`, sidecars come up first and the Attempt joins `{project}_default`, so a service is reachable by name. `network_mode: service:<name>` instead uses `docker run --network container:<that sidecar>`, so localhost is that sidecar's localhost. The Attempt is not compose service `main`.
 
 ## Parameters
 
@@ -32,7 +32,10 @@ Job knobs are `environment_options` (not `extensions[].options`).
 | --- | --- | --- |
 | `environment_options.image` | unset | Existing image tag; skip local build. Alias: `docker_image`. |
 | `environment_options.platform` | this host | `docker` platform (e.g. `linux/arm64`). |
-| `environment_options.network` | `bridge` | Attempt container network. A task compose file overrides this to `{project}_default`. |
+| `environment_options.network` | `bridge` | Attempt container network when there is no compose file. A task compose file joins `{project}_default` unless `network_mode` is `service:<name>`. |
+| `environment_options.network_mode` | omitted | `service:<sidecar>` starts the Attempt with `--network container:<that sidecar's id>`. Other values leave the network unchanged. Same key on task `parameters.network_mode`, or `services.main.network_mode` in `environment/docker-compose.yaml` when that file is not the compose-up file. Job value wins, then parameters, then the file. Scoring containers do not read it. |
+| `environment_options.cap_add` | omitted | Capability names passed to `docker run --cap-add` (for example `SYS_PTRACE`). `no-new-privileges` stays. Same key on `parameters.cap_add`, or `services.main.cap_add` in the harbor compose file. |
+| `environment_options.main_environment` | omitted | `KEY=VALUE` entries on `docker run -e`. Overrides the same names already baked as image ENV. A bare name with no value fails once and is not taken from the parent environment. Daemon locator names are dropped. Same key on `parameters.main_environment`, or `services.main.environment` in the harbor compose file. Not written to the lock or to evidence. |
 | `environment_options.user` | `10001:10001` | `docker run --user` and the same identity for `exec` / `attach_stdio`. `root` / `0` / `0:0` → root. Other values must be `uid` or `uid:gid`. Unknown strings are rejected. Default still has `no-new-privileges`. |
 | `environment_options.python_version` | `3.12` | CPython minor of the official Attempt base (`python:${version}-slim-bookworm`). Shape `^\d+\.\d+$`; `latest` / `3` / empty / other shapes are rejected once. The base builds as a versioned tag (e.g. `ageval-attempt:py3.13`) and the plugin rewrites the recipe's `FROM ageval-attempt:base` onto it, so 3.12 and 3.13 bases coexist. A base that cannot be pulled fails the image build once — no fallback to 3.12. The ACP entries stay baked at build time; engine versions are unaffected. |
 | `environment_options.egress` | omitted | Omit = today's `bridge` (no proxy). `llm` (docker only): in-box HTTP(S) is forced through a parent allowlist proxy (`HTTP_PROXY` / `HTTPS_PROXY`). ACP stdio does not go through it. A kind that cannot enforce this fails lock. |
