@@ -140,8 +140,8 @@ agent_profiles:
 
 | 字段 | 消费者 |
 | --- | --- |
-| `parameters` | `ctx.params` |
-| `limits.*` | Runtime limits |
+| `parameters` | `ctx.params`。其中 `cpus` / `memory_mb` / `gpus` / `gpu_types` / `verifier_gpus` 在 `environment: docker` 时也是容器限额，见 [environment](05-runtime/environment.md) |
+| `limits.*` | Runtime 的时间与 invoke 额度，不含 CPU / 内存 / GPU |
 | `evaluation/` | evaluate 相位（gold；可含 `docker_image` 供单只 isolated；禁止放 Dockerfile） |
 | `environment/` | Agent 环境配方；`evaluate.Dockerfile` 或 `evaluate/<name>/` 仅 isolated 打分环境 |
 | `data/` | Agent 可见 seed |

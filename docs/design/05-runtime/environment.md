@@ -50,6 +50,28 @@ docker `environment_options`：
 - `user` — 环境内身份，`docker run --user` 与 `exec`/`attach_stdio` 同一值。缺省 `10001:10001`。`root` / `0` / `0:0` 开 root（Harbor 式终端题要 `apt` 或写 `/usr/local` 时用）。其它值必须是 `uid` 或 `uid:gid`。未知字符串一次失败。默认仍带 `no-new-privileges`。
 - `python_version` — 官方 Attempt 基座的 CPython minor（如 `"3.13"`）；省略 = 3.12。形状 `^\d+\.\d+$`；`latest` / `3` / 空串 / 其它形状一次拒绝。基座 `FROM python:${python_version}-slim-bookworm` 拉不到 → image build 一次失败，**不**回退 3.12。ACP 引擎仍在 build 期 bake，Node / Go 等引擎版本不受此旋钮影响。
 
+## 容器 CPU、内存、GPU
+
+这些键写在成员 `parameters` 上，lock 原样收下，仍进 `ctx.params`。`environment: docker` 时，Runtime 在 `host.start` 读取并施加。残留 `task.toml` 不读。`storage_mb` 没有进 parameters 的，这轮不施加。其它 kind 不读这些键。
+
+| 键 | 形状 | 省略、`0`、或空列表 | docker |
+| --- | --- | --- | --- |
+| `cpus` | 非负整数或小数；布尔拒绝 | 不加 `--cpus` | `docker run --cpus` |
+| `memory_mb` | 非负整数；布尔拒绝 | 不加 `--memory` | `--memory <n>m` |
+| `gpus` | 非负整数；布尔拒绝 | 不加 `--gpus` | 大于 0 时要这么多张卡 |
+| `gpu_types` | 非空字符串的列表 | 不按型号过滤 | 非空时，可见 GPU 名称必须包含其中某一项（大小写不敏感） |
+| `verifier_gpus` | 非负整数；布尔拒绝 | 打分容器不加 `--gpus` | 大于 0 时打分容器要这么多张卡，型号过滤仍用 `gpu_types` |
+
+`gpus: 0` 且 `gpu_types: []` 与省略相同，今日 `docker run` 的参数不变。`cpus` / `memory_mb` 为正才加旗标。`gpu_types` 非空而 `gpus` 为 0 时，按 1 张计。
+
+要 GPU 时，先问这台机器的 `nvidia-smi`，再 `docker run` / `docker compose up`。张数不够、型号对不上、`nvidia-smi` 不在或失败、或列出来是空的，环境相位一次失败，token `environment_gpu_unavailable`。容器不起。型号对得上时旗标是 `--gpus device=<index,...>`；只要张数、不限型号时是 `--gpus count=<n>`。
+
+打分盒只在 `verifier_gpus` 大于 0 时要 GPU，并沿用同一份 `gpu_types`。打分盒的 CPU / 内存这轮不从 parameters 读。
+
+侧车保持自己的 compose 声明。某个 service 写了 `cpus` 或 `mem_limit`，又没有 `deploy.resources.limits` 时，docker 插件另写一份 override，把同一限额放进 `deploy.resources.limits`。没有声明限额的侧车不套用 Agent 的 CPU、内存或 GPU。Agent 容器仍是 `docker run`。
+
+形状不对在 lock 失败（`invalid_schema`，指针 `/parameters/<键>`），不拖到 start。
+
 `egress` / `egress_allow` 约束的是 **写它们的那只盒子**。两只盒子两份策略：打分 Host 有自己的
 `evaluate_host.environment_options`（`network` / `egress` / `egress_allow` / `platform` / `user` /
 `python_version`）；

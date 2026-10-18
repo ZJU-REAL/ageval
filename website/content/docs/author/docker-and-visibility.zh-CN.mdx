@@ -33,6 +33,23 @@ environment_options:
 
 插件 bake 层构建可读宿主 `AGEVAL_PIP_INDEX`，作为 `PIP_INDEX_URL`；未设置则用 pip 默认源。
 
+## CPU、内存、GPU
+
+写在成员 `parameters` 上，不写在 `environment_options`。`environment: docker` 时，容器启动前施加。其它环境不读这些键。
+
+```yaml
+parameters:
+  cpus: 2
+  memory_mb: 4096
+  gpus: 1
+  gpu_types: [H100]
+  verifier_gpus: 1
+```
+
+`cpus` 或 `memory_mb` 为正时加上 `--cpus` 和 `--memory`。`gpus: 0` 且 `gpu_types` 为空时不加 GPU 旗标，省略限额的题保持今日的 `docker run` 形状。`gpus` 为正，或 `gpu_types` 非空，机器上要有对得上的 GPU（`nvidia-smi`）。对不上时，这次尝试以 `environment_gpu_unavailable` 失败，容器不起。`verifier_gpus` 是打分容器的 GPU 张数，型号过滤沿用同一份 `gpu_types`。`storage_mb` 不施加。
+
+compose 侧车自己写了 `cpus` 或 `mem_limit` 时，同一限额会进入 `deploy.resources.limits`。没有声明限额的侧车保持原样。
+
 ## 谁看得见什么
 
 | 目录 | 谁用 |

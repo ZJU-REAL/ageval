@@ -2,6 +2,8 @@
 
 `limits` 由 Runtime 在效果前强制。dataset 软限（max_turns）不能替代 `limits`。事后 token/cost 只作观测。`record` 与 `cleanup` 不计预算。
 
+CPU、内存、GPU 不在这张表里。它们写在 task `parameters`（`cpus`、`memory_mb`、`gpus`、`gpu_types`、`verifier_gpus`）上，由 docker kind 在容器启动前施加。见 [environment](05-runtime/environment.md)。
+
 三个相位各有一只时钟，从该相位入口起算。已有超时的步骤读当前相位剩余时间。`host.start` 本身不加超时。
 
 | 键 | 缺省 | 覆盖 | 到期 |

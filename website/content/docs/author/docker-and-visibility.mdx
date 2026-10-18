@@ -33,6 +33,23 @@ environment_options:
 
 Plugin bake layers read host `AGEVAL_PIP_INDEX` as `PIP_INDEX_URL`; unset keeps pip's default index.
 
+## CPU, memory, and GPU
+
+Put these on the task `parameters`, not on `environment_options`. Docker applies them when the container starts. Other environment kinds leave them unread.
+
+```yaml
+parameters:
+  cpus: 2
+  memory_mb: 4096
+  gpus: 1
+  gpu_types: [H100]
+  verifier_gpus: 1
+```
+
+A positive `cpus` or `memory_mb` adds `--cpus` and `--memory`. `gpus: 0` and an empty `gpu_types` add nothing, so a task that omits limits keeps today's `docker run` shape. A positive `gpus`, or a non-empty `gpu_types`, requires a matching GPU on the machine (`nvidia-smi`). If the host cannot provide it, the attempt fails with `environment_gpu_unavailable` and does not start the container. `verifier_gpus` is the scoring container's GPU count and uses the same `gpu_types` list. `storage_mb` is not applied.
+
+A compose sidecar that already declares `cpus` or `mem_limit` also receives that limit as `deploy.resources.limits`. A sidecar that declares no limit stays as authored.
+
 ## What the agent can see
 
 | Path | Who |

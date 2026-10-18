@@ -39,6 +39,22 @@ Job knobs are `environment_options` (not `extensions[].options`).
 | `environment_options.egress_allow` | omitted | Extra hostnames on the **same map** as `egress: llm` (lowercase, no scheme / path / port). Omit = bound profile `base_url` hosts only. Empty list = no extras. Effective list = those `base_url` hosts ∪ this list, written to internal `egress_allowlist`. Present without `egress: llm`, or on a non-docker kind, fails lock. Scoring-box extras are a nested `evaluate_host.environment_options.egress_allow` and do not inherit from the agent box. |
 | `AGEVAL_PIP_INDEX` (host env) | unset | When set, plugin bake layers pass it as `PIP_INDEX_URL` so image-build pip uses that index. Unset / blank = pip default. Same knob as the official Attempt image build. |
 
+## Task resource parameters
+
+When the job `environment` is `docker`, these task `parameters` change the Attempt container. They are not `environment_options`. Omitted keys, `gpus: 0`, and an empty `gpu_types` leave today's `docker run` argv. `storage_mb` is not read. Other environment kinds do not apply these keys.
+
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `parameters.cpus` | unset | Positive number → `docker run --cpus`. `0` adds nothing. |
+| `parameters.memory_mb` | unset | Positive integer → `--memory <n>m`. `0` adds nothing. |
+| `parameters.gpus` | `0` | Positive count → `--gpus`. The host must show that many GPUs via `nvidia-smi` or start fails with `environment_gpu_unavailable` before any container is created. |
+| `parameters.gpu_types` | `[]` | Case-insensitive substrings of the GPU name. Non-empty selects `--gpus device=<index,...>`. Non-empty with `gpus: 0` requires one matching GPU. |
+| `parameters.verifier_gpus` | `0` | Scoring container only. Positive count uses the same `gpu_types` filter and the same unavailable error. Scoring CPU and memory are not read from parameters. |
+
+A compose sidecar that already sets `cpus` or `mem_limit` and does not set `deploy.resources.limits` gets an override that copies that limit into `deploy.resources.limits`. Sidecars that declare no limit stay as authored. The agent container stays `docker run`.
+
+A bad shape fails lock (`invalid_schema` at `/parameters/<key>`).
+
 ## Bind
 
 ```yaml
