@@ -19,6 +19,7 @@ from ageval.config.constants import (
     SEED_DIR,
 )
 from ageval.config.model import LockedTaskConfig, thaw
+from ageval.config.resources import resource_options
 from ageval.environments.protocol import BoxSpec
 from ageval.evaluation.bind import AttemptResult, bind_result
 from ageval.evidence.locators import default_runs_root
@@ -340,6 +341,8 @@ def _agent_environment_options(lock: LockedTaskConfig, graph: ExtensionGraph) ->
     options = dict(winner.options or {}) if winner is not None else _environment_options(lock)
     if str(options.get("egress") or "") == "llm":
         options["egress_allowlist"] = _egress_allowlist(lock)
+    if lock.environment == "docker":
+        options.update(resource_options(thaw(lock.parameters), scoring=False))
     return options
 
 

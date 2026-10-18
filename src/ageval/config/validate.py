@@ -37,6 +37,7 @@ from ageval.config.errors import (
     ConfigError,
 )
 from ageval.config.ports import PackageReader
+from ageval.config.resources import parse_task_resources
 from ageval.environments.protocol import CAPABILITY_NAMES
 
 ALLOWED_TASK_KEYS = frozenset(
@@ -160,6 +161,7 @@ def validate_document(
 
     profile_ids = _validate_profiles(doc, capabilities=capabilities)
     _validate_parameter_model_refs(parameters, profile_ids)
+    parse_task_resources(parameters)
     _validate_requires(doc.get("requires"))
     _validate_limits(doc.get("limits"))
     artifact_ids = _validate_artifacts(doc.get("artifacts"))

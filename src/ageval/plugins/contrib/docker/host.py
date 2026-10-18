@@ -41,6 +41,13 @@ from ageval.plugins.contrib.docker.images import (
     host_platform,
     resolve_image,
 )
+from ageval.plugins.contrib.docker.resources import (
+    DockerRunResources,
+    docker_run_resource_args,
+    query_gpu_inventory,
+    resources_from_options,
+    write_sidecar_overlay,
+)
 from ageval.plugins.decorators import environment_plugin
 
 BOX_ROOT = "/attempt"
@@ -129,10 +136,16 @@ class DockerHost(BaseEnvironment):
             self._egress_allowlist = tuple(str(item) for item in raw_allow if str(item).strip())
         else:
             self._egress_allowlist = ()
+        resources = resources_from_options(opts)
+        self._cpus = resources.cpus
+        self._memory_mb = resources.memory_mb
+        self._gpus = resources.gpus
+        self._gpu_types = resources.gpu_types
         self._proxy: object | None = None
         self._proxy_url: str | None = None
         self._container: str | None = None
         self._compose_project: str | None = None
+        self._compose_overlay: Path | None = None
         self._image: str | None = None
         self._started = False
         self._stopped = False
@@ -162,6 +175,9 @@ class DockerHost(BaseEnvironment):
             python_version=self._python_version,
         )
         self._image = tag
+        # Resolve CPU / memory / GPU before any container exists. A missing GPU
+        # fails here, with no compose project and no Attempt container.
+        resource_args = self._resource_run_args()
         # Sidecars come up first: the Attempt container joins their network, so
         # a service is reachable by name and nothing needs an orchestrator.
         network = self._network
@@ -181,6 +197,7 @@ class DockerHost(BaseEnvironment):
             "no-new-privileges",
             "--network",
             network,
+            *resource_args,
             *extra_run,
             *self._volume_flags(),
             "-w",
@@ -210,6 +227,7 @@ class DockerHost(BaseEnvironment):
         self._stop_egress_proxy()
         if self._compose_project is not None:
             self._compose("down", "-v")
+        self._drop_compose_overlay()
         if self._container is not None:
             docker("rm", "-f", self._container, timeout=120.0)
         if delete and self._root.is_dir():
@@ -451,26 +469,51 @@ class DockerHost(BaseEnvironment):
 
     # --- compose sidecars ----------------------------------------------------
 
+    def _resource_run_args(self) -> list[str]:
+        inventory = query_gpu_inventory() if self._gpus > 0 else ()
+        return docker_run_resource_args(
+            DockerRunResources(
+                cpus=self._cpus,
+                memory_mb=self._memory_mb,
+                gpus=self._gpus,
+                gpu_types=self._gpu_types,
+            ),
+            inventory,
+        )
+
     def _compose_up(self) -> None:
+        assert self._compose_file is not None
+        overlay = write_sidecar_overlay(self._task_root / self._compose_file)
+        if overlay is not None:
+            self._compose_overlay = overlay
         project = f"ageval-{uuid.uuid4().hex[:10]}"
         self._compose_project = project
         result = self._compose("up", "-d")
         if result.returncode != 0:
             self._compose_project = None
+            self._drop_compose_overlay()
             raise EnvironmentFailure(
                 "environment_compose_failed",
                 f"docker compose up failed: {(result.stderr or result.stdout).strip()[-500:]}",
             )
 
+    def _drop_compose_overlay(self) -> None:
+        path = self._compose_overlay
+        self._compose_overlay = None
+        if path is not None:
+            path.unlink(missing_ok=True)
+
     def _compose(self, *args: str) -> subprocess.CompletedProcess[str]:
         assert self._compose_file is not None
         assert self._compose_project is not None
+        files = ["-f", str(self._task_root / self._compose_file)]
+        if self._compose_overlay is not None:
+            files.extend(["-f", str(self._compose_overlay)])
         return docker(
             "compose",
             "-p",
             self._compose_project,
-            "-f",
-            str(self._task_root / self._compose_file),
+            *files,
             *args,
         )
 
