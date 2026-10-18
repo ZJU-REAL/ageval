@@ -107,13 +107,16 @@ result.json
 trajectory.jsonl
 summary.json
 task-artifacts/**              # file：<id><suffix>；tree：<id>/ 不可变快照（已 exclude）
+verifier-collect/**            # evaluation.collect 的路径快照；manifest 不含 command
 evaluation/observation.jsonl   # 仅当 evaluate 相位有 SDK invoke
 evaluation/checks.json         # 仅当 evaluator 返回 well-formed checks
 ```
 
 `task-artifacts/` 是 harvest 在 writer 停后写下的 **快照**。evaluate 从这里拷进打分 Host，不从 Agent 活 workspace 再读。tree 目录缺席、exclude 是否去掉 `target/`，都不是 PASS。
 
-`slim_sealed_attempt` **默认保留** `task-artifacts/`（file 与 tree）。丢掉的是 vendor raw / layer B，不是这份快照。cleanup 删除的是活的 box work root（`--keep-workspace` 才留下）；它不删除 evidence 上的 `task-artifacts/`。`ageval results regrade` 读的就是这份留下来的快照。
+`verifier-collect/` 是 `evaluation.collect` 在 evaluate 开头写下的路径快照。`manifest.json` 记 path、service、文件名，不记 command。没有 collect 声明时这个目录不出现。
+
+`slim_sealed_attempt` **默认保留** `task-artifacts/`（file 与 tree）和 `verifier-collect/`。丢掉的是 vendor raw / layer B，不是这两份快照。cleanup 删除的是活的 box work root（`--keep-workspace` 才留下）；它不删除 evidence 上的这两份目录。`ageval results regrade` 读的就是留下来的快照，并且不重跑 collect command。
 
 `summary.json` 是相位墙钟，不是 vendor raw。Verifier 看 `result.json`；有 `observation.jsonl` 时 TrajectoryPanel；有 `checks.json` 时在文件树预览里渲染检查点。两种都有时 XOR toggle，默认轨迹。默认不留 `evaluation/evaluator_raw.json`。`slim_sealed_attempt` 与 Hub Attempt archive 同一套 keep/drop：留下 `observation.jsonl` 与 `checks.json`，丢掉 `evaluator_raw.json`。检查脚本路径是 dataset locator，不是归档 gold。
 

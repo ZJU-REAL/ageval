@@ -40,6 +40,7 @@ description: ageval.yaml / task.yaml 的字段和校验规则。
 | --- | --- |
 | `evaluation.tmpfs_mb` | 环境内 evaluator `/tmp`（正整数 MiB），省略 32。**不是** `limits.*` |
 | `evaluation.environments` | 按名打分 Host（`dockerfile` 和/或 `docker_image`）。写出则必须 job `evaluate_host.isolated: true` + `environment: docker`，并忽略 `evaluate.Dockerfile` |
+| `evaluation.collect` | 打分前把声明的绝对路径从 attempt 容器和 compose service 拷到打分 Host。一条可以带 `command`、`service`、`timeout_sec`。省略或 `[]` 时这一步不跑：workspace 收获和打分脚本里的 `/app` 合并保持原样。命令失败或路径拷不到，这次 evaluate 是 ERROR |
 
 有文件就认：`run.py`、`evaluator.py`、`environment/Dockerfile`、`environment/setup.sh`。
 

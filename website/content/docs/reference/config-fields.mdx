@@ -40,6 +40,7 @@ Optional `evaluation.*` fields:
 | --- | --- |
 | `evaluation.tmpfs_mb` | in-environment evaluator `/tmp`, positive MiB, default 32. **Not** `limits.*` |
 | `evaluation.environments` | named scoring hosts (`dockerfile` and/or `docker_image`). Setting it requires job `evaluate_host.isolated: true` + `environment: docker` and ignores `evaluate.Dockerfile` |
+| `evaluation.collect` | Before scoring, copy declared absolute paths from the attempt container and compose services onto the scoring host. A row may include `command`, `service`, and `timeout_sec`. Omit or `[]` and this step does not run: workspace harvest and the scoring script's `/app` overlay are unchanged. A failed command or a missing path is an evaluate ERROR |
 
 Files present are recognized: `run.py`, `evaluator.py`, Dockerfile, `setup.sh`.
 

@@ -13,8 +13,13 @@ run 结束 → 停 solver writer（run 相位已打开的 session 不得再 invo
            download 到 evidence/task-artifacts；tree 按 exclude 做成不可变快照
 evaluate
   before_evaluate
+  evaluation.collect          # 省略或空列表：不跑
+                              # 有声明：先 attempt 容器（service 省略或 main）的 command，
+                              # 再拷它的 path；然后 sidecar 的 command，再拷 sidecar 的 path
+                              # 字节进 evidence/verifier-collect/。命令原文不进 evidence
   [isolated, 无名表] start 第二 Host（题包 evaluate 配方；独立 work root，不绑 Agent 盘）
   [无名表] upload artifacts / gold 到那只 Host
+           并把 verifier-collect 按声明的 path 放上这只 Host
   [isolated, 无名表] 对未在 run 用过的 ACP profile 再跑 after_environment_ready
   evaluation_runtime.evaluate # 独占槽赢家；默认 parent 子进程跑 evaluator.py
                               # 无名表：scoring.exec 打缺省打分 Host（= run 环境，或 isolated 那一只）
@@ -111,6 +116,41 @@ evaluate 开头         打分 Host.upload(evaluation_src, /attempt/evaluation)
 - 打分 Host 的 workspace **不是** Agent bind-mount。harvest 之后改 Agent 树，evaluator 看不见。
 
 快照在不在、exclude 清没清，都不是 PASS。
+
+## collect：打分前从 attempt 容器和 sidecar 取路径
+
+`evaluation.collect` 是 evaluate 里的引擎步骤，在 `before_evaluate` 之后、打分 Host 的 upload 之前。它不是链槽，也不是 `evaluation_runtime` 的方法。`run.py` 不读这份声明，也不执行它。
+
+省略该键，或写成空列表：这一步不跑。`artifacts.publishable` 的 workspace harvest 照旧。题包 evaluator 里对 `/app` 的合并也照旧，Core 不另做一次。
+
+一条声明：
+
+| 键 | 规则 |
+| --- | --- |
+| `path` | 容器内绝对路径，不含 `..`。打分 Host 上放回同一路径 |
+| `service` | 省略或 `main` = attempt 容器。其他名字是 compose service |
+| `command` | 可选。在该 service 里用 `sh -c` 跑，用来在拷贝前把状态落成文件 |
+| `timeout_sec` | 可选正数。省略 = 60。只约束 `command` |
+| `exclude` | 可选。只配有 `path` 的目录；拷下之后按目录名和 glob 丢掉 |
+
+每条至少要有 `path` 或 `command`。未知键一次拒绝。
+
+顺序固定，不按 yaml 里 command 和 path 的交错顺序：
+
+1. attempt 容器上的全部 `command`（声明顺序）
+2. attempt 容器上的全部 `path`
+3. sidecar 上的全部 `command`（声明顺序，跨 service）
+4. sidecar 上的全部 `path`
+
+`command` 退出码非 0：evaluate 失败，`error.title` 为 `environment_collect_failed`。路径拷不到：`environment_collect_missing`。两条都是 ERROR，不把缺文件当成 0 分。
+
+字节落在 `evidence/verifier-collect/`。事实 `verifier_collected` 只记 `path`、`service`、`status`。命令原文留在 task.yaml 和内存里的 lock，因为运行要读它；evidence 里的 lock 副本走既有 redaction。事实和 `verifier-collect/manifest.json` 不写命令。
+
+docker：`/attempt` 下仍走 bind mount。`/attempt` 以外的路径走 `docker cp`。sidecar 走 `docker compose cp`。没有 compose 项目却写了 sidecar：`environment_capability_missing`。其他 kind 写了 sidecar，或写了该 kind 的 upload/download 到不了的路径，同一次失败。拷贝本身的超时是 600 秒。
+
+放回打分 Host 时只写声明的 path，不删除该 path 以外的文件。镜像里本来就有的 verifier 文件还在。题包 evaluator 若再把 workspace 合并进 `/app`，那次合并只覆盖它拷到的路径，不删其他已放上的文件。有名打分 Host 在第一次 start 时各放一份。
+
+`ageval results regrade` 不重跑 `command`。它把来源 Attempt 的 `verifier-collect/` 和 `task-artifacts/` 一并拷进新 Attempt，再按 path 放到打分 Host。声明了 `path` 但快照里没有：`environment_collect_missing`。
 
 `ageval results regrade` 走同一条 evaluate：新 Attempt 的 evidence 里放上来源 `task-artifacts/` 的拷贝，再 upload 到打分 Host。不跑 `run`，不调用 `run.py`。gold 仍在 evaluate 开头从 **dataset** 的 `evaluation/` 送入。快照对不上当前 `artifacts.publishable` 时 Attempt 为 ERROR，轨迹不能顶上。没有按题开关。
 

@@ -343,8 +343,11 @@ run phase
 
 evaluate phase
   before_evaluate
+  evaluation.collect     # omitted or [] : skip. else commands then paths, main before sidecars
+                         # stage evidence/verifier-collect/ ; do not record the command text
   [evaluate_host.isolated, no named map] start second EnvironmentProvider (docker; distinct work root)
   [no named map] upload artifacts / tree snapshot / evaluation/ onto that scoring host
+                 place verifier-collect back at each declared path
   [isolated, no named map] after_environment_ready for evaluate-phase ACP profiles
   evaluation_runtime.evaluate  # exclusive-slot winner; default parent evaluator.py worker
                                # named map: lazy start on scoring.exec / session(environment=)
@@ -441,6 +444,7 @@ An ERROR writes `error` as `{phase, title, message}`. `title` annotates that ERR
 | Environment phase budget | ERROR; `error.phase` is `environment`; `error.title` is `environment_timeout`; run does not start | Attempt |
 | Evaluate phase budget | ERROR; `error.phase` is `evaluate`; `error.title` is `evaluate_timeout` | Attempt |
 | Evaluator status other than PASS / FAIL | ERROR; `error.phase` is `evaluate`; `error.title` is `evaluator_invalid_status` | Evaluation |
+| Collect command failed, or a declared path could not be copied | ERROR; `error.phase` is `evaluate`; `error.title` is `environment_collect_failed` or `environment_collect_missing` | Attempt |
 | Evaluator crash or missing verdict | ERROR; `error.phase` is `evaluate`; `error.title` is the class name or `ScriptError.title` | Evaluation |
 | Cleanup failure | warning | Box / Attempt |
 | User cancel | Enters cleanup | Attempt / runtime |

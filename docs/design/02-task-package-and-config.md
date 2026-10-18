@@ -55,6 +55,14 @@ evaluation:
   inputs:
     - artifact: reply
       target: artifacts/reply.json
+  # collect:                          # 打分前从 attempt 容器 / compose service 取路径
+  #   - path: /tmp/agent.patch        # 绝对路径；打分 Host 上放回同一路径
+  #     service: main                 # 省略或 main = attempt 容器
+  #     command: "git diff > /tmp/agent.patch"
+  #     timeout_sec: 60               # 省略 = 60；只约束 command
+  #   - path: /tmp/pg.dump
+  #     service: postgres-db          # compose service；先跑完全部 main，再跑 sidecar
+  #     command: "pg_dump -f /tmp/pg.dump"
   # docker_image: ageval-eval:grader   # 仅 isolated 且未写 environments 时认
   # environments:                      # 多只打分 Host；写出则忽略 evaluate.Dockerfile / docker_image
   #   audit:
@@ -94,6 +102,8 @@ tasks/<id>/
 | `requires.environment` | 空 = 不额外要 cap |
 | seed | 存在 `data/` → environment 相位 upload |
 | gold | 存在 `evaluation/` → evaluate 相位 upload |
+
+`evaluation.collect` 省略或 `[]`：不跑。workspace harvest 与题包脚本里的 `/app` 合并保持原样。每条至少有 `path` 或 `command`。`path` 是绝对路径且不含 `..`。`service` 省略或 `main` 表示 attempt 容器；其他值是 compose service。未知键一次拒绝。命令原文留在 task.yaml，evidence 只记 path、service、status。失败是 evaluate 的 ERROR（`environment_collect_failed` / `environment_collect_missing`），不给空分。细则见 [05-runtime/evaluation.md](05-runtime/evaluation.md)。
 
 yaml 显式字段覆盖缺省。旧 `harness.entrypoint` 与未知 format **拒绝**，不映射。
 

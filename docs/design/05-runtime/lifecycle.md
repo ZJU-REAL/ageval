@@ -45,7 +45,7 @@ created
 | Suite resume（`--resume-suite`） | 同一个 `suite_run_id` | 跳过已完成的格，补缺的 index。默认已完成包含 PASS、FAIL、**ERROR**。取消占位（没真正跑过）会再调度。 |
 | `--retry-errors` | 仍是同一个 `suite_run_id` | 只加在 resume 上。本次过滤里状态为 ERROR 的已完成格再跑一遍，不必逐个 `--replace-slot`。PASS / FAIL 仍跳过。每一格铸造新 Attempt，旧行进 `previous[]`。 |
 | `--replace-slot` | 仍是同一个 `suite_run_id` | 点名换一格（PASS / FAIL / ERROR 都可以）。新 Attempt；旧行进 `previous[]`。与 `--retry-errors` 可以同用。 |
-| `ageval results regrade` | **新** Attempt | 不跑 `run` 相位。把来源 Attempt 的 `task-artifacts/` 拷进新的打分 Host，只跑 evaluate。gold 与 `evaluator.py` 来自**当前 dataset**。来源 `result.json` 保持原样。 |
+| `ageval results regrade` | **新** Attempt | 不跑 `run` 相位。把来源 Attempt 的 `task-artifacts/` 与 `verifier-collect/` 拷进新的打分 Host，只跑 evaluate。不重跑 `evaluation.collect` 的 command。gold 与 `evaluator.py` 来自**当前 dataset**。来源 `result.json` 保持原样。 |
 
 Regrade 的外层顺序是 lock → preflight → 只 `host.start`（不跑 `environment_setup`、不跑 agent）→ evaluate → record → cleanup。五个相位的名字不变；这条入口省掉 `run`。
 
@@ -53,4 +53,4 @@ Harvest 缺失或不够（没有 `artifacts.publishable`，或声明的 file / t
 
 不做的事：中途恢复一次还活着的 agent session；provider session resume token；原地改写 Attempt 目录；用轨迹代替缺失的 harvest；Hub 远程编排。
 
-`slim_sealed_attempt` 默认留下 `task-artifacts/`。cleanup 拆的是活的 box work root，不删这份快照。
+`slim_sealed_attempt` 默认留下 `task-artifacts/` 和 `verifier-collect/`。cleanup 拆的是活的 box work root，不删这两份快照。
