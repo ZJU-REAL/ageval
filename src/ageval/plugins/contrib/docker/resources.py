@@ -11,7 +11,6 @@ import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -118,7 +117,11 @@ def parse_gpu_inventory(text: str) -> tuple[GpuDevice, ...]:
     return tuple(devices)
 
 
-def sidecar_resource_overlay(document: object) -> dict[str, Any] | None:
+# deploy.resources.limits copied from a sidecar's own cpus / mem_limit.
+_ServiceOverlay = dict[str, dict[str, dict[str, dict[str, str]]]]
+
+
+def sidecar_resource_overlay(document: object) -> dict[str, dict[str, _ServiceOverlay]] | None:
     """Copy a sidecar's own ``cpus`` / ``mem_limit`` into ``deploy.resources.limits``.
 
     Services that already set ``deploy.resources.limits``, and services that
@@ -140,7 +143,7 @@ def sidecar_resource_overlay(document: object) -> dict[str, Any] | None:
             "environment_compose_failed",
             "compose services must be a mapping to apply sidecar resource limits",
         )
-    overlay_services: dict[str, Any] = {}
+    overlay_services: dict[str, _ServiceOverlay] = {}
     for name, service in services.items():
         if not isinstance(name, str) or not isinstance(service, dict):
             continue
@@ -201,7 +204,7 @@ def _select_gpus(
     return tuple(pool[:count])
 
 
-def _sidecar_limits(service: Mapping[str, Any]) -> dict[str, str] | None:
+def _sidecar_limits(service: Mapping[str, object]) -> dict[str, str] | None:
     deploy = service.get("deploy")
     if isinstance(deploy, dict):
         resources = deploy.get("resources")

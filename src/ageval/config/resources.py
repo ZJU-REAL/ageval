@@ -39,17 +39,19 @@ def parse_task_resources(parameters: Mapping[str, Any]) -> TaskResources:
     )
 
 
-def resource_options(parameters: Mapping[str, Any], *, scoring: bool) -> dict[str, Any]:
+def resource_options(
+    parameters: Mapping[str, Any], *, scoring: bool
+) -> dict[str, int | float | list[str]]:
     """Options the docker host understands. Empty when this box has no limit to apply."""
     parsed = parse_task_resources(parameters)
+    options: dict[str, int | float | list[str]] = {}
     if scoring:
         if parsed.verifier_gpus <= 0:
-            return {}
-        options: dict[str, Any] = {"gpus": parsed.verifier_gpus}
+            return options
+        options["gpus"] = parsed.verifier_gpus
         if parsed.gpu_types:
             options["gpu_types"] = list(parsed.gpu_types)
         return options
-    options = {}
     if parsed.cpus is not None:
         options["cpus"] = parsed.cpus
     if parsed.memory_mb is not None:
