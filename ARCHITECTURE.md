@@ -1,11 +1,10 @@
 # ageval Architecture
 
-This document maintains **implementation structure** only: current vs target layout, module ownership, dependency direction, composition root, run lifecycle, cross-boundary data flow, failure/cleanup ownership, evidence grades, and change sync.
+This document specifies the **implementation structure** of `ageval`: current and target source layout, module ownership, dependency direction, composition root, Attempt lifecycle, cross-boundary data flow, failure/cleanup handling, and verification rules.
 
-- Do **not** write product essays, version checklists, or Phase task tables.
-- Product and mechanism design authority: [docs/](docs/README.md) (especially [docs/design/](docs/design/)). **Self-contained**; do not read an out-of-repo BRIEF.
+- Product and mechanism design authority: [docs/](docs/README.md) (especially [docs/design/](docs/design/)).
 - Incremental delivery and acceptance tracking: [GitHub Issues](https://github.com/ZJU-REAL/ageval/issues).
-- Reader-facing docs: [website/](website/) (not design authority).
+- Reader-facing usage documentation: [website/](website/).
 
 GitHub: [`ZJU-REAL/ageval`](https://github.com/ZJU-REAL/ageval). The product name, packages, and CLI are **ageval**.
 
@@ -14,56 +13,54 @@ GitHub: [`ZJU-REAL/ageval`](https://github.com/ZJU-REAL/ageval). The product nam
 | Field | Value |
 | --- | --- |
 | Product | ageval (agent eval) |
-| Implementation | Attempt five-phase pipeline is wired; box kinds `local` / `docker` / `e2b` / `ssh` / `daytona`; public commands follow `ageval --help` |
-| Evidence grade | **Limited to `runnable-mvp`**: local ACP, docker ACP, and named `minimal-demo` tasks have public runs. e2b/ssh/daytona **code exists; skip without keys — do not mark isolated** |
+| Implementation | Fixed Attempt phase pipeline; environment plugins `local` / `docker` / `e2b` / `ssh` / `daytona`; CLI entrypoints per `ageval --help` |
+| Evidence grade | **`runnable-mvp`**: local ACP, docker ACP, and named `minimal-demo` tasks have verified public runs; `e2b`/`ssh`/`daytona` implementations exist and fail `--probe` when credentials are absent |
 | Design authority | [docs/README.md](docs/README.md) |
 | Structure authority | **This document** |
-| Near-term target structure | [docs/design/00](docs/design/00-overview-and-product.md), [docs/design/01](docs/design/01-ageval-core.md), [docs/design/09](docs/design/09-owner-matrix-and-structure.md) |
-| Update trigger | See [Change Ownership](#change-ownership) at the end |
+| Related design docs | [docs/design/00](docs/design/00-overview-and-product.md), [docs/design/01](docs/design/01-ageval-core.md), [docs/design/09](docs/design/09-owner-matrix-and-structure.md) |
+| Sync policy | See [Change Ownership](#change-ownership) |
 
-**Do not** treat the Target tree or diagrams below as “already shipped.” Read Current and Target separately.
+Read **Current** and **Target** sections separately; do not treat unverified target items as shipped.
 
 ## System Overview
 
-ageval locks a **dataset**, opens a **box** (exclusive slot `environment`), runs the task `run.py` on a visible Attempt pipeline, then — after writers stop — an independent `evaluator.py` scores and binds a flat Result.
+To decouple task logic from execution backends, `ageval` locks a **dataset** with a role **profiles** configuration, provisions an **environment** (bound to the `environment` exclusive slot), executes the task's `run.py` inside the Attempt lifecycle, and—after sealing solver sessions—runs an independent `evaluator.py` to produce and bind a structured `Result`.
 
-Coding agents enter the box through the parent **ACP** client + `host.attach_stdio`, or through the external `acp-oneshot` executor (`host.exec` of an in-environment ACP pair). Other execution mechanisms fill the exclusive slot `executor` via `ageval.plugin/1`.
+Coding agents connect to the environment either through the parent-process **ACP** client over `host.attach_stdio` or through the external `acp-oneshot` executor (`host.exec` of an in-environment ACP client/server pair). Other harnesses and model endpoints bind to the per-profile `executor` exclusive slot via `ageval.plugin/1`.
 
 ### Main participants
 
 | Participant | Owns | Does not own |
 | --- | --- | --- |
-| Operator / CLI | Start lock/run/inspect; read exit code and summary | Business workflow, scoring algorithm |
-| Application | Use-case orchestration; **sole composition root** | A second copy of framework-agnostic domain rules |
-| Config | `load_and_lock` → `LockedTaskConfig` + `extension_bindings` | Interpreting the Python workflow |
-| Attempt host | `run_attempt`: environment → run → evaluate → record; `finally` cleanup | Vendor SDKs, the task loop |
-| Box (environment winner) | `preflight` / `start` / `exec` / `upload` / `download` / `attach_stdio` / `stop` | ACP protocol, PASS |
-| Capability | Authorized operation surface exposed to `run.py` | Issuing final PASS |
-| Evaluation | Barrier, in-environment evaluator, `bind_evaluation`, evidence | Unifying every scoring algorithm |
-| SDK (`ageval_sdk`) | `RunContext`, `AgentSession`, Tool soft limits | Run identity, credentials, verdict |
-| Task `run.py` | Business loop, local Tools, `ctx.params` | Docker, credentials, final PASS |
-| Plugins | Exclusive / chain slot implementations; `src/ageval/plugins/` registry + first-party contrib | Branching by Benchmark name; a second resolve path |
-| Evaluator (package) | Task truth | Starting the Agent, holding host secrets |
+| Operator / CLI | Invoking `lock` / `run` / `view`; reading exit codes and summaries | Task interaction logic, scoring criteria |
+| Application | Use-case orchestration; **sole production composition root** | Duplicating domain or protocol rules |
+| Config | `load_and_lock` → `LockedTaskConfig` + `extension_bindings` | Executing Python task workflows |
+| Attempt engine | `run_attempt`: `environment → run → evaluate → record`, with `cleanup` in `finally` | Vendor SDKs, task interaction loops |
+| Environment plugin | `preflight` / `start` / `exec` / `upload` / `download` / `attach_stdio` / `stop` | ACP protocol, `PASS` verdict |
+| Capability layer | Authorized operation surface and quotas exposed to `run.py` | Issuing `PASS` verdicts |
+| Evaluation | Phase boundary, subprocess `evaluator.py` runner, `bind_evaluation` | Task-specific scoring logic |
+| SDK (`ageval_sdk`) | `RunContext`, `AgentSession`, local `ToolSet`, concurrency helpers | Run identity, host credentials, `PASS` verdict |
+| Task `run.py` | Task interaction loop, domain tools, `ctx.params`, artifact registration | Container lifecycle, host credentials, `PASS` verdict |
+| Plugins | Exclusive-slot and chain-slot implementations (`src/ageval/plugins/` + external `plugins/`) | Branching by benchmark name; bypassing registry resolution |
+| Task `evaluator.py` | Task grading logic and `PASS` / `FAIL` status | Starting the solver agent, holding host secrets |
 
-### Target data/control main flow (validated-output direction)
+### End-to-end control flow
 
 ```text
 dataset root (ageval.yaml / ageval.dataset/1)
   → resolve_task(--task) → tasks/<id>/task.yaml
   → merge profiles.yaml (environment + agent_profiles)
-  → load_and_lock → model contract, then LockedTaskConfig + extension_bindings + digest
-  → IdentityFactory: Run / Trial / Attempt + evidence root
+  → load_and_lock → ModelSpec contract check, LockedTaskConfig + extension_bindings + digest
+  → IdentityFactory: Run / Trial / Attempt + evidence directory
   → host.preflight
   → run_attempt
        environment  host.start → upload data/ → after_environment_ready → environment_setup
-       run          subprocess run.py ← Agent Service socket ← attach_stdio
-       evaluate     solver writers stopped → [opt-in scoring host(s)] → gold/snapshot on started host(s) → parent evaluator.py (Agent Service; optional scoring.exec) → bind
+       run          subprocess run.py ← Agent Service socket ← executor (attach_stdio / exec / HTTP)
+       evaluate     seal solver sessions → [optional isolated scoring host(s)] → upload evaluation/ & artifact snapshots → subprocess evaluator.py → bind_evaluation
        record       trajectory_collect → trajectory_seal → summary_enrich
-       finally      cleanup → each started evaluate_host.stop + host.stop
+       finally      cleanup → stop started scoring host(s) + stop run environment
   → .ageval/runs/<attempt_id>/
 ```
-
-Arrows mean **control-flow progress**. Cross-trust-boundary data flow is in [Data Flow](#data-flow-current).
 
 ## Runnable System Path
 
@@ -71,34 +68,22 @@ Arrows mean **control-flow progress**. Cross-trust-boundary data flow is in [Dat
 
 | Item | Value |
 | --- | --- |
-| Public entrypoint | `ageval lock` / `run` (including `--probe`) / `tasks` / `campaign` / `view` / `plugin` / `evidence` / `status` / `cancel` / `executors` / `jobs` / `results` / `publish` / `release` / `agent` / `registry` (CLI is authoritative) |
+| Public entrypoint | `ageval lock` / `run` (including `--probe`) / `tasks` / `campaign` / `view` / `plugin` / `evidence` / `status` / `cancel` / `executors` / `jobs` / `results` / `publish` / `release` / `agent` / `registry` |
 | Production composition root | `src/ageval/application/composition.py` |
-| Smoke lock | `uv run ageval lock examples/datasets/minimal-demo --task terminal-jsonl-agg` (exit 0; summary has `dataset_id`, no `database_id`) |
-| Smoke docker ACP | `uv run ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg` (default `minimal-demo` box is docker) |
-| Smoke local ACP | `uv run ageval lock examples/datasets/tau3-airline-5 --task airline-00` (default box is local; run needs credentials + tau2) |
-| Smoke demo | `uv run ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg`; `… --task tau2-dialog-min` |
-| Expected failure | Unknown format → `invalid_format` exit 2; missing `--task` follows CLI; e2b/ssh/daytona without keys `--probe` `ready:false` |
-| Observable result | Secret-free lock summary + digest; Attempt has `lock.json` / `result.json` / `trajectory.jsonl` |
-| Evidence grade | **Limited to `runnable-mvp`** (commands above; do not upgrade from documentation) |
+| Smoke lock | `uv run ageval lock examples/datasets/minimal-demo --task terminal-jsonl-agg` (exit 0; summary has `dataset_id`) |
+| Smoke docker ACP | `uv run ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg` (default `minimal-demo` environment is `docker`) |
+| Smoke local ACP | `uv run ageval lock examples/datasets/tau3-airline-5 --task airline-00` (default environment is `local`; full run requires credentials + `tau2`) |
+| Expected failure | Unknown format → `invalid_format` exit 2; `e2b`/`ssh`/`daytona` without credentials → `--probe` reports `ready: false` |
+| Observable output | Secret-free lock summary + digest; Attempt directory contains `lock.json`, `result.json`, `trajectory.jsonl`, and `summary.json` |
+| Evidence grade | **`runnable-mvp`** |
 
-Suggested check after doc edits:
+### Target — items not yet claimed as verified
 
-```bash
-git diff --check
-# when website/ changes: pnpm --dir website build
-```
-
-### Target — structure/evidence not claimed done
-
-| Item | Planned value |
+| Item | Planned verification |
 | --- | --- |
-| Real ACP on e2b / ssh | Same task, public `ageval run` with `environment: e2b` and ssh A+B (tick only with credentials). Skip without keys ≠ pass. The Protocol seam needs a second real cloud winner |
-| External plugins actually run | One real `ageval run` each for nooa / dsh; miniswe at least lock. install recognition ≠ a real run |
-| Tree check | Do not keep two of `plugins/defaults` and `contrib/defaults`; CLI imports composition only |
-| Named-example hard cut | lock/run listed in [docs/design/10](docs/design/10-examples-database-52.md); leftover old formats in-tree must fail lock |
-| Docs | This document’s Current = `src/ageval` + five phases |
-
-Earlier intermediate checkpoints follow code and examples. **Do not** treat Target as Current.
+| Live ACP on `e2b` / `ssh` | Public `ageval run` with `environment: e2b` and `ssh` A/B using live credentials |
+| External plugins live run | Verified `ageval run` for `nooa`, `dsh`, and `miniswe` |
+| Named-example matrix | Full verification matrix in [docs/design/10](docs/design/10-examples-database-52.md) |
 
 ## Source Layout
 
@@ -114,87 +99,88 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 ├── src/ageval/
 │   ├── cli/                         # Typer: argv, help, exit code
 │   ├── application/
-│   │   ├── composition.py           # CLI imports builders only from here
-│   │   ├── lock.py                  # load_and_lock + capability/inject graph
+│   │   ├── composition.py           # Sole production wiring; CLI imports build_* only from here
+│   │   ├── lock.py                  # load_and_lock + capability/inject dependency graph
 │   │   ├── run.py                   # mint identity → ctx → run_attempt
-│   │   ├── regrade.py               # mint a new Attempt → run_regrade (no run phase)
+│   │   ├── regrade.py               # mint new Attempt → run_regrade (skips run phase)
 │   │   ├── campaign.py
 │   │   ├── suite/                   # suite_run, fingerprint, suite_metrics, summary document
 │   │   ├── registry_ops/            # results / publish / login / org / list
 │   │   ├── plugin_ops/
-│   │   ├── agent_ops/               # --agent (+ optional --model) projects into profiles
+│   │   ├── agent_ops/               # --agent (+ optional --model) projected into profiles
 │   │   ├── local_jobs/              # local Job list / get / delete
 │   │   └── analysis/                # post-run stats / hack / review (read-only)
-│   ├── attempt/                     # deep module: one Attempt’s visible pipeline
-│   │   ├── __init__.py              # run_attempt five phases; run_regrade skips run
+│   ├── attempt/                     # Single-Attempt execution pipeline
+│   │   ├── __init__.py              # run_attempt phases; run_regrade skips run
 │   │   ├── ctx.py
-│   │   ├── emit.py                  # chain-slot next()
+│   │   ├── emit.py                  # chain-slot next() dispatch
 │   │   └── phases/
 │   │       ├── environment.py
 │   │       ├── run.py
 │   │       ├── evaluate.py
 │   │       ├── record.py
 │   │       └── cleanup.py
-│   ├── config/                      # dataset root + task.yaml + profiles
-│   ├── model/                       # ModelSpec · resolve_model (no gateway key list)
+│   ├── config/                      # dataset root + task.yaml + profiles resolution
+│   ├── model/                       # ModelSpec · resolve_model
 │   ├── environments/
-│   │   ├── protocol.py              # EnvironmentProvider · StdioTransport · caps
+│   │   ├── protocol.py              # EnvironmentProvider · StdioTransport · capabilities
 │   │   └── streams.py
 │   ├── plugins/
 │   │   ├── base.py                  # BaseEnvironment · BaseExecutor
 │   │   ├── decorators.py            # @environment_plugin / @executor_plugin
-│   │   ├── slots.py                 # exclusive / chain ids
+│   │   ├── slots.py                 # exclusive / chain slot identifiers
 │   │   ├── registry.py / resolve.py / bootstrap.py / builtin.py
-│   │   ├── defaults/                # environment_setup recognizes setup.sh
+│   │   ├── defaults/                # environment_setup (setup.sh), default evaluation_runtime & trajectory_seal
 │   │   └── contrib/
-│   │       ├── acp/                 # exclusive executor + attach_stdio client
-│   │       ├── docker/              # exclusive environment; attempt/ = official base recipe
+│   │       ├── acp/                 # ACP executor + attach_stdio client
+│   │       ├── docker/              # Docker environment; attempt/ = official base image recipe
 │   │       ├── local/
 │   │       ├── e2b/
 │   │       ├── daytona/
-│   │       ├── ssh/                 # A whole host / B remote container
+│   │       ├── ssh/                 # Mode A (remote host) / Mode B (remote container)
 │   │       ├── openai_http/
 │   │       └── anthropic_http/
 │   ├── runtime/
-│   │   ├── clocks.py                # one CLOCKS table for timeout numbers
+│   │   ├── clocks.py                # Centralized CLOCKS table for default timeouts
 │   │   ├── identity.py
-│   │   ├── parent_agent.py          # executor service + host.attach_stdio only
-│   │   ├── task_launch.py           # Control Plane subprocess runs run.py
+│   │   ├── parent_agent.py          # Parent Agent Service + executor dispatch
+│   │   ├── task_launch.py           # Subprocess launcher for run.py
 │   │   └── task_worker.py
-│   ├── evaluation/                  # barrier + in-environment runner + bind PASS
-│   ├── evidence/                    # sole owner of layout strings
+│   ├── evaluation/                  # Phase barrier + subprocess evaluator runner + bind_evaluation
+│   ├── evidence/                    # Sole owner of .ageval/runs layout paths and trajectory sealing
 │   ├── capabilities/
-│   ├── registry/                    # Hub client
-│   ├── viewer/                      # local Jobs HTTP
+│   ├── registry/                    # Hub HTTP client
+│   ├── viewer/                      # Local Viewer HTTP server
 │   ├── control/
 │   └── agents/                      # ageval.agent/1 cache + builtin catalog
-│       ├── builtin/                 # catalog.json + shipped harness trees
-│       └── reserved.py              # short ids: overlay, not Hub upload
-├── src/ageval_sdk/                  # RunContext / RunTerminal / AgentSession (same distribution as ageval)
+│       ├── builtin/                 # catalog.json + shipped agent package trees
+│       └── reserved.py              # Reserved builtin short IDs
+├── src/ageval_sdk/                  # RunContext / RunTerminal / AgentSession
 ├── apps/
-│   ├── shared/                      # Hub + Viewer chrome (tokens, labels, trial)
+│   ├── shared/                      # Shared Hub + Viewer UI components and tokens
 │   ├── viewer/                      # `ageval view` SPA
-│   └── hub/                         # Registry Dataset / Plugin / Agent / Leaderboard
-├── services/registry/               # standalone HTTP: Route.access + *Service
+│   └── hub/                         # Registry Dataset / Plugin / Agent / Leaderboard SPA
+├── services/registry/               # Standalone HTTP service: Route.access + *Service
 │   ├── app.py / asgi.py / backend.py
-│   ├── http/                        # dispatch + one module per aggregate
+│   ├── http/                        # Request dispatch + one handler module per aggregate
 │   ├── auth/                        # AuthService, GitHub OAuth, token stores
-│   ├── orgs/                        # service, users, store, protocol, rows, queries, official
-│   ├── packages/                    # service, store, protocol, rows, queries, dto, builtins
-│   ├── runtimes/                    # derived agent performance
-│   ├── results/                     # service, store, protocol, rows, queries, dto
-│   ├── shares/                      # snapshot share; static archive or live patch
-│   ├── inbox/                       # requests, maintainers, store
-│   ├── hosted/                      # org secrets + hosted job queue; worker process
-│   ├── content/                     # files, blob_io, blobs
-│   ├── db/                          # dialect, sql_adapter, schema (open_stores)
+│   ├── orgs/                        # Organization and user management
+│   ├── packages/                    # Dataset, plugin, and agent package stores and catalogs
+│   ├── runtimes/                    # Derived agent performance aggregation
+│   ├── results/                     # Suite and Attempt result stores
+│   ├── shares/                      # Read-only snapshot shares (static archive or live update)
+│   ├── inbox/                       # Listing and performance attachment requests
+│   ├── hosted/                      # Organization secrets + hosted job queue and worker
+│   ├── content/                     # Package file indexing and BlobStore I/O
+│   ├── db/                          # SQL dialect adapter and schema initialization (open_stores)
 │   └── dataset.py / access.py / errors.py / paging.py / clock.py / envload.py / upload_slots.py / spool.py
 ├── examples/
 │   ├── datasets/
 │   │   ├── minimal-demo/            # terminal-jsonl-agg / tau2-dialog-min / multiagent-env-min
-│   │   └── tau3-airline-5/            # airline-00 … airline-04 lock
+│   │   ├── concurrent-research/     # fanout concurrent-session example
+│   │   └── tau3-airline-5/          # airline-00 … airline-04
 │   └── agents/                      # ageval.agent/1: dsh / nooa / miniswe defaults
-├── plugins/                         # external ageval.plugin/1
+├── plugins/                         # External ageval.plugin/1 packages
 │   ├── nooa/ / dsh/ / miniswe/ / acp-oneshot/
 │   └── home-files/ / agent-skills/
 ├── tests/
@@ -202,73 +188,48 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 └── website/
 ```
 
-Hub Agent Performance is a **derived view** of plaza / consented `job_overlay.agent_ref` rows, not a Core object. Builtin cards default to official public suites auto-collect; Maintainers (`AGEVAL_REGISTRY_MAINTAINERS`) own that setting and builtin attach approval. There is no `/runtimes` product surface. Public Leaderboard listing is a Registry flag (`board_listed`), not visibility. Leaderboard plaza indexes those existing surfaces (`GET /v1/results/suites?board=1` without `dataset_id`, plus one derived `GET /v1/results/performances`); it is not a stored table. Delayed `agent_ref` attach and request decide share one ResultService write path; CLI `build_results_commands` is the Hub/CLI use-case root.
+Hub Agent Performance is a **derived view** over public listed or consented `job_overlay.agent_ref` rows rather than a separate Core entity. Public Leaderboard listing is controlled by the Registry flag `board_listed` (distinct from package/result `visibility`). The `/leaderboard` plaza indexes Dataset Leaderboard, Agent Performance, and Model Performance via `GET /v1/results/suites?board=1` and `GET /v1/results/performances`.
 
-Production Attempt: `application/run.py` mints identity once, then `attempt.run_attempt`. `application/regrade.py` mints a new Attempt and calls `attempt.run_regrade`, which starts the box and runs evaluate without the `run` phase. Cleanup is in `try/finally`. Parent Agent Service and hard ceilings share the same quota object. The service admits each run-phase invoke, serializes one session in arrival order, and overlaps distinct sessions up to `limits.agent_concurrency` (omitted means 1). Quota is reserved once, immediately before the executor. `seal_run` drops queued solver work and drains in-flight solver execution before `mark_writers_stopped`. Judge sessions stay serial and do not spend that ceiling.
+During a production Attempt, `application/run.py` mints run identity once and invokes `attempt.run_attempt`. `application/regrade.py` mints a new Attempt and invokes `attempt.run_regrade`, which provisions the scoring environment and runs `evaluate` from archived artifact snapshots without executing `run.py`. Resource `cleanup` always runs in `finally`. The parent Agent Service and `limits` share a unified quota state: the service admits `run`-phase invocations, serializes calls within a single session in arrival order, and overlaps distinct sessions up to `limits.agent_concurrency` (default 1). At the end of `run`, `seal_run` cancels queued solver calls and drains in-flight solver executions before `mark_writers_stopped`. Evaluate-phase `judge` sessions execute serially without consuming solver invocation quotas.
 
-### Target Source Layout (not fully realized)
-
-This is the accepted direction, **not** splitting Current back into `adapters/` + `run_l0.py`.
-
-```text
-src/ageval/
-  cli/ application/ attempt/phases/ config/
-  model/                            # ModelSpec · resolve_model
-  environments/protocol.py          # still no vendor SDK
-  plugins/base.py                   # BaseEnvironment · BaseExecutor
-  plugins/decorators.py             # @environment_plugin / @executor_plugin
-  plugins/contrib/{acp,docker,local,e2b,daytona,ssh,openai_http,anthropic_http}
-  plugins/defaults/                 # or move to contrib/defaults — pick one, not both
-  runtime/{clocks,identity,parent_agent,task_launch,task_worker}
-  evaluation/{bind,package_evaluator} + runtime/eval_worker.py
-  evidence/{locators,store,trajectory,documents,analysis}
-```
-
-**Deliberately not built (deleted in Current; Target must not bring them back):**
-
-- `environment/manager.py`
-- catch-all `adapters/`, `agent_container.wrap_docker_exec`
-- forked lifecycle modules (Attempt goes only through `attempt/phases/`)
-- product `executor: mock` / FakeHost
-
-### Generated artifacts (not source ownership)
+### Generated artifacts (not source-edited)
 
 | Path / pattern | Notes |
 | --- | --- |
-| `.ageval/` | runs, suite-runs, local plugin cache, credentials |
-| `apps/shared/lib/evidence.gen.ts` | generated from `evidence/documents.py`; `scripts/gen_evidence_ts.py --check` |
-| `.venv/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/` | toolchain |
-| `dist/`, `*.egg-info/` | build artifacts |
+| `.ageval/` | Local runs, suite-runs, plugin cache, and credentials |
+| `apps/shared/lib/evidence.gen.ts` | Generated from `evidence/documents.py` (`scripts/gen_evidence_ts.py --check`) |
+| `.venv/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/` | Python toolchain caches |
+| `dist/`, `*.egg-info/` | Package build outputs |
 
-## Module Ownership (Current)
+## Module Ownership
 
 | Path | Sole responsibility | Does not own |
 | --- | --- | --- |
-| `cli/` | argv, help, exit code | Reading task business logic, starting Docker, assembling evidence paths |
-| `application/` | lock/run/campaign/suite/registry/plugin/agent/jobs/analysis; **wiring** | Hiding business rules in global singletons outside bootstrap |
-| `application/analysis/` | Post-run `stats` / `hack` / `review` over sealed evidence | PASS, `checks.json`, Hub upload |
-| `application/composition.py` | Sole production `build_*` | Business algorithms |
-| `config/` | dataset resolve; read `task.yaml` / profiles; digest | Executing `run.py`, scoring |
-| `attempt/` | Phase order, `emit`, AttemptCtx | Vendor SDKs, `container_id` |
-| `environments/` | Protocol + caps + stream shapes | `import e2b` / `docker` / `paramiko` |
-| `plugins/contrib/docker/` | `docker exec`, compose, uid/gid, images; `attempt/` official base recipe | ACP protocol |
-| `plugins/contrib/e2b/` | E2B SDK, template alias (cached on that account; Core does not implement) | A Core cache layer |
-| `plugins/contrib/ssh/` | ssh A/B, `ssh -T` / `docker exec` | A fake in-process agent |
-| `plugins/contrib/acp/` | Parent ACP client, entry registry, consumer of `attach_stdio` | Layer-C writer; vendor stdout scrape |
-| `plugins/defaults/` | `environment_setup` recognizes `setup.sh`; default winners for `evaluation_runtime` / `trajectory_seal` | Fake executor; PASS |
-| `runtime/` | identity, parent Agent Service, task-worker subprocess, cancel/timeout | Box implementations, scoring |
-| `evaluation/` | Barrier order, in-environment runner, flat Result | Task scoring algorithms |
-| `evidence/` | store / redaction / layer-C `trajectory.jsonl` / sealed document schema / analysis artifact paths | Vendor protocol parsing; PASS |
-| `registry/` + `services/registry/` | PackageRef, publish, verified cache; standalone HTTP | PASS; handing store credentials to the CLI |
-| `ageval_sdk` | Task types and thin helpers | Control Plane internal types, verdict |
-| `examples/` | Trusted regression datasets | Claiming a full upstream suite |
-| `tests/` | Contracts and regression | Becoming the production composition root |
-| `docs/` | Design and product spec | Version-checkbox status |
-| `website/` | Reader-facing usage | Design authority |
+| `cli/` | CLI argument parsing, help text, exit codes | Task business logic, starting containers, constructing evidence paths |
+| `application/` | Use-case orchestration (`lock`, `run`, `campaign`, `suite`, `registry`, `plugin`, `agent`, `jobs`, `analysis`) | Global mutable singletons outside bootstrap |
+| `application/analysis/` | Post-run read-only `stats` / `hack` / `review` over sealed evidence | `PASS` verdicts, `checks.json`, Hub uploads |
+| `application/composition.py` | Sole production `build_*` wiring | Task or scoring algorithms |
+| `config/` | Dataset resolution, `task.yaml` / `profiles.yaml` validation, lock digest | Executing `run.py` or `evaluator.py` |
+| `attempt/` | Fixed phase sequence, `emit` chain dispatch, `AttemptCtx` | Vendor SDKs, `container_id` |
+| `environments/` | `EnvironmentProvider` protocol, capability flags, stdio stream types | Importing `e2b`, `docker`, or `paramiko` |
+| `plugins/contrib/docker/` | `docker exec`, compose, UID/GID, image build; `attempt/` official base recipe | ACP protocol handling |
+| `plugins/contrib/e2b/` | E2B SDK integration and template caching | Core-level template caching |
+| `plugins/contrib/ssh/` | SSH Modes A and B (`ssh -T` / remote `docker exec`) | In-process fake agents |
+| `plugins/contrib/acp/` | Parent ACP JSON-RPC client, entry registry, `attach_stdio` consumer | Writing `trajectory.jsonl` directly; scraping unstructured stdout |
+| `plugins/defaults/` | `environment_setup` (`setup.sh`), default `evaluation_runtime` and `trajectory_seal` implementations | Issuing `PASS` directly |
+| `runtime/` | Run identity, parent Agent Service, subprocess worker launchers, clocks/quotas | Environment plugin internals, scoring criteria |
+| `evaluation/` | Phase barrier, subprocess evaluator execution, `bind_evaluation` | Task-specific scoring formulas |
+| `evidence/` | Evidence directory layout, secret redaction, `trajectory.jsonl` sealing, document schemas | Vendor protocol parsing, `PASS` verdicts |
+| `registry/` + `services/registry/` | Package and result HTTP client/server | Issuing `PASS`; exposing storage credentials to clients |
+| `ageval_sdk` | Task-script types and session/tool helpers | Control-plane internals, `PASS` verdicts |
+| `examples/` | Reference datasets and agent packages for smoke/regression checks | Full upstream benchmark distributions |
+| `tests/` | Contract, unit, integration, and architecture tests | Production composition wiring |
+| `docs/` | Product and mechanism design specifications | Task-tracking checklists |
+| `website/` | Reader-facing bilingual documentation | Mechanism design authority |
 
 ## Dependency Direction
 
-Dependency arrows = **allowed Python import direction**.
+Arrows denote allowed Python import directions:
 
 ```text
 cli ──────────────► application.composition
@@ -276,221 +237,191 @@ cli ──────────────► application.composition
                          ├─► config / attempt / runtime / capabilities / evaluation
                          │
                          └─► plugins.bootstrap ──► plugins.builtin ──► contrib/* ──► environments.protocol
-                                 (builtin lists modules; it does not scan contrib/.
-                                  contrib is not imported back by protocol)
+                                 (builtin imports explicit module tuples;
+                                  protocol never imports contrib)
 
 plugins.base ──► ageval.model · environments.protocol
-ageval.model ──► (no plugins, no contrib, no application)
+ageval.model ──► (independent of plugins, contrib, and application)
 
 ageval_sdk ──► public DTOs / protocol shapes only
-               (must not import application, contrib internals, or Control Plane private modules)
+               (never imports application, contrib internals, or private control-plane modules)
 ```
 
-### Forbidden
+### Forbidden dependencies
 
-- `environments/protocol.py` depending on Typer, Docker SDK, e2b SDK, or SQLAlchemy.
-- CLI calling Codex directly, writing the evidence tree, or parsing task business logic; CLI bypassing composition.
-- Control Plane importing/executing task `run.py` / `evaluator.py` **as Python modules** (must be a process or adapter boundary).
-- SDK obtaining host credential file contents, Docker-socket control, or final-result publish rights.
-- Implicitly registering a global Adapter singleton **outside** the composition root.
-- Adapters choosing behavior by Benchmark name, task id, or upstream brand.
-- `container_id` or `if kind == e2b` appearing in ACP / `attempt` / `run.py`.
-- A second `resolve_executor` / CLI bypass / hand-constructing Docker in application.
-- Production code importing a test helper as the only wiring path.
-- A gateway key list inside `ModelSpec` or `resolve_model`. Allowed `model.extra` keys are the executor `extra_allowlist`.
-
-Third-party workflow SDKs: allowed only as a task or **explicit** external plugin dependency; they must not become Core authority.
+- `environments/protocol.py` importing Typer, Docker SDK, E2B SDK, or SQLAlchemy.
+- `cli/` invoking agent CLIs directly, constructing evidence paths, or bypassing `application.composition`.
+- Control plane importing task `run.py` or `evaluator.py` as in-process Python modules.
+- `ageval_sdk` reading host credential files, controlling Docker sockets, or binding `PASS`.
+- Branching on benchmark names or task IDs inside Core or plugins.
+- Referencing `container_id` or branching on `if kind == "e2b"` inside ACP, `attempt/`, or `run.py`.
+- Hardcoding gateway-specific parameter lists inside `ModelSpec` or `resolve_model` (allowed `model.extra` keys belong on the executor's `extra_allowlist`).
 
 ## Composition Root
 
 | Item | Rule |
 | --- | --- |
-| Sole production wiring point | `build_*` in `src/ageval/application/composition.py` |
-| New public use case | Must have a matching `build_*` |
-| CLI | Imports only `ageval.application.composition` (and `ageval.cli` itself) |
-| Tests | May use test-only wiring; public smoke must go through production CLI |
-| Plugin discovery | Extension registry + `ageval plugin install` local cache; missing plugins are rejected and the run does not start; no `ageval.agent_executors` dual path |
+| Sole production wiring point | `build_*` functions in `src/ageval/application/composition.py` |
+| New public use case | Must expose a corresponding `build_*` function |
+| CLI | Imports only `ageval.application.composition` (and `ageval.cli`) |
+| Plugin discovery | `ExtensionRegistry` + `~/.ageval/plugins` local cache; missing plugins fail during `ageval lock` |
 
-## Extension emit map (Current)
+## Extension Emit Map
 
-The host **awaits** registered chain slots / exclusive winners. Plugins rewrite or short-circuit via `(ctx, value, nxt)`; they do **not** drop declaration rows for Core to interpret later.
+Core awaits registered chain-slot handlers and exclusive-slot implementations according to the locked dependency graph. Slot identifiers are defined in `src/ageval/plugins/slots.py`.
 
-Slot-name authority: `src/ageval/plugins/slots.py`. Only **exclusive** and **chain**. Current exclusive slots: `environment`, `executor`, `evaluation_runtime`, `trajectory_seal`. `environment` / `evaluation_runtime` / `trajectory_seal` are Attempt-wide; `executor` is one winner **per profile graph**. The last two default to the engine (`plugin_id: default`). PASS still enters Result only through `bind_evaluation`; `evaluation_runtime` returns raw and must not write a verdict itself. `pass` / `identity` / `cleanup` / `evidence` are not services.
+Exclusive slots: `environment`, `executor`, `evaluation_runtime`, `trajectory_seal`. `environment`, `evaluation_runtime`, and `trajectory_seal` bind once per Attempt, whereas `executor` binds one implementation **per role profile**. `evaluation_runtime` and `trajectory_seal` default to the engine (`plugin_id: default`). `PASS` enters `Result` exclusively through `bind_evaluation`.
 
 ```text
 environment phase
   before_environment
   host.start
   upload data/ → /attempt/workspace
-  after_environment_ready      # ACP probe; skip install when bake matches
-  environment_setup            # setup.sh (defaults)
+  after_environment_ready      # ACP runtime probe; skip install when baked version matches
+  environment_setup            # run environment/setup.sh if present
   after_environment
 
 run phase
   before_run
   subprocess python -m ageval.runtime.task_worker → run.py
     Agent.session → unix socket → ParentAgentService
-      accept hands the frame to a handler; the next frame does not wait
-      one session: arrival order; distinct sessions overlap up to agent_concurrency
-      quota once, immediately before executor.invoke
+      admit frame → serialize within session; overlap distinct sessions up to agent_concurrency
+      reserve agent_invocations quota immediately before executor.invoke
       before/after_agent_open
-      before_agent_invoke → this profile's executor.invoke → after_agent_invoke
+      before_agent_invoke → profile executor.invoke → after_agent_invoke
       normalize_agent_result
       before/after_agent_close
-  seal_run (drop queued solver invokes, cancel and drain in-flight ones)
-  mark_writers_stopped (Agent Service stays up for evaluate)
+  seal_run (cancel queued solver calls, drain in-flight solver calls)
+  mark_writers_stopped (Agent Service remains open for evaluate-phase judge profiles)
   after_run
 
 evaluate phase
   before_evaluate
-  evaluation.collect     # omitted or [] : skip. else commands then paths, main before sidecars
-                         # stage evidence/verifier-collect/ ; do not record the command text
-  [evaluate_host.isolated, no named map] start second EnvironmentProvider (docker; distinct work root)
-  [no named map] upload artifacts / tree snapshot / evaluation/ onto that scoring host
-                 place verifier-collect back at each declared path
-  [isolated, no named map] after_environment_ready for evaluate-phase ACP profiles
-  evaluation_runtime.evaluate  # exclusive-slot winner; default parent evaluator.py worker
-                               # named map: lazy start on scoring.exec / session(environment=)
-                               #            ACP must name the host; omit / run-phase target fails
-                               # optional Agent.session(<judge>).invoke via parent socket
-                               # isolated: ACP attach_stdio hits the (named) scoring host
-                               # opt-in: parent writes evaluation/checks.json from verdict
-  bind_evaluation              # PASS enters Result only here; checks are not an input
-  after_evaluate               # must not change status
+  evaluation.collect           # optional: run collect commands and stage declared paths into verifier-collect/
+  [evaluate_host.isolated, unnamed] start isolated Docker scoring environment (distinct work root)
+  [unnamed] upload harvested artifacts, verifier-collect paths, and evaluation/ onto scoring host
+  [isolated, unnamed] run after_environment_ready for evaluate-phase ACP profiles
+  evaluation_runtime.evaluate  # default: subprocess evaluator.py worker
+                               # named evaluation.environments: lazy start on first scoring.exec or session(environment=)
+                               # optional: Agent.session(<judge>).invoke via ParentAgentService
+                               # optional: write evaluation/checks.json from returned checks list
+  bind_evaluation              # sole entry point for PASS / FAIL
+  after_evaluate               # may attach metrics; cannot alter status
 
 record phase
-  trajectory_collect → enrich  # later steps still run if this hook fails
-  trajectory_seal              # exclusive-slot winner writes run-phase trajectory.jsonl
-  evaluation/observation.jsonl # evaluate-phase trajectory.jsonl when SDK invoked (omit user)
-  summary_enrich               # later steps still run if this hook fails; Attempt summary.extra (omit when empty)
+  trajectory_collect → trajectory_enrich
+  trajectory_seal              # writes run-phase trajectory.jsonl
+  evaluation/observation.jsonl # evaluate-phase judge trajectory (omits user prompts)
+  summary_enrich               # populates Attempt summary.extra (omitted when empty)
 
 cleanup (finally)
   cleanup_report
-  evaluate_host.stop           # each started isolated scoring host
+  stop started isolated scoring environment(s)
   host.stop
 ```
 
-`FAIL_OPEN_SLOTS`: `before_run` / `after_run` / `trajectory_collect` / `trajectory_enrich` / `summary_enrich` / `cleanup_report`. Any other slot failure fails that phase.
+`FAIL_OPEN_SLOTS`: `before_run`, `after_run`, `trajectory_collect`, `trajectory_enrich`, `summary_enrich`, `cleanup_report`. Failures in any other slot fail the enclosing phase.
 
-## Lifecycle (Current)
+## Lifecycle
 
-### Outer states (Attempt)
+### Attempt state transitions
 
 ```text
 created
   → locking          # load_and_lock
-  → preflight        # host.preflight; missing keys fail here
-  → environment      # start + seed + setup
-  → run              # run.py + ACP
-  → evaluate         # stop writers + gold + bind
-  → record
-  → cleanup          # finally; entered on every failure path
+  → preflight        # host.preflight; missing credentials fail here
+  → environment      # start + upload seed + setup
+  → run              # run.py + bound executor(s)
+  → evaluate         # seal solver + upload gold + evaluator.py + bind_evaluation
+  → record           # seal trajectory and summary
+  → cleanup          # finally block; runs on every exit path
   → terminal         # PASS | FAIL | ERROR
 ```
 
-### Order invariants
+### Ordering invariants
 
-1. Must not `start` a box or invoke until `load_and_lock` succeeds.
-2. Evaluator must not face the same scoring inputs concurrently with a writable Agent/`run.py` writer. Gold is uploaded only at the start of evaluate.
-3. `cleanup` must be reachable from timeout/cancel/exception; cleanup failure → warning, does not overwrite a bound score.
-4. Retry / re-run → a **new Attempt**; do not silently rewrite the old Attempt identity. One Attempt calls `IdentityFactory.new_run` once.
-5. Campaign schedules Trials/grid points only; it does not merge with the workflow inside `run.py`.
+1. No environment starts and no agent invocation occurs before `load_and_lock` succeeds.
+2. `evaluator.py` never runs concurrently with an active solver session; reference materials (`evaluation/`) are uploaded only after solver writers are sealed.
+3. `cleanup` runs on normal completion, timeout, cancellation, and exception paths; a cleanup warning never overwrites a bound evaluation result.
+4. Every retry or regrade mints a **new Attempt** (`IdentityFactory.new_run` is called once per Attempt) without mutating previous Attempt directories.
+5. `ageval campaign` expands parameter grid points across Trials without coupling to the internal control flow of `run.py`.
 
-Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifecycle.md).
+Detailed phase rules: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifecycle.md).
 
-## Data Flow (Current)
+## Data Flow
 
 | Data | Producer | Consumer | Boundary rule |
 | --- | --- | --- | --- |
-| `ageval.yaml` + `task.yaml` + `profiles.yaml` | Author / CLI | Config | Sole spec reader; unknown format is one error |
-| `LockedTaskConfig` + `extension_bindings` | Config | Attempt, box, executor, Evaluation | Replayable; no secret plaintext |
-| `ctx.params` | Config projection | `run.py` | Read-only; no gold/credential. Docker start also reads `network_mode`, `cap_add`, and `main_environment` and does not write them back into the lock |
-| Agent prompt / tools | `run.py` | ACP / other executor | Must not include secrets by default |
-| Credential material | Host env | Approved executor subprocess only | Locator; never in lock/evidence |
-| Workspace bytes | Box upload/bind | Agent and `run.py` visibility | Contract path `/attempt/workspace` |
-| Published artifacts | `ctx.publish_json` | evaluate upload | Logical name + allowlist |
-| Evaluator raw | Task `evaluator.py` | `bind_evaluation` | Independent materialization; same box |
-| Flat Result | Evaluation | CLI / evidence / aggregation | `status`/`score`/`kind`/`logs` |
-| Evidence tree | `evidence/` | Humans and later tools | No secrets; locatable |
+| `ageval.yaml` + `task.yaml` + `profiles.yaml` | Author / CLI | Config | Sole specification reader; unknown format fails fast |
+| `LockedTaskConfig` + `extension_bindings` | Config | Attempt, environment, executor, evaluation | Reproducible lock record; contains no plaintext secrets |
+| `ctx.params` | Config projection | `run.py` | Read-only task parameters; excludes reference materials and secrets |
+| Agent prompts / tool calls | `run.py` | Bound executor | Dispatched via ParentAgentService |
+| Credential material | Host environment | Authorized executor subprocess | Referenced by env locator name; never written to lock or evidence |
+| Workspace files | Environment upload | Agent and `run.py` | Mounted at `/attempt/workspace` |
+| Harvested artifacts | `run.py` / workspace | `evaluate` phase | Snapshotted into `task-artifacts/` before grading |
+| Evaluator return value | `evaluator.py` | `bind_evaluation` | Sole source of `PASS` or `FAIL` |
+| `Result` (`result.json`) | Evaluation / Attempt | CLI, Viewer, Hub | Records `status`, `score`, `error`, `limit`, and `logs` |
+| Evidence archive | `evidence/` | Operators, analyzers, `regrade` | Secret-redacted directory under `.ageval/runs/<attempt_id>/` |
 
-## Platform Boundary (Current)
+## Platform Boundaries
 
-| Platform capability | Owner | Notes |
+| Capability / surface | Owner | Notes |
 | --- | --- | --- |
-| `environment: local` | `plugins/contrib/local` | Real directory |
-| `environment: docker` | `plugins/contrib/docker` | Real container; compose / uid_gid / path_views. `network_mode: service:<name>` puts the attempt on that compose service's network; declared main env and `cap_add` go on the attempt `docker run` |
-| `environment: e2b` | `plugins/contrib/e2b` | SDK only in this package; missing `E2B_API_KEY` fails preflight |
-| `environment: ssh` A/B | `plugins/contrib/ssh` | A has no image; B has a remote tag |
-| ACP coding-agent | `plugins/contrib/acp` | Sole coding-agent inlet; `attach_stdio` |
-| Other Agent backends | `openai-http` / `anthropic-http` / external `nooa` `dsh` | Not vendor stdout scrape |
-| Official base image | `plugins/contrib/docker/attempt/` | GHCR `ageval-attempt:<cli-ver>` then local `ageval-attempt:base`; miss → packaged Dockerfile. Bake ACP entries at image build; no `npm i` at invoke |
-| ACP task image layer | `plugins/contrib/acp` | `config.image_layers` bakes the bound `options.entry` onto the task recipe |
-| Registry HTTP | `services/registry/` | Handlers go through `*Service`; persistence is six aggregate stores (packages, results, shares, orgs, inbox, hosted) behind narrow protocols, one schema init in `db/schema.open_stores`, SQL in each aggregate `queries.py`, dialect only in `db/sql_adapter.py`. `api_tokens` DDL stays in `auth/tokens.py`. Hosted jobs: Hub submit, worker process runs e2b / daytona only ([docs/design/15](docs/design/15-hosted-jobs.md)). |
+| `environment: local` | `plugins/contrib/local` | Host directory workspace |
+| `environment: docker` | `plugins/contrib/docker` | Container lifecycle, compose services, UID/GID, path views, and `network_mode: service:<name>` |
+| `environment: e2b` | `plugins/contrib/e2b` | E2B SDK integration; missing `E2B_API_KEY` fails preflight |
+| `environment: ssh` (A / B) | `plugins/contrib/ssh` | Mode A: remote host; Mode B: remote container |
+| `environment: daytona` | `plugins/contrib/daytona` | Daytona snapshot/sandbox integration; missing `DAYTONA_API_KEY` fails preflight |
+| ACP executor | `plugins/contrib/acp` | Parent JSON-RPC client over `attach_stdio` |
+| Other executors | `openai-http`, `anthropic-http`, external `nooa`, `dsh`, `miniswe`, `acp-oneshot` | Uniform session interface via `BaseExecutor` |
+| Official Attempt image | `plugins/contrib/docker/attempt/` | Pulls `ghcr.io/zju-real/ageval-attempt:<cli-ver>` as `ageval-attempt:base` or builds from packaged Dockerfile |
+| Registry HTTP service | `services/registry/` | Six aggregate stores (`packages`, `results`, `shares`, `orgs`, `inbox`, `hosted`) behind service classes; hosted worker runs `e2b` and `daytona` jobs ([docs/design/15](docs/design/15-hosted-jobs.md)) |
 
-## Failure and Privacy Boundary
+## Failure and Privacy Boundaries
 
-An ERROR writes `error` as `{phase, title, message}`. `title` annotates that ERROR and is not a verdict. PASS and FAIL leave `error` null, including when `limit` names the run-phase key that was reached. Viewer and Hub render `error` and `limit` directly. The bounded traceback stays on the `task_run` fact.
+When an Attempt terminates with `ERROR`, `result.json` records `error` as `{phase, title, message}`. `PASS` and `FAIL` leave `error` as `null` (including when `limit` records a `run`-phase quota such as `wall_time_seconds` or `agent_invocations`).
 
-| Failure class | Appearance | Owner |
+| Failure class | Outcome | Owner |
 | --- | --- | --- |
-| Config / lock failure | Non-zero; no fake PASS | Config / CLI |
-| Unknown format | `invalid_format` at `/format` | Config |
-| Missing cap / missing inject | lock fails | Config / plugins |
-| Missing keys (e2b/ssh/ACP) | One preflight or invoke failure | Box / executor |
-| Unauthorized effect | Rejected before execute | Capability / box |
-| Agent infrastructure error | ERROR; may have no score | runtime / executor |
-| Low eval score | FAIL + score; Attempt still complete | Evaluation |
-| Run-phase limit (`wall_time_seconds`, `agent_invocations`) | Evaluator PASS or FAIL; `result.json` `limit` is that key; `error` is null | Attempt |
-| Environment phase budget | ERROR; `error.phase` is `environment`; `error.title` is `environment_timeout`; run does not start | Attempt |
-| Evaluate phase budget | ERROR; `error.phase` is `evaluate`; `error.title` is `evaluate_timeout` | Attempt |
-| Evaluator status other than PASS / FAIL | ERROR; `error.phase` is `evaluate`; `error.title` is `evaluator_invalid_status` | Evaluation |
-| Collect command failed, or a declared path could not be copied | ERROR; `error.phase` is `evaluate`; `error.title` is `environment_collect_failed` or `environment_collect_missing` | Attempt |
-| Evaluator crash or missing verdict | ERROR; `error.phase` is `evaluate`; `error.title` is the class name or `ScriptError.title` | Evaluation |
-| Cleanup failure | warning | Box / Attempt |
-| User cancel | Enters cleanup | Attempt / runtime |
+| Config / schema / unknown format | Non-zero exit (`invalid_format`, `model_config`, etc.); run does not start | Config / CLI |
+| Unsatisfied capability or `inject` dependency | `ageval lock` fails | Config / plugins |
+| Missing credentials (`e2b` / `ssh` / `daytona` / ACP) | Preflight or invocation fails fast | Environment / executor |
+| Run-phase quota reached (`wall_time_seconds`, `agent_invocations`) | `evaluator.py` still scores harvested artifacts (`PASS` or `FAIL`); `result.json` sets `limit` and leaves `error` `null` | Attempt |
+| Environment phase timeout | `ERROR` (`phase: "environment"`, `title: "environment_timeout"`); `run` does not start | Attempt |
+| Evaluate phase timeout | `ERROR` (`phase: "evaluate"`, `title: "evaluate_timeout"`) | Attempt |
+| Evaluator status other than `PASS` / `FAIL` | `ERROR` (`phase: "evaluate"`, `title: "evaluator_invalid_status"`) | Evaluation |
+| `evaluation.collect` command failure or missing path | `ERROR` (`phase: "evaluate"`, `title: "environment_collect_failed"` or `"environment_collect_missing"`) | Attempt |
+| Evaluator crash or unhandled exception | `ERROR` (`phase: "evaluate"`, `title` set to exception class or `ScriptError.title`) | Evaluation |
+| Cleanup failure | Logged as warning; does not overwrite a bound result | Environment / Attempt |
 
-Privacy: tokens, `CODEX_HOME` contents, DB passwords, and SSH private keys must not appear in lock, default logs, or evidence body.
-
-## Testing and Evidence
-
-| Grade | Meaning | When you may claim it |
-| --- | --- | --- |
-| `design-only` | Docs only | Paths not covered by public smoke (including real e2b/ssh runs when keys are absent) |
-| `runnable-mvp` | Real public entrypoint + real Agent | Matching public demo exists (current: core local/docker ACP, named `minimal-demo` tasks) |
-| `isolated` | Isolated Attempt + isolation red lines | Matching acceptance evidence; do not infer from one docker PASS |
-| `real-benchmark-verified` | Fixed upstream + bounded public journey | Matching acceptance; do not expand to the full suite |
-
-| Test layer | Use | Cannot prove alone |
-| --- | --- | --- |
-| unit | Pure rules, schema, phases | The product runs |
-| integration | Wiring | Real ACP / E2B / SSH |
-| e2e / public smoke | Production CLI | — |
-
-Fixtures and mocks must not raise the evidence grade. `AGEVAL_SKIP_REAL_ACP=1` only means CI did not run that path.
+Privacy rule: API tokens, OAuth files, database passwords, and SSH private keys must never appear in `lock.json`, default stdout/stderr logs, or evidence archives.
 
 ## Change Ownership
 
-| Change type | Update first | Then sync |
+Documentation does not need to be committed in a standalone initial commit before writing code. Instead, ensure the authoritative specification and downstream docs are updated when wrapping up a phase or completing the change:
+
+| Change type | Authoritative doc | Sync when wrapping up the phase / PR |
 | --- | --- | --- |
-| Top-level dirs, module ownership, import direction, composition root | **This document** | Root `AGENTS.md`, code |
-| Product/mechanism design, red lines, box Protocol | `docs/design/*` (PRD if needed) | Related sections here, Issues, website |
-| Implementation-time user-named binding decisions | Write into related `docs/design/*` or `AGENTS.md` red lines | Code, Issues |
-| Incremental delivery and acceptance tracking | GitHub Issues | PR, smoke, README status |
-| Implementation delta and evidence | Code / tests / public smoke | Issues |
-| CLI user entry or publicly supported scope | `README.md` + `website/` | docs summary |
-| Reader-facing usage (CLI / Viewer / Hub) | `website/` | If it conflicts with docs, docs win |
+| Top-level directories, module ownership, import direction, composition root | **This document** (`ARCHITECTURE.md`) | Root `AGENTS.md`, code |
+| Product or mechanism design, red lines, `EnvironmentProvider` protocol | `docs/design/*` (and `PRD.md` / `glossary.md` if needed) | Relevant sections here, `website/`, skills |
+| Incremental delivery and acceptance tracking | GitHub Issues | PR description, smoke tests |
+| User-facing CLI, Viewer, or Hub behavior | `website/` and `README.md` | CLI / service READMEs |
 
-## Split with the design docs
+## Quick Index to Design Docs
 
-| Question | Read |
+| Topic | Document |
 | --- | --- |
-| Product stories / naming / non-goals? | [docs/design/00](docs/design/00-overview-and-product.md) |
-| Why this Core / five-phase cut? | [docs/design/01](docs/design/01-ageval-core.md) |
-| `ageval.yaml` fields and lock? | [docs/design/02](docs/design/02-task-package-and-config.md) |
-| `run.py` / SDK API? | [docs/design/03](docs/design/03-task-run-and-sdk.md) |
-| Box kind / ACP / evaluate / evidence? | [docs/design/05-runtime/](docs/design/05-runtime/) |
-| Plugin exclusive/chain? | [docs/design/11](docs/design/11-extension-plugins.md) |
-| Model fields / executor base? | [docs/design/16](docs/design/16-model.md) |
-| Evaluation and failure semantics? | [docs/design/07](docs/design/07-budget-evaluation-failure.md) |
-| Full owner matrix? | [docs/design/09](docs/design/09-owner-matrix-and-structure.md) |
-| Where source lives, who depends on whom, lifecycle diagrams? | **This document** |
+| Product overview, user stories, and red lines | [docs/design/00](docs/design/00-overview-and-product.md) |
+| Core locking, phase lifecycle, and environment protocol | [docs/design/01](docs/design/01-ageval-core.md) |
+| Dataset, `task.yaml`, and `profiles.yaml` fields | [docs/design/02](docs/design/02-task-package-and-config.md) |
+| Task `run.py` and `ageval_sdk` API | [docs/design/03](docs/design/03-task-run-and-sdk.md) |
+| Environments, ACP, evaluation, evidence, analyzers, and suites | [docs/design/05-runtime/](docs/design/05-runtime/) |
+| Capabilities and reference-material isolation | [docs/design/06](docs/design/06-capability-adapter-visibility.md) |
+| Resource limits, upstream stall, and failure semantics | [docs/design/07](docs/design/07-budget-evaluation-failure.md) |
+| Module ownership matrix and structural invariants | [docs/design/09](docs/design/09-owner-matrix-and-structure.md) |
+| Declarative plugin slots and dependency injection | [docs/design/11](docs/design/11-extension-plugins.md) |
+| Hub, Registry, and Leaderboard | [docs/design/12](docs/design/12-hub-dataset-and-leaderboard.md) |
+| Web UI design tokens | [docs/design/13](docs/design/13-web-ui-tokens.md) |
+| Agent packages (`ageval.agent/1`) and model catalog | [docs/design/14](docs/design/14-agent-hub.md) |
+| Hosted evaluation jobs | [docs/design/15](docs/design/15-hosted-jobs.md) |
+| `ModelSpec`, `BaseEnvironment`, and `BaseExecutor` contracts | [docs/design/16](docs/design/16-model.md) |

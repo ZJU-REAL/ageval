@@ -1,56 +1,35 @@
 # Campaign 与 Suite
 
-| | 命令 | 含义 |
+| 运行模式 | 命令 | 含义 |
 | --- | --- | --- |
-| 单 Attempt | `ageval run <dataset> --task <id>` | 一题一次 |
-| Suite | `ageval run <dataset>`（无 `--task`） | 全成员 |
-| Always-k | `ageval run … -k N` | 每题 N 次；CLI/job only，不是 yaml 字段 |
-| Campaign | `ageval campaign <dataset> --task a --task b --matrix …` | 参数格点；一格失败其它格仍在 |
+| 单次 Attempt | `ageval run <dataset> --task <id>` | 单题单次运行 |
+| Suite | `ageval run <dataset>`（省略 `--task`） | 运行 dataset 下的全部任务成员 |
+| Always-k | `ageval run … -k N` | 每道任务独立运行 N 次（仅作为 CLI / 运行期参数，不写入 `task.yaml`） |
+| Campaign | `ageval campaign <dataset> --task a --task b --matrix …` | 在指定任务上按参数网格展开运行 |
 
-退出码：全 PASS = 0，否则 1。禁止 dry-run 冒充完成。
+退出码约定：全部任务 `PASS` 时返回 `0`；存在 `FAIL` 时返回 `1`；发生 `ERROR` 或配置错误时返回 `2`。
 
 ```text
 suite job
   .ageval/suite-runs/<id>/
-    summary.json    metrics.pass_rate / pass_at_k（观测）
-    progress.json
-    task_refs[]     run_id / attempt_run_ids
+    summary.json    metrics.pass_rate / pass_at_k（汇总观测指标）
+    progress.json   计划槽位、在途任务与取消状态
+    task_refs[]     各任务的 run_id / attempt_run_ids 引用
 ```
 
-`summary.json` 在 suite 进行中就存在，是 **观测快照**：只统计已 settle 的 attempt，
-`status` 为 `running` / `cancelling`，`metrics.pass_rate` =
-`n_pass / (n_pass + n_fail + n_error)`（分母是已 settle 的任务，不是计划任务数）；
-`tasks[]` / `attempts[]` / `task_refs[]` 只列已 settle 的工作，未跑的 task id 不出现。
-它不是 suite PASS。suite 完成 / 取消时同一文件被按全计划 id 集重写为终值；
-`created_at` 在首次写入时锁定，resume 重写不改写它。`progress.json` 仍是
-slot / cancel 文档（计划数、in-flight、取消请求），两文件各管各的。
+- 在 suite 运行期间，`summary.json` 实时维护已完成（settled）Attempt 的观测快照（`status` 为 `running` 或 `cancelling`，`metrics.pass_rate` 按已完成任务数计算）；待全部任务完成或取消后重写为最终汇总文档。
+- 本地 Viewer 的 Jobs 列表将正在运行的 suite 展示为单行（显示 `settled / planned` 进度）；`ageval results upload-suite` 仅接受已进入终态且完备的 suite。
+- Hub 公开 Leaderboard 仅收录完备、绑定正式 release 且经组织 owner 批准上榜（`board_listed`）的 suite 结果。
 
-Viewer Jobs 对进行中的 suite 显示 **一行**（suite_run_id 唯一），pass rate 取自该
-快照，Trials 显示 `settled / planned`；已 settle 的 run id 归属该 suite 行，
-不再以单题 job 重复出现。`ageval results upload-suite` 拒绝 `running` /
-`cancelling` 的快照——观测快照不是完备 suite，完备性门禁不变。
+## 断点续跑、单格替换与重新评分
 
-Hub Leaderboard 吃的是 **suite** 上传（`ageval results upload-suite`），不是单 Attempt `results upload`。公开榜还要完备且绑定 release。draft / 不完备只上 Jobs。
+Suite 续跑沿用同一个 `suite_run_id`，且绝不原地改写已生成的 Attempt 目录：
 
-`--agent` 与 `--profiles` 互斥。`--model` 须配合 `--agent`（`lock` / `run` / `campaign` / `results regrade`）。Campaign 不与 `run.py` 内 scheduler 合并。
+- **`--resume-suite`**：跳过已完成的任务槽位（默认包含 `PASS`、`FAIL` 与 `ERROR`），仅补充尚未运行的槽位或此前因取消而未实际执行的占位项，并重新计算 `pass@k` / `pass^k`。
+- **`--retry-errors`**：配合 `--resume-suite` 使用，将当前筛选范围内状态为 `ERROR` 的槽位重新运行（每次生成新 Attempt，旧记录移入 `previous[]`）。
+- **`--replace-slot`**：配合 `--resume-suite --task`（及可选 `--attempt-index`）重新运行指定槽位，生成新 Attempt 并将旧记录移入 `previous[]`。
 
-## Resume、换格、重评分
-
-Suite 可以沿用同一个 `suite_run_id`。Attempt 目录不改写。
-
-- **`--resume-suite`**：跳过已完成格（默认含 PASS / FAIL / ERROR），追加还没有的 index，重算 pass@k / pass^k。取消占位会再跑。`created_at` 保持首次写入。
-- **`--retry-errors`**：必须和 `--resume-suite` 一起用。本次过滤里的 ERROR 格再跑，不必写 `--replace-slot`。PASS / FAIL 仍跳过。新 Attempt；旧行进 `previous[]`；指标只看现行指针。
-- **`--replace-slot`**：点名换一格已完成的 PASS / FAIL / ERROR。仍要求 `--resume-suite` 与 `--task`。可以和 `--retry-errors` 同用。fingerprint 不一致时这一格拒绝换。
-- resume 的 `progress.json` / 结束摘要带 `skipped` 与 `retried` 计数（跳过的已完成格、这次重跑的 ERROR 格）。
-
-**`ageval results regrade <dataset> --run <attempt_id>`**（`--run` 可重复）是另一条入口，不进 suite 调度：
-
-- 铸造新 Attempt。来源 `result.json` 与来源目录不改。
-- 不跑 agent / `run.py`。把来源 `task-artifacts/` 与 `verifier-collect/` 拷进打分 Host，只 evaluate。不重跑 collect command。
-- gold 与 evaluator 读**当前 dataset**，不读来源 Attempt 里冻住的那份脚本。
-- harvest 缺失或对不上当前 `artifacts.publishable` → 新 Attempt 为 ERROR，不从轨迹编 PASS / FAIL。
-- 没有题包字段声明「这题能否 regrade」。
-
-`task-artifacts/` 在 `slim_sealed_attempt` 之后默认仍在。`--keep-workspace` 只影响活的 work root。
-
-不做：把一次进行中的 agent 对话接着跑；session resume token；原地覆盖 Attempt。
+**`ageval results regrade <dataset> --run <attempt_id>`**（`--run` 可重复指定）用于在不重跑模型的情况下重新评分：
+- 签发新的 Attempt，保持来源 Attempt 目录与 `result.json` 不变；
+- 跳过 `run` 阶段（不运行 `run.py` 与 `evaluation.collect` 命令），将来源 Attempt 的 `task-artifacts/` 与 `verifier-collect/` 快照复制到评分环境中，并使用当前 dataset 的 `evaluation/` 与 `evaluator.py` 执行 `evaluate` 阶段；
+- 若来源 Attempt 缺少声明的产物快照，则新 Attempt 记为 `ERROR`（`regrade_harvest_missing`）。

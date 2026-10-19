@@ -1,103 +1,74 @@
-# 07 — limits 与失败
+# 07 — 资源上限（Limits）、上游等待与失败语义
 
-`limits` 由 Runtime 在效果前强制。dataset 软限（max_turns）不能替代 `limits`。事后 token/cost 只作观测。`record` 与 `cleanup` 不计预算。
+`limits` 由 Core 运行时在调用前强制检查，任务脚本内的软性步数限制（如 `max_turns`）不替代 `limits`。事后统计的 token 与费用默认作为观测指标记录，`record` 与 `cleanup` 阶段不消耗业务预算。
 
-CPU、内存、GPU 不在这张表里。它们写在 task `parameters`（`cpus`、`memory_mb`、`gpus`、`gpu_types`、`verifier_gpus`）上，由 docker kind 在容器启动前施加。见 [environment](05-runtime/environment.md)。
+容器硬件资源限额（`cpus`、`memory_mb`、`gpus`、`gpu_types`、`verifier_gpus`）声明在任务 `parameters` 下，由 `docker` 环境在容器启动前施加（见 [environment](05-runtime/environment.md)）。
 
-三个相位各有一只时钟，从该相位入口起算。已有超时的步骤读当前相位剩余时间。`host.start` 本身不加超时。
+三个业务阶段各自维护独立的阶段计时器，从进入对应阶段时起算：
 
-| 键 | 缺省 | 覆盖 | 到期 |
+| 配置键 | 默认值 | 约束范围 | 到期行为 |
 | --- | --- | --- | --- |
-| `limits.wall_time_seconds` | 300 | run：从入口到 task worker 返回 | 记下 `limit_reached`，名字 `wall_time_seconds`。run 结束，evaluate 照常打分 |
-| `limits.environment_seconds` | 600 | environment：box start、seed upload、`after_environment_ready`、`environment_setup` | ERROR，phase `environment`，token `environment_timeout`。run 不开始 |
-| `limits.evaluate_seconds` | 600 | evaluate：打分 Host 的 start 与 upload、evaluate 相位的 `after_environment_ready`、evaluator worker、`scoring.exec`、evaluate 相位的 invoke | ERROR，phase `evaluate`，token `evaluate_timeout` |
+| `limits.wall_time_seconds` | 300 | `run` 阶段：从阶段入口到任务子进程返回 | 记录 `limit_reached`（`wall_time_seconds`），结束 `run` 阶段并继续进入 `evaluate` 评分 |
+| `limits.environment_seconds` | 600 | `environment` 阶段：环境启动、初始数据上传、`after_environment_ready`、`environment_setup` | 记为 `ERROR`（`phase: "environment"`，`title: "environment_timeout"`），不启动 `run` 阶段 |
+| `limits.evaluate_seconds` | 600 | `evaluate` 阶段：评分环境启动与上传、评分阶段 `after_environment_ready`、`evaluator.py`、`scoring.exec` 与 `judge` 调用 | 记为 `ERROR`（`phase: "evaluate"`，`title: "evaluate_timeout"`） |
 
-`limits.agent_invocations` 只计 run 相位的 invoke。`seal_run` 之后才打开的 profile（evaluate 的 judge）不占这只额度，由 `evaluate_seconds` 封顶。写出 `0` 时，run 相位每一次 invoke 都被拒绝。同一次 parent invoke 里的上游 stall 只扣这一次额度，中间的重试不另扣。额度在这只 invoke 即将进入 executor 时原子扣一次；还在排队时取消不扣。
+- `limits.agent_invocations` 仅统计 `run` 阶段的模型调用次数（在即将执行 `executor.invoke` 时原子扣减一次；排队期间被取消不扣减，同一次调用内的 `upstream_stall` 重试不重复扣减）。`evaluate` 阶段的 `judge` 调用不占用该额度，由 `evaluate_seconds` 统一约束。
+- `limits.agent_concurrency`（正整数，默认 `1`）限制单次 Attempt 在 `run` 阶段同时处于 `executor.invoke` 运行状态的调用数量（跨会话、跨角色共享）。`judge` 调用保持串行准入。
 
-`limits.agent_concurrency` 是正整数，省略等于 `1`。它封顶同时进入 executor 的 run 相位 invoke，跨 session、跨 profile。`0`、负数、布尔和非整数 lock 失败。它不封子任务个数，不封 `agent_invocations`，也不封 suite 并发。`run.py` 的扇出上限不能把它抬高。judge 保持串行准入，不占这只额度。调度、取消和 `seal_run` 见 [agent-service](05-runtime/agent-service.md)。
+## 上游重试等待（Upstream Stall）
 
-## 上游 stall
+当 `executor.invoke` 返回可重试的传输异常时，`ParentAgentService.invoke` 进入 `upstream_stall` 等待重试，避免因瞬时网络或网关波动直接终止评测：
 
-executor invoke 的 `ok` 不是 true 时，Parent 进入 upstream stall，而不是第一次失败就结束 Attempt。stall 停在 `ParentAgentService.invoke`。`before_agent_invoke` 与 `after_agent_invoke` 仍各跑一次，自己不转重试。没有名为 `invoke` 的槽。
+- 等待预算由角色 profile 的 `options.upstream_stall_seconds` 控制（默认读取 [`src/ageval/runtime/clocks.py`](../../src/ageval/runtime/clocks.py) 中的 `3600` 秒；设为 `0` 时关闭重试），重试间隔固定为 `60` 秒（`stall_interval`）。
+- 在 `upstream_stall` 等待期间，当前阶段的计时器（`wall_time_seconds` 或 `evaluate_seconds`）暂停计时（多并发调用按在途 stall 数量引用计数，全部恢复后才继续走表），子进程等待超时同步顺延。
+- 在进入执行器之前的本地拒绝（阶段时钟已到期、调用额度已耗尽、脱敏校验失败、强制离线模式）直接返回失败，不进入 `upstream_stall`。
 
-`options.upstream_stall_seconds` 写在该 executor 已经在读的 profile `options` 上（与 miniswe 的 `options.step_limit` 同一处）。省略等于 [`src/ageval/runtime/clocks.py`](../../src/ageval/runtime/clocks.py) 里 `upstream_stall` 的 3600。`0` 关掉 stall，第一次失败立刻返回，进度上不出现 `upstream_stall`。负数或非整数拒绝。重试间隔是同一张表的 `stall_interval`（60 秒），不是字段。
+各执行器的可重试判定规则：
+- **`openai-http` 与 `anthropic-http`：** 读取超时、连接失败、HTTP `408`、`429` 与 `5xx` 归为可重试的 `TransportStall`；其余 HTTP `4xx` 响应属于不可重试的 `ModelConfigError`（`repeatable=False`）；非法 JSON 为 `ProtocolError`。
+- **ACP：** 超时、空闲超时、非预期 EOF 与协议传输错误归为 `TransportStall`，仅当该次 prompt 尚未修改工作区文件（`repeatable=True`）时允许在同一会话上重发。
+- **`miniswe`：** 在进程内针对当前单步模型请求执行 stall 重试（关闭其内置的短周期 tenacity 重试），保留已有的对话上下文。
 
-stall 期间当前相位的时钟不走。run 冻住 `limits.wall_time_seconds`，evaluate 里的 judge invoke 冻住 `limits.evaluate_seconds`。task worker 和 eval worker 的等待按同一段时间延长。只把 `deadline_monotonic` 往后推不够：这两处若在入口把剩余秒数抓住一次，原到期仍会杀掉 worker。环境启动不 stall。
+证据中的 `summary.json` 会记录一条 `upstream_stall` 事实（含原因、`started_at`、重试次数与结果 `resumed` / `budget_exhausted` / `not_repeatable`）。
 
-睡眠之后用同一份 prompt、tools、messages 再调 `executor.invoke`，直到 `ok` 或 stall 预算用尽。成功后，实时进度回到该相位的名字（`run` 或 `evaluate`）。
+## `run` 阶段触及配额上限时的处理
 
-executor 运行之前的拒绝立刻返回，不进入 stall，也不显示 `upstream_stall`：wall 已经到期、invoke 额度已经用完、redaction 失败、offline forced。
+当 `run` 阶段触发 `wall_time_seconds` 或 `agent_invocations` 上限时，系统记录 `limit_reached` 事实，封存 solver 会话并正常收集已有产物快照，随后继续进入 `evaluate` 阶段由 `evaluator.py` 对已生成的产物评分（返回 `PASS` 或 `FAIL`）。此时 `result.json` 顶层 `limit` 字段记录对应的配额键名，`error` 字段保持为 `null`。
 
-`repeatable: false` 不再调 `executor.invoke`。打一条 `upstream_stall`，outcome 为 `not_repeatable`，不在预算里空等。
+## `Result` 状态与 `error` 结构
 
-三种 executor 的一次 invoke 大小不同：
+`bind_evaluation` 的结果仅有两个来源：`evaluator.py` 返回的 `PASS` / `FAIL`（若返回其他字符串则以 `evaluator_invalid_status` 记为 `ERROR`），以及阶段异常产生的 `ERROR`。
 
-- `openai-http` 与 `anthropic-http`：一次 invoke 是一次请求。读超时、连接失败、408、429 和 5xx 是 `TransportStall`，父进程只在 `isinstance(failure, TransportStall)` 且 `repeatable` 时 stall。除此之外的 4xx 是 `ModelConfigError`，`repeatable` 为 false。坏 JSON 是 `ProtocolError`。动作解析失败是 `FormatError`。这三类不 stall。结果上仍留状态码字符串，给证据事实用。父进程不靠错误字符串分类。
-- ACP：超时、空闲超时、unexpected EOF 和协议/传输错误是 `TransportStall`；父进程只在 `isinstance(failure, TransportStall)` 且这条 prompt 还没有改过 workspace（`repeatable`）时，在同一 session 上重发。已经改过则 `repeatable: false`。
-- miniswe：一次 invoke 是整段 agent。stall 包住进程内当前这一次模型查询。消息留在进程里，恢复后重发这一次查询，不新开 agent。这个集成关掉 mini-swe-agent 自己的 10 次、4–60 秒 tenacity，两段等待不叠。预算属于这一次 parent invoke。内层把预算用完时带 `stall_exhausted`，外层不再开一轮。
-
-预算用尽：invoke 按失败 invoke 返回，Attempt 照今天的失败收场，cleanup 照跑。不给半成品 workspace 打分。最终 CLI 行仍是 PASS / FAIL / ERROR。
-
-证据记一条 `upstream_stall` 事实：executor 的 reason 字符串、`started_at`、try count、outcome（`resumed`、`budget_exhausted` 或 `not_repeatable`）。它不是 `result.json` 的 status，也不是 PASS。
-
-CLI 复用现有相位槽，不另做进度渲染。suite 的 `unit_phase` 与单题 `AttemptSpinner.phase` 在 stall 期间显示 `upstream_stall`。stderr 不是 TTY 时，stall 开始一行、每次等待一行、结束一行。行上有 task id、state `upstream_stall`、距下次尝试的秒数、剩余预算。没有新的 `--json` 事件流。
-
-启动 probe、`--probe`、`after_environment_ready` 不因这段等待改动。响应正文里的 `token-limit` 不单列成一种原因。
-
-run 相位强制一只 limit 时记一条 `limit_reached` 事实 `{"name": "<limits 键>"}`，先到的那条为准：
-
-- task worker 在 run 时钟上被杀掉 → `wall_time_seconds`
-- Agent Service 在 run 时钟之后拒绝 invoke 或 session → `wall_time_seconds`
-- Agent Service 因额度拒绝 invoke → `agent_invocations`
-
-此后 run 不以 `phase_failed` 结束。worker 被杀，或 `run.py` 随后抛出的异常，留在 `task_run` 事实里。writer 封口，产物 harvest，evaluate 照常跑。裁决是 evaluator 的：通常 FAIL，收获的工作过了也可以 PASS。
-
-`result.json` 顶层 `limit` 是触到的 limits 键，没有则为 `null`。suite 的 task 行和 attempt 行在 `status`、`score` 旁带同一个 `limit`。
-
-`evaluator.py` 的 `status` 只许 `PASS` 或 `FAIL`。其他值（含 `ERROR`）让 evaluate 相位失败一次，token `evaluator_invalid_status`，Attempt 为 ERROR，phase `evaluate`。打不了分就抛出。缺 verdict 仍是 ERROR。
-
-`bind_result` 只有两个来源：evaluator 的 PASS / FAIL，以及 `phase_failed` 的 ERROR。引擎不写 `metrics.reason`、`metrics.timeout_phase`、`metrics.error`。`metrics` 是 evaluator 的。executor / host 的超时字符串不进入裁决。没有 `limit_reached` 时，`run.py` 或 `evaluator.py` 抛出的异常是 ERROR，与文本无关。
-
-ERROR 的 `result.json` `error` 是一个对象。PASS / FAIL 时 `error` 为 `null`，包括已经写下 `limit` 的那次。`error.title` 标注这次 ERROR，不是裁决。Viewer 和 Hub 直接渲染 `error` 与 `limit`。
+当状态为 `ERROR` 时，`result.json` 的 `error` 字段为结构化对象 `{phase, title, message}`（状态为 `PASS` 或 `FAIL` 时 `error` 为 `null`）：
 
 | 字段 | 含义 |
 | --- | --- |
-| `phase` | `run_attempt` 记下的失败相位：`environment`、`run`、`evaluate`、`record`。相位开始前的失败（lock、preflight）为 `null` |
-| `title` | 两边页面显示、并用来筛选的标签 |
-| `message` | 写在 title 旁边的说明 |
+| `phase` | 发生错误的阶段名：`environment`、`run`、`evaluate` 或 `record`（进入阶段前的 `lock` / `preflight` 错误为 `null`） |
+| `title` | 稳定错误分类标签（供 Viewer 与 Hub 展示及筛选） |
+| `message` | 当次错误的具体说明（不含完整堆栈或敏感命令原文） |
 
-`title` 按这个顺序取：
+`title` 的取值优先级为：
+1. `run.py` 或 `evaluator.py` 主动抛出的 `ScriptError(title, message)`：使用传入的 `title` 与 `message`；
+2. 任务脚本抛出的其他未捕获异常：使用异常类名（如 `ValueError`）；
+3. 引擎内置错误标识：如 `task_worker_no_result`、`environment_setup_failed`、`environment_collect_failed`、`environment_collect_missing`、`environment_timeout`、`evaluate_timeout`、`evaluator_invalid_status`、`ConfigError` 等。
 
-- `run.py` 或 `evaluator.py` 抛出的 `ScriptError`：构造时的 `title`。`message` 是构造时的 `message`。同一个类，相位由抓住异常的 worker 决定。
-- 脚本里逃出的其他异常：类名（`ValueError`），`message` 为 `str(exc)`。任务组里的 `ScriptError` 以 `ExceptionGroup` 到达 worker，worker 不拆开，title 为 `ExceptionGroup`。
-- 引擎 ERROR：已经产出的稳定 token。worker envelope 的 `error`（`task_worker_no_result`、`task_worker_unreadable_result`），`EnvironmentFailure.kind`（`environment_setup_failed`、`environment_collect_failed`、`environment_collect_missing`），`environment_timeout`、`evaluate_timeout`、`evaluator_invalid_status`，以及 `ConfigError`。没有这种 token 时用异常类名。`message` 是已记下的文字：envelope 的 `message`，否则有界的 stderr 尾部。collect 的 message 含 service、path、退出码，不含 command 原文。
-
-traceback 留在 worker envelope 上，记在 `task_run` 事实里，不进 `result.json` 的 `error`。
-
-suite 的 task 行和 attempt 行在 status 为 ERROR 时带同一个对象；`task_refs[]` 带 `run_id` 指向的那次 attempt 的 `error` 和 `limit`。`suite_cancelled` 仍是字符串。字符串 `error`，或没有 `title` 的对象，页面按原文显示。
-
-`RunTerminal.failed` 和 evaluator 返回的 FAIL 不产生这个对象。Cleanup 失败和 `record_warning` 仍是 warning，不改已 bind 的分。
-
-完整失败归属表：[ARCHITECTURE.md](../../ARCHITECTURE.md) § Failure and Privacy Boundary。
+## CLI 退出码与失败归属汇总
 
 | 退出码 | 含义 |
 | --- | --- |
-| 0 | PASS；或 `--probe` ready |
-| 1 | FAIL；或 probe 不可跑 |
-| 2 | ERROR / 配置 / 运行时 |
+| `0` | `PASS`（或 `--probe` 检查就绪） |
+| `1` | `FAIL`（或 `--probe` 检查未就绪） |
+| `2` | `ERROR` / 配置校验失败 / 运行时异常 |
 
-| 失败类 | 表现 | 归属 |
+| 失败类别 | 结果表现 | 归属模块 |
 | --- | --- | --- |
-| 未知 format | `invalid_format` `/format` | Config |
-| 缺 cap / inject | lock 失败 | Config / plugins |
-| 缺钥 | preflight 一次失败，`started: false` | 环境 / executor |
-| 评测低分 | FAIL + score | Evaluation |
-| run 相位 limit（wall、invoke 额度） | evaluator 的 PASS / FAIL；`result.json` 的 `limit` 为该键 | Attempt |
-| environment 时钟到期 | ERROR，`error.phase` 为 `environment`，`error.title` 为 `environment_timeout` | Attempt |
-| evaluate 时钟到期 | ERROR，`error.phase` 为 `evaluate`，`error.title` 为 `evaluate_timeout` | Attempt |
-| evaluator 的 status 不是 PASS / FAIL | ERROR，`error.phase` 为 `evaluate`，`error.title` 为 `evaluator_invalid_status` | Evaluation |
-| `evaluation.collect` 的 command 非 0，或声明的 path 拷不到 | ERROR，`error.phase` 为 `evaluate`，`error.title` 为 `environment_collect_failed` 或 `environment_collect_missing` | Attempt |
-| Evaluator 崩、缺 verdict | ERROR，`error.phase` 为 `evaluate`，`error.title` 为类名或 `ScriptError.title` | Evaluation |
-| Cleanup 失败 | warning | 不改已 bind 的分 |
-
-相位失败记在该 phase。未知键：拒绝，一条消息。不要把 skip 写成通过。
+| 未知 schema format | `invalid_format`（位于 `/format`） | Config |
+| 能力不满足或 `inject` 缺失 | `ageval lock` 报错终止 | Config / plugins |
+| 缺失运行凭据 | `preflight` 报错终止（`started: false`） | Environment / executor |
+| 任务未达标 | `FAIL` + 连续得分 | Evaluation (`evaluator.py`) |
+| `run` 阶段触及配额上限 | 由 `evaluator.py` 判定 `PASS` / `FAIL`，`result.json` 记录 `limit` | Attempt |
+| `environment` 阶段超时 | `ERROR`（`phase: "environment"`，`title: "environment_timeout"`） | Attempt |
+| `evaluate` 阶段超时 | `ERROR`（`phase: "evaluate"`，`title: "evaluate_timeout"`） | Attempt |
+| `evaluator.py` 返回非法状态 | `ERROR`（`phase: "evaluate"`，`title: "evaluator_invalid_status"`） | Evaluation |
+| `evaluation.collect` 失败或路径缺失 | `ERROR`（`phase: "evaluate"`，`title: "environment_collect_failed"` / `"environment_collect_missing"`） | Attempt |
+| `evaluator.py` 崩溃或缺失返回值 | `ERROR`（`phase: "evaluate"`，`title` 为异常类名或 `ScriptError.title`） | Evaluation |
+| `cleanup` 阶段异常 | 记录 warning，不覆盖已绑定的评分结果 | Environment / Attempt |

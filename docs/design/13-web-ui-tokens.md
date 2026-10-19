@@ -10,7 +10,7 @@
 SPA 实现对照的**常量清单**在 `apps/shared/DESIGN.md` 文首 YAML(Hub / Viewer 继承同一份,不要再开一套色板)。改本表必须同步那份 YAML 与 `scripts/check_design_tokens.py` 的 `CANONICAL`。YAML 只列主题常量,不写页面零件。
 实现先复用已有组件,再拿本文件核对语言。Hub / Viewer 的**气质与反 slop**在各自 `DESIGN.md`(组件地图也在那里)。landing / docs 例外在 `website/DESIGN.md`。
 
-三端已是同一套产品语言(冷纸 / 冷墨 + IKB + Geist)。不要再「设计一套新身份」。禁止用 shadcn 或 Tailwind 默认皮肤冒充本语言。Hub / Viewer 的落地页 playbook 禁令在 SPA `DESIGN.md` Taste。
+三端已是同一套产品语言(冷纸 / 冷墨 + IKB + Geist)。不要再「设计一套新身份」。禁止用 shadcn 或 Tailwind 默认皮肤冒充本语言。Hub / Viewer 的 landing 页 playbook 禁令在 SPA `DESIGN.md` Taste。
 
 ## 色彩令牌
 
@@ -24,7 +24,7 @@ SPA 实现对照的**常量清单**在 `apps/shared/DESIGN.md` 文首 YAML(Hub /
 | canvas-soft | `#E9EBED` | `#20242D` | 卡片 / 悬浮面 / 行 hover | `canvas-soft`、`row-hover` | `muted`(`fd-card` 为本地近似) |
 | canvas-soft-2 | `#E1E5ED` | `#2B3041` | 强填充 / 次级底 | `canvas-soft-2` | `secondary` |
 | hairline | `#D2D6DF` | `#343948` | 分隔线 / ring | `hairline` | `border` |
-| hairline-strong | `#979EB1` | `#5C6274` | 强分隔 / 相位图中阶 | `hairline-strong` | — |
+| hairline-strong | `#979EB1` | `#5C6274` | 强分隔 / 阶段图中阶 | `hairline-strong` | — |
 | ink | `#14161F` | `#EEF0F6` | 标题 / 强文字 | `ink` | `foreground` |
 | body | `#4A4E5C` | `#9AA0B4` | 正文 | `body` | `muted-foreground` |
 | mute | `#5E6376` | `#8A90A4` | 次要文字 / 图标 | `mute` | — |
@@ -114,7 +114,7 @@ landing 的 oklch 系(`oklch(15.4% 0.018 264)` 底等)是本表的 oklch 等值�
 | Catalog 卡 | 市场实体(plugin / agent)用 `CatalogCard`:14px、四面 hairline + pop 阴影、hover `canvas-soft`、按下 `squish`(0.96)。描述三行。宽屏三列(`xl:grid-cols-3`)。卡上不画 slot / binding tag。star 在卡上是计数不是写入口;写收藏不是卡上的控件,填实用 `star` 金。first-party overlay 走短 id + lucide builtin 标(`link`),不要冒充 OfficialMark。可比行(dataset / jobs / leaderboard / members / 模型 Performance)用表。模型百科**不是**市场包:按 lab 分组的表,不要复用 `CatalogCard` |
 | 表 | hairline 表。表头底 `canvas-soft`，表身 `canvas`。列名 `text-sm` / `mute`。不要 zinc 灰表头，也不要表头表身同色 |
 | 页头(PageHead) | h1 + 可选 sub + hairline(无编号 kicker) |
-| 相位/耗时图谱 | `--viewer-phase-1..6` 用 ink / body / mute / hairline 冷灰阶。执行段 `--viewer-phase-1` 为 ink 与 mute 的 `color-mix`（约 55% ink），不用实心 ink，也不用 IKB。IKB 留给链接 / 焦点 / 主 CTA。禁 zinc 等外部灰阶 |
+| 阶段/耗时图谱 | `--viewer-phase-1..6` 用 ink / body / mute / hairline 冷灰阶。执行段 `--viewer-phase-1` 为 ink 与 mute 的 `color-mix`（约 55% ink），不用实心 ink，也不用 IKB。IKB 留给链接 / 焦点 / 主 CTA。禁 zinc 等外部灰阶 |
 | 弹层(tooltip/select/dropdown/dialog) | 圆角 14px。hairline 边框 + `--viewer-shadow-pop`。Select 触发器复制 `scanTriggerClass`（高 36px、`text-sm`），不要另写 `h-8` / `text-xs` / 另一套焦点环。Portal 到 `document.body` 或 `OverlayRoot`;不要挂在已有 `transform` 的 pop 里(`position:fixed` 会跟错) |
 | 危险确认 | Modal：较大标题 + mute 说明后果 + Cancel / Confirm 两枚按钮 |
 | Hub 壳 | 左右分区:整列侧栏 `canvas-soft` + 右 hairline;顶栏与主列 `canvas`(不透明,无 blur)。Logo 行 `border-b`,GitHub / Documentation 脚 `border-t`。选中侧栏行 Liquid fill 走 `canvas`;hover 走 `sidebarHoverClass`（`canvas/50`）。宽屏(`xl`)正文居中 `w-[80%]`;顶栏仍铺满主列 |
@@ -133,7 +133,7 @@ landing 的 oklch 系(`oklch(15.4% 0.018 264)` 底等)是本表的 oklch 等值�
 5. 主 CTA 用 8px 圆角 + IKB 填充;表格 / 输入 / 普通控件用同一套圆角三档。搜索是 stadium。不要切角 `clip-path`。
 6. 焦点可见性不妥协,但扫描与编辑不是同一条。按钮 / 链接 / 卡用 2px IKB 环(landing 3px outline);编辑字段用 1px IKB 描边;搜索与过滤保持 hairline 描边,不换焦点色。
 7. 选区、hover、active 的色彩表达一律引用令牌,不自调 hex / opacity 组合。
-8. 动效默认 `--ease-smooth` 200ms。`--ease-spring` / `--ease-glide`、按下 80ms、toast 550ms、landing hero/章节揭示 400ms、Hub/Viewer `ThinkingLogo` canvas、Hub/Viewer `liquid-gooey` Move 是已记录的例外。其它曲线、时长或运动库先改本文件。
+8. 动效默认 `--ease-smooth` 200ms。`--ease-spring` / `--ease-glide`、按下 80ms、toast 550ms、landing hero/章节揭示 400ms、Hub/Viewer `ThinkingLogo` canvas、Hub/Viewer `liquid-gooey` Move 是已记录的例外。新增其它曲线、时长或运动库需同步更新本文件。
 9. 图标三用途:产品品牌用 owl 系列(`owl-flat.tsx` / `OwlIcon`);功能用 lucide;plugin/agent 实体标默认 GitHub 头像(`uploaded_by`),**official / builtin 默认仓内 `zju-real`**(不在打开列表时 fetch GitHub)。可改闭包彩色标或另一个 GitHub login。闭包 SVG/PNG 在 `apps/shared/lib/brand-marks/assets/`,彩色,不把第三方 logo 组件库当运行时依赖。模型百科的 **lab** 标是 pin 里 vendored 的 lab SVG,缺则字母标;不进 plugin/agent 闭包、不装 `@lobehub/icons`。Lab ≠ Hub org。文件树仍用 `material-icon-theme`(既有例外)。
 10. 深度感只用 `--viewer-shadow-pop`;blur 分档封顶,不为单个组件发明新档或第二套阴影令牌。
 

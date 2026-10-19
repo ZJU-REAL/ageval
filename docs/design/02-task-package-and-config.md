@@ -1,8 +1,8 @@
-# 02 — dataset 与配置
+# 02 — Dataset 与配置规范
 
-交付单位是 **dataset**（根配置 + 若干 task 成员），不是 SQL。侧车 Postgres 仍叫 compose service。lock 数据流见 [ARCHITECTURE.md](../../ARCHITECTURE.md) § Data Flow。
+评测数据集的交付单位是 **dataset**（根清单 `ageval.yaml` + `tasks/<id>/` 任务成员目录）。配置锁定数据流见 [ARCHITECTURE.md](../../ARCHITECTURE.md) § Data Flow。
 
-## 根
+## 根清单 `ageval.yaml`
 
 ```yaml
 format: ageval.dataset/1
@@ -12,9 +12,7 @@ tasks:
   root: tasks
 ```
 
-文件名 `ageval.yaml`。未知 format lock 失败：`invalid_format` 于 `/format`。
-
-CLI 路径永远是 dataset 根：
+未知 `format` 在 `lock` 阶段直接报错 `invalid_format`（位于 `/format`）。CLI 的 dataset 参数始终指向 dataset 根目录或 Hub 引用：
 
 ```bash
 ageval lock examples/datasets/minimal-demo --task terminal-jsonl-agg
@@ -23,11 +21,11 @@ ageval tasks examples/datasets/minimal-demo
 ageval run  official/demo@0.1.0 --dir tmp
 ```
 
-`run` / `lock` / `view` / `results upload-suite` 第一个参数是本地 dataset 根 **或** Hub ref（`dataset_id@version` / `@sha256:…`）。`--dir <path>` 只在 `run` 上、且只配合 Hub ref：在 `<path>/<dataset_id>/` 找包（例：`--dir tmp` + `official/demo@0.1.0` → `tmp/official/demo`）。子目录已是匹配 dataset 就复用，否则 fetch 进去再 run。相对路径相对 cwd。本地路径再加 `--dir` 是 `invalid_override`。`lock` / `view` / `upload-suite` 走已校验缓存，命中不打 Hub。`tasks` / `campaign` 仍只收本地目录。
+`run`、`lock`、`view` 与 `results upload-suite` 的首个参数支持本地 dataset 根目录或 Hub 引用（`dataset_id@version` / `@sha256:…`）。`--dir <path>` 仅在 `ageval run` 配合 Hub 引用时使用，将数据集检出至 `<path>/<dataset_id>/`（若已存在匹配目录则直接复用）；本地路径搭配 `--dir` 会报错 `invalid_override`。`lock`、`view` 与 `upload-suite` 优先读取本地已校验缓存。`tasks` 与 `campaign` 仅接受本地目录。
 
-`--profiles` 整份替换根上的配置文件。`--agent` 与 `--profiles` 互斥。`--model` 须配合 `--agent`，改已绑角色的 `model.id`（包缺省否则保留）。`--set` 白名单：`/parameters/seed`、`/parameters/active_profile`、`/agent_profiles/<role>/{model,executor,api_key,base_url,options/<key>}`，以及嵌套 `model/id`、`model/api`、`model/timeout`、`model/watchdog`、`model/reasoning/effort`。`model` 必须是嵌套对象。`limits.*` 不可 `--set`。`ageval results --model` 是上传观测标签，不是这条糖。
+`--profiles` 整份替换默认配置文件；`--agent` 与 `--profiles` 互斥；`--model` 需配合 `--agent` 覆盖已绑定角色的 `model.id`。`--set` 允许覆盖的白名单路径包括：`/parameters/seed`、`/parameters/active_profile`、`/agent_profiles/<role>/{model,executor,api_key,base_url,options/<key>}`，以及嵌套模型字段 `model/id`、`model/api`、`model/timeout`、`model/watchdog`、`model/reasoning/effort`（`model` 必须为嵌套对象）。`limits.*` 不允许通过 `--set` 修改。
 
-## 成员 `task.yaml`
+## 任务成员 `task.yaml`
 
 ```yaml
 format: ageval.task/1
@@ -37,16 +35,16 @@ parameters:
 agent_profiles:
   - id: solver
 limits:
-  wall_time_seconds: 600       # 只覆盖 run；缺省 300
-  environment_seconds: 600     # environment 相位；缺省 600
-  evaluate_seconds: 600        # evaluate 相位；缺省 600
-  agent_invocations: 1         # 只计 run 相位的 invoke
-  agent_concurrency: 1         # 同时在 executor 里的 run 相位 invoke；缺省 1
+  wall_time_seconds: 600       # 仅约束 run 阶段；默认 300
+  environment_seconds: 600     # 约束 environment 阶段；默认 600
+  evaluate_seconds: 600        # 约束 evaluate 阶段；默认 600
+  agent_invocations: 1         # 仅统计 run 阶段的调用次数
+  agent_concurrency: 1         # run 阶段同时执行的调用上限；默认 1
 artifacts:
   publishable:
     - id: reply
       path: artifacts/reply.json
-    # kind 省略 / file = 单文件 harvest（今日）。tree = 工作区快照：
+    # kind 省略或为 file 时收集单个文件；设为 tree 时保存工作区目录快照：
     # - id: repo
     #   path: workspace
     #   kind: tree
@@ -55,80 +53,73 @@ evaluation:
   inputs:
     - artifact: reply
       target: artifacts/reply.json
-  # collect:                          # 打分前从 attempt 容器 / compose service 取路径
-  #   - path: /tmp/agent.patch        # 绝对路径；打分 Host 上放回同一路径
-  #     service: main                 # 省略或 main = attempt 容器
+  # collect:                          # 评分前从 attempt 容器或 compose 服务收集文件
+  #   - path: /tmp/agent.patch        # 容器内绝对路径；在评分环境中放回相同路径
+  #     service: main                 # 省略或 main 表示 attempt 容器
   #     command: "git diff > /tmp/agent.patch"
-  #     timeout_sec: 60               # 省略 = 60；只约束 command
+  #     timeout_sec: 60               # 默认 60，仅约束 command
   #   - path: /tmp/pg.dump
-  #     service: postgres-db          # compose service；先跑完全部 main，再跑 sidecar
+  #     service: postgres-db          # compose 服务；先执行全部 main，再执行辅助服务
   #     command: "pg_dump -f /tmp/pg.dump"
-  # docker_image: ageval-eval:grader   # 仅 isolated 且未写 environments 时认
-  # environments:                      # 多只打分 Host；写出则忽略 evaluate.Dockerfile / docker_image
+  # docker_image: ageval-eval:grader   # 仅在 isolated 且未声明 environments 时生效
+  # environments:                      # 多命名评分容器；声明后忽略 evaluate.Dockerfile 与 docker_image
   #   audit:
   #     dockerfile: environment/evaluate/audit/Dockerfile
   #   verification:
   #     docker_image: ageval-eval:verify
 ```
 
-`limits.agent_concurrency` 是正整数，省略等于 `1`。`0`、负数、布尔和非整数在 lock 失败一次。它封顶一次 Attempt 里同时进入 executor 的 run 相位 invoke，跨 session、跨 profile。它不封子任务个数，不封 `agent_invocations`，也不封 suite 里有几只 Attempt 在跑。`bounded_gather(limit=)` 与 `first_success(limit=)` 是 `run.py` 自己的扇出，不能把这只天花板抬高。写出 `1` 与省略相同：invoke 不重叠。`--set` 不能改 `limits.*`。
+`limits.agent_concurrency` 为正整数（省略时默认为 `1`；`0`、负数、布尔值或非整数在 `lock` 阶段直接拒绝），用于限制单次 Attempt 在 `run` 阶段同时处于执行器运行状态的调用数量（跨会话、跨角色共享）。它不限制子协程创建数量、`agent_invocations` 总额度或 suite 并发任务数；`run.py` 中的 `bounded_gather(limit=)` 与 `first_success(limit=)` 受此上限约束。
 
-## 薄 task 目录
+## 精简任务目录与默认文件识别
 
 ```text
 tasks/<id>/
-  task.yaml                 # 只写例外；目录名 == task_id == --task
-  run.py                    # async def run(ctx) — 仅 run phase
-  evaluator.py              # 仅 evaluate
+  task.yaml                 # 目录名必须等于 task_id 与 --task 参数
+  run.py                    # async def run(ctx) — 仅在 run 阶段执行
+  evaluator.py              # 仅在 evaluate 阶段执行
   environment/
-    Dockerfile              # Agent 环境配方；有则用；docker 与 e2b 同一份
-    evaluate.Dockerfile     # 单只打分配方；仅 isolated 且未写 evaluation.environments 时认
-    evaluate/               # 按名打分配方（audit/Dockerfile 等）；gold 不放这里
-    setup.sh                # 有则 environment_setup 去 exec（只跑在 Agent 环境）
-  data/                     # Agent 可见 seed；environment 相位 upload 到 /attempt/workspace
-  evaluation/               # gold；agent 不可见；evaluate 开头才 upload 到打分 Host
-                            # 禁止把打分 Dockerfile 放这里
+    Dockerfile              # 待测 Agent 环境配方（docker / e2b / daytona 共用）
+    evaluate.Dockerfile     # 单个独立评分容器配方（isolated 且未声明 evaluation.environments 时生效）
+    evaluate/               # 多命名评分容器配方目录（如 audit/Dockerfile）
+    setup.sh                # 存在时由 environment_setup 在 Agent 环境中执行
+  data/                     # 待测 Agent 可见的初始文件，在 environment 阶段上传至 /attempt/workspace
+  evaluation/               # 评分参考材料（gold），run 阶段不可见，evaluate 阶段上传至评分环境
 ```
 
-**缺省（有文件就认，不必在 yaml 再写一遍）：**
+**默认约定（存在对应文件即自动识别，无需在 YAML 中重复声明）：**
 
-| 没写时 | 默认 |
+| 未显式声明项 | 默认识别规则 |
 | --- | --- |
-| run 入口 | 存在 `run.py` → `run:run` |
-| evaluator 入口 | 存在 `evaluator.py` → `evaluator:evaluate` |
-| 镜像配方 | 存在 `environment/Dockerfile` → 用之；或 job `environment_options.image` / `docker_image` |
-| 打分镜像 | 存在 `environment/evaluate.Dockerfile` → isolated 且未写 `evaluation.environments` 时用之；或成员 `evaluation.docker_image`。写出 `evaluation.environments` 则按名认 `dockerfile` / `docker_image`，忽略上面两份单只配方。省略 `evaluate_host` 则忽略全部打分配方 |
-| setup | 存在 `environment/setup.sh` → `environment_setup` exec；没有则跳过 |
-| `requires.environment` | 空 = 不额外要 cap |
-| seed | 存在 `data/` → environment 相位 upload |
-| gold | 存在 `evaluation/` → evaluate 相位 upload |
+| `run` 入口 | 存在 `run.py` → `run:run` |
+| `evaluator` 入口 | 存在 `evaluator.py` → `evaluator:evaluate` |
+| Agent 环境镜像配方 | 存在 `environment/Dockerfile` → 自动使用；或使用 `environment_options.image` / `docker_image` |
+| 评分容器配方 | 存在 `environment/evaluate.Dockerfile`（或 `evaluation.docker_image`）→ 在 `evaluate_host.isolated: true` 且未声明 `evaluation.environments` 时使用；若声明了 `evaluation.environments` 则按名称读取；省略 `evaluate_host` 时忽略所有独立评分容器配方 |
+| 环境初始化脚本 | 存在 `environment/setup.sh` → 在 `environment_setup` 链槽中执行；不存在则跳过 |
+| `requires.environment` | 默认为空（不额外要求特定环境能力） |
+| 初始数据 (`seed`) | 存在 `data/` → 在 `environment` 阶段上传至工作区 |
+| 参考材料 (`gold`) | 存在 `evaluation/` → 在 `evaluate` 阶段上传至评分环境 |
 
-`evaluation.collect` 省略或 `[]`：不跑。workspace harvest 与题包脚本里的 `/app` 合并保持原样。每条至少有 `path` 或 `command`。`path` 是绝对路径且不含 `..`。`service` 省略或 `main` 表示 attempt 容器；其他值是 compose service。未知键一次拒绝。命令原文留在 task.yaml，evidence 只记 path、service、status。失败是 evaluate 的 ERROR（`environment_collect_failed` / `environment_collect_missing`），不给空分。细则见 [05-runtime/evaluation.md](05-runtime/evaluation.md)。
+`evaluation.collect` 省略或为空列表 `[]` 时不执行。每条声明至少包含 `path`（不含 `..` 的绝对路径）或 `command`，可选指定 `service`（省略或 `main` 表示 attempt 容器，其余值表示 compose 服务名）。命令或路径拷贝失败时，在 `evaluate` 阶段记为 `ERROR`（`environment_collect_failed` / `environment_collect_missing`）。详见 [05-runtime/evaluation.md](05-runtime/evaluation.md)。
 
-yaml 显式字段覆盖缺省。旧 `harness.entrypoint` 与未知 format **拒绝**，不映射。
+当多个任务共享相同的交互逻辑时，可将公共模块置于 dataset 根目录的 `shared/lib` 下，由各任务的 `run.py` 导入（Runtime 注入的 `sys.path` 前缀为 `[task_dir, dataset_root]`）。参考材料（`gold`）严禁放入 `shared/`。Docker 构建不会隐式拷贝 `shared/`；若容器内脚本需导入 `shared.lib.*`，需在 Dockerfile 中显式 `COPY` 并将 dataset 根目录加入 `PYTHONPATH`。
 
-不要：`provider.kind`、`assurance`、`harness:` 块、角色上的 `executor` / `api_key`（那些在 profiles）。
-
-`run.py` **禁止**：`host.start`、`apt`、装环境、读 `evaluation/`。只做 session / invoke / 业务 Tool。环境在它被调用前已经就绪。ACP attach 发生在第一次 invoke。
-
-多题同构时，循环放 `shared/lib`，成员 `run.py` 只转发。gold 永不进 `shared/`。Runtime 注入 path 前缀是 `[task_dir, dataset_root]`，不会把 `shared/lib` 叶子再塞进 path。docker 镜像 **不会** 由 Core 隐式 COPY `shared/`；容器内要用时在 Dockerfile 里显式 `COPY`，并把 dataset 根放进 `PYTHONPATH`。
-
-## job `profiles.yaml`
+## 运行配置文件 `profiles.yaml`
 
 ```yaml
 format: ageval.profiles/1
-environment: local          # 或 docker / e2b / ssh / daytona
-# environment_options:      # docker：image / platform / network / user（`root` 开 root）/ egress / egress_allow / python_version
-#                           #        可选 network_mode / cap_add / main_environment（见 05 environment「compose 与 Attempt」）
-#                           # ssh：host / user / port / key_env / image
-#                           # daytona：image / snapshot / timeout_seconds
-# evaluate_host:            # 省略 = 同一环境 evaluate
+environment: local          # local | docker | e2b | ssh | daytona
+# environment_options:      # docker: image / platform / network / user / egress / egress_allow / python_version
+#                           #         以及可选 network_mode / cap_add / main_environment
+#                           # ssh: host / user / port / key_env / image
+#                           # daytona: image / snapshot / timeout_seconds
+# evaluate_host:            # 省略时复用 run 阶段环境进行评分
 #   isolated: true
-#   environment_options:     # 打分盒自己的 network / egress / egress_allow / platform / user / python_version；省略 = 不继承 agent 的 egress/egress_allow/network
+#   environment_options:    # 独立评分容器自身的网络与平台配置（network / egress / egress_allow / platform / user / python_version）
 agent_profiles:
   solver:
     executor: acp
-    model: …            # 嵌套字段表见 16-model.md
+    model: …                # 嵌套 ModelSpec 字段见 16-model.md
     api_key: ${ZHIPU_API_KEY}
     options:
       entry: pi
@@ -137,25 +128,21 @@ agent_profiles:
       - plugin: local
 ```
 
-`environment_options` 给 **run** 环境；locator 在 preflight 解析，密钥不进 digest。`evaluate_host.isolated: true` 要求成员题有打分配方，且 kind 能再起一份环境（Current：docker）；否则 lock 失败。`evaluate_host.environment_options` 是打分盒自己的旋钮（`network` / `egress` / `egress_allow` / `platform` / `user` / `python_version`；不是 `image`），要求 `isolated: true`；省略时打分盒只继承 job `environment_options` 的 `platform` / `user` / `python_version`，不继承 agent 的 `egress` / `egress_allow` / `network`。`egress_allow` 是 hostname 列表，必须与同一 map 的 `egress: llm` 同写（Current：仅 docker）；省略 = 该盒只放行相关 `base_url` 主机。未知顶键与未知嵌套键一次拒绝。
+- `environment_options` 配置 `run` 阶段环境；凭据 locator 在 `preflight` 阶段解析，明文密钥不进入 lock digest。
+- `evaluate_host.isolated: true` 要求任务具备评分容器配方且环境类型支持启动独立容器（当前为 `docker`），否则 `lock` 失败。`evaluate_host.environment_options` 配置独立评分容器自身的 `network`、`egress`、`egress_allow`、`platform`、`user` 与 `python_version`；省略时仅继承顶层 `environment_options` 的 `platform`、`user` 与 `python_version`，不继承待测 Agent 环境的 `egress`、`egress_allow` 或 `network`。
+- `egress_allow` 为小写主机名列表，必须与同一字典下的 `egress: llm` 同时声明（当前仅支持 `docker`）；有效放行列表为对应阶段绑定角色的 `base_url` 主机名与 `egress_allow` 的并集。
+- `evaluation.environments` 定义多命名评分容器配方（键名匹配 `[a-z][a-z0-9_-]*`），每项指定 `dockerfile`（相对任务目录，禁止位于 `evaluation/` 下）或 `docker_image`，并要求 `evaluate_host.isolated: true` 且 `environment: docker`。
+- `artifacts.publishable[]` 支持 `id`、`path`、`kind`（`file` | `tree`，默认 `file`）与 `exclude`（仅 `tree` 模式）。当 `evaluation.inputs[].target` 设为 `workspace` 时，将对应的 `tree` 快照恢复至评分环境的 `/attempt/workspace`；否则文件产物放置在 `/attempt/artifacts`。
 
-`evaluation.environments` 是成员题上的名 → 配方表。名字 `[a-z][a-z0-9_-]*`。每个名字只允许 `dockerfile`（题相对路径）或 `docker_image`（OCI tag），或两者（与今日单只配方同一识别规则）。未知键一次错误。`dockerfile` 必须存在且不得落在 `evaluation/`（那是 gold）。写出该表则：
+## 配置字段归属
 
-- job 必须 `evaluate_host.isolated: true` 且 `environment: docker`，否则 lock 失败。
-- 每个名字必须落到已有 Dockerfile 或非空 tag；缺文件 → lock 失败，不 start。
-- 忽略 `environment/evaluate.Dockerfile` 与 `evaluation.docker_image`。
-
-`artifacts.publishable[]` 允许键：`id`、`path`、`kind`（`file` \| `tree`，省略 = `file`）、`exclude`（仅 `tree`，字符串列表）。其它键一次错误，不映射。`evaluation.inputs[].target: workspace` 把对应 tree 铺到打分 Host `/attempt/workspace`；省略则 file 产物仍上 `/attempt/artifacts`。有名表时，**每只被 start 的** 打分 Host 各收一份快照拷贝。
-
-## 所有权
-
-| 字段 | 消费者 |
+| 字段 / 目录 | 消费者 |
 | --- | --- |
-| `parameters` | `ctx.params`。其中 `cpus` / `memory_mb` / `gpus` / `gpu_types` / `verifier_gpus` 在 `environment: docker` 时也是容器限额，见 [environment](05-runtime/environment.md)。docker Agent 容器在 start 时另读 `network_mode`、`cap_add`、`main_environment`（job `environment_options` 上的同名键优先）。不写回 lock |
-| `limits.*` | Runtime 的时间与 invoke 额度，不含 CPU / 内存 / GPU |
-| `evaluation/` | evaluate 相位（gold；可含 `docker_image` 供单只 isolated；禁止放 Dockerfile） |
-| `environment/` | Agent 环境配方；`evaluate.Dockerfile` 或 `evaluate/<name>/` 仅 isolated 打分环境 |
-| `data/` | Agent 可见 seed |
-| `profiles.yaml` | 选环境 / executor / entry；可选 `evaluate_host` / `egress` / `egress_allow` |
+| `parameters` | 注入 `ctx.params` 供 `run.py` 读取；在 `environment: docker` 下，`cpus`、`memory_mb`、`gpus`、`gpu_types`、`verifier_gpus` 以及 `network_mode`、`cap_add`、`main_environment` 同时作为容器启动参数（见 [environment](05-runtime/environment.md)） |
+| `limits.*` | Core 运行时强制执行的阶段时长、调用次数与并发度上限 |
+| `evaluation/` | `evaluate` 阶段上传的参考材料（gold） |
+| `environment/` | 待测 Agent 环境配方与独立评分容器配方 |
+| `data/` | `environment` 阶段上传至 `/attempt/workspace` 的初始文件 |
+| `profiles.yaml` | 绑定环境插件、角色 executor、`ModelSpec` 及可选的 `evaluate_host` |
 
-实现：`src/ageval/config/`（`dataset.py`、`profiles.py`、`load_and_lock.py`、`validate.py`、`digest.py`）。
+代码实现位于 `src/ageval/config/`（`dataset.py`、`profiles.py`、`load_and_lock.py`、`validate.py`、`digest.py`）。
