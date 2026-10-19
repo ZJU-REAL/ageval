@@ -43,7 +43,15 @@ Landing: more than one dataset → Datasets. Exactly one (including
 2. **Jobs list** — search; filter dropdowns; sortable columns; row click.
    Jobs = that package's `.ageval/suite-runs/` and `.ageval/runs/` only.
    Routes carry the directory key so two packages cannot share a `job_id`.
-3. **Job → tasks** — task table with scores / status / agent-model meta
+   Kind, Source, harness, model, and the suite chart are query parameters on
+   that path. Back restores them. Dataset stays in the path. Kind suite shows
+   finished jobs over the jobs listed and keeps the Trials column visible.
+   The list refreshes while a suite is still running.
+3. **Job → tasks** — task table with scores / status / agent-model meta.
+   A suite job shows finished/total tasks above the task table, and a
+   horizontally scrolling plot of task duration (height) and result (dot
+   color). Time left is the recent gap between finishes times the tasks still
+   open. The page refreshes while tasks are still open.
 4. **Task detail** — trials/run row(s), status/error coloring, **copyable CLI**
 5. **Attempt / trial detail** — `Jobs > job > task > run_id`; Outcome + actors
    (Role / Harness / Model / Time / Usage) + tabs from real evidence only
