@@ -12,7 +12,7 @@ import contextlib
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 from ageval.application.phase_timing import format_duration_ms
 from ageval.application.suite import document as suite_document
@@ -599,7 +599,23 @@ def _duration_label(phase_timing: dict[str, Any] | None) -> str | None:
     return None
 
 
-def _attempt_clock(root: Path, run_id: str) -> dict[str, Any] | None:
+class AttemptClock(TypedDict):
+    """One Attempt's phase clock. Stamps are present only when the seal wrote them."""
+
+    duration_ms: float
+    started_at: NotRequired[str]
+    finished_at: NotRequired[str]
+
+
+class TaskTiming(TypedDict):
+    """Mean duration for a suite task row, plus the finish stamp the pace board orders on."""
+
+    duration: str | None
+    duration_ms: float | None
+    finished_at: str | None
+
+
+def _attempt_clock(root: Path, run_id: str) -> AttemptClock | None:
     """One Attempt's phase clock: ``duration_ms``, and stamps when sealed."""
     text = str(run_id or "").strip()
     if not text:
@@ -621,11 +637,13 @@ def _attempt_clock(root: Path, run_id: str) -> dict[str, Any] | None:
         total_ms = timing.get("total_ms")
         if not isinstance(total_ms, int | float) or isinstance(total_ms, bool):
             continue
-        clock: dict[str, Any] = {"duration_ms": float(total_ms)}
-        for key in ("started_at", "finished_at"):
-            value = timing.get(key)
-            if isinstance(value, str) and value.strip():
-                clock[key] = value.strip()
+        clock: AttemptClock = {"duration_ms": float(total_ms)}
+        started = timing.get("started_at")
+        if isinstance(started, str) and started.strip():
+            clock["started_at"] = started.strip()
+        finished = timing.get("finished_at")
+        if isinstance(finished, str) and finished.strip():
+            clock["finished_at"] = finished.strip()
         return clock
     return None
 
@@ -644,12 +662,12 @@ def _latest_stamp(values: list[str]) -> str | None:
     return best_value
 
 
-def _task_timing(root: Path, run_ids: list[str], fallback: object) -> dict[str, Any]:
+def _task_timing(root: Path, run_ids: list[str], fallback: object) -> TaskTiming:
     """Mean Attempt duration, plus the finish stamp the pace board orders on."""
     clocks = [clock for rid in run_ids if (clock := _attempt_clock(root, rid)) is not None]
     if clocks:
         duration_ms = sum(float(clock["duration_ms"]) for clock in clocks) / len(clocks)
-        finished = [str(clock["finished_at"]) for clock in clocks if clock.get("finished_at")]
+        finished = [stamp for clock in clocks if (stamp := clock.get("finished_at"))]
         return {
             "duration": format_duration_ms(duration_ms),
             "duration_ms": duration_ms,
