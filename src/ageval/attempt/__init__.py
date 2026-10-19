@@ -81,9 +81,11 @@ async def run_attempt(ctx: AttemptCtx) -> None:
 async def run_regrade(ctx: AttemptCtx) -> None:
     """Score a harvested snapshot. The task ``run`` phase does not run.
 
-    The box still starts so evaluate can copy ``task-artifacts/`` onto the
-    scoring host. ``environment_setup`` and the agent probe do not run.
+    The box still starts so evaluate can copy ``task-artifacts/`` and
+    ``verifier-collect/`` onto the scoring host. Collect commands do not run.
+    ``environment_setup`` and the agent probe do not run.
     """
+    ctx.regrade = True
     should_record = False
     try:
         ctx.phase = environment.PHASE

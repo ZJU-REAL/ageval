@@ -11,6 +11,7 @@
 format: ageval.profiles/1
 environment: e2b    # local | docker | e2b | ssh | daytona
 # environment_options:   # docker：image / platform / network / user / egress / egress_allow / python_version
+#                        #        以及可选 network_mode / cap_add / main_environment（见下「compose 与 Attempt」）
 #                        # ssh：host / user / port / key_env / image
 #                        # daytona：image / snapshot / timeout_seconds
 # evaluate_host:         # 省略 = 同一环境打分
@@ -44,7 +45,7 @@ docker `environment_options`：
 
 - `image` / `docker_image` — 已有 tag，跳过本机构建
 - `platform` — 缺省跟本机
-- `network` — 缺省 `bridge`。这是 **原始 docker 网络名**。`none` 也是原始名：它会一并挡住环境内进程访问模型 API，**不是**下面的 LLM egress 模式。
+- `network` — 缺省 `bridge`。这是 **原始 docker 网络名**。`none` 也是原始名：它会一并挡住环境内进程访问模型 API，**不是**下面的 LLM egress 模式。有 `environment/compose.yaml` 时 Attempt 改接 `{project}_default`，除非声明了 `network_mode: service:<name>`（见「compose 与 Attempt」）。
 - `egress` — 省略 = 今日 `bridge`。`egress: llm`（Current：仅 docker contrib）：Agent 环境出站 HTTP(S) 只能到达 **有效放行名单**（parent 侧代理 + 环境内 `HTTPS_PROXY` / `HTTP_PROXY`，或等价物）。ACP stdio 仍是 parent `attach_stdio`，不走这条代理。不能兑现的 kind 写了该键 → lock 失败。依赖仍 bake 在题包 `environment/Dockerfile`；官方 Attempt 镜像 invoke 时禁止 `npm i` / 浮动 `npx`。
 - `egress_allow` — 仅与同一 map 上的 `egress: llm` 同写。hostname 列表（小写、无 scheme、无 path、无 port；与代理 exact match 同一规范化）。省略 = 只放行绑定 profile 的 `base_url` 主机（今日行为）。空列表 = 不加额外主机。有效名单 = 该盒相关 `base_url` 主机 ∪ 本 map 的 `egress_allow`，去重排序后写入内部 `egress_allowlist`；不另起代理。非 hostname 条目（带 path 的 URL、空串）→ lock 失败。非 docker kind 写了该键、或没有 `egress: llm` → lock 失败。不是新插件，也不是 chain slot。并集为空（`egress: llm` 且没有可解析 `base_url` 主机、也没有 extras）仍按今日规则拒绝启动代理，不静默放开网络。代理 allow/deny 不写 `Result.status`。
 - `user` — 环境内身份，`docker run --user` 与 `exec`/`attach_stdio` 同一值。缺省 `10001:10001`。`root` / `0` / `0:0` 开 root（Harbor 式终端题要 `apt` 或写 `/usr/local` 时用）。其它值必须是 `uid` 或 `uid:gid`。未知字符串一次失败。默认仍带 `no-new-privileges`。
@@ -162,6 +163,30 @@ contrib/local    → 本机目录
 `setup.sh` 是 environment **末槽** `environment_setup`，不是独立 provision phase。无文件则 no-op。失败是 environment 相位失败。重依赖进 Dockerfile，不要在 `run.py` 里 `apt`。
 
 侧车：拆掉 Environment Manager。compose 或 `host.exec(service=)`。`run.py` 读投影 DSN。旧 `setup_steps` 废止。
+
+## compose 与 Attempt
+
+任务带 `environment/compose.yaml` 时，`docker compose up -d` 启动这份文件里的服务。Agent 所在容器仍是单独的 `docker run`。compose 里的 `main` 不会被启动。
+
+这些服务之间的 `depends_on` 和 `healthcheck` 随这次 `compose up` 生效。`depends_on` 里指向 `main` 的条目，在 up 用的副本里去掉，因为 `main` 不在这份文件里。任务原来的 compose 文件不改。`compose up -d` 不加 `--wait`。Agent 容器不会等这些服务的 healthcheck 通过。要等的话写在 `setup.sh` 里，或由 Agent 自己等。
+
+下面三样只加在 **Agent** 这只容器的 `docker run` 上。打分容器 `compose_file` 为空，不读这些声明，也不加入 compose 网络。`evaluate_host.environment_options` 不接收这三个键，写了则 lock 失败。
+
+同一键按这个顺序取值，写了的来源盖过前面的来源：
+
+1. `environment/docker-compose.yaml` 的 `services.main`（`network_mode`、`environment`、`cap_add`）。这份文件不参与 `compose up`。它和 compose-up 文件是同一路径时不拿来当声明。
+2. 任务 `parameters.network_mode`、`parameters.cap_add`、`parameters.main_environment`。这三个键仍进入 `ctx.params`。
+3. job `environment_options` 的同名键。写了就整份 job 共用，盖过该任务的声明。
+
+`network_mode` 只有 `service:<服务名>` 会改 Agent 容器的网络。`compose up` 之后取该服务正在运行的容器 id，执行 `docker run --network container:<id>`。Agent 容器和那个服务共用网络，`127.0.0.1` 就是那个服务容器里的 `127.0.0.1`。这时用的网络是 `container:<id>`。其它值（空、`bridge`、`host`）不改网络。`service:` 后面不是服务名、没有 compose 文件、或该服务不是恰好一个正在运行的容器，启动一次失败。
+
+`services.main.environment` / `parameters.main_environment` / `environment_options.main_environment` 用 `docker run -e` 传进容器。声明里的键盖过镜像里的同名环境变量。每条必须带值（mapping，或 `KEY=VALUE`）。只写名字、没有值的条目一次失败，不会去读本机环境变量。`DOCKER_HOST` 这类指向 Docker 守护进程的名字不传进容器。
+
+`cap_add` 变成 `--cap-add`。名字是 `SYS_PTRACE` 这种能力名（大小写不敏感，运行时用大写）。容器仍带 `no-new-privileges`，不改 seccomp。
+
+`egress: llm` 与 `network_mode: service:*` 写在一起则启动一次失败。共用这一个网络时，Docker 不能再加 `--add-host`。
+
+这些值留在进程内的 `docker run` 参数上。不写入 lock，不写入 evidence。
 
 ## Current vs Target
 

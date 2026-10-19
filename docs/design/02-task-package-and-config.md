@@ -55,6 +55,14 @@ evaluation:
   inputs:
     - artifact: reply
       target: artifacts/reply.json
+  # collect:                          # 打分前从 attempt 容器 / compose service 取路径
+  #   - path: /tmp/agent.patch        # 绝对路径；打分 Host 上放回同一路径
+  #     service: main                 # 省略或 main = attempt 容器
+  #     command: "git diff > /tmp/agent.patch"
+  #     timeout_sec: 60               # 省略 = 60；只约束 command
+  #   - path: /tmp/pg.dump
+  #     service: postgres-db          # compose service；先跑完全部 main，再跑 sidecar
+  #     command: "pg_dump -f /tmp/pg.dump"
   # docker_image: ageval-eval:grader   # 仅 isolated 且未写 environments 时认
   # environments:                      # 多只打分 Host；写出则忽略 evaluate.Dockerfile / docker_image
   #   audit:
@@ -95,6 +103,8 @@ tasks/<id>/
 | seed | 存在 `data/` → environment 相位 upload |
 | gold | 存在 `evaluation/` → evaluate 相位 upload |
 
+`evaluation.collect` 省略或 `[]`：不跑。workspace harvest 与题包脚本里的 `/app` 合并保持原样。每条至少有 `path` 或 `command`。`path` 是绝对路径且不含 `..`。`service` 省略或 `main` 表示 attempt 容器；其他值是 compose service。未知键一次拒绝。命令原文留在 task.yaml，evidence 只记 path、service、status。失败是 evaluate 的 ERROR（`environment_collect_failed` / `environment_collect_missing`），不给空分。细则见 [05-runtime/evaluation.md](05-runtime/evaluation.md)。
+
 yaml 显式字段覆盖缺省。旧 `harness.entrypoint` 与未知 format **拒绝**，不映射。
 
 不要：`provider.kind`、`assurance`、`harness:` 块、角色上的 `executor` / `api_key`（那些在 profiles）。
@@ -109,6 +119,7 @@ yaml 显式字段覆盖缺省。旧 `harness.entrypoint` 与未知 format **拒�
 format: ageval.profiles/1
 environment: local          # 或 docker / e2b / ssh / daytona
 # environment_options:      # docker：image / platform / network / user（`root` 开 root）/ egress / egress_allow / python_version
+#                           #        可选 network_mode / cap_add / main_environment（见 05 environment「compose 与 Attempt」）
 #                           # ssh：host / user / port / key_env / image
 #                           # daytona：image / snapshot / timeout_seconds
 # evaluate_host:            # 省略 = 同一环境 evaluate
@@ -140,7 +151,7 @@ agent_profiles:
 
 | 字段 | 消费者 |
 | --- | --- |
-| `parameters` | `ctx.params`。其中 `cpus` / `memory_mb` / `gpus` / `gpu_types` / `verifier_gpus` 在 `environment: docker` 时也是容器限额，见 [environment](05-runtime/environment.md) |
+| `parameters` | `ctx.params`。其中 `cpus` / `memory_mb` / `gpus` / `gpu_types` / `verifier_gpus` 在 `environment: docker` 时也是容器限额，见 [environment](05-runtime/environment.md)。docker Agent 容器在 start 时另读 `network_mode`、`cap_add`、`main_environment`（job `environment_options` 上的同名键优先）。不写回 lock |
 | `limits.*` | Runtime 的时间与 invoke 额度，不含 CPU / 内存 / GPU |
 | `evaluation/` | evaluate 相位（gold；可含 `docker_image` 供单只 isolated；禁止放 Dockerfile） |
 | `environment/` | Agent 环境配方；`evaluate.Dockerfile` 或 `evaluate/<name>/` 仅 isolated 打分环境 |

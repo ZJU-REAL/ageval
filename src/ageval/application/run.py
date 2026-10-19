@@ -7,6 +7,7 @@ no orchestration: the phase order lives in ``ageval.attempt``.
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Mapping, MutableMapping
 from pathlib import Path
 from typing import Any
 
@@ -343,7 +344,31 @@ def _agent_environment_options(lock: LockedTaskConfig, graph: ExtensionGraph) ->
         options["egress_allowlist"] = _egress_allowlist(lock)
     if lock.environment == "docker":
         options.update(resource_options(thaw(lock.parameters), scoring=False))
+    _merge_attempt_declarations(options, thaw(lock.parameters))
     return options
+
+
+def _merge_attempt_declarations(
+    options: MutableMapping[str, Any], parameters: Mapping[str, Any]
+) -> None:
+    """Copy task network, caps, and main env onto the agent box options.
+
+    A key already set on the job ``environment_options`` wins. ``options`` is
+    the in-memory start dict. It is not written back onto the lock.
+    """
+    mode = parameters.get("network_mode")
+    if "network_mode" not in options and isinstance(mode, str) and mode.strip():
+        options["network_mode"] = mode.strip()
+    caps = parameters.get("cap_add")
+    if "cap_add" not in options and isinstance(caps, str) and caps.strip():
+        options["cap_add"] = [caps.strip()]
+    elif "cap_add" not in options and isinstance(caps, list | tuple) and caps:
+        options["cap_add"] = list(caps)
+    env = parameters.get("main_environment")
+    if "main_environment" not in options and isinstance(env, dict) and env:
+        options["main_environment"] = dict(env)
+    elif "main_environment" not in options and isinstance(env, list | tuple) and env:
+        options["main_environment"] = list(env)
 
 
 def _egress_allowlist(lock: LockedTaskConfig) -> list[str]:

@@ -70,7 +70,7 @@ ERROR 的 `result.json` `error` 是一个对象。PASS / FAIL 时 `error` 为 `n
 
 - `run.py` 或 `evaluator.py` 抛出的 `ScriptError`：构造时的 `title`。`message` 是构造时的 `message`。同一个类，相位由抓住异常的 worker 决定。
 - 脚本里逃出的其他异常：类名（`ValueError`），`message` 为 `str(exc)`。任务组里的 `ScriptError` 以 `ExceptionGroup` 到达 worker，worker 不拆开，title 为 `ExceptionGroup`。
-- 引擎 ERROR：已经产出的稳定 token。worker envelope 的 `error`（`task_worker_no_result`、`task_worker_unreadable_result`），`EnvironmentFailure.kind`（`environment_setup_failed`），`environment_timeout`、`evaluate_timeout`、`evaluator_invalid_status`，以及 `ConfigError`。没有这种 token 时用异常类名。`message` 是已记下的文字：envelope 的 `message`，否则有界的 stderr 尾部。
+- 引擎 ERROR：已经产出的稳定 token。worker envelope 的 `error`（`task_worker_no_result`、`task_worker_unreadable_result`），`EnvironmentFailure.kind`（`environment_setup_failed`、`environment_collect_failed`、`environment_collect_missing`），`environment_timeout`、`evaluate_timeout`、`evaluator_invalid_status`，以及 `ConfigError`。没有这种 token 时用异常类名。`message` 是已记下的文字：envelope 的 `message`，否则有界的 stderr 尾部。collect 的 message 含 service、path、退出码，不含 command 原文。
 
 traceback 留在 worker envelope 上，记在 `task_run` 事实里，不进 `result.json` 的 `error`。
 
@@ -96,6 +96,7 @@ suite 的 task 行和 attempt 行在 status 为 ERROR 时带同一个对象；`t
 | environment 时钟到期 | ERROR，`error.phase` 为 `environment`，`error.title` 为 `environment_timeout` | Attempt |
 | evaluate 时钟到期 | ERROR，`error.phase` 为 `evaluate`，`error.title` 为 `evaluate_timeout` | Attempt |
 | evaluator 的 status 不是 PASS / FAIL | ERROR，`error.phase` 为 `evaluate`，`error.title` 为 `evaluator_invalid_status` | Evaluation |
+| `evaluation.collect` 的 command 非 0，或声明的 path 拷不到 | ERROR，`error.phase` 为 `evaluate`，`error.title` 为 `environment_collect_failed` 或 `environment_collect_missing` | Attempt |
 | Evaluator 崩、缺 verdict | ERROR，`error.phase` 为 `evaluate`，`error.title` 为类名或 `ScriptError.title` | Evaluation |
 | Cleanup 失败 | warning | 不改已 bind 的分 |
 

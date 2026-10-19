@@ -40,6 +40,7 @@ Optional `evaluation.*` fields:
 | --- | --- |
 | `evaluation.tmpfs_mb` | in-environment evaluator `/tmp`, positive MiB, default 32. **Not** `limits.*` |
 | `evaluation.environments` | named scoring hosts (`dockerfile` and/or `docker_image`). Setting it requires job `evaluate_host.isolated: true` + `environment: docker` and ignores `evaluate.Dockerfile` |
+| `evaluation.collect` | Before scoring, copy declared absolute paths from the attempt container and compose services onto the scoring host. A row may include `command`, `service`, and `timeout_sec`. Omit or `[]` and this step does not run: workspace harvest and the scoring script's `/app` overlay are unchanged. A failed command or a missing path is an evaluate ERROR |
 
 Files present are recognized: `run.py`, `evaluator.py`, Dockerfile, `setup.sh`.
 
@@ -70,6 +71,8 @@ Optional `evaluate_host.isolated: true` (Current: docker) starts a scoring envir
 Task `parameters` `cpus`, `memory_mb`, `gpus`, `gpu_types`, and `verifier_gpus` are docker container limits when set. A required GPU the host cannot show fails the attempt with `environment_gpu_unavailable`. Omitted limits leave today's `docker run` shape.
 
 Optional docker `environment_options`: `image` / `platform` / `network` / `user` / `egress` / `egress_allow` / `python_version`. `python_version` is the official image CPython minor (e.g. `"3.13"`; omit = 3.12, shape `^\d+\.\d+$`); an image that cannot be pulled fails once, with no fallback. `egress: llm` allows outbound traffic only to bound profile `base_url` hosts; `egress_allow` on the same map is extra hostnames (omit = none). `evaluate_host.environment_options` may set `network` / `egress` / `egress_allow` / `platform` / `user` / `python_version` (not `image`); when omitted, the scoring host inherits the job's `platform` / `user` / `python_version` and does not inherit the agent's `egress` / `egress_allow` / `network`.
+
+A task `environment/compose.yaml` starts its services with `docker compose up -d`. The agent container is still its own `docker run`. A `depends_on` entry that names `main` is omitted for that up. Healthchecks on those services are not waited on. `network_mode: service:<name>` — from `environment/docker-compose.yaml` service `main`, task `parameters.network_mode`, or `environment_options.network_mode` — runs the agent with `--network container:<that service's container>`. The agent and that service share one network, so `127.0.0.1` is that service's `127.0.0.1`. `cap_add` and main `environment` (`parameters.cap_add`, `parameters.main_environment`, or the same `environment_options` keys) are set on that `docker run`. The scoring container does not use them. The values stay on the `docker run` and are not copied into the lock or evidence.
 
 ## Allowed top-level dirs
 

@@ -29,6 +29,7 @@ from ageval.environments.protocol import (
     EnvironmentFailure,
     ExecResult,
     Placement,
+    reject_foreign_service,
 )
 from ageval.plugins.base import BaseEnvironment
 from ageval.plugins.decorators import environment_plugin
@@ -267,8 +268,9 @@ class DaytonaHost(BaseEnvironment):
             stderr=str(getattr(result, "stderr", "") or "")[:_MAX_STREAM_BYTES],
         )
 
-    async def upload(self, source: Path, dest: str) -> None:
+    async def upload(self, source: Path, dest: str, *, service: str | None = None) -> None:
         self._assert_started()
+        reject_foreign_service(service, kind="daytona", verb="upload")
         src = Path(source).expanduser()
         if not src.exists():
             raise EnvironmentFailure(
@@ -286,8 +288,9 @@ class DaytonaHost(BaseEnvironment):
             payload = path.read_bytes()
             await asyncio.to_thread(self._sandbox.fs.upload_file, payload, target)
 
-    async def download(self, source: str, dest: Path) -> None:
+    async def download(self, source: str, dest: Path, *, service: str | None = None) -> None:
         self._assert_started()
+        reject_foreign_service(service, kind="daytona", verb="download")
         target = Path(dest).expanduser()
         try:
             info = await asyncio.to_thread(self._sandbox.fs.get_file_info, source)

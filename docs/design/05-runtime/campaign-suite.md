@@ -46,7 +46,7 @@ Suite 可以沿用同一个 `suite_run_id`。Attempt 目录不改写。
 **`ageval results regrade <dataset> --run <attempt_id>`**（`--run` 可重复）是另一条入口，不进 suite 调度：
 
 - 铸造新 Attempt。来源 `result.json` 与来源目录不改。
-- 不跑 agent / `run.py`。把来源 `task-artifacts/` 拷进打分 Host，只 evaluate。
+- 不跑 agent / `run.py`。把来源 `task-artifacts/` 与 `verifier-collect/` 拷进打分 Host，只 evaluate。不重跑 collect command。
 - gold 与 evaluator 读**当前 dataset**，不读来源 Attempt 里冻住的那份脚本。
 - harvest 缺失或对不上当前 `artifacts.publishable` → 新 Attempt 为 ERROR，不从轨迹编 PASS / FAIL。
 - 没有题包字段声明「这题能否 regrade」。

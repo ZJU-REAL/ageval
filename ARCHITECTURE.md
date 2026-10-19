@@ -343,8 +343,11 @@ run phase
 
 evaluate phase
   before_evaluate
+  evaluation.collect     # omitted or [] : skip. else commands then paths, main before sidecars
+                         # stage evidence/verifier-collect/ ; do not record the command text
   [evaluate_host.isolated, no named map] start second EnvironmentProvider (docker; distinct work root)
   [no named map] upload artifacts / tree snapshot / evaluation/ onto that scoring host
+                 place verifier-collect back at each declared path
   [isolated, no named map] after_environment_ready for evaluate-phase ACP profiles
   evaluation_runtime.evaluate  # exclusive-slot winner; default parent evaluator.py worker
                                # named map: lazy start on scoring.exec / session(environment=)
@@ -401,7 +404,7 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | --- | --- | --- | --- |
 | `ageval.yaml` + `task.yaml` + `profiles.yaml` | Author / CLI | Config | Sole spec reader; unknown format is one error |
 | `LockedTaskConfig` + `extension_bindings` | Config | Attempt, box, executor, Evaluation | Replayable; no secret plaintext |
-| `ctx.params` | Config projection | `run.py` | Read-only; no gold/credential |
+| `ctx.params` | Config projection | `run.py` | Read-only; no gold/credential. Docker start also reads `network_mode`, `cap_add`, and `main_environment` and does not write them back into the lock |
 | Agent prompt / tools | `run.py` | ACP / other executor | Must not include secrets by default |
 | Credential material | Host env | Approved executor subprocess only | Locator; never in lock/evidence |
 | Workspace bytes | Box upload/bind | Agent and `run.py` visibility | Contract path `/attempt/workspace` |
@@ -415,7 +418,7 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | Platform capability | Owner | Notes |
 | --- | --- | --- |
 | `environment: local` | `plugins/contrib/local` | Real directory |
-| `environment: docker` | `plugins/contrib/docker` | Real container; compose / uid_gid / path_views |
+| `environment: docker` | `plugins/contrib/docker` | Real container; compose / uid_gid / path_views. `network_mode: service:<name>` puts the attempt on that compose service's network; declared main env and `cap_add` go on the attempt `docker run` |
 | `environment: e2b` | `plugins/contrib/e2b` | SDK only in this package; missing `E2B_API_KEY` fails preflight |
 | `environment: ssh` A/B | `plugins/contrib/ssh` | A has no image; B has a remote tag |
 | ACP coding-agent | `plugins/contrib/acp` | Sole coding-agent inlet; `attach_stdio` |
@@ -441,6 +444,7 @@ An ERROR writes `error` as `{phase, title, message}`. `title` annotates that ERR
 | Environment phase budget | ERROR; `error.phase` is `environment`; `error.title` is `environment_timeout`; run does not start | Attempt |
 | Evaluate phase budget | ERROR; `error.phase` is `evaluate`; `error.title` is `evaluate_timeout` | Attempt |
 | Evaluator status other than PASS / FAIL | ERROR; `error.phase` is `evaluate`; `error.title` is `evaluator_invalid_status` | Evaluation |
+| Collect command failed, or a declared path could not be copied | ERROR; `error.phase` is `evaluate`; `error.title` is `environment_collect_failed` or `environment_collect_missing` | Attempt |
 | Evaluator crash or missing verdict | ERROR; `error.phase` is `evaluate`; `error.title` is the class name or `ScriptError.title` | Evaluation |
 | Cleanup failure | warning | Box / Attempt |
 | User cancel | Enters cleanup | Attempt / runtime |
