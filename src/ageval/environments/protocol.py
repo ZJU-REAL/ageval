@@ -152,9 +152,21 @@ class EnvironmentProvider(Protocol):
         service: str | None = None,
     ) -> ExecResult: ...
 
-    async def upload(self, source: Path, dest: str) -> None: ...
+    async def upload(
+        self,
+        source: Path,
+        dest: str,
+        *,
+        service: str | None = None,
+    ) -> None: ...
 
-    async def download(self, source: str, dest: Path) -> None: ...
+    async def download(
+        self,
+        source: str,
+        dest: Path,
+        *,
+        service: str | None = None,
+    ) -> None: ...
 
     async def attach_stdio(
         self,
@@ -174,3 +186,13 @@ class EnvironmentFailure(Exception):
         super().__init__(message)
         self.kind = kind
         self.message = message
+
+
+def reject_foreign_service(service: str | None, *, kind: str, verb: str) -> None:
+    """Kinds without compose cannot copy from a named service."""
+    if service is None:
+        return
+    raise EnvironmentFailure(
+        "environment_capability_missing",
+        f"{kind} does not provide compose; {verb}(service=…) is unavailable",
+    )

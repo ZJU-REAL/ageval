@@ -45,7 +45,7 @@ src/ageval/
     phases/
       environment.py        # start · ready · setup
       run.py                # 调题包 run.py
-      evaluate.py           # 停写 · upload gold · evaluator
+      evaluate.py           # 停写 · collect · upload gold · evaluator
       record.py             # collect → 引擎写轨迹文件
       cleanup.py            # finally；host.stop
   config/                   # dataset 根 + task.yaml 缺省；无 Database 名

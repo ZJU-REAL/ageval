@@ -5,9 +5,9 @@ exec`` argv, the uid/gid, the compose calls, and the rule that the daemon's own
 locator variables must never reach a process inside the box. Above it, the ACP
 executor and the Attempt phases see only the environment Protocol.
 
-Files move through a bind mount: the Attempt work root is the container's
-``/attempt``, so an upload is a copy on this side and a read is a read on that
-side. ``/attempt/evaluation`` therefore appears exactly when the evaluate phase
+Files under ``/attempt`` move through the bind mount. Other absolute paths
+use ``docker cp``. A compose service uses ``docker compose cp``.
+``/attempt/evaluation`` therefore appears exactly when the evaluate phase
 uploads it, and not one moment earlier.
 """
 
@@ -21,7 +21,7 @@ import shutil
 import subprocess
 import uuid
 from collections.abc import Mapping, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
@@ -34,6 +34,7 @@ from ageval.environments.protocol import (
     ExecResult,
     Placement,
 )
+from ageval.evidence.redaction import redact_text
 from ageval.plugins.base import BaseEnvironment
 from ageval.plugins.contrib.docker.images import (
     daemon_available,
@@ -47,7 +48,9 @@ BOX_ROOT = "/attempt"
 ATTEMPT_UID = 10001
 ATTEMPT_GID = 10001
 _MAX_STREAM_BYTES = 256 * 1024
+_CP_TIMEOUT_SEC = 600.0
 _PYTHON_VERSION_RE = re.compile(r"^\d+\.\d+$")
+_COMPOSE_SERVICE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$")
 
 # The daemon locators the docker CLI itself needs. They describe *this* machine,
 # so they must never be projected into a container.
@@ -245,43 +248,49 @@ class DockerHost(BaseEnvironment):
         ]
         return await self._run_docker(prefix + argv, timeout_sec=timeout_sec)
 
-    async def upload(self, source: Path, dest: str) -> None:
-        """Copy into the bind-mounted work root; the container sees it at once."""
+    async def upload(self, source: Path, dest: str, *, service: str | None = None) -> None:
+        """Copy into the box. ``/attempt`` stays on the bind mount."""
         self._assert_started()
-        src = Path(source).expanduser()
-        if not src.exists():
-            raise EnvironmentFailure(
-                "environment_upload_missing",
-                f"upload source does not exist: {source}",
-            )
-        target = self.host_path(dest)
-        if src.is_dir():
-            if target.exists():
-                if target.is_dir():
-                    shutil.rmtree(target)
-                else:
-                    target.unlink()
-            target.parent.mkdir(parents=True, exist_ok=True)
-            copy_bind_tree(src, target)
-        else:
+        if service is None and str(dest or "").strip().startswith(BOX_ROOT):
+            src = Path(source).expanduser()
+            if not src.exists():
+                raise EnvironmentFailure(
+                    "environment_upload_missing",
+                    f"upload source does not exist: {source}",
+                )
+            target = self.host_path(dest)
+            if src.is_dir():
+                if target.exists():
+                    if target.is_dir():
+                        shutil.rmtree(target)
+                    else:
+                        target.unlink()
+                target.parent.mkdir(parents=True, exist_ok=True)
+                copy_bind_tree(src, target)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, target)
+            _make_box_writable(target)
+            return
+        await self._cp_into(Path(source), dest, service=service)
+
+    async def download(self, source: str, dest: Path, *, service: str | None = None) -> None:
+        self._assert_started()
+        if service is None and str(source or "").strip().startswith(BOX_ROOT):
+            src = self.host_path(source)
+            if not src.exists():
+                raise EnvironmentFailure(
+                    "environment_download_missing",
+                    f"download source does not exist in box: {source}",
+                )
+            target = Path(dest).expanduser()
+            if src.is_dir():
+                copy_bind_tree(src, target)
+                return
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, target)
-        _make_box_writable(target)
-
-    async def download(self, source: str, dest: Path) -> None:
-        self._assert_started()
-        src = self.host_path(source)
-        if not src.exists():
-            raise EnvironmentFailure(
-                "environment_download_missing",
-                f"download source does not exist in box: {source}",
-            )
-        target = Path(dest).expanduser()
-        if src.is_dir():
-            copy_bind_tree(src, target)
             return
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, target)
+        await self._cp_out(source, Path(dest), service=service)
 
     async def attach_stdio(
         self,
@@ -502,11 +511,126 @@ class DockerHost(BaseEnvironment):
             timeout_sec=timeout_sec,
         )
 
+    async def _cp_out(self, source: str, dest: Path, *, service: str | None) -> None:
+        remote = _absolute_container_path(source)
+        if service is not None:
+            self._check_service(service)
+        target = dest.expanduser()
+        if target.exists():
+            if target.is_dir():
+                shutil.rmtree(target)
+            else:
+                target.unlink()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        result = await self._run_docker(
+            self._cp_argv(self._remote_ref(remote, service), str(target), service=service),
+            timeout_sec=_CP_TIMEOUT_SEC,
+        )
+        if result.exit_code != 0 or not target.exists():
+            tail = redact_text(result.stderr or "")[-300:]
+            raise EnvironmentFailure(
+                "environment_collect_missing",
+                f"collect copy failed for {remote} exit {result.exit_code}: {tail}",
+            )
+
+    async def _cp_into(self, source: Path, dest: str, *, service: str | None) -> None:
+        src = source.expanduser()
+        if not src.exists():
+            raise EnvironmentFailure(
+                "environment_upload_missing",
+                f"upload source does not exist: {source}",
+            )
+        remote = _absolute_container_path(dest)
+        if service is not None:
+            self._check_service(service)
+        if src.is_dir():
+            removed = await self.exec(["rm", "-rf", remote], timeout_sec=60, service=service)
+            if not removed.ok:
+                tail = redact_text(removed.stderr or "")[-300:]
+                raise EnvironmentFailure(
+                    "environment_collect_failed",
+                    f"collect copy failed for {remote} exit {removed.exit_code}: {tail}",
+                )
+        parent = str(PurePosixPath(remote).parent)
+        if parent not in {"/", "."}:
+            made = await self.exec(["mkdir", "-p", parent], timeout_sec=30, service=service)
+            if not made.ok:
+                tail = redact_text(made.stderr or "")[-300:]
+                raise EnvironmentFailure(
+                    "environment_collect_failed",
+                    f"collect copy failed for {remote} exit {made.exit_code}: {tail}",
+                )
+        result = await self._run_docker(
+            self._cp_argv(str(src), self._remote_ref(remote, service), service=service),
+            timeout_sec=_CP_TIMEOUT_SEC,
+        )
+        if result.exit_code != 0:
+            tail = redact_text(result.stderr or "")[-300:]
+            raise EnvironmentFailure(
+                "environment_collect_failed",
+                f"collect copy failed for {remote} exit {result.exit_code}: {tail}",
+            )
+
+    def _check_service(self, service: str) -> str:
+        name = service.strip()
+        if _COMPOSE_SERVICE_RE.fullmatch(name) is None:
+            raise EnvironmentFailure(
+                "environment_path_invalid",
+                f"compose service name is invalid: {service!r}",
+            )
+        if self._compose_project is None or self._compose_file is None:
+            raise EnvironmentFailure(
+                "environment_capability_missing",
+                f"no compose project is up; transfer(service={name!r}) is unavailable",
+            )
+        return name
+
+    def _remote_ref(self, remote: str, service: str | None) -> str:
+        if service is None:
+            assert self._container is not None
+            return f"{self._container}:{remote}"
+        return f"{self._check_service(service)}:{remote}"
+
+    def _cp_argv(self, src: str, dst: str, *, service: str | None) -> list[str]:
+        if service is None:
+            return ["cp", src, dst]
+        assert self._compose_project is not None
+        assert self._compose_file is not None
+        return [
+            "compose",
+            "-p",
+            self._compose_project,
+            "-f",
+            str(self._task_root / self._compose_file),
+            "cp",
+            src,
+            dst,
+        ]
+
     def _assert_started(self) -> None:
         if not self._started:
             raise EnvironmentFailure("environment_not_started", "docker box is not started")
         if self._stopped:
             raise EnvironmentFailure("environment_stopped", "docker box is already stopped")
+
+
+def _absolute_container_path(raw: str) -> str:
+    text = str(raw or "").strip()
+    if not text.startswith("/") or "\\" in text:
+        raise EnvironmentFailure(
+            "environment_path_invalid",
+            f"container path must be absolute: {raw!r}",
+        )
+    pure = PurePosixPath(text)
+    if any(part in {".", ".."} for part in pure.parts):
+        raise EnvironmentFailure(
+            "environment_path_invalid",
+            f"container path escapes its root: {raw!r}",
+        )
+    normalized = pure.as_posix()
+    if normalized != "/":
+        normalized = normalized.rstrip("/")
+    return normalized
 
 
 def copy_bind_tree(src: Path, dest: Path) -> None:

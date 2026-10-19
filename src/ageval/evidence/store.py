@@ -37,6 +37,7 @@ EVALUATION_EVENTS_REL = "evaluation/events.jsonl"
 AGENT_BOX_REL = "box"
 EVALUATE_BOX_REL = "eval-box"
 TASK_ARTIFACTS_REL = "task-artifacts"
+VERIFIER_COLLECT_REL = "verifier-collect"
 
 
 def evaluate_box_rel(name: str | None = None) -> str:

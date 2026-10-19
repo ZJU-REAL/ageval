@@ -26,6 +26,7 @@ from ageval.environments.protocol import (
     EnvironmentFailure,
     ExecResult,
     Placement,
+    reject_foreign_service,
 )
 from ageval.plugins.base import BaseEnvironment
 from ageval.plugins.decorators import environment_plugin
@@ -216,8 +217,9 @@ class E2BHost(BaseEnvironment):
             stderr=str(getattr(result, "stderr", "") or "")[:_MAX_STREAM_BYTES],
         )
 
-    async def upload(self, source: Path, dest: str) -> None:
+    async def upload(self, source: Path, dest: str, *, service: str | None = None) -> None:
         self._assert_started()
+        reject_foreign_service(service, kind="e2b", verb="upload")
         src = Path(source).expanduser()
         if not src.exists():
             raise EnvironmentFailure(
@@ -228,9 +230,10 @@ class E2BHost(BaseEnvironment):
             payload = path.read_bytes()
             await asyncio.to_thread(self._sandbox.files.write, target, payload)
 
-    async def download(self, source: str, dest: Path) -> None:
+    async def download(self, source: str, dest: Path, *, service: str | None = None) -> None:
         """Copy a file or a directory's contents. ``files.read`` is files only."""
         self._assert_started()
+        reject_foreign_service(service, kind="e2b", verb="download")
         target = Path(dest).expanduser()
         try:
             info = await asyncio.to_thread(self._sandbox.files.get_info, source)

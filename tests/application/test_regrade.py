@@ -59,6 +59,9 @@ def _seed(root: Path, *, artifacts: bool) -> tuple[Path, bytes]:
         art.mkdir()
         (art / "result.json").write_text(json.dumps({"ok": True}) + "\n", encoding="utf-8")
         (art / "alias.json").symlink_to("result.json")
+        staged = run_dir / "verifier-collect" / "entries" / "0"
+        staged.mkdir(parents=True)
+        (staged / "agent.patch").write_text("diff\n", encoding="utf-8")
     return run_dir, body
 
 
@@ -132,6 +135,8 @@ def test_regrade_scores_harvest_without_running_the_agent(tmp_path: Path) -> Non
     alias = new_dir / "task-artifacts" / "alias.json"
     assert alias.is_symlink()
     assert os.readlink(alias) == "result.json"
+    copied = new_dir / "verifier-collect" / "entries" / "0" / "agent.patch"
+    assert copied.read_text(encoding="utf-8") == "diff\n"
 
 
 def test_regrade_missing_harvest_is_error_and_leaves_the_source(tmp_path: Path) -> None:

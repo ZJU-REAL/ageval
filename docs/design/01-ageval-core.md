@@ -81,7 +81,7 @@ PASS 仍只经 `AttemptCtx.bind_evaluation` 进入 Result。`evaluation_runtime`
 | --- | --- |
 | `environment` | `host.start` + upload seed + 槽（见下） |
 | `run` | 调 task `run.py`；内含 agent open/invoke/close **子槽**。结束时停 solver writer，**保持** Agent Service |
-| `evaluate` | 选打分 Host（缺省 = run 环境；job `evaluate_host.isolated` 则另起同 kind 实例：一份配方 = 一只；`evaluation.environments` = 按名懒启动多只）、放入环境 gold **只进打分 Host**、调 `evaluation_runtime` 赢家（可选 SDK `Agent.session` / `scoring.exec`）、`bind_evaluation` |
+| `evaluate` | 选打分 Host（缺省 = run 环境；job `evaluate_host.isolated` 则另起同 kind 实例：一份配方 = 一只；`evaluation.environments` = 按名懒启动多只）、按 `evaluation.collect` 从 attempt 容器和 compose sidecar 取路径（空声明则跳过）、放入环境 gold **只进打分 Host**、调 `evaluation_runtime` 赢家（可选 SDK `Agent.session` / `scoring.exec`）、`bind_evaluation` |
 | `record` | collect/enrich → `trajectory_seal` 写 run 相位 `trajectory.jsonl`；evaluate 相位 invoke 另封 `evaluation/observation.jsonl`（省略 user） |
 | `cleanup` | `host.stop`；isolated 时停 **每一只** 已启动的打分 Host 再停 Agent Host。实现可加报告，不能选择跳过 |
 
@@ -116,6 +116,7 @@ async def run(ctx) -> None:
 ```python
 async def run(ctx) -> None:
     await emit(ctx, "before_evaluate")          # solver writer 已在 run 结束停掉；Agent Service 仍在
+    # evaluation.collect：空声明则跳过。引擎步骤，不挂在链上
     # 引擎 upload gold —— 不挂在 before_evaluate 链上
     if ctx.evaluation_src.exists():
         await ctx.host.upload(ctx.evaluation_src, "/attempt/evaluation")

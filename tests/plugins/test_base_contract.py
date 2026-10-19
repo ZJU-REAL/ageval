@@ -59,11 +59,11 @@ class _ReadyEnvironment(BaseEnvironment):
         del command, cwd, env, timeout_sec, user, service
         return ExecResult(0)
 
-    async def upload(self, source: object, dest: str) -> None:
-        del source, dest
+    async def upload(self, source: object, dest: str, *, service: str | None = None) -> None:
+        del source, dest, service
 
-    async def download(self, source: str, dest: object) -> None:
-        del source, dest
+    async def download(self, source: str, dest: object, *, service: str | None = None) -> None:
+        del source, dest, service
 
     async def attach_stdio(
         self,
