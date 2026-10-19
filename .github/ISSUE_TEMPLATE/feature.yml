@@ -6,16 +6,16 @@ body:
   - type: textarea
     id: problem
     attributes:
-      label: What this is for
-      description: User or developer scenario. Do not lead with an implementation plan.
+      label: What is this for
+      description: Background and problem statement (user or developer scenario).
     validations:
       required: true
 
   - type: textarea
     id: proposal
     attributes:
-      label: Suggested direction
-      description: Optional. If this touches mechanism, point at docs/design or say design must change first.
+      label: Suggested implementation
+      description: Optional. Summarize the proposed approach (bullets, control flow, or pseudocode) and link any docs/design pages to update.
       placeholder: |
         Related: docs/design/…
         Related Issue / docs/design links:
@@ -28,7 +28,7 @@ body:
       label: Does this change product or mechanism semantics?
       options:
         - No (implementation / docs / examples)
-        - Yes (align docs/ first, then implement)
+        - Yes (update docs/design when completing the change)
         - Unsure
     validations:
       required: true

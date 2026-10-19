@@ -1,21 +1,21 @@
 ---
 title: 贡献指南
-description: Issues 跟踪；改机制先改 docs。
+description: 使用 Issues 跟踪交付；在阶段收尾或提交 PR 时同步更新文档。
 ---
 
 ```text
-docs/design     → 机制（自包含；不要读仓外 BRIEF）
-ARCHITECTURE.md → 结构
-GitHub Issues   → 要做什么、怎么验收
-代码 / 测试     → 实际行为
-website/        → 怎么用
+docs/design     → 核心机制规范（自包含）
+ARCHITECTURE.md → 模块结构与依赖方向
+GitHub Issues   → 增量需求与验收跟踪
+代码 / 测试     → 运行时实现与验证
+website/        → 面向使用者的教程与参考
 ```
 
-1. 开或认领 [Issue](https://github.com/ZJU-REAL/ageval/issues)
-2. 动机制先改 `docs/design/`；动目录树先改 `ARCHITECTURE.md`
-3. 实现、测试、PR 挂 Issue
-4. 用户可见行为变了，更新本站对应页
+1. 创建或认领 [Issue](https://github.com/ZJU-REAL/ageval/issues)。
+2. 按功能切片完成代码实现与测试验证。
+3. 在阶段收尾或提交 PR 时，完成对应文档的同步修改（机制变更更新 `docs/design/`，目录结构变更更新 `ARCHITECTURE.md`，用户可见行为变更更新本站对应页面），不必在开发开头单独提交信息密度低的纯文档 commit。
+4. 遵循仓库的 Commit 模板（`.gitmessage`）与 PR 模板（[`.github/PULL_REQUEST_TEMPLATE.md`](https://github.com/ZJU-REAL/ageval/blob/main/.github/PULL_REQUEST_TEMPLATE.md)）：PR 说明以 `## What is this for` 开头介绍背景与要解决的问题，随后在 `## Implementation` 中分点或分段说明实现方式（可结合流程图或伪代码），并附上 `## Verification` 验证结果。
 
-请别：重建 Spec 勾选机；secret 进 yaml/证据；轨迹当 PASS；按 Benchmark 名写适配器。
+请勿将明文密钥写入 YAML、lock 或证据目录；请勿将轨迹完成当作 `PASS`；请勿在 Core 或插件中按特定 benchmark 名称编写条件分支。
 
-完整路由：[`AGENTS.md`](https://github.com/ZJU-REAL/ageval/blob/main/AGENTS.md)。
+完整协作规范见 [`AGENTS.md`](https://github.com/ZJU-REAL/ageval/blob/main/AGENTS.md)。

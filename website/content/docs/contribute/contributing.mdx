@@ -1,21 +1,21 @@
 ---
 title: Contributing guide
-description: Track work with Issues; design changes start in docs.
+description: Track work with Issues; sync docs when wrapping up a phase or PR.
 ---
 
 ```text
-docs/design     → mechanism (self-contained; no external BRIEF)
-ARCHITECTURE.md → structure
-GitHub Issues   → work and acceptance
-code / tests    → behavior
-website/        → how-to
+docs/design     → mechanism specifications (self-contained)
+ARCHITECTURE.md → module structure and dependency direction
+GitHub Issues   → incremental delivery and acceptance tracking
+code / tests    → runtime behavior and verification
+website/        → reader-facing guides and reference
 ```
 
-1. Open or claim an [Issue](https://github.com/ZJU-REAL/ageval/issues)
-2. Mechanism → `docs/design/`; layout → `ARCHITECTURE.md`
-3. Implement, test, link the Issue
-4. Update this site when user-visible behavior changes
+1. Open or claim an [Issue](https://github.com/ZJU-REAL/ageval/issues).
+2. Implement and test the change in focused slices.
+3. When wrapping up a phase or preparing the PR, update the corresponding documentation (`docs/design/` for mechanism changes, `ARCHITECTURE.md` for module layout changes, and `website/` for user-visible behavior)—avoid standalone, low-density doc-only commits at the start of a task.
+4. Follow the commit template (`.gitmessage`) and PR template ([`.github/PULL_REQUEST_TEMPLATE.md`](https://github.com/ZJU-REAL/ageval/blob/main/.github/PULL_REQUEST_TEMPLATE.md)): open PR notes with `## What is this for` (background and problem statement), followed by `## Implementation` (structured points or paragraphs, with flowcharts or concise pseudocode where helpful) and `## Verification`.
 
-Don’t rebuild Spec checkbox machines; don’t put secrets in yaml/evidence; don’t treat trajectory as PASS; don’t name adapters after benchmarks.
+Do not commit plaintext secrets in YAML, lock files, or evidence archives; do not treat trajectory completion as `PASS`; and do not branch on benchmark names inside Core or plugins.
 
-Full routing: [`AGENTS.md`](https://github.com/ZJU-REAL/ageval/blob/main/AGENTS.md).
+Full contributor instructions: [`AGENTS.md`](https://github.com/ZJU-REAL/ageval/blob/main/AGENTS.md).

@@ -1,0 +1,15 @@
+# <type>(<scope>): <concise summary of the change, no trailing period>
+#
+# What is this for:
+# <1-2 sentences describing the background or problem being solved>
+#
+# Implementation:
+# - <key implementation detail 1>
+# - <key implementation detail 2>
+#
+# Refs: #<issue>
+#
+# ---
+# Types: feat | fix | refactor | perf | docs | test | build | ci | chore | revert
+# Note: Do not create standalone low-density doc-only commits at the start of a task;
+# update the corresponding docs when wrapping up a phase or completing the change.
