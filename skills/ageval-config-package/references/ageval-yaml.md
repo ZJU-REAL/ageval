@@ -6,6 +6,8 @@ Dataset root keys: `format`, `dataset_id`, `version`, `description`, `tasks`. No
 
 Task: `format`, `task_id`, `parameters`, `agent_profiles` (role ids only), `limits`, `artifacts`, `evaluation`, `provenance`, `requires`. Files present (`run.py`, `evaluator.py`, Dockerfile, `setup.sh`) are recognized. No `harness:` block, no `provider.kind`, no `assurance`.
 
+Docker reads task `parameters` `cpus`, `memory_mb`, `gpus`, `gpu_types`, and `verifier_gpus` when the job environment is docker. They are not `environment_options`. The table is in the docker plugin README.
+
 `limits`: `wall_time_seconds` (run only, default 300), `environment_seconds` (default 600), `evaluate_seconds` (default 600), `agent_invocations` (run-phase invokes only, default 1), `agent_concurrency` (simultaneous run-phase executor invokes, default 1). `agent_concurrency` must be a positive integer. An unknown key is rejected once. `limits.*` is not overridable with `--set`. A task's `bounded_gather(limit=)` cannot raise `agent_concurrency`.
 
 Profiles: `format`, `environment`, `environment_options`, `agent_profiles`. Role rows may have `executor`, `model`, `api_key` (locator), `options.entry`, `extensions`.

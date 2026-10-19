@@ -17,6 +17,7 @@ from ageval.attempt.emit import emit
 from ageval.attempt.verifier_collect import collect_declared_artifacts, place_collected_artifacts
 from ageval.config.errors import ConfigError
 from ageval.config.model import thaw
+from ageval.config.resources import resource_options
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
     EVALUATION_PATH,
@@ -223,6 +224,8 @@ def _scoring_environment_options(
         options["image"] = image.strip()
     if str(options.get("egress") or "") == "llm":
         options["egress_allowlist"] = _scoring_egress_allowlist(ctx, options)
+    if str(getattr(ctx.lock, "environment", "")) == "docker":
+        options.update(resource_options(thaw(ctx.lock.parameters), scoring=True))
     return options
 
 
