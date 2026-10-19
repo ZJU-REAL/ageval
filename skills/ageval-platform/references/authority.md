@@ -1,27 +1,23 @@
-# Authority & conflict resolution
+# Authority & documentation sync
 
-## Chain
+## Source-of-truth hierarchy
 
 ```text
 docs/design/*  →  ARCHITECTURE.md  →  GitHub Issues  →  code/tests/examples
 ```
 
-`docs/` is self-contained. Do not read an external BRIEF / vault as design truth.
+`docs/` is self-contained. `ARCHITECTURE.md` defines the current source tree, dependency graph, Attempt state machine, extension emit map, data flow, and failure boundaries. Construction rules and CI gates live in root `AGENTS.md`.
 
-`ARCHITECTURE.md` 拥有 Current 源码树、依赖图、五个阶段状态机、emit 图、数据流表、失败归属。施工红线与 CI 命令在根 `AGENTS.md`。不要在 skill 里复制那两份图。
+`website/` is reader-facing product documentation; `apps/*` and `services/*` READMEs document SPA and service development details.
 
-`website/` is reader-facing product documentation only — never design truth.  
-`apps/*` and `services/*` READMEs own SPA/service **dev** detail, not product tutorials.
+## Conflict resolution and doc sync timing
 
-## Conflict handling
-
-1. Stop the conflicting implementation.
-2. Classify: design change | structure change | delivery scope | implementation drift.
-3. Edit the **highest** authority first.
-4. Sync README / AGENTS / website / tests in the same change when claims change.
+1. When implementation and specifications disagree, stop and classify the discrepancy: design change, structure change, delivery scope, or implementation bug.
+2. `docs/` and `ARCHITECTURE.md` are the authoritative specifications for product semantics and module structure.
+3. **Phase-completion doc sync:** Do not force a standalone doc-only commit at the start of a task before writing code. Update the corresponding documentation (`docs/design/*`, `ARCHITECTURE.md`, `README*`, `website/`, and skills) when wrapping up a phase or completing the PR.
 
 ## What skills are not
 
-- Not a second design doc.
-- Not a license to claim unfinished surfaces as available.
-- Not allowed to invent `ageval` subcommands not present in `src/ageval/cli/main.py`.
+- Not a replacement for `docs/design/` or `ARCHITECTURE.md`.
+- Not a license to claim unverified surfaces as complete.
+- Not allowed to invent `ageval` subcommands or flags absent from `src/ageval/cli/main.py`.

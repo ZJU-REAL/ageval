@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
-from typing import Any
+from pathlib import Path, PurePosixPath
+from typing import Any, TypedDict
 
 from ageval.config.capabilities import CapabilityCatalog
 from ageval.config.constants import (
@@ -37,6 +37,7 @@ from ageval.config.errors import (
     ConfigError,
 )
 from ageval.config.ports import PackageReader
+from ageval.config.resources import parse_task_resources
 from ageval.environments.protocol import CAPABILITY_NAMES
 
 ALLOWED_TASK_KEYS = frozenset(
@@ -65,7 +66,9 @@ ALLOWED_LIMIT_KEYS = frozenset(
 )
 PUBLISHABLE_KEYS = frozenset({"id", "path", "kind", "exclude"})
 PUBLISHABLE_KINDS = frozenset({"file", "tree"})
-EVALUATION_KEYS = frozenset({"entrypoint", "inputs", "docker_image", "environments"})
+EVALUATION_KEYS = frozenset({"entrypoint", "inputs", "docker_image", "environments", "collect"})
+_COLLECT_KEYS = frozenset({"path", "service", "command", "timeout_sec", "exclude"})
+_COLLECT_SERVICE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$")
 EVALUATION_ENVIRONMENT_KEYS = frozenset({"dockerfile", "docker_image"})
 _EVALUATE_ENVIRONMENT_NAME = re.compile(EVALUATE_ENVIRONMENT_NAME_PATTERN)
 
@@ -160,6 +163,7 @@ def validate_document(
 
     profile_ids = _validate_profiles(doc, capabilities=capabilities)
     _validate_parameter_model_refs(parameters, profile_ids)
+    parse_task_resources(parameters)
     _validate_requires(doc.get("requires"))
     _validate_limits(doc.get("limits"))
     artifact_ids = _validate_artifacts(doc.get("artifacts"))
@@ -444,6 +448,141 @@ def _validate_artifacts(artifacts: Any) -> set[str]:
     return artifact_ids
 
 
+class _CollectRow(TypedDict, total=False):
+    path: str
+    service: str
+    command: str
+    timeout_sec: int | float
+    exclude: list[str]
+
+
+def _normalize_collect(raw: Any) -> list[_CollectRow]:
+    """Return lock rows for ``evaluation.collect``. An empty list stores nothing."""
+    if not isinstance(raw, list):
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "evaluation.collect must be a list",
+            location="/evaluation/collect",
+        )
+    return [_one_collect(item, f"/evaluation/collect/{idx}") for idx, item in enumerate(raw)]
+
+
+def _one_collect(item: Any, loc: str) -> _CollectRow:
+    if not isinstance(item, dict):
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "evaluation.collect item must be a mapping",
+            location=loc,
+        )
+    unknown = sorted(set(item) - _COLLECT_KEYS)
+    if unknown:
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            f"unknown evaluation.collect keys: {unknown}",
+            location=loc,
+        )
+    path = _collect_path(item.get("path"), f"{loc}/path") if "path" in item else None
+    service = _collect_service(item.get("service"), f"{loc}/service") if "service" in item else None
+    command = _collect_command(item.get("command"), f"{loc}/command") if "command" in item else None
+    if path is None and command is None:
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "evaluation.collect item requires path or command",
+            location=loc,
+        )
+    row: _CollectRow = {}
+    if path is not None:
+        row["path"] = path
+    if service is not None:
+        row["service"] = service
+    if command is not None:
+        row["command"] = command
+    if "timeout_sec" in item:
+        row["timeout_sec"] = _collect_timeout(item.get("timeout_sec"), f"{loc}/timeout_sec")
+    if "exclude" in item:
+        if path is None:
+            raise ConfigError(
+                ERROR_INVALID_SCHEMA,
+                "evaluation.collect exclude requires path",
+                location=f"{loc}/exclude",
+            )
+        row["exclude"] = _collect_exclude(item.get("exclude"), f"{loc}/exclude")
+    return row
+
+
+def _collect_path(raw: Any, loc: str) -> str:
+    if not isinstance(raw, str) or not raw.strip() or "\\" in raw:
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "evaluation.collect path must be an absolute path",
+            location=loc,
+        )
+    pure = PurePosixPath(raw.strip())
+    if not pure.is_absolute() or any(part in {".", ".."} for part in pure.parts):
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "evaluation.collect path must be an absolute path without ..",
+            location=loc,
+        )
+    text = pure.as_posix()
+    if text != "/":
+        text = text.rstrip("/")
+    return text
+
+
+def _collect_service(raw: Any, loc: str) -> str:
+    if not isinstance(raw, str) or not raw.strip():
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "evaluation.collect service must be a non-empty name",
+            location=loc,
+        )
+    name = raw.strip()
+    if _COLLECT_SERVICE_RE.fullmatch(name) is None:
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "evaluation.collect service must match [A-Za-z0-9][A-Za-z0-9_.-]{0,62}",
+            location=loc,
+        )
+    return name
+
+
+def _collect_command(raw: Any, loc: str) -> str:
+    if not isinstance(raw, str) or not raw.strip():
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "evaluation.collect command must be a non-empty string",
+            location=loc,
+        )
+    return raw
+
+
+def _collect_timeout(raw: Any, loc: str) -> int | float:
+    if isinstance(raw, bool) or not isinstance(raw, int | float) or raw <= 0:
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "evaluation.collect timeout_sec must be a positive number",
+            location=loc,
+        )
+    if isinstance(raw, float) and raw.is_integer():
+        return int(raw)
+    return raw
+
+
+def _collect_exclude(raw: Any, loc: str) -> list[str]:
+    if (
+        not isinstance(raw, list)
+        or not raw
+        or not all(isinstance(part, str) and part.strip() for part in raw)
+    ):
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "evaluation.collect exclude must be a list of non-empty strings",
+            location=loc,
+        )
+    return [str(part) for part in raw]
+
+
 def _validate_evaluation(
     evaluation: Any,
     *,
@@ -519,6 +658,8 @@ def _validate_evaluation(
             reader=reader,
             root=root,
         )
+    if "collect" in evaluation:
+        _normalize_collect(evaluation.get("collect"))
 
 
 def _validate_evaluation_environments(
@@ -645,6 +786,10 @@ def collect_resolved_references(
             if isinstance(exclude, list) and exclude:
                 row["exclude"] = [str(part) for part in exclude]
             refs["artifacts"].append(row)
+    if isinstance(evaluation, dict) and "collect" in evaluation:
+        rows = _normalize_collect(evaluation.get("collect"))
+        if rows:
+            refs["evaluation_collect"] = rows
     for inp in evaluation.get("inputs") or []:
         if not isinstance(inp, dict):
             continue

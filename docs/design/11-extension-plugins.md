@@ -1,61 +1,56 @@
-# 11 — 插件（独占 / 链）
+# 11 — 插件系统（独占槽、链槽与依赖注入）
 
-扩展只有独占槽与链槽。槽名权威：`src/ageval/plugins/slots.py`。emit 总图：[ARCHITECTURE.md](../../ARCHITECTURE.md) § Extension emit map、[05-runtime/README.md](05-runtime/README.md)。
+为在替换底层环境与执行器的同时支持运行时准备、任务初始化与轨迹收集等横切扩展，且避免插件直接耦合具体实现类，ageval 提供基于**独占槽**（`exclusive slot`）、**链槽**（`chain slot`）与**声明式依赖注入**（`inject`）的插件机制。插件槽标识符定义在 `src/ageval/plugins/slots.py` 中，完整阶段调度顺序见 [ARCHITECTURE.md](../../ARCHITECTURE.md) § Extension Emit Map 与 [05-runtime/README.md](05-runtime/README.md)。
 
-两条轴。Core 做表与解析，不做业务实现。
-
-| 轴 | 回答 | 谁定名 |
+| 维度 | 作用 | 定义位置 |
 | --- | --- | --- |
-| slot | 这次 Attempt **何时**跑 | `attempt/` / phase |
-| service | 进程里 **有什么** 可被别人调 | 独占槽赢家自动同名登记；插件还可 `exports.services` |
+| **插件槽 (slot)** | 声明插件在 Attempt 生命周期的**哪个扩展点**接入 | `src/ageval/plugins/slots.py` |
+| **命名服务 (service)** | 声明运行期内**可被其他插件调用的能力接口** | 独占槽实现自动注册为同名服务；插件也可通过 `exports.services` 显式导出 |
 
-参照 Cordis 的 `inject` + 按名取服务。不抄整机事件总线、热卸载、用事件替换 `run_attempt`。
+## 接口与实现分离：export / inject / capabilities
 
-## 稳定接口：export / inject / capabilities
+插件之间不通过硬编码 `plugin_id` 或直接导入对方模块通信，而是通过命名服务与能力契约解耦：
 
-扩展要解的是 **实现之间的编译期耦合**，不是「多几个钩子」。以独占槽 `executor` 与 `environment` 为范例（ACP × docker / e2b / ssh / daytona 是同一条规则）：
-
-| | 含义 | 不该变成 |
+| 机制 | 含义 | 设计约束 |
 | --- | --- | --- |
-| **export** | 「我是什么」：独占赢家以**槽名**进服务表（`environment`）；可选再 export 别名 | 把 docker SDK、container id 漏进邻居模块 |
-| **inject** | 「我需要什么」：按**服务名**声明依赖，并列出要用的 **capabilities** | `inject: {plugin_id: e2b}`；在 invoke 里 `if kind ==` |
-| **调用** | 只打该服务的 Protocol 方法（`attach_stdio` / `exec` / `upload`） | 本机 POSIX `cwd`、vendor HTTPS、自己拼 `docker exec` |
+| **export** | 独占槽实现自动以槽位名称（如 `environment`）注册进服务表 | 不向外部模块泄露底层容器 ID 或厂商专有 SDK |
+| **inject** | 插件按**服务名称**声明依赖，并列出所需的 **capabilities** 能力标记 | 不绑定具体 `plugin_id`（如不写 `inject: {plugin_id: e2b}`），也不在调用中编写 `if kind ==` 分支 |
+| **协议调用** | 仅调用目标服务在协议中定义的方法（如 `attach_stdio`、`exec`、`upload`） | 不假定宿主机本地文件路径，不在执行器内自行拼接 `docker exec` |
 
-效果是 **interface / implementation 分离**：ACP 的稳定接口是「名为 `environment`、且声明了 `attach_stdio` 的环境」；docker 把 `exec -i` 收在自己的 `attach_stdio` 里，e2b 把 SDK stdin 流收在同一方法里。换一种 kind，ACP 源码与 lock 里的 inject 行都不改。环境内部怎么实现，对 executor **不可见**（locality）。
+例如，ACP 执行器仅声明依赖具备 `attach_stdio` 能力的 `environment` 服务；`docker` 将 `docker exec -i` 封装在自身的 `attach_stdio` 实现中，`e2b` 与 `daytona` 则将云沙箱双向标准流封装在同一方法内。因此，切换环境类型时，执行器代码与 `inject` 声明均无需改动。
 
-一类环境与一类 executor 继承 `BaseEnvironment` / `BaseExecutor`（`src/ageval/plugins/base.py`），并用 `@environment_plugin` / `@executor_plugin` 注册。Model 字段、`supports_model` / `bind_model`、`extra_allowlist` 见 [16](16-model.md)。lock 在写 lock 之前调用类方法 `supports_model`；`requires_environment` 未满足是 `PluginContractError`。没有装饰类的外置 factory：`source` 为 `first-party` 且环境变量未设置时 lock 失败；其他 source 在 2027-01-15 前警告，并写明该日之后拒绝。`AGEVAL_STRICT_MODEL_CONTRACT=1` 时一律改为 `PluginContractError`。`0` / `false` / `no` / `off` 在该日前仍是警告，该日起一律拒绝。一等 executor 的 `options` 在 lock 用冻结 `Options` 解析，不认识的键拒绝。miniswe、nooa、dsh、acp-oneshot 走同一基类，仍由 `load_installed` 装入，不在 builtin 名单里。
+### 两阶段静态契约校验
 
-`exec` 与 `attach_stdio` 是同一服务上的不同 capability，不是两个 service。缺 cap 在 **lock** 失败，不在 invoke 中途探测。PASS / identity / cleanup 不准 export。
+1. **导入期注册校验：** 内置与外置的环境及执行器插件分别继承 `BaseEnvironment` 与 `BaseExecutor`（`src/ageval/plugins/base.py`），并通过 `@environment_plugin` / `@executor_plugin` 装饰器注册。装饰器在模块导入时校验类体是否完整实现了必需的生命周期方法、声明的能力方法以及模型契约属性（`supported_apis`、`supported_model_fields`、`extra_allowlist`）；不满足契约时直接抛出 `PluginContractError`，拒绝插入注册表。
+2. **锁定期配置校验（`ageval lock`）：** 解析器构建插件依赖图（`ExtensionGraph`），选定各独占槽实现、排定链槽顺序、核对 `requires_environment` 与 `inject` 能力依赖，并调用 `BaseExecutor.supports_model(spec)` 校验角色 profile 的 `ModelSpec`（详见 [16](16-model.md)）。对于缺少类级装饰器的第三方纯 YAML 工厂插件，默认给出 `YamlOnlyExecutorWarning`（提示在 2027-01-15 后停止支持），而在设置 `AGEVAL_STRICT_MODEL_CONTRACT=1` 时直接在 `lock` 阶段报错 `PluginContractError`。
 
-笛卡尔积成立的条件：每个 executor 的 `invoke` 只通过已 inject 的 `environment` 服务碰环境。本机 SDK + 碰巧能看见的 bind-mount **不算** 满足这条。dsh / nooa 必须走环境内 worker + `host.exec`，与 ACP 同一 seam。
+### 独占槽与链槽的绑定粒度
 
-| 槽 | 语义 | 例子 |
+| 槽位类型 | 语义 | 当前槽位 |
 | --- | --- | --- |
-| 独占 | 每个 resolved graph 一个赢家；登记为同名 service | `environment`、`executor`、`evaluation_runtime`、`trajectory_seal` |
-| 链 | `(ctx, value, nxt)` | `after_environment_ready`、`environment_setup`、`trajectory_collect`、`summary_enrich` |
+| **独占槽 (exclusive)** | 每个解析图绑定唯一实现并导出为同名服务 | `environment`、`executor`、`evaluation_runtime`、`trajectory_seal` |
+| **链槽 (chain)** | 按优先级排序串联执行的钩子 `(ctx, value, nxt)` | `after_environment_ready`、`environment_setup`、`trajectory_collect`、`trajectory_enrich`、`summary_enrich`、`cleanup_report` 等 |
 
-`environment` / `evaluation_runtime` / `trajectory_seal` 是 Attempt 级一份赢家。`executor` 按 `agent_profiles` 每行一份：同一 Attempt 上 solver 与 judge 可以选不同 executor 插件（仍各是该 graph 上的独占赢家）。两个插件抢**同一 graph** 的同一独占槽或同一 export id → rejected。
+- `environment`、`evaluation_runtime` 与 `trajectory_seal` 为 **Attempt 级**独占槽（后两者默认绑定引擎内置实现 `plugin_id: default`）。
+- `executor` 为**角色 profile 级**独占槽：`agent_profiles` 中每个角色独立解析一份插件图，允许同一 Attempt 中 `solver` 与 `judge` 绑定不同的执行器实现。
+- 未列入 `extensions` 的可选插件不会进入当前运行的调用链或镜像构建层。`PASS`、Attempt 身份与 `cleanup` 属于引擎核心不变量，不可通过插件服务覆盖。
 
-`profiles.environment` / `agent_profiles.<id>.executor` = 选独占槽赢家。`evaluation_runtime` / `trajectory_seal` **没有** job 单独的配置字段；默认赢家即可，替换只能走显式 `extensions` 行（`slot` + `plugin`）。`extensions` 也是链槽 opt-in。未列入 `extensions` 的不进链、不进服务表（引擎默认除外）。不开 `evaluation_collect` 一类新槽；evaluate 相位 SDK invoke 复用现有 invoke → 层 B → fold。
-
-Current 独占槽：`environment`、`executor`、`evaluation_runtime`、`trajectory_seal`。后两者默认是引擎（`plugin_id: default`）。PASS 仍只经 `bind_evaluation` 进入；`pass` / `identity` / `cleanup` / `evidence` 不准 export。
-
-## 声明（形状）
+## 插件清单示例（`ageval.plugin/1`）
 
 ```yaml
-# plugins/e2b/plugin.yaml（示意；contrib 也可内建注册）
+# 环境插件示例
 format: ageval.plugin/1
 plugin_id: e2b
-description: Open the Attempt box on E2B. Exclusive environment winner.
+description: Provision the Attempt environment on E2B cloud sandboxes.
 slots:
   exclusive:
     - id: environment
       entry: e2b_plugin:E2BHost
 
-# plugins/acp/plugin.yaml（示意）
+# 执行器插件示例
 format: ageval.plugin/1
 plugin_id: acp
-description: Parent ACP JSON-RPC client. Coding-agent executor; injects environment attach_stdio.
+description: Parent ACP JSON-RPC client over environment attach_stdio.
 slots:
   exclusive:
     - id: executor
@@ -64,63 +59,32 @@ slots:
     - id: after_environment_ready
       entry: acp.hooks:ensure_runtime
 inject:
-  - service: environment         # 要 attach_stdio；不写 plugin_id: e2b
-
-# job
-environment: ssh
-agent_profiles:
-  solver:
-    executor: acp
-    options:
-      entry: pi
-    extensions: [ssh, acp]
+  - service: environment
+    capabilities: [attach_stdio]
 ```
 
-外置包实例见 `plugins/nooa/plugin.yaml`：`slots.exclusive` / `slots.chain`，`host_requires`，`config.image_layers`（给 environment 赢家 bake，**不是**时间线槽）。first-party `acp` 同样声明 `config.image_layers`：只 bake 该 graph 绑定的 `options.entry`（钉死包来自包内 `acp_entries.json` 与 `$AGEVAL_HOME/acp-entries.json` 的并集；包内 id 不能被家目录行覆盖），不把全部 ACP entry 写进每张题图。官方 Attempt 镜像的 `install-executors.sh` 和 `acp-entries.lock.json` 只收包内 entry。
+外置插件包（如 `plugins/nooa/plugin.yaml`、`plugins/dsh/plugin.yaml`）还可声明 `host_requires`（宿主机依赖检查）与 `config.image_layers`（供 Docker 环境在构建期叠加镜像层）。`description` 为可选的单段功能说明（支持行内 Markdown 链接），在 Hub 插件详情页的命令条上方展示。
 
-`description` 可选。一段功能说明；Hub 插件详情把它画在 Install (CLI) 上方。缺省不展示。空字符串 / 非字符串则拒绝。Hub 渲染 Markdown 链接（`[text](https://…)`）；其它块级语法不展示。
-
-## 规则
-
-- `host_requires` / `plugin_requires` 只保留「没装先装谁」。调用一律 `inject: [service:…]`。
-- 两个插件抢同一独占槽或同一 export id → 拒绝。绑定图进 lock digest。
-- 参数走该插件 `config` / 服务方法。禁止翻别人 yaml。密钥 locator。
-- 拆时先拆 inject 方。PASS / 身份 / cleanup **不是**可 export 的服务。
-- 新插座不必先改 `slots.py`；新 **时间线** 槽仍要改 attempt 宿主。
-- `ageval plugin install` 只写 `~/.ageval/plugins`，永不改 profiles。
-- 按机制命名（`acp` / `acp-oneshot` / `docker` / `e2b` / `daytona` / `ssh` / `nooa`）。禁止按 bench 名。
-
-独占槽默认赢家（Current）：`environment` 由 job `environment:` 选出（缺省常见 local 或 docker，以 profiles 为准）；`executor` 由 **各** `agent_profiles.*.executor` 选出（coding-agent 默认 acp；judge 行可以是 `openai-http` 或 `anthropic-http`）；`evaluation_runtime` / `trajectory_seal` 由引擎 `plugin_id: default` 赢（parent `evaluator.py` / 轨迹文件 writer）。缺默认注册 → lock 失败，不能进入运行。lock 记录 **per-profile** executor 绑定。
-
-链默认：`after_environment_ready`（ACP 探测；bake 已匹配则跳过安装 + HOME overlay）；`environment_setup`（`setup.sh`，引擎 defaults）。
-
-## 解析
+## 优先级与解析规则
 
 ```text
 profiles.environment / agent_profiles.<id>.executor / extensions
-  → registry resolve（每个 profile 一份 graph；environment 赢家必须一致）
-       exclusive  该 graph 单赢家（priority，并列则拒绝）
-       chain      已排序的 nxt 链
-  → lock.extension_bindings 按 profile id 进 digest
+  → ExtensionRegistry.resolve → ExtensionGraph（按每个角色 profile 解析独立依赖图；Attempt 级 environment 必须一致）
+       exclusive: 选出唯一实现（显式指定优先，否则数值更小的 priority 优先；并列冲突则拒绝）
+       chain:     按 priority 升序排列的钩子调用链
+  → 写入 lock.extension_bindings 并纳入配置摘要（digest）
 ```
 
-inject 用 `service: environment`，不写死 `plugin_id: e2b`。`executor: acp` 要 `attach_stdio`；环境内 worker（dsh / nooa / `acp-oneshot`）要 `exec`（dsh / nooa 另要 `upload`）。缺则 lock 失败。环境没有 `attach_stdio` 不是把 oneshot 折进 ACP 插件的理由。
+默认优先级 `DEFAULT_PRIORITY = 1000`，**数值越小优先级越高**（在链槽中越先执行）。`ageval plugin install` 仅将插件安装至 `~/.ageval/plugins`，不会自动修改任何 `profiles.yaml`。
 
-Resolve：显式 binding > 更低 priority 赢；并列且无显式挑选 → 拒绝。`DEFAULT_PRIORITY = 1000`。**数字更小的先跑（链）/ 先赢（独占）。**
+## 内置插件与外置插件目录
 
-## 包
+- **内置插件（First-party contrib）：** 位于 `src/ageval/plugins/contrib/`，共 8 个保留短 ID：`local`、`docker`、`e2b`、`ssh`、`daytona`、`acp`、`openai-http`、`anthropic-http`。它们通过 `services/registry/packages/builtin_plugins.json` 在 Hub `/plugins` 页面展示为内置目录项，无需通过 `ageval plugin install` 安装（尝试发布或安装同名短 ID 会被拒绝）。
+- **外置插件（External plugins）：** 位于仓库根 `plugins/`（`nooa`、`dsh`、`miniswe`、`acp-oneshot`、`home-files`、`agent-skills`），或发布在 Hub 上。每个插件目录必须包含 `plugin.yaml` 与包含 **Capabilities** 和 **Parameters** 表格的 `README.md`（详见 `skills/ageval-plugin`）。
 
-manifest：`ageval.plugin/1`。first-party：`src/ageval/plugins/contrib/{acp,docker,local,e2b,daytona,ssh,openai_http,anthropic_http}`。引擎默认：`plugins/defaults`（`environment_setup`、`evaluation_runtime`、`trajectory_seal`）。外置包在仓库根 `plugins/`（nooa、dsh、miniswe、acp-oneshot、home-files、agent-skills）。`acp-oneshot` 是第二条 coding inlet（环境内 oneshot client + `exec`），不是 first-party `acp` 的运输开关。
+注意区分四个独立状态：**Hub 目录可见** ≠ **本机已安装插件包** ≠ **本机满足 `host_requires` 运行条件** ≠ **Docker 镜像已写入插件层**。
 
-Recognition（list/lock 认得）≠ 本机能跑 ≠ 镜像已 bake。缺 extra / 钥 → skip，不要假绿。
-
-Hub `/plugins` 可以把 first-party contrib 画成 **catalog overlay**，不是 upload。contrib 目录仍是正规 `ageval.plugin/1`（`plugin.yaml` + README）。README 是详情页的公开合同：必须用表格写清 **export / inject 的 capabilities** 与 **读取的参数**（名称、默认值、作用）。作者约定见 `skills/ageval-plugin`。手写 JSON（`services/registry/builtin_plugins.json`）列出八个 bootstrap id：`local`、`docker`、`e2b`、`ssh`、`daytona`、`acp`、`openai-http`、`anthropic-http`。Registry 读 JSON 与 contrib 文件树；**禁止**在 Registry 进程 `import ageval.plugins.contrib`。行上 `builtin: true`，不绑 `org_id`，不设 `official`（`official` 仍是 upload-org allowlist）。没有 blob / digest / 下载数 / 安装命令；详情仍预览 `plugin.yaml` 与 README。详情路由是短 id（`/plugins/docker`）。`plugins/defaults` 不进这张表。机制 Agent 卡是另一张 catalog overlay（`src/ageval/agents/builtin/catalog.json`，见 [14](14-agent-hub.md)），不要把 `ageval.agent/1` upload 画进 `/plugins`。
-
-四条不相等：**Hub 认得** ≠ **本机能跑** ≠ **镜像已 bake** ≠ **`ageval plugin install` 装过**。空店 Explore 仍应看到这八张卡；e2b / ssh / daytona 缺 extra 或缺钥时卡仍在，lock/run 维持既有 skip，或检查不过就不能进入运行。八个短 id 保留：`ageval plugin publish` 与 `ageval plugin install` 撞到它们则拒绝，避免 `/plugins/docker` 和店包抢同一条路由。运行时装载路径仍是 `bootstrap.py`。
-
-`FAIL_OPEN_SLOTS`：`before_run` / `after_run` / `trajectory_collect` / `trajectory_enrich` / `summary_enrich` / `cleanup_report`。其余失败即该相位失败。
-
-钩子形状：
+## 链槽钩子签名与扩展字段约定
 
 ```python
 async def trajectory_collect(ctx, value, nxt):
@@ -128,6 +92,6 @@ async def trajectory_collect(ctx, value, nxt):
     return out
 ```
 
-`trajectory_collect` / `trajectory_enrich` 可以在 payload 的兄弟字段 `extra` 增补或合并键（JSON-safe）。不得剥掉自己不拥有的一等 usage 字段（`prompt_tokens` / `completion_tokens` / `cached_tokens` / `cost_usd`）。invoke 这袋不要新开槽。`turn_rows` 把 `extra` 拷到密封 `terminal` 行；`trajectory_seal` 仍写轨迹文件。
-
-Attempt 级观察袋走另一条链：`summary_enrich`。`trajectory_seal` 成功之后 emit 一次，`value` 是 `summary.extra` 袋（引擎起点 `{}`）。插件只写 `extra[<plugin_id>]`，不得剥自己不拥有的键。空袋不进 `summary.json`。不是 PASS。详见 [05-runtime/evidence.md](05-runtime/evidence.md)。
+- `FAIL_OPEN_SLOTS`（`before_run`、`after_run`、`trajectory_collect`、`trajectory_enrich`、`summary_enrich`、`cleanup_report`）发生异常时记录警告而不中断后续步骤；其余插件槽异常直接使当前阶段失败。
+- `trajectory_collect` 与 `trajectory_enrich` 可在单次调用载荷的 `extra` 字段中补充 JSON-safe 观测数据，不得删除标准 `usage` 字段。
+- `summary_enrich` 在 `trajectory_seal` 完成后执行一次，各插件仅向 `value[<plugin_id>]` 写入 Attempt 级汇总观测数据（详见 [05-runtime/evidence.md](05-runtime/evidence.md)）。

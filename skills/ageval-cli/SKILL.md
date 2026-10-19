@@ -28,7 +28,7 @@ uv run ageval executors -v
 uv run ageval plugin install plugins/nooa
 ```
 
-`--profiles` replaces the dataset job document. `--agent` and `--profiles` are mutually exclusive. `--agent pi` (and other shipped short ids) needs no `agent install`. `--model` requires `--agent` and overrides this run’s `model.id` (not `ageval results upload-suite --model`). `ageval results analyze` is separate: default analyzer `stats`; `hack` and `review` take `--agent` plus `--model` for an `openai-http` or `anthropic-http` package. Analysis does not change PASS or `evaluation/checks.json`. `--set` allowlist: `/parameters/seed`, `/parameters/active_profile`, `/agent_profiles/<role>/{model,model/id,model/api,model/timeout,model/watchdog,model/reasoning/effort,executor,api_key,base_url,options/<key>}`. `model` is a nested object. Not `limits.*`.
+`--profiles` replaces the dataset's default `profiles.yaml`. `--agent` and `--profiles` are mutually exclusive. `--agent pi` (and other shipped short ids) needs no `agent install`. `--model` requires `--agent` and overrides this run’s `model.id` (not `ageval results upload-suite --model`). `ageval results analyze` is separate: default analyzer `stats`; `hack` and `review` take `--agent` plus `--model` for an `openai-http` or `anthropic-http` package. Analysis does not change PASS or `evaluation/checks.json`. `--set` allowlist: `/parameters/seed`, `/parameters/active_profile`, `/agent_profiles/<role>/{model,model/id,model/api,model/timeout,model/watchdog,model/reasoning/effort,executor,api_key,base_url,options/<key>}`. `model` is a nested object. Not `limits.*`.
 
 TTY prints a short recap (no digest / sha256). A pipe keeps JSON. `ageval run --json` forces the run document.
 
@@ -42,7 +42,7 @@ Offline: `AGEVAL_OFFLINE_AGENT=1` must not PASS agent tasks.
 
 Hub Leaderboard needs suite upload (`ageval results upload-suite`), not a lone `results upload`.
 
-`ageval results regrade <dataset> --run <attempt_id>` scores a finished Attempt again from `task-artifacts/` (new Attempt, no agent run). Default `--resume-suite` skips ERROR; `--retry-errors` re-runs those slots. `--replace-slot` still replaces one named slot.
+`ageval results regrade <dataset> --run <attempt_id>` scores a finished Attempt again from `task-artifacts/` and `verifier-collect/` (new Attempt, no agent run, collect commands are not re-run). Default `--resume-suite` skips ERROR; `--retry-errors` re-runs those slots. `--replace-slot` still replaces one named slot.
 
 Flags: `uv run ageval <cmd> --help`. Source: `src/ageval/cli/main.py`.
 

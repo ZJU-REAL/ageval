@@ -46,7 +46,7 @@ config:
 ```
 
 Hub: `package_kind=plugin`. Dataset vs plugin is rejected.
-`description` is optional Hub copy (one paragraph above Install (CLI)). Empty / non-string fails closed. Markdown links (`[text](https://…)`) render on Hub; other block syntax does not.
+`description` is optional Hub copy (one paragraph above Install (CLI)). Empty / non-string is rejected. Markdown links (`[text](https://…)`) render on Hub; other block syntax does not.
 
 README is the Hub detail contract (previewed next to `plugin.yaml`). A plugin that
 omits capability or parameter tables is unfinished. See **README contract** below.
@@ -82,10 +82,10 @@ credential_env_names, binary
 
 ## Trajectory
 
-Layer B: each event row has `schema: ageval.trajectory.event/1`, `source` = this plugin id, `session_id`.
-trajectory.jsonl: the `trajectory_seal` winner writes `trajectory.jsonl` (engine default). Plugins must not emit layer-C rows unless they won that slot.
+Normalized events: each event row has `schema: ageval.trajectory.event/1`, `source` = this plugin id, `session_id`.
+`trajectory.jsonl`: the `trajectory_seal` implementation writes `trajectory.jsonl` (engine default). Plugins must not write `trajectory.jsonl` directly unless they implement `trajectory_seal`.
 
-`trajectory_collect` may map **this** plugin's vendor dump into layer B.
+`trajectory_collect` may map **this** plugin's vendor dump into `ageval.trajectory.event/1` events.
 Never stamp `trajectory_source` onto another plugin's `source`. Never emit ACP `session_update`.
 
 When the container does `import my_mech.trajectory`, package `__init__.py` must
@@ -93,7 +93,7 @@ not import the Core-touching factory.
 
 ## Image layers (docker bake)
 
-Not a timeline slot. The environment winner reads `config.image_layers` at `host.start()`.
+Not a timeline slot. The environment plugin reads `config.image_layers` at `host.start()`.
 `executor:` alone does not bake. Context = installed plugin root (first-party
 contribs use the package next to the plugin). Pin wheels / npm at image build.
 No invoke-time `npm i` / floating pip. First-party ACP uses the same contract
@@ -150,12 +150,12 @@ What this plugin **is** on the Attempt graph, and what it **needs**.
 
 | | Value |
 | --- | --- |
-| export | exclusive slot it wins, if any (`environment` / `executor` / …). Exclusive winners register that slot name as a service. |
+| export | exclusive slot it implements, if any (`environment` / `executor` / …). Exclusive-slot implementations register that slot name as a service. |
 | inject | `service` + **capabilities** this plugin calls. Capability names are only those in `src/ageval/environments/protocol.py` `CAPABILITY_NAMES`: `exec`, `upload`, `download`, `attach_stdio`, `uid_gid`, `path_views`, `compose`. |
 | chain | chain slots it fills (`after_environment_ready`, `trajectory_collect`, …) |
 | bake | `config.image_layers` path, or omit the row |
 
-Environment winners also list the caps they **export** (the Protocol methods they actually implement). Declaring a cap the kind cannot deliver is a bug.
+Environment plugins also list the caps they **export** (the Protocol methods they actually implement). Declaring a cap the kind cannot deliver is a bug.
 
 Do not invent slot names. Do not write `inject: {plugin_id: e2b}`. Missing a declared cap fails at **lock**, not mid-invoke.
 
@@ -172,7 +172,7 @@ Every knob this plugin **reads**. One row per name. Columns:
 
 | Prefix | Who writes it | Who reads it |
 | --- | --- | --- |
-| `environment_options.<key>` | job `profiles.yaml` | environment exclusive winner |
+| `environment_options.<key>` | job `profiles.yaml` | environment plugin |
 | `options.<key>` | profile `options` then this plugin's `extensions` row; last wins | executor factory / chain hook |
 | `model` / `base_url` / `api_key` | role profile (job axis) | executor factory kwargs. `api_key` is an **env locator name**, never the secret |
 | `E2B_API_KEY` (host env) | host environment | preflight / invoke locators this plugin itself looks up |

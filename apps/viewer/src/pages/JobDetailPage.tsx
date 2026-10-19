@@ -5,6 +5,7 @@ import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { BreadcrumbNav } from "@ageval/shared/components/breadcrumb";
 import { LoadingState } from "@ageval/shared/components/empty-state";
 import { Shell } from "@/components/layout";
+import { SuitePaceBoard } from "@/components/suite-pace-board";
 import { SnapshotShareControl } from "@/components/snapshot-share";
 import {
   compareValues,
@@ -31,6 +32,7 @@ import {
   type TreeEntry,
 } from "@/lib/api";
 import { jobsHome, taskHref, taskRunIds } from "@/lib/routes";
+import { jobStillRunning, SUITE_POLL_MS } from "@/lib/suite-pace";
 import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { HarnessLabel } from "@ageval/shared/components/harness-label";
 import { ModelLabel } from "@ageval/shared/components/model-label";
@@ -80,6 +82,36 @@ export function JobDetailPage() {
       cancelled = true;
     };
   }, [datasetKey, jobId]);
+
+  const suiteOpen =
+    job?.source_kind !== "single" &&
+    (jobStillRunning(job ?? {}) ||
+      tasks.some((task) => {
+        const status = (task.status || "").toUpperCase();
+        return status === "PENDING" || status === "RUNNING" || status === "CANCELLING";
+      }));
+
+  useEffect(() => {
+    if (loading || !suiteOpen) return;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      if (document.hidden) return;
+      fetchJob(jobId)
+        .then((data) => {
+          if (cancelled) return;
+          setJob(data.job);
+          setTasks(data.tasks || []);
+          setError(null);
+        })
+        .catch((e: Error) => {
+          if (!cancelled) setError(e.message);
+        });
+    }, SUITE_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [datasetKey, jobId, loading, suiteOpen]);
 
   const overlayPrefixes = job?.overlays ?? [];
 
@@ -214,6 +246,19 @@ export function JobDetailPage() {
             <ReasonSelect value={reason} reasons={reasons} onChange={setReason} />
           </div>
         </div>
+
+        {job && job.source_kind !== "single" && !loading ? (
+          <SuitePaceBoard
+            tasks={tasks}
+            onOpenTask={(taskId) => {
+              const task = tasks.find((row) => row.task_id === taskId);
+              if (!task) return;
+              const status = (task.status || "").toUpperCase();
+              if (status === "PENDING" || status === "RUNNING") return;
+              navigate(taskHref(datasetKey, jobId, task));
+            }}
+          />
+        ) : null}
 
         {loading ? (
           <LoadingState label="Loading tasks" />

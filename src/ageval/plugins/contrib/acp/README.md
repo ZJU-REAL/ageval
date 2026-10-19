@@ -1,6 +1,6 @@
 # acp executor
 
-First-party exclusive-slot winner for `executor: acp`.
+First-party exclusive-slot implementation for `executor: acp`.
 
 Parent is the **only** ACP JSON-RPC client. The coding-agent Target inlet is:
 
@@ -20,7 +20,7 @@ scrape in this repo.
 | --- | --- |
 | export | exclusive `executor` |
 | inject | `environment`: `attach_stdio` |
-| chain | `after_environment_ready` (probe the box; skip `install_command` when the bake already matches pin + stdio `initialize`), `trajectory_collect` |
+| chain | `after_environment_ready` (probe the environment; skip `install_command` when the bake already matches pin + stdio `initialize`), `trajectory_collect` |
 | bake | `docker/Dockerfile.bake` — bound `options.entry` only. Pins come from packaged `acp_entries.json`, or from `$AGEVAL_HOME/acp-entries.json` when that file defines the id. A packaged id cannot be overridden. Official Attempt images bake shipped entries only. Invoke does not `npm i`. |
 
 Missing `attach_stdio` fails at **lock**, not mid-invoke.
@@ -39,7 +39,7 @@ Missing `attach_stdio` fails at **lock**, not mid-invoke.
 
 | Name | Default | Purpose |
 | --- | --- | --- |
-| `model.id` | `entry-default` | Nested `model:` only. Session model id. Binding is entry-specific (`config-option` vs entry-default-only). After lock, a non-default id is also written into the Attempt HOME as the engine's own overlay (Pi `models.json`, OpenCode `opencode.json`, Codex `config.toml`, Claude Code `.claude/settings.json`) so an empty box can advertise it. Claude Code also gets `ANTHROPIC_MODEL` on the attach env. `entry-default` writes nothing. Host `~/.pi` is never copied. |
+| `model.id` | `entry-default` | Nested `model:` only. Session model id. Binding is entry-specific (`config-option` vs entry-default-only). After lock, a non-default id is also written into the Attempt HOME as the engine's own overlay (Pi `models.json`, OpenCode `opencode.json`, Codex `config.toml`, Claude Code `.claude/settings.json`) so an empty environment can advertise it. Claude Code also gets `ANTHROPIC_MODEL` on the attach env. `entry-default` writes nothing. Host `~/.pi` is never copied. |
 | `model.reasoning.effort` | unset | Applied when the entry advertises a reasoning selector. Omit to keep the entry default. |
 | `model.api` | `chat` | Only `chat`. `responses` fails lock. |
 | `api_key` | unset | Env **locator name** projected into the attach env. Value never enters the lock or the generated overlay. |

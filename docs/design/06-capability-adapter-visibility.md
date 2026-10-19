@@ -1,19 +1,18 @@
-# 06 — 能力与可见性
+# 06 — 环境能力标记与参考材料隔离
 
-环境报 `capabilities`。task `requires.environment` 非空则必须是子集，否则 lock 失败。Result 记 `kind` + `capabilities_used`。
+环境插件显式声明其支持的 `capabilities` 集合。当任务 `requires.environment` 非空时，`lock` 阶段校验 `requires ⊆ capabilities`，不满足则在运行前直接报错终止。`Result` 记录实际使用的环境 `kind` 与 `capabilities_used`。
 
-常见 cap：`exec`、`upload`、`download`、`attach_stdio`、`uid_gid`、`path_views`、`compose`。四 kind 矩阵见 [05-runtime/environment.md](05-runtime/environment.md)。e2b/ssh 不报 compose / uid_gid。契约：`src/ageval/environments/protocol.py`。不能兑现的 cap 不许报 yes。
+标准能力标记包括：`exec`、`upload`、`download`、`attach_stdio`、`uid_gid`、`path_views`、`compose`。五种环境的完整能力矩阵见 [05-runtime/environment.md](05-runtime/environment.md)，协议定义见 `src/ageval/environments/protocol.py`。
 
-## gold
+## 参考材料（Gold）隔离
 
-默认隔离是时间切：environment / run 不 upload `evaluation/`。evaluate 开头再 upload，然后环境内 exec evaluator。不要只靠 YAML 删字段。
+参考材料（`evaluation/`）默认通过**阶段边界**与待测 Agent 隔离：在 `environment` 与 `run` 阶段不挂载、不上传 `evaluation/`；仅当 `run` 阶段结束并封存 solver 会话后，`evaluate` 阶段才将参考材料上传至评分环境（或在 `evaluate_host.isolated: true` 下上传至独立的 Docker 评分容器）并运行 `evaluator.py`。
 
 ```text
-environment/run     /attempt/evaluation  不存在
-evaluate 开头       host.upload(evaluation_src, /attempt/evaluation)
-                    然后 exec evaluator.py
+environment / run     待测 Agent 环境中不存在 /attempt/evaluation
+evaluate 开始         向评分环境上传 evaluation/ → 运行 evaluator.py
 ```
 
-`path_views` 是额外能力，只有 docker 这类能兑现的 kind 才报 yes。UID/GID 同理。
+`path_views` 是用于单容器内多角色不同挂载视图的扩展能力（当前由 `docker` 提供），不替代 `evaluate` 阶段的参考材料延迟上传机制。
 
-凭证：locator only；投影最小集进获准进程。不进 lock / evidence。见 ARCHITECTURE § Failure and Privacy Boundary。
+宿主凭据仅以环境变量名（locator）引用，并按最小白名单注入获准的子进程，绝不写入 `lock.json` 或归档证据中（详见 [ARCHITECTURE.md](../../ARCHITECTURE.md) § Failure and Privacy Boundaries）。

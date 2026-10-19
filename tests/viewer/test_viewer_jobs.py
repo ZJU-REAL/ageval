@@ -488,8 +488,14 @@ def test_suite_task_duration_averages_attempt_evidence(tmp_path: Path) -> None:
     detail = jobs.get_job(db, job_id)
     by_id = {row["task_id"]: row for row in detail["tasks"]}
     assert by_id["alpha"]["duration"] == "4.5s"
+    assert by_id["alpha"]["duration_ms"] == 4500.0
+    assert by_id["alpha"]["finished_at"] == "2026-08-20T10:00:04Z"
     assert by_id["beta"]["duration"] == "14s"
+    assert by_id["beta"]["duration_ms"] == 13500.0
+    assert by_id["beta"]["finished_at"] == "2026-08-20T10:00:04Z"
     assert by_id["gamma"]["duration"] is None
+    assert by_id["gamma"]["duration_ms"] is None
+    assert by_id["gamma"]["finished_at"] is None
 
 
 def test_single_job_environment_and_timing_from_current_evidence(tmp_path: Path) -> None:

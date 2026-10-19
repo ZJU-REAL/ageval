@@ -1,152 +1,122 @@
 # Environment
 
-独占槽 `environment`。Protocol 在 `src/ageval/environments/protocol.py`，无厂商 SDK。结构总图与 locality 规则见 [ARCHITECTURE.md](../../../ARCHITECTURE.md)。动词与 Placement 形状见 [01](../01-ageval-core.md)。
+环境通过独占槽 `environment` 接入，统一实现 `src/ageval/environments/protocol.py` 中的 `EnvironmentProvider` 协议，不向 Core 或上层模块暴露特定厂商的 SDK。源码结构与隔离约束见 [ARCHITECTURE.md](../../../ARCHITECTURE.md)，接口方法定义见 [01](../01-ageval-core.md)。
 
-环境内路径合同：`/attempt/workspace`、`/attempt/home`、`/attempt/artifacts`、`/attempt/evaluation`。
-
-配置文件：
+环境内标准路径约定为：`/attempt/workspace`、`/attempt/home`、`/attempt/artifacts`、`/attempt/evaluation`。
 
 ```yaml
-# profiles.yaml — 选独占槽 environment 的赢家
+# profiles.yaml — 选择 environment 独占槽实现
 format: ageval.profiles/1
 environment: e2b    # local | docker | e2b | ssh | daytona
-# environment_options:   # docker：image / platform / network / user / egress / egress_allow / python_version
-#                        # ssh：host / user / port / key_env / image
-#                        # daytona：image / snapshot / timeout_seconds
-# evaluate_host:         # 省略 = 同一环境打分
-#   isolated: true       # 第二只 EnvironmentProvider；不是新槽
-#   environment_options: # 打分盒自己的 docker 旋钮；省略 = 不继承 agent 的 egress / egress_allow / network
-#     egress: llm        # network / egress / egress_allow / platform / user / python_version；不是 image（配方照旧）
-#     egress_allow:      # 仅 egress: llm：额外 hostname，与该盒 base_url host 并集
+# environment_options:   # docker: image / platform / network / user / egress / egress_allow / python_version
+#                        #         以及可选 network_mode / cap_add / main_environment
+#                        # ssh: host / user / port / key_env / image
+#                        # daytona: image / snapshot / timeout_seconds
+# evaluate_host:         # 省略时复用 run 阶段环境进行评分
+#   isolated: true       # 启动独立评分容器实例
+#   environment_options: # 独立评分容器自身的网络与平台配置；省略时不继承待测 Agent 环境的 egress / egress_allow / network
+#     egress: llm
+#     egress_allow:
 #       - registry.npmjs.org
 ```
 
-取消隔离档产品面。不要写 `provider.kind`、`assurance: l0/l1`。Result 记 `kind` + `capabilities_used`。
+## 环境类型（`kind`）与能力矩阵
 
-## kind 与能力
+任务 `requires.environment` 默认为空；非空时必须满足 `requires ⊆ capabilities`，否则 `ageval lock` 直接报错终止。
 
-`requires ∩ capabilities`：task `requires.environment` 缺省为空；非空必须 ⊆ kind.capabilities，否则 lock 失败。不能兑现的 cap 不许报 yes。
-
-| cap | local | docker | e2b | ssh | daytona |
+| 能力标记 | `local` | `docker` | `e2b` | `ssh` | `daytona` |
 | --- | --- | --- | --- | --- | --- |
-| exec / upload / download | yes | yes | yes | yes | yes |
-| attach_stdio | 本机进程 | `docker exec -i` | **yes**（SDK 双向 stdin 流；旧 envd 在 start 探针失败） | ssh / 远端 docker exec | **yes**（session stdin + `suppress_input_echo`，泵到 `fileno()`；实现期 ACP `initialize` 握手成功。不是每次 start / `--probe` 再测） |
-| uid_gid / path_views | no | yes | 通常 no | 通常 no | no |
-| compose | no | yes | no | 视远端而定，默认 no | no |
+| `exec` / `upload` / `download` | yes | yes | yes | yes | yes |
+| `attach_stdio` | 本机子进程管道 | `docker exec -i` | yes（SDK 双向 stdin 流） | `ssh -T` / 远程 `docker exec -i` | yes（session stdin + HTTP 日志流） |
+| `uid_gid` / `path_views` | no | yes | no | no | no |
+| `compose` | no | yes | no | 默认 no | no |
 
-`path_views` 仅 docker 一类能做 per-actor mount+UID。gold 默认隔离 **不依赖** 它（evaluate 晚上传）。要 compose 而 kind 没有该 cap → lock 失败。
+`path_views` 用于单容器内多角色的挂载与 UID 隔离（当前由 `docker` 提供）；参考材料（`gold`）的默认隔离不依赖 `path_views`，而是通过 `evaluate` 阶段延迟上传（或独立评分容器）实现。
 
-`environment/Dockerfile`（或 `docker_image`）对 docker 与 e2b 是同一配方。docker 本机编；e2b `Template.from_dockerfile` 再 `Sandbox.create`。daytona 把同一配方编成 **snapshot**（`Image.from_dockerfile` 或公开 OCI tag），再 `Sandbox.create` from snapshot。OCI tag 须带具体 tag/digest；Daytona 拒绝 `latest` / `lts` / `stable`。
+任务的 `environment/Dockerfile`（或 `docker_image`）在 `docker`、`e2b` 与 `daytona` 间共用：
+- `docker` 在本机构建镜像；
+- `e2b` 通过 `Template.from_dockerfile` 构建云端模板并创建沙箱；
+- `daytona` 通过 `Image.from_dockerfile`（或公开固定标签的 OCI 镜像，拒绝 `latest` / `lts` / `stable` 等浮动标签）构建 snapshot 并创建沙箱。
 
-官方 Attempt 镜像配方在 `src/ageval/plugins/contrib/docker/attempt/`（打进 `ageval-cli` wheel）。运行时先看本地 `ageval-attempt:base`；没有则 pull `ghcr.io/zju-real/ageval-attempt:<ageval-cli 版本>`（与 CLI 发版 tag 对齐，再 tag 成本地 `ageval-attempt:base`）；再没有则用包内 Dockerfile 构建一次。`ARG PYTHON_VERSION` 选基座 CPython（缺省 3.12）。题包 Dockerfile 用 `FROM ageval-attempt:base`；job 声明非缺省 `python_version` 时 docker 插件把该 `FROM` 解析到版本化 tag（如 `ageval-attempt:py3.13`），镜像内容键含 `python_version`，两个版本的本地基座并存、不互相覆盖。非缺省 CPython 的 GHCR tag 是 `<ver>-py3.13`；CI 只推默认 3.12，其它 minor pull 不到就走本地构建。题包也可以 `FROM ubuntu:24.04`（或其它发行版）：docker 按配方构建，再叠绑定插件的 `image_layers`。ACP 只 bake lock 的 `options.entry`（钉死包来自包内 `acp_entries.json` 与 `$AGEVAL_HOME/acp-entries.json` 的并集；包内 id 不能被家目录行覆盖），不改写题包 `FROM`，也不把全部 ACP entry 写进每张题图。官方基座的 `install-executors.sh` 和 `acp-entries.lock.json` 只收包内 entry。官方基座配方仍然有效；叠层在 pin 已存在时幂等。invoke 时禁止 `npm i` / 浮动 `npx`。Python ACP SDK 只在 parent，不进 Attempt 镜像。
+### 官方基础镜像与插件镜像层构建
 
-docker `environment_options`：
+官方 Attempt 基础镜像配方位于 `src/ageval/plugins/contrib/docker/attempt/`（随 `ageval-cli` 发行包分发）。运行时优先查找本地 `ageval-attempt:base`；若不存在则拉取 `ghcr.io/zju-real/ageval-attempt:<cli-ver>` 并标记为 `ageval-attempt:base`；若拉取未命中则使用包内 Dockerfile 在本地构建。
 
-- `image` / `docker_image` — 已有 tag，跳过本机构建
-- `platform` — 缺省跟本机
-- `network` — 缺省 `bridge`。这是 **原始 docker 网络名**。`none` 也是原始名：它会一并挡住环境内进程访问模型 API，**不是**下面的 LLM egress 模式。
-- `egress` — 省略 = 今日 `bridge`。`egress: llm`（Current：仅 docker contrib）：Agent 环境出站 HTTP(S) 只能到达 **有效放行名单**（parent 侧代理 + 环境内 `HTTPS_PROXY` / `HTTP_PROXY`，或等价物）。ACP stdio 仍是 parent `attach_stdio`，不走这条代理。不能兑现的 kind 写了该键 → lock 失败。依赖仍 bake 在题包 `environment/Dockerfile`；官方 Attempt 镜像 invoke 时禁止 `npm i` / 浮动 `npx`。
-- `egress_allow` — 仅与同一 map 上的 `egress: llm` 同写。hostname 列表（小写、无 scheme、无 path、无 port；与代理 exact match 同一规范化）。省略 = 只放行绑定 profile 的 `base_url` 主机（今日行为）。空列表 = 不加额外主机。有效名单 = 该盒相关 `base_url` 主机 ∪ 本 map 的 `egress_allow`，去重排序后写入内部 `egress_allowlist`；不另起代理。非 hostname 条目（带 path 的 URL、空串）→ lock 失败。非 docker kind 写了该键、或没有 `egress: llm` → lock 失败。不是新插件，也不是 chain slot。并集为空（`egress: llm` 且没有可解析 `base_url` 主机、也没有 extras）仍按今日规则拒绝启动代理，不静默放开网络。代理 allow/deny 不写 `Result.status`。
-- `user` — 环境内身份，`docker run --user` 与 `exec`/`attach_stdio` 同一值。缺省 `10001:10001`。`root` / `0` / `0:0` 开 root（Harbor 式终端题要 `apt` 或写 `/usr/local` 时用）。其它值必须是 `uid` 或 `uid:gid`。未知字符串一次失败。默认仍带 `no-new-privileges`。
-- `python_version` — 官方 Attempt 基座的 CPython minor（如 `"3.13"`）；省略 = 3.12。形状 `^\d+\.\d+$`；`latest` / `3` / 空串 / 其它形状一次拒绝。基座 `FROM python:${python_version}-slim-bookworm` 拉不到 → image build 一次失败，**不**回退 3.12。ACP 引擎仍在 build 期 bake，Node / Go 等引擎版本不受此旋钮影响。
+- `ARG PYTHON_VERSION` 指定基础镜像的 CPython 版本（默认 `3.12`）。当 `environment_options.python_version` 指定非默认版本（如 `"3.13"`）时，插件将任务配方中的 `FROM ageval-attempt:base` 解析为版本化标签（如 `ageval-attempt:py3.13`），不同 Python 版本的基础镜像可在本地并存。
+- 任务 Dockerfile 也可直接基于其他发行版镜像（如 `FROM ubuntu:24.04`）：`docker` 插件在构建完任务配方后，按顺序叠加已绑定插件声明的 `config.image_layers`。ACP 插件仅在镜像中写入当前锁定的 `options.entry` 对应包版本（来自包内 `acp_entries.json` 与 `$AGEVAL_HOME/acp-entries.json` 的并集，且包内内置 ID 不可被覆盖），不在运行调用期间执行 `npm i` 或浮动 `npx`。Python 侧的 ACP SDK 仅驻留在宿主父进程中。
 
-`egress` / `egress_allow` 约束的是 **写它们的那只盒子**。两只盒子两份策略：打分 Host 有自己的
-`evaluate_host.environment_options`（`network` / `egress` / `egress_allow` / `platform` / `user` /
-`python_version`）；
-嵌套表省略时打分盒沿用今日行为——只继承 job `environment_options` 的
-`platform` / `user` / `python_version`，**不**继承 agent 的 `egress` / `egress_allow` / `network` 或镜像。
-打分 `egress: llm` 的放行名单 = evaluate 相位 profile 的 `base_url` 主机 ∪ 打分 map 自己的 `egress_allow`
-（judge 盒 reach judge 的 API host 与打分作者列出的额外 host），不是 solver 名单。不能兑现该键的 kind
-写了任一处 `egress` / `egress_allow` → lock 失败，同一规则。
+### Docker `environment_options` 参数
 
-## 第二份环境（evaluate，opt-in）
+- `image` / `docker_image`：使用已有镜像标签，跳过本地 Dockerfile 构建。
+- `platform`：目标架构平台（默认跟随宿主机）。
+- `network`：Docker 网络名（默认 `bridge`；设为 `none` 时完全禁用容器网络）。若任务包含 `environment/compose.yaml`，Attempt 容器默认接入 `{project}_default` 网络（除非指定了 `network_mode: service:<name>`）。
+- `egress`：省略时保持默认 `bridge` 网络。设为 `egress: llm`（仅支持 `docker`）时，容器内出站 HTTP(S) 流量经父进程白名单代理（`HTTP_PROXY` / `HTTPS_PROXY`）过滤，仅放行允许的目标域名。
+- `egress_allow`：必须与同一字典下的 `egress: llm` 配合使用，为小写主机名列表（不含协议头、路径或端口）。有效放行域名为当前环境对应阶段绑定角色的 `base_url` 主机名与 `egress_allow` 的并集。
+- `user`：容器内运行身份（`docker run --user` 及 `exec` / `attach_stdio` 共用），默认为 `10001:10001`；设为 `root`、`0` 或 `0:0` 时以 root 身份运行；容器始终附带 `no-new-privileges`。
+- `python_version`：官方基础镜像的 CPython 次版本（格式 `^\d+\.\d+$`，默认 `"3.12"`）；若拉取或构建失败则直接报错，不静默回退至 `3.12`。
 
-`environment` 独占槽仍一份赢家。`evaluate_host.isolated: true` 时 Runtime 再 `start` **同一个赢家类** 的更多实例：
+## 容器 CPU、内存与 GPU 限额
 
-- 单只配方：题包 `environment/evaluate.Dockerfile`，或 `evaluation.docker_image`。与 Agent 的 `environment/Dockerfile` 不是同一文件。Current 只要求 docker。
-- **构造时机：evaluate 相位。** run 密封（`seal_run`）之后才知道哪些 profile 属 evaluate 相位；打分盒实例在 evaluate 相位按 evaluate 相位 graph 联合的 `image_layers` 构造（见 [evaluation.md](evaluation.md)），composition 不再预建。cleanup 只停已构造 / 已启动的实例。
-- 名表：成员 `evaluation.environments.<name>.dockerfile` 或 `.docker_image`。每只一个 `BoxSpec.attempt_root`（evidence `eval-box/<name>`）。evaluate 开头不 start；第一次 `exec` / `session(environment=)` 才 start。写出名表则忽略单只配方。
-- work root **独立**。禁止把 Agent 的 bind-mount 或 live workspace symlink 进打分环境。
-- 不加入 Agent compose 网络。compose 侧车仍随 Agent `host.start()` 起来，寿命与 Agent 环境相同；不要拿侧车当打分镜像。
-- **禁止**把 docker daemon socket 挂进 **Agent** 环境。打分环境也不挂 daemon socket。locator 只给 parent 的 docker CLI。
-- gold、tree/file 快照只 upload 到 **已 start** 的打分实例。`evaluator.py` 在 parent 跑，连本机 Agent Service socket；不要把该 socket bind-mount 进容器。
-- cleanup 停每一只已启动的打分实例再停 Agent 实例（或并行，但都要停）。`keep_workspace` 只保留引擎声明要留的 work root，不得把打分盘并回 Agent 盘。
+容器硬件资源限额声明在任务 `task.yaml` 的 `parameters` 下，在 `environment: docker` 的 `host.start` 阶段读取并施加（其他环境类型忽略这些参数）：
 
-不能再起第二环境的 kind（Current：`local` 以及尚未兑现的云 kind）遇到 `isolated: true` 或名表 → lock 失败。不要为此发明 cap 名。
+| 参数键 | 类型要求 | 省略、`0` 或空列表时 | `docker` 行为 |
+| --- | --- | --- | --- |
+| `cpus` | 非负整数或浮点数（拒绝布尔值） | 不添加 `--cpus` | `docker run --cpus <n>` |
+| `memory_mb` | 非负整数（拒绝布尔值） | 不添加 `--memory` | `docker run --memory <n>m` |
+| `gpus` | 非负整数（拒绝布尔值） | 不添加 `--gpus` | 大于 0 时请求对应数量的 GPU |
+| `gpu_types` | 非空字符串列表 | 不按型号过滤 | 非空时要求宿主机可见 GPU 名称包含匹配子串（大小写不敏感） |
+| `verifier_gpus` | 非负整数（拒绝布尔值） | 评分容器不添加 `--gpus` | 大于 0 时为独立评分容器分配对应数量的 GPU（沿用 `gpu_types` 过滤） |
 
-## `attach_stdio`
+当 `gpus > 0` 或 `gpu_types` 非空时，系统在启动容器前通过 `nvidia-smi` 检查宿主机可用 GPU；若数量不足、型号不匹配或 `nvidia-smi` 不可用，`environment` 阶段直接以 `environment_gpu_unavailable` 失败，不启动容器。Compose 辅助服务若声明了 `cpus` 或 `mem_limit` 且未设置 `deploy.resources.limits`，插件会自动生成 override 补齐该限额。
 
-在**已开的环境**里再起一个前台进程，把 stdin/stdout 交回 parent。ACP 只拿 `StdioTransport`，不写 `if docker`。
+## 独立评分容器（`evaluate` 阶段可选配置）
 
-| 赢家 | `attach_stdio(argv)` 内部 |
+当 `evaluate_host.isolated: true` 时，Core 在 `evaluate` 阶段（solver 会话封存之后）构造并启动独立的 `EnvironmentProvider` 实例（当前支持 `docker`）：
+
+- **单独立评分容器：** 使用任务的 `environment/evaluate.Dockerfile` 或 `evaluation.docker_image`，叠加 `evaluate` 阶段绑定角色（如 `judge`）所需的 `image_layers`。
+- **多命名评分容器：** 在 `task.yaml` 的 `evaluation.environments.<name>` 中声明 `dockerfile` 或 `docker_image`，每个命名容器拥有独立的工作目录（`eval-box/<name>`），在 `evaluator.py` 首次调用 `scoring.exec` 或 `Agent.session(..., environment=<name>)` 时按需启动。
+- **完全隔离：** 评分容器拥有独立的工作区，不挂载待测 Agent 的实时工作区，也不挂载宿主 Docker daemon socket；产物快照（`task-artifacts/`）、收集路径（`verifier-collect/`）与参考材料（`evaluation/`）仅上传至已启动的评分容器。`cleanup` 阶段负责停止所有已启动的评分容器与运行环境。
+
+## `attach_stdio` 双向流传输
+
+`attach_stdio` 在已启动的环境中拉起前台进程并将标准输入/输出流交回宿主父进程，使 ACP 客户端无需关心底层环境差异：
+
+| 环境类型 | `attach_stdio(argv)` 实现方式 |
 | --- | --- |
-| local | 本机 `Popen(argv)` |
-| docker | `Popen(["docker","exec","-i", …, *argv])`（旧 `wrap_docker_exec` 缩进此插件） |
-| ssh **A** 环境=整机 | `Popen(["ssh","-T", …, "--", *argv])`，agent 就是这台 VM 上的进程 |
-| ssh **B** 环境=远端容器 | `start()` 远端 `docker run` 已有 tag；`attach_stdio` = `ssh -- docker exec -i <cid> argv` |
-| e2b | SDK 双向流（`stdin=True` + send stdin）。只跑完收 stdout 不够 ACP |
-| daytona | **yes**。`create_session` + async session command + `send_session_command_input`（`suppress_input_echo`），stdout 用 HTTP logs 泵到 `os.pipe()`。未回退 PTY。kind 常量，之后不再探测 |
+| `local` | 本机 `Popen(argv)` |
+| `docker` | `Popen(["docker", "exec", "-i", …, *argv])` |
+| `ssh` 模式 A（远程整机） | `Popen(["ssh", "-T", …, "--", *argv])` |
+| `ssh` 模式 B（远程容器） | `start()` 在远端执行 `docker run`，`attach_stdio` 执行 `ssh -- docker exec -i <cid> argv` |
+| `e2b` | E2B SDK 双向标准输入/输出流 |
+| `daytona` | Daytona session 命令输入流与日志管道 |
 
-两种 ssh **agent 都在云上**。差别是隔离单元：整机 vs 机上容器。options：无 `image` → A；有已有 tag → B。`stop(delete=False)` 默认不 terminate 云主机。密钥 locator 不进 lock。
+当缺少 `E2B_API_KEY`、`DAYTONA_API_KEY` 或 SSH 凭据时，`preflight` / `--probe` 直接返回未就绪状态，不创建云端沙箱或远程容器。
 
-缺 `E2B_API_KEY` / `DAYTONA_API_KEY` / ssh locator：preflight 一次失败，不建 sandbox、不开远端容器。`--probe` 必须 `ready: false` 且未 start。`--probe` **不**发现 stdio。
+## 模块局部性（Locality）与产物收集
 
-E2B 模板 alias/hash 只在 `plugins/contrib/e2b`。Daytona snapshot 名 / sandbox id 只在 `plugins/contrib/daytona`。Core 只调 `host.start()`。
-
-## daytona
-
-独占赢家 `plugin_id: daytona`，first-party，与 e2b 同 locality。厂商 SDK 不得漏进 ACP / `attempt` / `run.py`。
-
-Locator：`DAYTONA_API_KEY`（接受 `daytona_api_key`）。缺钥或缺 SDK import → 一次 `environment_preflight_failed`。
-
-`environment_options`：
-
-- `snapshot` — 已有 Daytona snapshot 名，跳过编 snapshot
-- `image` — 公开 OCI tag/digest（禁止 `latest` / `lts` / `stable`）
-- `timeout_seconds` — sandbox 寿命（映射 Daytona `auto_stop_interval`，分钟向上取整；默认 900）
-
-无 `snapshot` 时：有 `image` 则 snapshot-from-OCI；否则用题包 `environment/Dockerfile`（`Image.from_dockerfile`）。snapshot 名按配方 digest 复用。环境内路径仍是 `/attempt/workspace` 等。
-
-`attach_stdio` 是 kind 常量，与 e2b 一样。实现期用真钥在 session stdin 上完成 ACP `initialize`（echo fixture，干净 JSON，无 TTY echo）。因此 `executor: acp` + `environment: daytona` lock 成功。缺钥的 skip 不是这条 cap 的证据。
-
-## ssh A / B
-
-ssh A / B 由 `environment_options.image` 是否为空决定。host/user/`key_env` 是 locator，preflight 解析，不进 lock 明文密钥。
-
-ACP 挂 `after_environment_ready`：名字 + 钉死包版本 + 一次 stdio `initialize`。docker bake 已匹配 pin + stdio `initialize` 时跳过 `install_command`；不对再按 ACP entry 的 `install_command` 装。云镜像 / 官方基座已 bake 且版本/协议对得上时探测命中，不得再装一遍。同名但不是 stdio ACP 的二进制不算命中。
-
-## locality
-
-executor **inject** 名为 `environment` 的服务（独占赢家自动 export 该名），lock 时核 capabilities。`executor: acp` 要 `attach_stdio`；环境内 worker（dsh / nooa / `acp-oneshot`）要 `exec`。调用只打 Protocol 方法。`exec` 不是独立 service。
+执行器通过 `inject: [service: environment]` 按服务名获取环境实例并在 `lock` 阶段核对能力标记（如 ACP 要求 `attach_stdio`，环境内 worker 要求 `exec` / `upload`）。
 
 ```text
 ACP / acp-oneshot / dsh / nooa  invoke
         │  inject service: environment
-        │  只看见 Protocol（attach_stdio / exec / upload）
+        │  仅调用 EnvironmentProvider 协议方法 (attach_stdio / exec / upload)
         ▼
 contrib/docker   → docker exec / compose / uid_gid / path_views
-contrib/e2b      → e2b SDK、template alias
-contrib/daytona  → Daytona SDK、snapshot 名、sandbox id
-contrib/ssh      → ssh A/B、远端 docker
+contrib/e2b      → E2B SDK 与模板缓存
+contrib/daytona  → Daytona SDK 与 snapshot 管理
+contrib/ssh      → SSH 模式 A/B 与远程 docker
 contrib/local    → 本机目录
 ```
 
-`docker exec` 只在 `plugins/contrib/docker/`。ACP 禁止 import docker/e2b/daytona/ssh。`attempt` / `run.py` 不见 `container_id`、不见 `if kind == e2b`。换 kind 不必改 executor 源码。
+在 `run` 阶段结束、solver 会话封存后，Core 按 `artifacts.publishable` 声明统一收集一次产物快照至 `evidence/task-artifacts/`（单文件或按 `exclude` 过滤的 `tree` 目录快照），供后续 `evaluate` 与 `regrade` 消费。
 
-`run.py` 是 parent 子进程。seed 在 launch 投影到 `ctx.workspace_root`（local/docker 即共享盘；ssh/e2b/daytona 是 evidence 上的 seed 拷贝）。Agent Service **不**在每次 invoke 后 `download` workspace。writer 停后 runtime 按题包 `artifacts.publishable` harvest **一次**：`kind` 省略/`file` 收缺的单文件（环境内 `/attempt/workspace/<basename>` → parent `task-artifacts/`）；`kind: tree` 按 `exclude` 把工作区树拷成 evidence 上的不可变快照。共享盘上 `run.py` 已从磁盘 `publish_json` 的 file 跳过；远程环境走 Protocol `download`。tree 在 docker 上读已有 bind-mount 再拷（符号链接拷节点、不跟随），不要三次 export。搬哪些由题包声明，不写 `if kind`。聊天文本不是 Terminal 类题的权威产物，不得 publish 成功并挡住 harvest。evaluate 消费快照拷贝，不是 Agent 活目录。
+## Docker Compose 辅助服务与 Attempt 容器参数
 
-## setup.sh 与侧车
+当任务包含 `environment/compose.yaml` 时，`docker compose up -d` 先启动辅助服务（自动剔除 `depends_on` 中指向 `main` 的依赖项），待测 Agent 仍运行在独立的 `docker run` 容器中。
 
-`setup.sh` 是 environment **末槽** `environment_setup`，不是独立 provision phase。无文件则 no-op。失败是 environment 相位失败。重依赖进 Dockerfile，不要在 `run.py` 里 `apt`。
+针对待测 Agent 容器，`network_mode`、`cap_add` 与 `main_environment` 按以下优先级合并（后置覆盖前置，评分容器不读取这三项）：
+1. `environment/docker-compose.yaml` 中 `services.main` 的对应字段（当该文件不作为 compose-up 主文件时）；
+2. `task.yaml` 中 `parameters.network_mode`、`parameters.cap_add`、`parameters.main_environment`；
+3. `profiles.yaml` 中 `environment_options` 的同名字段。
 
-侧车：拆掉 Environment Manager。compose 或 `host.exec(service=)`。`run.py` 读投影 DSN。旧 `setup_steps` 废止。
-
-## Current vs Target
-
-| 项 | Current | Target（未宣称完成） |
-| --- | --- | --- |
-| local / docker | 公开真 `ageval run`（core ACP、`minimal-demo` 明确列出的示例） | — |
-| e2b / ssh / daytona | 代码在；缺钥则 `--probe` 过不了，不能进入运行 | 有凭证时同一题公开 `ageval run`（ssh 含 A+B） |
-| Protocol seam | docker 已是真实赢家 | 第二个云赢家（e2b **或** ssh）真跑后 seam 才算成立 |
-
-默认 CI **无**真 E2B/SSH/Daytona。没跑不要标完成。不得从 docker 一次 PASS 推导 `isolated`。
+其中，`network_mode: service:<name>` 使待测 Agent 容器以 `docker run --network container:<id>` 共享指定 compose 服务的网络命名空间（与 `egress: llm` 互斥）；`main_environment` 通过 `docker run -e KEY=VALUE` 注入环境变量（拒绝无值键名，且过滤 `DOCKER_HOST` 等守护进程变量）；`cap_add` 转换为 `--cap-add`（仍保留 `no-new-privileges`）。

@@ -87,6 +87,7 @@ Before drawing a control:
 | Jobs / tasks rows | hairline `Table` |
 | Optional table columns | `TableColumnPicker` |
 | Jobs search | `Input` + `focus-visible:border-hairline` |
+| Suite progress | `SuitePaceBoard` above the suite task table |
 | Kind / source / time filter | `Select` |
 | Row / theme overflow | `DropdownMenu` |
 | Evidence section switcher | `UnderlineTabs` (Liquid Move). Unselected hover is Button `quietHoverClass` |

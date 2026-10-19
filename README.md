@@ -41,9 +41,7 @@
 
 </details>
 
-How to avoid rewriting scaffolds for the huge set of agent runtime × model × environment combinations?
-
-**ageval** keeps one stable Core and swaps the agent under test and the environment through plugins. Install the CLI and skills so a coding agent can design or convert a benchmark and finish the eval; after results land on the Hub, datasets, plugins, and Agent packages can be shared or reused publicly.
+To decouple benchmark task logic from execution backends across heterogeneous agent harnesses, models, and environments, **ageval** combines programmable task scripts with declarative plugin composition. Install the CLI and skills so a coding agent can author or convert a benchmark and run evaluations end to end; publish datasets, plugins, Agent packages, and evaluation results to the Hub for reproducible comparison and reuse.
 
 <p align="center">
   <video src="https://github.com/user-attachments/assets/79f54d94-999f-44c1-b2a4-72d79d3ce1f4" controls width="100%" title="ageval highlights"></video>
@@ -60,7 +58,7 @@ uv tool install 'ageval-cli[e2b]' # one extra at a time
 ageval -V
 ```
 
-Run a dataset straight from the Hub ([ageval.zjureal.com](https://ageval.zjureal.com); the CLI default), or any local dataset root:
+Run a dataset directly from the Hub ([ageval.zjureal.com](https://ageval.zjureal.com), the CLI default) or from any local dataset directory:
 
 ```bash
 ageval registry list                        # datasets visible on the Hub
@@ -72,7 +70,7 @@ ageval view <org>/<name>@<version> --no-browser
 
 ### Install skills
 
-Install skills for your local coding agent (CLI usage, plugins, dataset authoring, and more):
+Install skills for your local coding agent (CLI usage, plugin authoring, dataset conversion, and SDK usage):
 
 ```bash
 # install all
@@ -83,7 +81,7 @@ npx skills add ZJU-REAL/ageval --skill ageval-cli
 
 ### Develop from source
 
-To try the in-repo dataset examples and Agent catalog packs, or to build from source, clone the repo:
+To run the in-repo dataset examples and Agent packages, or to build from source, clone the repository:
 
 ```bash
 git clone https://github.com/ZJU-REAL/ageval.git
@@ -92,7 +90,7 @@ uv sync --frozen --all-packages
 uv run ageval -V
 ```
 
-Run the in-repo minimal example and inspect the results in the local Viewer:
+Run the minimal example and inspect the results in the local Viewer:
 
 ```bash
 uv run ageval tasks examples/datasets/minimal-demo
@@ -108,24 +106,24 @@ uv run ageval view examples/datasets/minimal-demo --no-browser
 
 ## Features
 
-**Quickly switch the agent under test**
+**Swap the evaluated agent and environment via plugins**
 
-Environments and agent runtimes both plug in. The default path is [ACP](https://agentclientprotocol.com); [nooa](https://github.com/NVIDIA-NeMo/labs-OO-Agents), [dsh](https://github.com/deepseek-ai/deepseek-harness), and [miniswe](https://github.com/SWE-agent/mini-swe-agent) use the same plugin path. Change one line in `profiles.yaml`, or pass `--agent` for a one-off switch.
+Environments and agent executors both connect through plugin slots. Coding agents connect by default over [ACP](https://agentclientprotocol.com) (`pi`, `codex`, `claude-code`, `opencode`), while [nooa](https://github.com/NVIDIA-NeMo/labs-OO-Agents), [dsh](https://github.com/deepseek-ai/deepseek-harness), and [miniswe](https://github.com/SWE-agent/mini-swe-agent) use the same plugin mechanism. Update `profiles.yaml` or pass `--agent` (and optional `--model`) to switch configurations without modifying task scripts.
 
-**Let the Agent run the eval**
+**Automated benchmark conversion and inspection**
 
-With the CLI and skills installed, a coding agent can author or convert a dataset and run the eval end to end. Afterwards, `ageval view` opens that dataset or a directory of datasets and replays the trajectory locally: phase timing, tool calls, and a reproduce command for failed tasks. The same window lists Agent and Plugin packages on this machine. See [Getting started](#getting-started).
+With the CLI and skills installed, a coding agent can author or convert a dataset and execute evaluations end to end. Afterwards, `ageval view` opens the dataset (or a directory of datasets) to inspect phase timings, tool-call trajectories, and reproduction commands locally, while `ageval results regrade` re-runs grading on archived artifact snapshots without repeating model inference.
 
-**Two scoring styles**
+**Isolated phase boundary and flexible grading**
 
-Only a separate `evaluator.py` can return PASS:
+Only the independent `evaluator.py` in the `evaluate` phase can return `PASS` or `FAIL`, after solver sessions are sealed and reference materials (`gold`) are uploaded:
 
-- Default is a deterministic script: compare artifacts to gold, optionally split into `checks`
-- Open-ended tasks can add a judge role on the same `profiles.yaml` and use LLM-as-judge.
+- **Deterministic scripts:** compare candidate artifacts or environment states against reference materials, optionally returning structured `checks`.
+- **Agent-as-judge / LLM-as-judge:** bind an independent `judge` profile in `profiles.yaml` to inspect artifacts across single or multiple steps.
 
-**Share and reuse on Hub**
+**Share and compare on Hub**
 
-Upload datasets, plugins, Agent packages, and results to [ageval Hub](https://ageval.zjureal.com). A local suite, including one still running, or a single Attempt can also be sent as a read-only link `/s/{token}`. Opening that link does not require a sign-in, and it does not list the suite. Leaderboard scores name the Agent and environment used; pull a published Agent with `--agent`; compare models side by side.
+Publish datasets, plugins, Agent packages, and suite results to [ageval Hub](https://ageval.zjureal.com), or share a read-only snapshot link `/s/{token}` (frozen or `--live`) directly from a local run. Leaderboard entries record the bound harness, model, and environment and link directly to per-Attempt configurations and trajectories.
 
 ### Screenshots
 
@@ -163,10 +161,10 @@ Upload datasets, plugins, Agent packages, and results to [ageval Hub](https://ag
 
 ### End-to-end flow
 
-1. **`ageval lock`** resolves the plugin graph (`ExtensionGraph`), checks capabilities and credentials, and writes `lock.json` (secrets stay locators).
-2. **`ageval run`** opens an environment and uploads task files (local / Docker / E2B, …).
-3. **`run.py`** drives the task loop inside that environment; swapping env or Agent does not require editing this file.
-4. **Only `evaluator.py` can return PASS**; gold uploads after the run; cleanup always runs.
+1. **`ageval lock`** resolves the plugin dependency graph (`ExtensionGraph`), validates capability dependencies and `ModelSpec` contracts, and writes `lock.json` (storing credentials only as environment variable locators).
+2. **`ageval run`** provisions the selected environment (`local`, `docker`, `e2b`, `ssh`, or `daytona`) and uploads task input data.
+3. **`run.py`** drives the task interaction loop inside the `run` phase; switching environments or harnesses requires no changes to task code.
+4. **`evaluator.py`** runs in the `evaluate` phase after solver sessions are sealed and reference materials (`gold`) are uploaded, producing the sole `PASS` or `FAIL` verdict while `cleanup` always executes in `finally`.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"actorBkg":"#eaf1ff","actorBorder":"#5B7BFF","actorTextColor":"#10233f","actorLineColor":"rgba(45,49,66,0.2)","signalColor":"#4f5d75","signalTextColor":"#2d3142","labelBoxBkgColor":"#eaf1ff","labelBoxBorderColor":"#5B7BFF","labelTextColor":"#10233f","noteBkgColor":"#f1f5f9","noteBorderColor":"#64748b","noteTextColor":"#1e293b"}}}%%
@@ -179,17 +177,17 @@ sequenceDiagram
     participant v as evaluator.py
 
     u->>r: ageval lock<br/>dataset + profiles → lock.json
-    Note over r: the check fails — the run does not start
+    Note over r: contract or capability mismatch fails fast before execution
     u->>r: ageval run
     r->>r: mint run identity
-    r->>e: open one environment
-    r->>e: upload task files
+    r->>e: open environment
+    r->>e: upload task data
     e->>t: execute run.py
     loop task loop
         t->>t: ACP invoke · attach_stdio
     end
     t-->>r: trajectory.jsonl
-    Note over r,v: run ends → gold uploads, then evaluation
+    Note over r,v: solver sealed → upload reference materials (gold), then evaluate
     r->>v: run evaluator.py
     v-->>r: PASS / FAIL / ERROR
     r->>r: record · finally cleanup<br/>lock.json · result.json · trajectory.jsonl
@@ -197,7 +195,7 @@ sequenceDiagram
 
 ### Core base
 
-ageval Core is a fixed five-phase pipeline: `lock → environment → run → evaluate → record`. Inputs are the user, dataset, and profiles; outputs land in evidence (`lock.json`, `result.json`, `trajectory.jsonl`). At `ageval lock`, one environment plugin and one Agent plugin are bound. Before the run starts, `limits` cap wall-clock time, memory, process forks, and call counts; `cleanup` always runs. Swapping an Agent or an environment does not require changing Core.
+ageval Core coordinates a fixed pipeline: `lock → environment → run → evaluate → record`, with resource `cleanup` in `finally`. During `ageval lock`, Core binds the environment plugin and per-role executor plugins and validates their contracts. At runtime, Core enforces `limits` (wall-clock timeouts, invocation quotas, and concurrency caps) prior to execution and archives structured evidence (`lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, and `task-artifacts/`).
 
 <p align="center">
   <img src="docs/assets/core-base.png" alt="ageval Core base overview" width="100%">
@@ -205,10 +203,10 @@ ageval Core is a fixed five-phase pipeline: `lock → environment → run → ev
 
 ### Plugins
 
-Core does not hard-code a particular Agent or environment. Plugins declare what they provide and what capabilities they need; `ageval lock` resolves a dependency graph (`ExtensionGraph`), and later dispatch follows that graph.
+Core decouples runtime responsibilities through **exclusive slots**, **chain slots**, and declarative **dependency injection** (`inject`). Plugins declare the slots they implement and the service capabilities they require; `ageval lock` resolves and verifies the dependency graph (`ExtensionGraph`) before execution.
 
 ```yaml
-# Agent plugin (e.g. dsh)
+# Agent executor plugin (e.g. dsh)
 plugin_id: dsh
 slots:
   exclusive:
@@ -244,32 +242,36 @@ ageval/
 │   │   ├── composition.py           # sole production wiring; CLI imports build_* here
 │   │   ├── lock.py                  # load_and_lock
 │   │   ├── run.py                   # mint identity → run_attempt
+│   │   ├── regrade.py               # artifact-based regrading (skips run phase)
 │   │   ├── campaign.py / suite/     # matrix · suite · Always-k
-│   │   └── agent_ops/ / plugin_ops / registry_ops/
+│   │   └── agent_ops/ / plugin_ops / registry_ops/ / analysis/
 │   ├── attempt/                     # Attempt pipeline
-│   │   ├── __init__.py              # run_attempt
+│   │   ├── __init__.py              # run_attempt & run_regrade
 │   │   └── phases/                  # environment → run → evaluate → record · cleanup
 │   ├── config/                      # dataset + task.yaml + profiles
-│   ├── environments/protocol.py     # EnvironmentProvider · caps; no vendor SDK
+│   ├── model/                       # ModelSpec · resolve_model
+│   ├── environments/protocol.py     # EnvironmentProvider · capabilities
 │   ├── plugins/
-│   │   ├── slots.py                 # exclusive / chain
-│   │   └── contrib/                 # acp · local · docker/attempt (official base, in the wheel) · e2b · daytona · ssh
+│   │   ├── base.py / decorators.py  # BaseEnvironment · BaseExecutor
+│   │   ├── slots.py                 # exclusive / chain slots
+│   │   └── contrib/                 # acp · local · docker/attempt · e2b · daytona · ssh · openai_http · anthropic_http
 │   ├── runtime/                     # identity, parent Agent Service, task_worker
-│   ├── evaluation/                  # bind PASS
-│   └── evidence/                    # trajectory.jsonl layout
-├── src/ageval_sdk/                  # ageval_sdk for run.py (no PASS, no host credentials)
-├── plugins/                         # external ageval.plugin/1 (nooa, dsh, miniswe, …)
+│   ├── evaluation/                  # bind_evaluation
+│   └── evidence/                    # .ageval/runs layout & trajectory sealing
+├── src/ageval_sdk/                  # ageval_sdk for run.py and evaluator.py
+├── plugins/                         # external ageval.plugin/1 (nooa, dsh, miniswe, acp-oneshot, …)
 ├── examples/
 │   ├── datasets/
 │   │   ├── minimal-demo/            # terminal-jsonl-agg · tau2-dialog-min · multiagent-env-min
-│   │   └── tau3-airline-5/            # airline-00 … airline-04
-│   └── agents/                      # ageval.agent/1
-├── apps/shared                      # Hub + Viewer overlap chrome
+│   │   ├── concurrent-research/     # concurrent-session fanout example
+│   │   └── tau3-airline-5/          # airline-00 … airline-04
+│   └── agents/                      # ageval.agent/1 packages
+├── apps/shared                      # shared Hub + Viewer UI components
 ├── apps/viewer                      # ageval view SPA
 ├── apps/hub                         # Hub SPA
-├── services/registry/               # package + results HTTP
-├── docs/                            # mechanism design
-└── website/                         # product docs
+├── services/registry/               # package + results HTTP service & hosted worker
+├── docs/                            # mechanism design specifications
+└── website/                         # bilingual product documentation
 ```
 
 <div align="right">

@@ -25,7 +25,7 @@ must be discovered from seeded DB rows via tools.
 
 `run.py` reads profile ids from `parameters.roles` — it never branches on entry name.
 
-## In-box PostgreSQL
+## In-environment PostgreSQL
 
 `environment/Dockerfile` adds PostgreSQL to the Attempt image; `environment/setup.sh`
 starts it, loads `environment/seed.sql`, and writes `.ageval_env_result.json` into

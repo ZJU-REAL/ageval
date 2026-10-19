@@ -220,7 +220,7 @@ not classified as dataset.
 
 - List JSON: `{ dataset_id, digest, version, items: [{path, type, size}, …] }`
 - File JSON: `{ path, size, encoding: "utf-8"|"base64", content, truncated }`
-- **Hard top:** single file default **2 MiB** (`MAX_FILE_BYTES`); larger → **413**
+- **Max file size:** single file default **2 MiB** (`MAX_FILE_BYTES`); larger → **413**
 - Path rules: reject `..`, absolute paths, empty segments
 - Private unauthorized → **404** (not 403)
 - Server indexes tar on first access (process LRU by digest); does not change upload format

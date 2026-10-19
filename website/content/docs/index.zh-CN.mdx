@@ -1,20 +1,18 @@
 ---
 title: ageval 是什么
-description: 一份 dataset 写一次，换环境和 Agent 只改配置。
+description: 解耦任务逻辑与执行后端；一份 dataset 编写一次，通过配置切换环境与待测 Agent。
 icon: BookOpen
 ---
 
-怎么避免为 Agent 运行时、模型和环境的各种组合，一遍遍重写脚手架？
+为解耦任务逻辑与执行后端，避免针对不同 harness、模型与环境的组合重复编写适配脚手架，**ageval**（agent eval）将可编程任务脚本与声明式插件组合相结合。一份 dataset 编写一次，即可通过配置文件独立切换运行环境、harness 与模型。
 
-**ageval**（agent eval）评测的是 coding agent。一份 dataset 写一次，换环境和 Agent 只改配置。
+安装 CLI 和 skill 后，本机 coding agent 可以自主设计、转换 benchmark 并完成评测；评测结果、dataset、插件和 Agent 包均可上传至 Hub 供他人复现与对比。
 
-装上 CLI 和 skill，你的 coding agent 可以设计、转化 benchmark，并自己跑完评测。结果、dataset、插件和 Agent 配置都能上传 Hub，给别人接着用。
+- **通过插件切换待测 Agent 与环境。** 执行环境与 Agent 执行器均经插件槽接入（默认走 [ACP](https://agentclientprotocol.com)，`nooa` / `dsh` / `miniswe` 采用同一插件机制）。修改 `profiles.yaml` 中的一行，或在运行时传入 `--agent`（及可选 `--model`）即可切换。
+- **让 Agent 自主完成评测。** Skill 指导本机 coding agent 使用 CLI、编写 dataset 与任务脚本，从而自动设计或转换 benchmark 并端到端跑完评测。
+- **在 Hub 上共享与复用。** 公开的 dataset、插件与 Agent 包可直接复用：`ageval run <org>/<name>@<version>`。
 
-- **切换待评测 Agent.** 环境和 Agent 运行时都经插件接入（默认 [ACP](https://agentclientprotocol.com)，nooa / dsh / miniswe 同一条插件路）。`profiles.yaml` 改一行，或这次运行用 `--agent`。
-- **让 Agent 自己跑评测.** skill 教会你的 coding agent 用 CLI、写 dataset；之后由它设计或转化 benchmark，自动跑完。
-- **在 Hub 上分享与复用.** 公开的 dataset、插件和 Agent 配置都能复用：`ageval run <org>/<name>@<version>`。
-
-CLI 命令是 `ageval`（PyPI 包 `ageval-cli`）。
+CLI 命令为 `ageval`（PyPI 包名为 `ageval-cli`）。
 
 ## 文档导航
 
@@ -29,4 +27,4 @@ CLI 命令是 `ageval`（PyPI 包 `ageval-cli`）。
 | 命令与字段            | [CLI](./reference/cli.mdx) · [配置字段](./reference/config-fields.mdx)              |
 | 本地结果 / Hub        | [本地查看器](./run/local-viewer.mdx) · [Hub](./share/hub.mdx)                       |
 
-设计说明在仓库 [`docs/design/`](https://github.com/ZJU-REAL/ageval/tree/main/docs/design)。本站按使用路径组织。
+机制设计规范位于仓库 [`docs/design/`](https://github.com/ZJU-REAL/ageval/tree/main/docs/design)，本站按使用路径组织。

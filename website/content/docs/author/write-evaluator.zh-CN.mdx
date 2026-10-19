@@ -43,16 +43,16 @@ evaluation:
 
 | 点 | 说明 |
 | --- | --- |
-| 屏障 | `run.py` 结束后才进入环境 输入 |
+| 阶段边界 | `run.py` 结束并封存 solver 后才上传评测输入与参考答案 |
 | 参考答案 | 放 `evaluation/`，evaluate 阶段才 upload |
 | artifact id | 必须和 `run.py` 实际写出的文件对上 |
 | `tmpfs_mb` | 只改环境内 evaluator `/tmp`；省略 32 MiB。大 snapshot 在 **task** 上声明，不要写进 `limits` |
 
-`evaluator.py` 在 **parent 子进程**里跑（与 `run.py` 同一形态）。配置可写 `evaluate_host.isolated: true`（Current：docker）另起打分环境；参考答案只上打分 Host。需要**多个、安装内容不同**的打分镜像时，在 `task.yaml` 写 `evaluation.environments`，用 `inputs["scoring"].exec(<name>, argv)` 或 `Agent.session(..., environment=<name>)` 指定名字；未用到的名字不 start。省略该表 = 单个打分 Host（或同一环境）；此时 `scoring.exec` 打这只缺省 Host。写出有名表则必须点名；未知名一次失败，不 start。
+`evaluator.py` 在 **parent 子进程**里跑（与 `run.py` 同一形态）。配置可写 `evaluate_host.isolated: true`（Current：docker）另起评分容器；参考答案只上传至该评分环境。需要**多个、安装内容不同**的评分镜像时，在 `task.yaml` 写 `evaluation.environments`，用 `inputs["scoring"].exec(<name>, argv)` 或 `Agent.session(..., environment=<name>)` 指定名字；未用到的名字不启动。省略该表表示单个默认评分环境（或复用 `run` 环境），此时 `scoring.exec` 在该默认评分环境中执行。写出命名表则必须指定名字；未知名字直接报错，不启动容器。
 
-## 两种评测
+## 两种评分策略
 
-缺省是**确定性脚本**：读产物和 `evaluation/` 里的参考答案，返回 `{status, score, metrics}`；status 只取 PASS 或 FAIL。低分是 FAIL。其它 status（含 ERROR）让这次运行记 ERROR。run 阶段触到 limit 时，裁决仍是这份返回值，`result.json` 的 `limit` 记下那只键。环境起不来、evaluator 崩了记 ERROR。不必调 Agent。没有 `evaluation/observation.jsonl`。可选额外键 `checks`（helper `evaluation_check`）会写成 `evaluation/checks.json` 给 Verifier；bind 忽略它。没有 `checks` 时 Verifier 仍是 `result.json` 与文件树。
+默认是**确定性脚本**：读产物和 `evaluation/` 里的参考答案，返回 `{status, score, metrics}`；status 只取 PASS 或 FAIL。低分是 FAIL。其它 status（含 ERROR）让这次运行记 ERROR。run 阶段触到 limit 时，裁决仍是这份返回值，`result.json` 的 `limit` 记下对应的配额键名。环境起不来、evaluator 崩了记 ERROR。不必调 Agent。没有 `evaluation/observation.jsonl`。可选额外键 `checks`（helper `evaluation_check`）会写成 `evaluation/checks.json` 给 Verifier；bind 忽略它。没有 `checks` 时 Verifier 仍是 `result.json` 与文件树。
 
 可选 **LLM-as-judge**：同一份 job `profiles.yaml` 再写一个角色（如 `judge`），`task.yaml` 的 `agent_profiles` 列入同一 id。参考答案 **已经** upload 之后，`evaluator.py` 可以 `Agent.session("judge").invoke(...)`。提示词归 dataset。`invoke` 不得改 `profile_id` / executor。
 

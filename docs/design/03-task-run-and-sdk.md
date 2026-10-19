@@ -1,22 +1,22 @@
-# 03 — 题包 `run.py` 与 SDK
+# 03 — 任务脚本 `run.py` 与 Python SDK
 
-题包入口是 **`run.py`**：`async def run(ctx: RunContext) -> RunTerminal`。SDK 与 Runtime 同属**单一发行版**（PyPI 发行名 `ageval-cli`，一个 wheel、两个顶层包 `ageval` / `ageval_sdk`）；import 名不变，题包零改动。import 边界（`ageval_sdk` **不得** import `ageval`）由架构测试钉住，取代独立包图隔离。
+任务执行入口为 **`run.py`**（`async def run(ctx: RunContext) -> RunTerminal`）。`ageval_sdk` 与 `ageval` 同属 `ageval-cli` 发行包，通过架构测试保障单向依赖边界（`ageval_sdk` 不导入 `ageval` 内部模块）。
 
-SDK 可被 upstream 替代。**不**拥有 Run identity、环境、credential、PASS。
+`ageval_sdk` 提供任务脚本所需的会话与工具辅助接口，不管理 Run 身份、环境启停、宿主凭据或最终 `PASS` 判定。
 
-## 负责 / 不负责
+## 职责边界
 
-| 负责 | 禁止 |
+| `run.py` 负责 | `run.py` 禁止 |
 | --- | --- |
-| loop、角色、本地 Tool、`ctx.publish_json` / 可选 `ctx.publish_tree` | 最终 PASS |
-| `ctx.agent.session(profile_id).invoke` | 持有 host 凭据 |
-| 读 `ctx.params`、workspace | 再读一份「真配置」覆盖 lock |
-| 返回 `completed` / `failed` | 自己改 `limits`、按 bench 名分支 |
-| 业务 Tool、handoff | `host.start` / `host.upload` / `host.stop`、`apt`、装 agent CLI、读 `evaluation/` |
+| 组织交互循环、多角色路由、领域工具调用、通过 `ctx.publish_json` / `ctx.publish_tree` 登记产物 | 直接产出最终 `PASS` 裁决 |
+| 通过 `ctx.agent.session(profile_id).invoke` 调用已绑定角色 | 读取或持有宿主明文凭据 |
+| 读取 `ctx.params` 与工作区文件 | 绕过 `lock` 自行读取外部配置文件 |
+| 返回 `RunTerminal.completed` 或 `RunTerminal.failed` | 修改 `limits` 配额或按 benchmark 名称编写框架分支 |
+| 在子进程内执行领域工具与状态更新 | 调用 `host.start` / `host.upload` / `host.stop` 或读取 `evaluation/` |
 
-控制面不 import 题包模块。worker 是控制面子进程；Agent 经 Parent Agent Service + `attach_stdio` 进环境。环境在 `run.py` 被调用前已经就绪（environment 相位已跑完 `start` + seed + `setup.sh`）。
+父进程控制面通过独立子进程启动 `run.py`，角色调用经 Unix domain socket 转发至父进程 `ParentAgentService`。在 `run.py` 启动前，`environment` 阶段已完成环境启动、初始数据上传与 `setup.sh` 初始化。
 
-## 最小形状
+## 最小示例
 
 ```python
 from ageval_sdk import RunContext, RunTerminal
@@ -30,9 +30,7 @@ async def run(ctx: RunContext) -> RunTerminal:
     return RunTerminal.completed("ok")
 ```
 
-`RunTerminal.completed` **不是** PASS。
-
-## SDK 表面
+## SDK 导出接口
 
 ```python
 from ageval_sdk import (
@@ -42,52 +40,52 @@ from ageval_sdk import (
     RunParameterView,
     RunScope,
     RunTerminal,
+    ScriptError,
     Tool,
     ToolSet,
     AllowList,
     CallLimit,
+    bounded_gather,
+    first_success,
     evaluation_check,
 )
 ```
 
-| 对象 | 用途 |
+| 符号 | 用途 |
 | --- | --- |
-| `RunContext` | params、workspace、artifact_dir、agent、publish |
-| `RunTerminal` | `completed` / `failed`；不是 PASS |
-| `ScriptError` | `run.py` 或 `evaluator.py` 自己无法继续时抛出。`title` 是稳定标签，`message` 是这一次的说明。Agent 没做好仍返回 `RunTerminal.failed`，或由 evaluator 返回 FAIL |
-| `Agent.session(profile_id)` | 经 unix socket 调 parent Agent Service |
-| `ToolSet` / `CallLimit` | 题包软限，不替代 Runtime limits |
-| `evaluation_check` | 组 evaluator 返回的可选 `checks` 行；不是 PASS |
+| `RunContext` | 提供 `params`、`workspace`、`artifact_dir`、`agent` 与产物发布方法 |
+| `RunTerminal` | 表示 `run.py` 的执行终态（`completed` / `failed`），不决定 `PASS` |
+| `ScriptError` | 当 `run.py` 或 `evaluator.py` 自身因配置或脚本异常无法继续时抛出（含稳定标签 `title` 与当次说明 `message`），计为对应阶段的 `ERROR` |
+| `Agent.session(profile_id)` | 通过本机 Unix socket 连接父进程 `ParentAgentService` 开启角色会话 |
+| `ToolSet` / `CallLimit` | 任务内领域工具集合与软性调用次数护栏（不替代 Core 的 `limits`） |
+| `evaluation_check` | 构造 `evaluator.py` 可选返回的 `checks` 检查项明细 |
 
-`AgentSession.record_observation` 是补充口：域工具由 `run.py` 执行后，把 observation 挂到刚结束的 invoke。parent 写入该 invoke 的 `events.jsonl`；record 相位折进 `trajectory.jsonl`。SDK **不**自己写 trajectory.jsonl。
+当领域工具在 `run.py` 子进程内执行完毕后，可调用 `AgentSession.record_observation` 将工具返回结果附加到当前调用事件中，由 `record` 阶段统一归档至 `trajectory.jsonl`。
 
-`run.py` 通过 `ctx.agent.session(...).invoke` 调 Agent。ACP attach 发生在第一次 invoke。SDK 不拥有 `host.start`、凭据文件内容、final PASS。
+### 在 `evaluate` 阶段调用 SDK（Agent-as-judge）
 
-evaluate 相位同样可以用 SDK：`evaluator.py` 是 parent 子进程（与 `run.py` 一样），gold 已 upload 之后可以 `Agent.session(<role>).invoke`（role 须在同一份 `profiles.yaml` 里，且不得复用 solver 的 key locator）。invoke 走本机 Parent Agent Service；ACP `attach_stdio` 打当时的 environment 服务（isolated = 打分 Host）。有 `evaluation.environments` 时，ACP / 环境内 exec 必须 `Agent.session(id, environment=<name>)`（未知名、run 相位点名、或省略名字一次失败 `unknown_evaluate_environment`，不 start）。省略 `environment=` 只在无名表时等于今日单只打分 Host。`executor: openai-http` / `anthropic-http` 忽略 `environment=`（出站仍在 parent）。密封进 `evaluation/observation.jsonl`，省略 `user` 行。`evaluator.py` **不得** bind PASS；仍返回 `{status, score, metrics}`。不调 `Agent.session` = 无 observation 文件。invoke kwargs 仍不得改 `profile_id` / executor。SDK **仍然** 没有 `host.start` / `host.upload` / `host.stop` / `dockerfile=`。
+`evaluator.py` 同样在父进程的受限子进程中运行。在 `evaluation/` 参考材料上传完成后，`evaluator.py` 可调用 `Agent.session(<role>).invoke`（该角色需在 `profiles.yaml` 中独立声明，且不复用 solver 的凭据引用）。
 
-## 一次 Attempt 里的并发 session
+- 在 `evaluate_host.isolated: true` 模式下，ACP `attach_stdio` 自动连接至独立评分容器；若任务声明了 `evaluation.environments` 命名评分容器表，则 ACP 角色调用必须显式指定 `Agent.session(id, environment=<name>)`（未知名称或在 `run` 阶段传入 `environment=` 会直接报错 `unknown_evaluate_environment`）。`openai-http` 与 `anthropic-http` 执行器在父进程发起请求，忽略 `environment=` 参数。
+- `evaluate` 阶段产生的会话轨迹单独写入 `evaluation/observation.jsonl`（自动省略 `user` 提示行以防泄露参考材料），不混入根 `trajectory.jsonl`。
+- `evaluator.py` 最终仍须返回 `{status, score, metrics}`，由 `bind_evaluation` 绑定 `PASS` 或 `FAIL`。
 
-`Agent.session`、`invoke`、`record_observation`、`close` 走异步 unix 帧，不占任务的事件循环。不同 session 的 invoke 可以重叠，包括绑在同一个 profile 上的 session。每只 session 保住自己的消息历史。session 不是新的隔离边界：actor 放置和文件系统权限仍是原来的那一套。
+## 单次 Attempt 内的多会话并发
 
-同一 session 上的 invoke 按到达顺序一次一个。`close` 和取消可以在这只 session 还有 invoke 时送到 parent。
+`Agent.session`、`invoke`、`record_observation` 与 `close` 均采用异步通信，支持在单次 Attempt 内并发开启多个会话（包括绑定同一角色 profile 的多个独立会话，各自维护独立的消息历史）。同一个会话内部的多次 `invoke` 按到达顺序串行执行。
 
-`bounded_gather(aws, *, limit)` 按输入顺序收回全部结果。`limit` 是同时进行的 awaitable 个数，可以是一整段子模型/工具循环。子任务抛出的 `Exception` 留在对应槽里，已经完成的兄弟还在。调用方决定残缺结果够不够。`timeout`（秒）是这一批的共同截止。到期时已完成的值和已经写下的证据留下，未完成的槽是 `TimeoutError`，其余工作停掉并排干，调用方继续。研究策略和合成属于题包。
+- **`bounded_gather(aws, *, limit, timeout=None)`：** 在并发上限 `limit` 内执行一组协程并按输入顺序返回结果列表。单个子任务抛出的 `Exception` 保留在对应位置，不影响其他已完成结果；若设置 `timeout`（秒）到期，未完成位置填入 `TimeoutError`，其余在途任务被取消并排干。
+- **`first_success(aws, *, limit=None, accept=None)`：** 在并发上限内返回首个未抛异常且满足 `accept` 谓词的结果（例如 `accept=lambda reply: reply.get("ok") is True`），随后立即取消并排干其余未完成子任务；若全部子任务均未满足条件则抛出 `RuntimeError("no acceptable result")`。该原语仅用于任务内控制流选择，不替代 `evaluator.py` 的 `PASS` 判定。
+- 任务脚本指定的 `limit` 受 Core 的 `limits.agent_concurrency` 约束，不能突破运行时并发上限。
 
-取消 `bounded_gather` 本身时，`CancelledError` 向外传，不进结果列表。
+### 分步脚本评分（`scoring.exec` 与 `checks`）
 
-`first_success(aws, *, limit=None, accept=None)` 在并发上限内取第一只可接受的结果。`limit` 省略表示 SDK 不再加一顶帽子（Runtime 的 `agent_concurrency` 仍在）。没有 `accept` 时，成功指没抛异常，不是题做对了，也不是 PASS。要比 invoke 应答，写成 `accept=lambda reply: reply.get("ok") is True`。`ok: false` 在这只谓词下不能赢。被拒绝的结果和异常都不赢。全部结束仍没有可接受结果时抛 `RuntimeError("no acceptable result")`。有赢家时，取消并排干未完成的子任务，包括还没进入 `limit` 的那些。
-
-按完成顺序消费、以及完成一只再补一只，用 `asyncio.wait(..., return_when=asyncio.FIRST_COMPLETED)` 或 `asyncio.as_completed`。没被取消的任务继续跑。完成可以再开一只子任务。SDK 不另做调度器。
-
-这些帮助函数不读 lock，也不能抬高 `limits.agent_concurrency`。
-
-脚本阶梯用 Runtime 注入的 `inputs["scoring"]`（不是 SDK 类型、不是第二套 docker 客户端）：
+在 `evaluate` 阶段，`evaluator.py` 可通过注入的 `inputs["scoring"]` 在命名评分容器中执行验证命令，并通过 `evaluation_check` 构造分步检查结果：
 
 ```python
 from ageval_sdk import evaluation_check
 
 audit = await scoring.exec("audit", ["python", "/attempt/evaluation/audit.py"])
-# audit.exit_code / stdout / stderr 来自那只容器内 Protocol host.exec
 return {
     "status": "PASS" if audit.exit_code == 0 else "FAIL",
     "score": 1.0 if audit.exit_code == 0 else 0.0,
@@ -103,35 +101,24 @@ return {
 }
 ```
 
-`exec` 的 argv 是列表。第一次点到某名字时 Runtime 才 start 那只 Host 并 upload 快照 + gold。未知名失败且不 start。`exec` 退出码、start 事实、`evaluation_check` 行都不是 PASS。省略 `checks` = 不写 `evaluation/checks.json`。`evaluator.py` 源码不见 `container_id`。SDK **不得** bind PASS。
+首次调用某个命名评分容器时，Core 自动启动该容器并上传产物快照与参考材料。`checks` 列表由父进程写入 `evaluation/checks.json` 供界面展示，最终 `Result` 的 `status` 与 `score` 仍仅取决于顶层返回字段。
 
-`ctx.publish_tree(id, path)` 是可选登记：告诉 Runtime「这份 tree 已由 Agent 写在 workspace」。**拷贝与 exclude 仍归 harvest**，不在 SDK 里做。题包 yaml 已经声明 `kind: tree` 且 `path` 指向 Agent 写过的工作区时，`run.py` 不必再调。`publish_json` / `publish_file` 仍是单文件。登记成功不是 PASS。
+## 结构化工具调用通道（`tools` 与 `messages`）
 
-## invoke 工具通道
-
-`Agent.session(profile_id).invoke` 默认仍是今天的 **prompt-only** 文本调用。可选关键字（省略 = 旧行为）：
+`AgentSession.invoke` 默认接受纯文本 `prompt`，同时支持传入可选的 `tools` 与 `messages` 参数：
 
 | 参数 | 含义 |
 | --- | --- |
-| `tools` | OpenAI 风格工具目录：`[{type: function, function: {name, description?, parameters}}]` |
-| `messages` | 可选 chat 历史（`role` / `content`，以及后续 `tool` / `tool_calls` 轮） |
+| `tools` | OpenAI 函数调用格式的工具声明列表：`[{type: "function", function: {name, description?, parameters}}]` |
+| `messages` | 显式对话历史列表（包含 `user`、`assistant`、`tool_calls` 与 `tool` 消息轮次） |
 
-返回值在既有 `ok` / `text` / `structured` 之外，可以带结构化 **`tool_calls`**：`[{id, name, arguments}]`。`arguments` 是对象，不是 JSON 字符串。没有工具调用时该字段为空（省略或 `[]`），`text` 仍是助手文本。
-
-约定：
-
-- 题包把 **域工具目录** 交给 invoke；真正执行仍在 `run.py`（`ToolSet.call` 或 package `Environment.get_response`）。SDK / parent **不**代跑域工具，**不**把 MCP / home-files / skills 注册成可调用工具。
-- `executor: acp` **忽略** `tools` / `messages`，继续文本 invoke。coding-agent 入口不变；ACP 不因为题包传了目录就要求 `tools=`。
-- 禁止把 `profile_id` / workspace / executor 绑定从 invoke kwargs 里改掉。
-- `tool_calls` 与 `RunTerminal.completed` 都不是 PASS。PASS 只来自独立 evaluator。
-
-最小形状（openai-http / anthropic-http 原生工具；ACP 路径可继续只传 prompt）：
+- **HTTP 执行器（`openai-http`、`anthropic-http`）：** 根据绑定的 API 协议编码 `tools` 与 `messages`，并在返回字典的 `tool_calls` 字段中返回结构化调用列表 `[{id, name, arguments}]`。任务脚本在本地执行对应工具后，通过 `session.record_observation(...)` 记录观测结果：
 
 ```python
 reply = await session.invoke(
     instruction,
-    tools=catalog,          # 可选
-    messages=history,       # 可选；省略则 parent 用 prompt 包一轮 user
+    tools=catalog,
+    messages=history,
 )
 for call in reply.get("tool_calls") or ():
     obs = await tools.call(call["name"], call["arguments"])
@@ -144,8 +131,4 @@ for call in reply.get("tool_calls") or ():
     )
 ```
 
-`record_observation` 不消耗 invoke 配额、不是 PASS。缺 session / invocation 则拒绝（`no_invocation` / `unknown_session`）。
-
-## 薄 task
-
-多题同构时，循环放 `shared/lib`，成员 `run.py` 只转发。gold 永不进 `shared/`。
+- **ACP 执行器（`executor: acp`）：** 忽略 `tools` 与 `messages` 参数，由环境内的交互式 harness 根据文本 prompt 自主管理工具调用循环。

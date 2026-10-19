@@ -4,11 +4,11 @@ External `ageval.plugin/1`. **Not** first-party `executor: acp`.
 
 Parent ACP is a JSON-RPC client on `environment.attach_stdio`. This plugin is
 the other coding inlet: one `host.exec` per `invoke` starts the entry's ACP
-server **and** a one-shot client *inside the box*. ACP frames stay in the box;
+server **and** a one-shot client *inside the environment*. ACP frames stay in the environment;
 the parent learns the turn is done from process exit.
 
 Switching pi / Claude Code / OpenCode is `options.entry` (same ids as ACP).
-Do not write `executor: pi`. A box without `attach_stdio` still lock-fails
+Do not write `executor: pi`. An environment without `attach_stdio` still lock-fails
 `executor: acp`; this plugin only needs `exec`.
 
 ## Capabilities
@@ -66,4 +66,4 @@ agent_profiles:
       - plugin: docker
 ```
 
-Credentials are locators projected into the **exec** env. Trajectory is not PASS.
+Credentials are locators projected into the **exec** env.

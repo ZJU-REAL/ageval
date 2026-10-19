@@ -1,6 +1,6 @@
-# 16 — Model
+# 16 — ModelSpec 与插件基类契约
 
-profile 上的 `model` 是一份嵌套 mapping。全仓只有一个 `ModelSpec`。字段表以本页为准。
+为独立于 harness 配置模型参数并防止静默协议回退改变实验条件，角色 profile 中的 `model` 块统一解析为不可变的 `ModelSpec` 数据结构。
 
 ```python
 from ageval.model import ModelConfigError, ModelSpec, require_model_support, resolve_model
@@ -8,32 +8,24 @@ from ageval.plugins.base import BaseEnvironment, BaseExecutor
 from ageval.plugins.errors import PluginContractError
 ```
 
-`src/ageval/model/` 解析。`src/ageval/plugins/base.py` 是环境与 executor 的基类。`api_key` 与 `base_url` 留在 profile 上，是 locator，不是 Model 字段。lock 用 `ageval.config.locator` 把 `base_url` 解析一次：`HttpUrl` 或 `EnvLocator`。锁文件仍写 URL 或 locator 名，不写密钥。
+`src/ageval/model/` 负责解析与校验 `ModelSpec`；`src/ageval/plugins/base.py` 定义环境与执行器的抽象基类。`api_key` 与 `base_url` 作为凭据与端点定位符保留在角色 profile 顶层，不属于 `ModelSpec` 内部字段。
 
-## 字段
+## `ModelSpec` 字段定义
 
-`resolve_model(model, options=None)` 只接受嵌套 mapping。字符串 id 拒绝。`options` 里的平铺模型字段（`api`、`reasoning_effort`、`timeout`、`request_timeout`、`watchdog`、`extra_body`）拒绝，不翻译进 Spec。一等 executor 的其余 option 键由该类的冻结 `Options` 解析。不认识的键在 lock 拒绝，并在编辑距离足够近时写出最近的字段名。没有 `Options` 的 yaml-only factory 在截止日期前仍只警告。
+`resolve_model(model, options=None)` 仅接受嵌套字典格式（拒绝纯字符串 `model` 或在 `options` 中平铺 `api`、`reasoning_effort`、`timeout`、`request_timeout`、`watchdog`、`extra_body` 等模型字段）：
 
-| YAML | Spec 字段 | 类型 | 省略 |
+| YAML 路径 | `ModelSpec` 属性 | 类型 | 省略时行为 |
 | --- | --- | --- | --- |
-| `id` | `id` | `str` | 必填。空串拒绝 |
-| `api` | `api` | `str` | `chat`。短名只有 `chat` 与 `responses` |
-| `reasoning.effort` | `reasoning_effort` | `str \| None` | 不发送 |
-| `timeout` | `timeout` | `float \| None` | Spec 保持 `None`。省略时 executor 读 [`src/ageval/runtime/clocks.py`](../../src/ageval/runtime/clocks.py) 的 `timeout` 行（180）。`0`、负数、非有限值拒绝 |
-| `watchdog` | `watchdog` | `float \| None` | Spec 保持 `None`。省略时 executor 读同一张表的 `watchdog` 行（180）。`0`、负数、非有限值拒绝 |
-| `extra` | `extra` | mapping | 空 mapping。不并进一等字段 |
+| `id` | `id` | `str` | 必填（空字符串直接拒绝） |
+| `api` | `api` | `str` | 默认为 `"chat"`；仅允许 `"chat"` 或 `"responses"` |
+| `reasoning.effort` | `reasoning_effort` | `str \| None` | 保持 `None`（请求中不发送该字段） |
+| `timeout` | `timeout` | `float \| None` | 保持 `None`（执行器默认读取 [`clocks.py`](../../src/ageval/runtime/clocks.py) 中的 `180` 秒；拒绝 `0`、负数或非有限值） |
+| `watchdog` | `watchdog` | `float \| None` | 保持 `None`（执行器默认读取 `clocks.py` 中的 `180` 秒；拒绝 `0`、负数或非有限值） |
+| `extra` | `extra` | `Mapping[str, Any]` | 默认为空字典 `{}` |
 
-`reasoning` 只认 `effort`。`summary` 等放进 `extra`。`none` 是会发送的 effort 值，不是省略。
-
-配置文件写出具体档名。`reasoning.effort: max` 是别名：lock 先把模型 id 按 pin 的 alias、prefix、lookup 收成唯一的 canonical id，再改写成该行 `reasoning_options` 里最后一档 effort。锁里记下的是这一档，不是未解析的别名。对不上 pin，或该行没有 effort 列表，lock 失败，并提示改成具体档。不静默降档。其它档名原样保留，不收成枚举。`none` 仍是会发送的值。最高档本身就叫 `max` 时，锁里记下的就是这个档名。
-
-`extra` 是厂商键，原样保留。这里没有网关名单。`extra` 不能改写一等字段，所以这些键拒绝：`id`、`api`、`timeout`、`watchdog`、`reasoning_effort`，以及 `extra.reasoning.effort`。
-
-哪些 extra 键能进请求，由该 executor 的 `extra_allowlist` 决定。类体必须声明它，空 `frozenset` 表示拒绝全部 extra 键。不认识的 extra 键在校验时 `ModelConfigError`，不丢弃。
-
-已写出、而该 executor 的 `supported_model_fields` 里没有的一等字段，同样 `ModelConfigError`。省略（`None`，或空 `extra`）不算写出。`api` 不在 `supported_apis` 里，也是 `ModelConfigError`。
-
-`require_model_support(spec, *, supported_apis, supported_model_fields, extra_allowlist)` 做上面三项检查。`supports_model` 调用它，再加该 executor 自己的规则。
+- **`reasoning.effort`：** 唯一的一等推理强度字段。显式设置 `"none"` 时会按值发送；省略时不发送。当设置为别名 `"max"` 时，`lock` 阶段先将该角色的 `model.id` 唯一关联至规范模型目录（canonical pin），并将其替换为该模型 `reasoning_options` 列表中的最高档位写入锁定配置；若无法唯一匹配模型或该模型未声明推理档位列表，`lock` 阶段直接报错并提示填写具体档位名。
+- **`extra` 与 `extra_allowlist`：** `extra` 用于传递厂商专有扩展参数（如 `reasoning.summary`、`thinking` 或 `provider`），不得覆盖一等字段（禁止包含 `id`、`api`、`timeout`、`watchdog`、`reasoning_effort` 或 `extra.reasoning.effort`）。每个 `BaseExecutor` 子类通过类属性 `extra_allowlist` 声明允许接收的 `extra` 顶层键集合（空 `frozenset` 拒绝一切 `extra` 键）。
+- **`supports_model` 静态检查：** `require_model_support(spec, *, supported_apis, supported_model_fields, extra_allowlist)` 校验 `api` 是否在 `supported_apis` 内、非空一等字段是否在 `supported_model_fields` 内、以及 `extra` 键是否在 `extra_allowlist` 内；任一不满足即抛出 `ModelConfigError`。
 
 ```yaml
 model:
@@ -48,42 +40,35 @@ model:
       summary: auto
 ```
 
-## 错误
+## 契约与配置异常类型
 
-| 类型 | 模块 | 何时 |
+| 异常类 | 所在模块 | 触发时机 |
 | --- | --- | --- |
-| `PluginContractError` | `ageval.plugins.errors` | 类契约。未声明 `extra_allowlist` / `supported_apis` / `supported_model_fields`；capability 为真但没有对应方法；`requires_environment` 未满足。`kind` 是 `plugin_contract`。它是 `ExtensionRegistryError` 的子类 |
-| `ModelConfigError` | `ageval.model` | 畸形 model、不认识的 `api`、不认识的一等字段、extra 键不在 allowlist。`kind` 是 `model_config` |
+| `PluginContractError` | `ageval.plugins.errors` | 插件类未声明 `extra_allowlist` / `supported_apis` / `supported_model_fields`；声明的能力标记缺少对应实现方法；或 `requires_environment` 未满足（`kind` 为 `plugin_contract`） |
+| `ModelConfigError` | `ageval.model` | `model` 结构非法、不支持的 `api`、不支持的一等字段或不在 `extra_allowlist` 中的扩展键（`kind` 为 `model_config`） |
 
-`ModelConfigError` 是配置错误。lock 失败。它不是传输失败，不进入 upstream stall。
+`ModelConfigError` 属于配置错误，在 `ageval lock` 阶段直接终止，不会在运行期触发 `upstream_stall` 重试。
 
-## Lock
-
-`load_and_lock` 在写出 lock 之前做完下面几步。配置错误停在 lock，不进入 upstream stall。
+## Lock 阶段校验流程
 
 ```text
-resolve 独占槽赢家
+解析各独占槽实现
   → resolve_model(profile) → ModelSpec
-  → requires_environment 为真：环境赢家必须在，且该 executor 对 environment 的 inject caps 必须由赢家提供
-       否则 PluginContractError
-  → 赢家是 BaseExecutor 子类：类方法 supports_model(spec)，不构造实例
-       api 不在 supported_apis、写出的一等字段不在 supported_model_fields、
-       extra 键不在 extra_allowlist（空集拒绝全部）→ ModelConfigError
-  → 通过之后才写 lock
+  → 若 requires_environment 为 True：校验 environment 服务已绑定且满足 inject 声明的 capabilities
+       否则抛出 PluginContractError
+  → 若执行器为 BaseExecutor 子类：调用类方法 supports_model(spec)（无需实例化）
+       校验 supported_apis、supported_model_fields 与 extra_allowlist
+       不满足则抛出 ModelConfigError
+  → 校验通过后生成 LockedTaskConfig 与配置摘要（digest）
 ```
 
-没有装饰类的外置 executor（plugin.yaml 的 factory，不是 `BaseExecutor` 子类，不能声明 allowlist）：
+对于未继承 `BaseExecutor` 的外置纯 YAML 工厂插件：
+- 若注册 `source` 为 `first-party`，直接抛出 `PluginContractError`；
+- 若为第三方来源，在 `2027-01-15` 前默认发出 `YamlOnlyExecutorWarning`（设置 `AGEVAL_STRICT_MODEL_CONTRACT=1` 时立即提升为 `PluginContractError`；自 `2027-01-15` 起一律拒绝）。
 
-- 环境变量未设置，且注册 `source` 是 `first-party`：`PluginContractError`
-- 环境变量未设置，其他 `source`：`YamlOnlyExecutorWarning`。警告写明第三方 yaml-only factory 在 2027-01-15 之后拒绝
-- `AGEVAL_STRICT_MODEL_CONTRACT=1`（也接受 `true` / `yes` / `on` / `strict`）：不论 source，`PluginContractError`
-- `0` / `false` / `no` / `off`：截止日期前仍是警告。2027-01-15 起不论该环境变量，一律 `PluginContractError`
+## Executor Options 参数表
 
-allowlist 在 executor 类上，不在 `ModelSpec` 里。
-
-## Executor options
-
-下表由 `scripts/gen_param_tables.py` 从各 executor 的 `Options` 与 `CLOCKS` 生成。lock 调用 `Options.parse`。
+以下表格由 `scripts/gen_param_tables.py` 根据各执行器的冻结 `Options` 类与 `CLOCKS` 自动生成（`--check` 校验同步）：
 
 ### openai-http
 
@@ -156,41 +141,31 @@ allowlist 在 executor 类上，不在 `ModelSpec` 里。
 | `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
 <!-- /ageval:param-table -->
 
-Current：`resolve_model` 在 profile 解析和 lock 上拒绝字符串 id 与平铺模型键。独占 executor 赢家若是 `BaseExecutor` 子类，lock 调用类方法 `supports_model`，并在 `requires_environment` 未满足时拒绝。一类环境与一类 executor（`local` / `docker` / `e2b` / `ssh` / `daytona` / `acp` / `openai-http` / `anthropic-http`）继承基类并带装饰器。miniswe、nooa、dsh、acp-oneshot 使用同一份 `ModelSpec`，经 `load_installed` 进入，不在 builtin 名单里。仍是普通 factory 的第三方 executor 走上面的警告。
+## `BaseEnvironment` 抽象基类
 
-## BaseEnvironment
+所有环境插件继承 `BaseEnvironment` 并实现 `EnvironmentProvider` 协议：
 
-实现 `EnvironmentProvider`。`capabilities` 用 `ageval.environments.protocol.EnvironmentCapabilities`，不另造一套。
-
-| 成员 | 契约 |
+| 属性 / 方法 | 契约要求 |
 | --- | --- |
-| `kind` | 类属性。稳定 id，与今天的赢家相同（`local`、`docker`、`e2b`、`ssh`、`daytona`） |
-| `capabilities` | 类属性。布尔矩阵 |
-| `python_command` | 类属性。环境内 Python 的 argv 前缀 |
-| `preflight` / `start` / `stop` | 抽象。总是要 |
-| `placement` / `visible_path` | 抽象。总是要。行为与今天的 Protocol 相同 |
-| `exec` / `upload` / `download` / `attach_stdio` | 对应 capability 为真时，子类必须有这个方法。基类不提供默认实现，这样注册期能看出缺方法 |
+| `kind` | 类属性，环境唯一标识符（`local`、`docker`、`e2b`、`ssh`、`daytona`） |
+| `capabilities` | 类属性，`EnvironmentCapabilities` 实例 |
+| `python_command` | 类属性，环境内 Python 解释器命令元组 |
+| `preflight` / `start` / `stop` | 抽象异步方法，子类必须实现 |
+| `placement` / `visible_path` | 抽象方法，子类必须实现 |
+| `exec` / `upload` / `download` / `attach_stdio` | 当对应 `capabilities` 字段为 `True` 时，子类必须实现对应方法（导入注册期由装饰器校验） |
 
-缺方法的类不能实例化（`TypeError`）。capability 与方法不一致是注册期 `PluginContractError`，不是实例化检查。
+## `BaseExecutor` 抽象基类
 
-## BaseExecutor
+所有执行器插件继承 `BaseExecutor`：
 
-每个 executor 继承这一基类。`supports_model` 与 `bind_model` 都是抽象方法。
-
-| 成员 | 契约 |
+| 属性 / 方法 | 契约要求 |
 | --- | --- |
-| `kind` | 类属性。稳定 id（如 `openai-http`） |
-| `requires_environment` | 类属性。缺省 `True`。不需要环境的 executor（`openai-http`）设 `False` |
-| `supported_apis` | 类属性。如 `{"chat"}` 或 `{"chat", "responses"}` |
-| `supported_model_fields` | 类属性。Spec 字段名：`id`、`api`、`reasoning_effort`、`timeout`、`watchdog`、`extra` |
-| `extra_allowlist` | 类属性。必须在类体声明。空集拒绝全部 extra 键 |
-| `invoke` / `close` | 抽象 |
-| `open` | 缺省空操作，返回 `None` |
-| `supports_model` | 类方法。lock 不构造实例。不能接受就抛 `ModelConfigError` |
-| `bind_model` | 把校验过的 Spec 写成内部请求参数。`extra` 只留下 allowlist 里的键 |
-
-未实现的抽象方法不能实例化。
-
-## Hub
-
-Hub 的 `JobOverlayProfile.model` 只写本页的嵌套对象。展示、suite usage、Performance 读 `id`。已存的字符串 id 在再次写出 profile 时收成 `{id}`。`options` 不再携带 `extra_body` 或平铺 `reasoning_effort`。
+| `kind` | 类属性，执行器唯一标识符（如 `acp`、`openai-http`、`miniswe`） |
+| `requires_environment` | 类属性（默认 `True`；纯 HTTP 执行器如 `openai-http` 与 `anthropic-http` 设为 `False`） |
+| `supported_apis` | 类属性，`frozenset`（如 `{"chat"}` 或 `{"chat", "responses"}`） |
+| `supported_model_fields` | 类属性，支持的 `ModelSpec` 属性名集合（`id`、`api`、`reasoning_effort`、`timeout`、`watchdog`、`extra`） |
+| `extra_allowlist` | 类属性，`frozenset`，必须在类体显式声明（空集拒绝全部 `extra` 键） |
+| `invoke` / `close` | 抽象异步方法 |
+| `open` | 可选异步方法（默认返回 `None`） |
+| `supports_model` | 类方法，在 `lock` 阶段静态校验 `ModelSpec`，不通过则抛出 `ModelConfigError` |
+| `bind_model` | 将校验通过的 `ModelSpec` 转换为执行器内部请求参数 |

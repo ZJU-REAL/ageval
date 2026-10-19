@@ -1,6 +1,6 @@
 # daytona environment
 
-First-party exclusive-slot winner for `environment: daytona`.
+First-party exclusive-slot implementation for `environment: daytona`.
 
 The Attempt runs in a [Daytona](https://www.daytona.io) sandbox built from
 an OCI snapshot. Vendor SDK objects, snapshot names, and sandbox ids stay

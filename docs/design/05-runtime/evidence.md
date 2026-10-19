@@ -1,124 +1,81 @@
 # Evidence
 
-布局字符串只出现在 `src/ageval/evidence/`。结构与数据流见 [ARCHITECTURE.md](../../../ARCHITECTURE.md)。
+证据目录的路径常量统一维护在 `src/ageval/evidence/` 中。整体数据流见 [ARCHITECTURE.md](../../../ARCHITECTURE.md)。
 
-单次 Attempt：`<dataset>/.ageval/runs/<attempt_id>/`
+单次 Attempt 的证据归档目录位于 `<dataset>/.ageval/runs/<attempt_id>/`：
 
-| 文件 | 含义 |
+| 文件 / 目录 | 含义 |
 | --- | --- |
-| `lock.json` | 无 secret 的 lock 摘要 |
-| `result.json` | 扁平 Result（status/score/kind/logs） |
-| `trajectory.jsonl` | 轨迹文件（**run 相位** Agent invoke）；`trajectory_seal` 独占槽默认引擎写 |
-| `evaluation/observation.jsonl` | 轨迹文件（**evaluate 相位** SDK invoke，opt-in）；无则 Verifier 不显示 TrajectoryPanel |
-| `evaluation/checks.json` | 确定性检查项（**evaluate 相位** parent 从 evaluator 返回的 `checks` 写入，opt-in）；无则文件树按普通 JSON 预览 |
-| `summary.json` | 相位事实 / timing；可选根字段 `extra`（Attempt 级观察袋，空则省略） |
-| `agent/` | run 相位 invoke 级观察 |
-| `evaluation/` | gold 不在此树的 Attempt 侧；环境内 gold 是时间切开。`evaluator_raw.json` 默认不留。检查脚本是 dataset 文件，不拷进这棵树 |
+| `lock.json` | 脱敏后的锁定配置摘要（仅保留凭据环境变量名引用） |
+| `result.json` | 结构化评测结果（`status` / `score` / `kind` / `error` / `limit` / `logs`） |
+| `trajectory.jsonl` | `run` 阶段的标准化交互轨迹，由 `trajectory_seal` 独占槽实现写出 |
+| `evaluation/observation.jsonl` | `evaluate` 阶段 `judge` 会话的标准化轨迹（可选，自动省略 `user` 提示行） |
+| `evaluation/checks.json` | `evaluator.py` 返回的分步检查项明细（可选，`ageval.evaluation.checks/1`） |
+| `summary.json` | 各阶段耗时（`phase_timing`）、运行事实（`facts`）及可选扩展字段 `extra` |
+| `task-artifacts/` | `run` 阶段结束时收集的任务产物快照（文件或目录树） |
+| `verifier-collect/` | `evaluation.collect` 收集的容器路径快照（可选） |
 
-`summary.json`、`result.json` 和轨迹 `terminal` 行的线型在 `src/ageval/evidence/documents.py`。`scripts/gen_evidence_ts.py` 从这些 dataclass 导出 JSON Schema，并生成 `apps/shared/lib/evidence.gen.ts`。`--check` 拒绝漂移。不要再手写一份同形 TypeScript。Trial 上的 `input_tokens` / `output_tokens` 是展示投影，不是这组线型。
+`summary.json`、`result.json` 与轨迹 `terminal` 行的 Schema 定义在 `src/ageval/evidence/documents.py` 中，并由 `scripts/gen_evidence_ts.py` 自动导出生成 `apps/shared/lib/evidence.gen.ts`（`--check` 校验同步）。
 
-`Result.logs` / `evidence_path` 指向该树。
+`Result.logs` / `evidence_path` 指向该 Attempt 目录；`ageval evidence <logs> --out …` 支持在二次脱敏校验后导出已封存的证据目录。
 
-轨迹是观察事实，不是分数。export：`ageval evidence <logs> --out …`（再脱敏，不改分）。
+## 轨迹事件处理与展示表面
 
-三层：
+运行时调用期间的轨迹数据经过三步处理后落盘：
+1. **原始响应（`backend_raw`）：** 执行器原始请求与响应载荷；
+2. **标准化事件（`ageval.trajectory.event/1`）：** 执行器或 `trajectory_collect` 映射的统一事件行（`thought` / `assistant` / `tool_call` / `observation` / `permission` / `terminal`）；
+3. **封存轨迹文件（`trajectory.jsonl`）：** `record` 阶段由 `trajectory_seal` 按调用顺序（`seq` / `turn_index`）合并写出的最终轨迹文件。
 
-```text
-A  vendor raw     后端原样
-B  中立事件       ageval.trajectory.event/1（adapter 只映射）
-C  trajectory.jsonl  `trajectory_seal` 赢家写（默认引擎折叠）
-```
+每条轨迹事件均带有顶层 `profile_id` 字段以标识对应的角色（如 `solver`、`planner` 等），Viewer 与 Hub 按文件顺序展示并按 `profile_id` 区分多角色交互。
 
-层 A/B 是 invoke 期的 scratch；轨迹文件 是 Hub / Viewer / `ageval evidence` 的观察记录。轨迹不是分数，也不绑定 PASS。
-
-两份轨迹观察、一份脚本检查项、两个页签。轨迹文件 **同一**行形（`ageval.trajectory.event/1` → thought / assistant / tool_call / observation / permission / terminal）。没有第二套轨迹 schema，也不把脚本检查点折进 jsonl。HTTP judge 通常只有 assistant + terminal；ACP judge 以后可以有 tool。
-
-| 表面 | 文件 | 谁写 | SPA |
+| 展示区域 | 归档文件 | 数据来源 | Web 界面位置 |
 | --- | --- | --- | --- |
-| Agent | Attempt 根 `trajectory.jsonl` | run 相位 invoke | Trajectory 页（不变） |
-| Judge | `evaluation/observation.jsonl` | evaluate 相位 SDK invoke | Verifier TrajectoryPanel |
-| Script checks | `evaluation/checks.json` | parent，从 evaluator 返回的 `checks` | Verifier 文件树里对该文件的结构化预览 |
+| 待测 Agent 轨迹 | 根目录 `trajectory.jsonl` | `run` 阶段角色调用 | Trajectory 页签 |
+| 评分 Judge 轨迹 | `evaluation/observation.jsonl` | `evaluate` 阶段 SDK 调用 | Verifier 页签（Trajectory 视图） |
+| 确定性检查项 | `evaluation/checks.json` | `evaluator.py` 返回的 `checks` | Verifier 页签（Files 视图下预览） |
 
-轨迹文件 按 invoke 序（Attempt 内 `seq` / `turn_index`）写成**各自**的文件。每一行带一等 `profile_id`：这是 package role（`Agent.session(profile_id)`），不是 chat `role`（user/assistant）。同一 invoke 的 tool / assistant / terminal 共用该值。Hub / Viewer 按文件序展示，用 `profile_id` 区分是谁在说话，**不**按 role 重分组。旧 jsonl 若只有 `terminal.metadata.profile_id`，读侧按 `turn_index` 回填到该轮其它行。
+在 Verifier 页签中：若同时存在 `evaluation/observation.jsonl` 与 `evaluation/checks.json`，页签栏右侧提供 `Trajectory / Files` 切换开关（默认显示 Trajectory）；若仅存在其中一种，则直接渲染对应视图。
 
-并发的 run 相位 invoke 各自一个 invocation 目录。`metadata.json` 的 `started_at` 与 `finished_at` 是这只后端调用的区间。两只调用重叠与否看这两段时间；只看任务创建时刻不够。`seq` 按 begin 的顺序递增，并且不重复。`record_observation` 写到点名的 `invocation_id`；省略时写这只 session 最近一次已经结束的 invoke。它不写到另一只 session。
+## 轨迹 `terminal.usage` 与 `extra` 扩展字段
 
-`evaluation/observation.jsonl` 密封时 **省略 `user` 行**。judge 提示经常嵌 hidden reference / gold 正文；那份正文不得进 evidence。assistant / thought / tool / terminal / usage 保留。未知 usage 字段省略，不编造 0。准则拆分等 leftover 进 `terminal.extra`，不升格一等列。record 相位密封 Agent 轨迹时 **忽略** evaluate 相位的 invoke。
-
-evaluate 相位的 invoke scratch 写在 `evaluation/` 下（布局字符串只在 `src/ageval/evidence/`），**不**进 `agent/invocations/`。Agent 页与根 `trajectory.jsonl` 看不到这些目录。`--keep-vendor-raw` 才保留该 scratch（与 run 相位 vendor raw 同一旗）。
-
-缺省（evaluator 不调 `Agent.session`）不写 `observation.jsonl`。缺省（不返回 well-formed `checks`）不写 `checks.json`。Verifier 页签一次只显示一种表面：
-
-1. 同时有 `evaluation/observation.jsonl`（含轨迹步）与 `evaluation/checks.json`：页签行最右侧 hairline toggle（Trajectory / Files），默认 Trajectory。不是第二条 UnderlineTabs。
-2. 只有 observation → TrajectoryPanel（满高）。
-3. 否则 → 文件树（`result.json` 与其它 `evaluation/` 文件）。选中 `checks.json` 时在右侧预览里渲染检查点（摘要计数、可展开行、stdout/stderr、View script），不另开 ChecksPanel。解析失败则退回普通 JSON。
-
-**不要**把 `observation.jsonl` 喂给 Agent 的 Trajectory 页。Trajectory 页的 actors 表仍是 run 相位 profile，不把 judge invoke 并进去。tab id 仍是 `verifier`，不开新页签。
-
-观察不是分数。`result.json` 的 `status` 只来自 `evaluator.py` 返回值经 `bind_evaluation`（只读 `status` / `score` / `metrics`）。`checks.json` 与 `observation.jsonl` 都不是 bind 的输入。Core 不得从 `evaluate_exec` 合成 `checks.json`。
-
-## 轨迹文件 `terminal.usage`
-
-对齐 ATIF 的拆法：一等 token/cost 在 turn 上，厂商剩余进袋子。密封后的 `terminal` 行：
+封存后的 `terminal` 轨迹行包含标准化的 `usage` 字段与同级 `extra` 扩展字段：
 
 ```text
-usage: { prompt_tokens, completion_tokens, cached_tokens, cost_usd }  # 一等；未知则省略
-extra: { ... }                                                       # 兄弟字段：厂商 leftover + 插件袋
+usage: { prompt_tokens, completion_tokens, cached_tokens, cost_usd }  # 标准统计项；未报告则省略
+extra: { ... }                                                       # 厂商附加统计与插件扩展字段
 ```
 
-规则：
+- 标准字段（`prompt_tokens`、`completion_tokens`、`cached_tokens`、`cost_usd`）仅在后端实际报告时写入；若未报告、超时中断、解析失败或仅收到部分数据，则在 `usage` 中记录 `unavailable` 及原因（`not_reported` / `lost_on_timeout` / `parse_failed` / `partial`），绝不将缺失值填为 `0`。
+- 厂商特定字段（如 `reasoning_tokens`、缓存写入 token、ACP `session_journal` 来源标记等）及插件自定义观测数据存放在 JSON-safe 的同级 `extra` 字段中。
+- `trajectory_collect` 与 `trajectory_enrich` 链槽可在 `extra` 中补充字段，但不得删除标准 `usage` 字段。
 
-- 一等字段只在后端报告了该量时出现。后端没给就省略；**不要**编造 0 去冒充测过。
-- `extra` 是 JSON-safe 标量/对象。未知键留在 `extra`，不升格为一等（升格要另改设计）。
-- 典型袋子：`reasoning_tokens`、cache-write、厂商 `id`、ACP 的 `context` / `sources` / 非 USD `cost` / `usage_partial` / `usage_source`、以及插件自写的键。
-- `trajectory_collect` / `trajectory_enrich` 可以在 payload 的兄弟字段 `extra` 增补或合并键；不得删自己不拥有的一等 usage 字段。invoke 这袋 **不开新槽**（没有 `trajectory_extra` / `hub_display`）。
-- `trajectory_seal` 仍是轨迹文件 的作者；collect/enrich 只塑 payload。`turn_rows` 把 `usage` 与兄弟 `extra` 拷到 `terminal`，不得丢掉 `extra`。
-- `openai-http` 从 Chat Completions `usage` 映射：`prompt_tokens` / `completion_tokens`（或 text tokens）/ `cached_tokens`（cached prompt tokens）。`AgentResult.usage` 与轨迹文件 同一形状。
-- `anthropic-http` 从 Messages `usage` 映射：`input_tokens` → `prompt_tokens`，`output_tokens` → `completion_tokens`，`cache_read_input_tokens` → `cached_tokens`。cache-write 等剩余进 `extra`。
-- ACP 用两源（`PromptResponse.usage` + `usage_update`）映射一等名；cache-read / cache-write 等剩余进 `extra`。`session/prompt` 正常返回把这袋写进 `final-response.json`。空闲超时（`acp_idle_timeout`）、总超时（`acp_timeout`）、EOF（`acp_unexpected_eof`）和协议异常（`acp_protocol_error`）不写 `final-response.json`；当时已经收到的 `usage` / `extra` 记在该次 `metadata.json`，record 再放进这一轮 `terminal.usage` / `terminal.extra`。没有数字时 `usage` 仍是对象，带 `unavailable`：超时是 `lost_on_timeout`，其余是 `not_reported`。不写 JSON null。后四条在有数据时理由是 `partial`，并给 `extra` 写 `usage_partial: true` 和 `usage_source`（`prompt_usage`、`usage_update`、`prompt_usage+usage_update` 或 `session_journal`）。正常返回不写这两键。ACP 没有一等 usage、且 entry 声明了 `usage_journal` 时，执行器从 Attempt HOME 下该目录的 JSONL 累加已声明记录，映到同一组一等字段，并写 `extra.sources.session_journal: true`。超时、EOF 和协议异常上的这份累加同样带 `usage_partial`。没有匹配记录时理由仍是 `not_reported`（超时且没有数字则是 `lost_on_timeout`）。`partial` 上的数字不进 suite 的 token 合计和均价。
+## Attempt `summary.extra` 扩展字段
 
-## Attempt `summary.extra`
-
-两只观察袋、两档粒度。invoke 袋是密封 `terminal` 的兄弟字段 `extra`。Attempt 袋是 `summary.json` 的根字段 `extra`：
+`summary.json` 支持根级可选字段 `extra`（按插件 ID 命名空间隔离，为空时整键省略）：
 
 ```text
-extra: { <plugin_id>: { ... }, ... }   # 空则省略整键；默认 = 旧 summary 形状
+extra: { <plugin_id>: { ... }, ... }
 ```
 
-规则：
+在 `trajectory_seal` 完成后，Core 触发一次 `summary_enrich` 链槽（起始值为 `{}`），各插件仅写入自身的 `extra[<plugin_id>]` 命名空间。Hub 与 Viewer 在运行详情页将其渲染为可折叠的 JSON 面板。
 
-- 观察袋，不是 PASS。Core **不**把 invoke 的 `terminal.extra` 聚合成 `summary.extra`（插件若要读 jsonl 自己读）。
-- 链槽 `summary_enrich`（失败不挡后续，形状 `(ctx, value, nxt)`）在 `trajectory_seal` 成功之后 emit **一次**；`value` 是这只袋，引擎起点 `{}`。插件只写自己的 `extra[<plugin_id>]`，不得删自己不拥有的键。
-- 不复用 `trajectory_collect` / `trajectory_enrich`（每 invoke）、`trajectory_seal`（轨迹文件 独占作者）、`after_run` / `after_evaluate`、`cleanup_report`。
-- Core 把合并后的袋写入 `summary.json`；空袋不写 `extra` 键。
-- Hub / Viewer 在 attempt / job summary 上投影折叠 JSON；没有袋就没有这块 chrome。不为此开 `hub_display`，不加 CLI 旗。`ageval plugin install` 仍不改 profiles。opt-in 走 `extensions`。
+## `terminal.elapsed_ms` 耗时记录
 
-## `terminal.elapsed_ms`
+单次调用的墙钟耗时记录在调用元数据 `latency_ms` 中，并在轨迹封存时同步至 `terminal.elapsed_ms`，供轨迹步骤卡片展示单步耗时。
 
-invoke 墙钟写在 invocation `metadata.json` 的 `latency_ms`，并进入 `terminal.metadata.latency_ms`。折叠时：该 turn 的事件若还没给 `terminal.elapsed_ms`，则把 invoke `latency_ms` 拷过去。轨迹卡片读 `elapsed_ms`。
+## 封存后的默认保留文件集
 
-## 密封后的默认可持久集合
-
-层 A/B 在 invoke 时照写（record 的 collect 仍读 `events.jsonl` + request）。`trajectory_seal` **成功之后**，默认磁盘与 Hub archive 只留：
+在 `trajectory_seal` 封存成功后，`slim_sealed_attempt` 默认精简中间临时文件，在磁盘与 Hub 归档中保留以下核心文件：
 
 ```text
 lock.json
 result.json
 trajectory.jsonl
 summary.json
-task-artifacts/**              # file：<id><suffix>；tree：<id>/ 不可变快照（已 exclude）
-evaluation/observation.jsonl   # 仅当 evaluate 相位有 SDK invoke
-evaluation/checks.json         # 仅当 evaluator 返回 well-formed checks
+task-artifacts/**              # run 阶段结束时收集的文件或目录树快照
+verifier-collect/**            # evaluation.collect 收集的路径快照（manifest 不含命令原文）
+evaluation/observation.jsonl   # 仅当 evaluate 阶段发生 SDK 调用时存在
+evaluation/checks.json         # 仅当 evaluator.py 返回有效 checks 时存在
 ```
 
-`task-artifacts/` 是 harvest 在 writer 停后写下的 **快照**。evaluate 从这里拷进打分 Host，不从 Agent 活 workspace 再读。tree 目录缺席、exclude 是否去掉 `target/`，都不是 PASS。
-
-`slim_sealed_attempt` **默认保留** `task-artifacts/`（file 与 tree）。丢掉的是 vendor raw / layer B，不是这份快照。cleanup 删除的是活的 box work root（`--keep-workspace` 才留下）；它不删除 evidence 上的 `task-artifacts/`。`ageval results regrade` 读的就是这份留下来的快照。
-
-`summary.json` 是相位墙钟，不是 vendor raw。Verifier 看 `result.json`；有 `observation.jsonl` 时 TrajectoryPanel；有 `checks.json` 时在文件树预览里渲染检查点。两种都有时 XOR toggle，默认轨迹。默认不留 `evaluation/evaluator_raw.json`。`slim_sealed_attempt` 与 Hub Attempt archive 同一套 keep/drop：留下 `observation.jsonl` 与 `checks.json`，丢掉 `evaluator_raw.json`。检查脚本路径是 dataset locator，不是归档 gold。
-
-`--keep-vendor-raw`（默认关）才保留 `backend_raw/`、per-invoke `request.json` / `events.jsonl` / `final-response.json` / `metadata.json`、失败 `stderr.txt`、`agent/events.jsonl`、`evaluator_raw.json`。`--keep-workspace` 只管宿主 work root（`l1-work`），与 vendor raw 无关。`ageval evidence` 跟可持久树走，轨迹文件 优先。只作用于新 run，不改写旧树。删文件不是 PASS。
-
-lock 与 evidence 禁止 host token。密钥 locator 只留名字。
-
-Suite：`<dataset>/.ageval/suite-runs/<id>/summary.json`（`pass_rate` 等是观测，不是 suite PASS）。
+若需在归档后保留底层原始调试文件（`backend_raw/`、单次调用的 `request.json` / `events.jsonl` / `final-response.json` / `metadata.json` 以及 `evaluator_raw.json`），可在运行时传入 `--keep-vendor-raw`。`--keep-workspace` 则用于保留宿主工作区临时目录，二者相互独立。

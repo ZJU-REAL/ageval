@@ -1,8 +1,8 @@
 # local environment
 
-First-party exclusive-slot winner for `environment: local`.
+First-party exclusive-slot implementation for `environment: local`.
 
-The Attempt uses a real directory tree on this host. In-box paths
+The Attempt uses a real directory tree on this host. In-environment paths
 (`/attempt/workspace`, `/attempt/home`, `/attempt/evaluation`, artifacts)
 map onto those directories. `exec` is a real subprocess; `attach_stdio`
 hands ACP a live `Popen` pipe. Gold stays off the Agent mount and is
@@ -31,7 +31,7 @@ environment: local
 ```
 
 No extra Python package. The process must be able to write the work root.
-This is a production kind, not a mock box.
+This is a production kind, not a mock environment.
 
 Not a Hub install. `ageval plugin install local` is rejected: the id is
 reserved.

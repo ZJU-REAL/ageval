@@ -5,9 +5,9 @@ exec`` argv, the uid/gid, the compose calls, and the rule that the daemon's own
 locator variables must never reach a process inside the box. Above it, the ACP
 executor and the Attempt phases see only the environment Protocol.
 
-Files move through a bind mount: the Attempt work root is the container's
-``/attempt``, so an upload is a copy on this side and a read is a read on that
-side. ``/attempt/evaluation`` therefore appears exactly when the evaluate phase
+Files under ``/attempt`` move through the bind mount. Other absolute paths
+use ``docker cp``. A compose service uses ``docker compose cp``.
+``/attempt/evaluation`` therefore appears exactly when the evaluate phase
 uploads it, and not one moment earlier.
 """
 
@@ -21,7 +21,7 @@ import shutil
 import subprocess
 import uuid
 from collections.abc import Mapping, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
@@ -34,12 +34,26 @@ from ageval.environments.protocol import (
     ExecResult,
     Placement,
 )
+from ageval.evidence.redaction import redact_text
 from ageval.plugins.base import BaseEnvironment
+from ageval.plugins.contrib.docker.compose_parity import (
+    AttemptParity,
+    is_runtime_compose,
+    prepare_runtime_compose,
+    resolve_attempt_parity,
+)
 from ageval.plugins.contrib.docker.images import (
     daemon_available,
     docker,
     host_platform,
     resolve_image,
+)
+from ageval.plugins.contrib.docker.resources import (
+    DockerRunResources,
+    docker_run_resource_args,
+    query_gpu_inventory,
+    resources_from_options,
+    write_sidecar_overlay,
 )
 from ageval.plugins.decorators import environment_plugin
 
@@ -47,7 +61,9 @@ BOX_ROOT = "/attempt"
 ATTEMPT_UID = 10001
 ATTEMPT_GID = 10001
 _MAX_STREAM_BYTES = 256 * 1024
+_CP_TIMEOUT_SEC = 600.0
 _PYTHON_VERSION_RE = re.compile(r"^\d+\.\d+$")
+_COMPOSE_SERVICE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$")
 
 # The daemon locators the docker CLI itself needs. They describe *this* machine,
 # so they must never be projected into a container.
@@ -124,15 +140,28 @@ class DockerHost(BaseEnvironment):
         self._user = _box_user(opts.get("user"))
         self._python_version = _box_python_version(opts.get("python_version"))
         self._egress = _text(opts.get("egress"))
+        self._network_mode_set = "network_mode" in opts
+        self._network_mode = opts.get("network_mode")
+        self._cap_add_set = "cap_add" in opts
+        self._cap_add = opts.get("cap_add")
+        self._main_environment_set = "main_environment" in opts
+        self._main_environment = opts.get("main_environment")
         raw_allow = opts.get("egress_allowlist") or ()
         if isinstance(raw_allow, (list, tuple)):
             self._egress_allowlist = tuple(str(item) for item in raw_allow if str(item).strip())
         else:
             self._egress_allowlist = ()
+        resources = resources_from_options(opts)
+        self._cpus = resources.cpus
+        self._memory_mb = resources.memory_mb
+        self._gpus = resources.gpus
+        self._gpu_types = resources.gpu_types
         self._proxy: object | None = None
         self._proxy_url: str | None = None
         self._container: str | None = None
         self._compose_project: str | None = None
+        self._compose_overlay: Path | None = None
+        self._compose_runtime: Path | None = None
         self._image: str | None = None
         self._started = False
         self._stopped = False
@@ -151,6 +180,8 @@ class DockerHost(BaseEnvironment):
     async def start(self, *, force_build: bool = False) -> None:
         if self._started:
             raise EnvironmentFailure("environment_already_started", "docker box already started")
+        parity = self._attempt_parity()
+        self._reject_service_network(parity)
         self._prepare_work_root()
         tag, _digest = resolve_image(
             task_root=self._task_root or self._repo_root,
@@ -162,12 +193,18 @@ class DockerHost(BaseEnvironment):
             python_version=self._python_version,
         )
         self._image = tag
-        # Sidecars come up first: the Attempt container joins their network, so
-        # a service is reachable by name and nothing needs an orchestrator.
+        # Resolve CPU / memory / GPU before any container exists. A missing GPU
+        # fails here, with no compose project and no Attempt container.
+        resource_args = self._resource_run_args()
+        # Sidecars come up first. The Attempt joins their project network, so a
+        # service is reachable by name. service:<name> instead shares that
+        # sidecar's network namespace: localhost is the sidecar's localhost.
         network = self._network
         if self._compose_file is not None:
             self._compose_up()
             network = f"{self._compose_project}_default"
+        if parity.service is not None:
+            network = f"container:{self._sidecar_container_id(parity.service)}"
         name = f"ageval-{uuid.uuid4().hex[:12]}"
         extra_run = self._start_egress_proxy()
         started = docker(
@@ -181,6 +218,8 @@ class DockerHost(BaseEnvironment):
             "no-new-privileges",
             "--network",
             network,
+            *resource_args,
+            *self._parity_run_flags(parity),
             *extra_run,
             *self._volume_flags(),
             "-w",
@@ -210,6 +249,8 @@ class DockerHost(BaseEnvironment):
         self._stop_egress_proxy()
         if self._compose_project is not None:
             self._compose("down", "-v")
+        self._discard_compose_runtime()
+        self._drop_compose_overlay()
         if self._container is not None:
             docker("rm", "-f", self._container, timeout=120.0)
         if delete and self._root.is_dir():
@@ -245,43 +286,49 @@ class DockerHost(BaseEnvironment):
         ]
         return await self._run_docker(prefix + argv, timeout_sec=timeout_sec)
 
-    async def upload(self, source: Path, dest: str) -> None:
-        """Copy into the bind-mounted work root; the container sees it at once."""
+    async def upload(self, source: Path, dest: str, *, service: str | None = None) -> None:
+        """Copy into the box. ``/attempt`` stays on the bind mount."""
         self._assert_started()
-        src = Path(source).expanduser()
-        if not src.exists():
-            raise EnvironmentFailure(
-                "environment_upload_missing",
-                f"upload source does not exist: {source}",
-            )
-        target = self.host_path(dest)
-        if src.is_dir():
-            if target.exists():
-                if target.is_dir():
-                    shutil.rmtree(target)
-                else:
-                    target.unlink()
-            target.parent.mkdir(parents=True, exist_ok=True)
-            copy_bind_tree(src, target)
-        else:
+        if service is None and str(dest or "").strip().startswith(BOX_ROOT):
+            src = Path(source).expanduser()
+            if not src.exists():
+                raise EnvironmentFailure(
+                    "environment_upload_missing",
+                    f"upload source does not exist: {source}",
+                )
+            target = self.host_path(dest)
+            if src.is_dir():
+                if target.exists():
+                    if target.is_dir():
+                        shutil.rmtree(target)
+                    else:
+                        target.unlink()
+                target.parent.mkdir(parents=True, exist_ok=True)
+                copy_bind_tree(src, target)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, target)
+            _make_box_writable(target)
+            return
+        await self._cp_into(Path(source), dest, service=service)
+
+    async def download(self, source: str, dest: Path, *, service: str | None = None) -> None:
+        self._assert_started()
+        if service is None and str(source or "").strip().startswith(BOX_ROOT):
+            src = self.host_path(source)
+            if not src.exists():
+                raise EnvironmentFailure(
+                    "environment_download_missing",
+                    f"download source does not exist in box: {source}",
+                )
+            target = Path(dest).expanduser()
+            if src.is_dir():
+                copy_bind_tree(src, target)
+                return
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, target)
-        _make_box_writable(target)
-
-    async def download(self, source: str, dest: Path) -> None:
-        self._assert_started()
-        src = self.host_path(source)
-        if not src.exists():
-            raise EnvironmentFailure(
-                "environment_download_missing",
-                f"download source does not exist in box: {source}",
-            )
-        target = Path(dest).expanduser()
-        if src.is_dir():
-            copy_bind_tree(src, target)
             return
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, target)
+        await self._cp_out(source, Path(dest), service=service)
 
     async def attach_stdio(
         self,
@@ -451,26 +498,113 @@ class DockerHost(BaseEnvironment):
 
     # --- compose sidecars ----------------------------------------------------
 
+    def _resource_run_args(self) -> list[str]:
+        inventory = query_gpu_inventory() if self._gpus > 0 else ()
+        return docker_run_resource_args(
+            DockerRunResources(
+                cpus=self._cpus,
+                memory_mb=self._memory_mb,
+                gpus=self._gpus,
+                gpu_types=self._gpu_types,
+            ),
+            inventory,
+        )
+
+    def _attempt_parity(self) -> AttemptParity:
+        return resolve_attempt_parity(
+            task_root=self._task_root,
+            compose_file=self._compose_file,
+            options=self._parity_options(),
+        )
+
+    def _parity_options(self) -> dict[str, object]:
+        """Only keys the caller actually set. Omitted keys fall through to the file."""
+        options: dict[str, object] = {}
+        if self._network_mode_set:
+            options["network_mode"] = self._network_mode
+        if self._cap_add_set:
+            options["cap_add"] = self._cap_add
+        if self._main_environment_set:
+            options["main_environment"] = self._main_environment
+        return options
+
+    def _reject_service_network(self, parity: AttemptParity) -> None:
+        if parity.service is None:
+            return
+        if self._compose_file is None:
+            raise EnvironmentFailure(
+                "environment_start_failed",
+                f"network_mode service:{parity.service} requires environment/compose.yaml",
+            )
+        if self._egress == "llm":
+            raise EnvironmentFailure(
+                "environment_options_invalid",
+                "network_mode service:* cannot be combined with egress: llm",
+            )
+
+    def _parity_run_flags(self, parity: AttemptParity) -> list[str]:
+        flags: list[str] = []
+        for cap in parity.cap_add:
+            flags.extend(["--cap-add", cap])
+        for key, value in parity.environment:
+            flags.extend(["-e", f"{key}={value}"])
+        return flags
+
+    def _sidecar_container_id(self, service: str) -> str:
+        result = self._compose("ps", "-q", service)
+        lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+        if result.returncode != 0 or len(lines) != 1:
+            raise EnvironmentFailure(
+                "environment_start_failed",
+                f"compose service {service!r} did not yield one running container",
+            )
+        return lines[0]
+
     def _compose_up(self) -> None:
+        assert self._compose_file is not None
+        overlay = write_sidecar_overlay(self._task_root / self._compose_file)
+        if overlay is not None:
+            self._compose_overlay = overlay
         project = f"ageval-{uuid.uuid4().hex[:10]}"
         self._compose_project = project
+        runtime = prepare_runtime_compose(self._task_root / self._compose_file, project)
+        if is_runtime_compose(runtime):
+            self._compose_runtime = runtime
         result = self._compose("up", "-d")
         if result.returncode != 0:
+            self._compose("down", "-v")
+            self._discard_compose_runtime()
             self._compose_project = None
+            self._drop_compose_overlay()
             raise EnvironmentFailure(
                 "environment_compose_failed",
                 f"docker compose up failed: {(result.stderr or result.stdout).strip()[-500:]}",
             )
 
+    def _drop_compose_overlay(self) -> None:
+        path = self._compose_overlay
+        self._compose_overlay = None
+        if path is not None:
+            path.unlink(missing_ok=True)
+
+    def _discard_compose_runtime(self) -> None:
+        path = self._compose_runtime
+        self._compose_runtime = None
+        if path is not None and is_runtime_compose(path):
+            path.unlink(missing_ok=True)
+
     def _compose(self, *args: str) -> subprocess.CompletedProcess[str]:
         assert self._compose_file is not None
         assert self._compose_project is not None
+        compose_path = self._compose_runtime or (self._task_root / self._compose_file)
+        files = ["-f", str(compose_path)]
+        if self._compose_overlay is not None:
+            files.extend(["-f", str(self._compose_overlay)])
         return docker(
             "compose",
             "-p",
             self._compose_project,
-            "-f",
-            str(self._task_root / self._compose_file),
+            *files,
             *args,
         )
 
@@ -487,13 +621,14 @@ class DockerHost(BaseEnvironment):
                 f"no compose project is up; exec(service={service!r}) is unavailable",
             )
         assert self._compose_file is not None
+        compose_path = self._compose_runtime or (self._task_root / self._compose_file)
         return await self._run_docker(
             [
                 "compose",
                 "-p",
                 self._compose_project,
                 "-f",
-                str(self._task_root / self._compose_file),
+                str(compose_path),
                 "exec",
                 "-T",
                 service,
@@ -502,11 +637,126 @@ class DockerHost(BaseEnvironment):
             timeout_sec=timeout_sec,
         )
 
+    async def _cp_out(self, source: str, dest: Path, *, service: str | None) -> None:
+        remote = _absolute_container_path(source)
+        if service is not None:
+            self._check_service(service)
+        target = dest.expanduser()
+        if target.exists():
+            if target.is_dir():
+                shutil.rmtree(target)
+            else:
+                target.unlink()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        result = await self._run_docker(
+            self._cp_argv(self._remote_ref(remote, service), str(target), service=service),
+            timeout_sec=_CP_TIMEOUT_SEC,
+        )
+        if result.exit_code != 0 or not target.exists():
+            tail = redact_text(result.stderr or "")[-300:]
+            raise EnvironmentFailure(
+                "environment_collect_missing",
+                f"collect copy failed for {remote} exit {result.exit_code}: {tail}",
+            )
+
+    async def _cp_into(self, source: Path, dest: str, *, service: str | None) -> None:
+        src = source.expanduser()
+        if not src.exists():
+            raise EnvironmentFailure(
+                "environment_upload_missing",
+                f"upload source does not exist: {source}",
+            )
+        remote = _absolute_container_path(dest)
+        if service is not None:
+            self._check_service(service)
+        if src.is_dir():
+            removed = await self.exec(["rm", "-rf", remote], timeout_sec=60, service=service)
+            if not removed.ok:
+                tail = redact_text(removed.stderr or "")[-300:]
+                raise EnvironmentFailure(
+                    "environment_collect_failed",
+                    f"collect copy failed for {remote} exit {removed.exit_code}: {tail}",
+                )
+        parent = str(PurePosixPath(remote).parent)
+        if parent not in {"/", "."}:
+            made = await self.exec(["mkdir", "-p", parent], timeout_sec=30, service=service)
+            if not made.ok:
+                tail = redact_text(made.stderr or "")[-300:]
+                raise EnvironmentFailure(
+                    "environment_collect_failed",
+                    f"collect copy failed for {remote} exit {made.exit_code}: {tail}",
+                )
+        result = await self._run_docker(
+            self._cp_argv(str(src), self._remote_ref(remote, service), service=service),
+            timeout_sec=_CP_TIMEOUT_SEC,
+        )
+        if result.exit_code != 0:
+            tail = redact_text(result.stderr or "")[-300:]
+            raise EnvironmentFailure(
+                "environment_collect_failed",
+                f"collect copy failed for {remote} exit {result.exit_code}: {tail}",
+            )
+
+    def _check_service(self, service: str) -> str:
+        name = service.strip()
+        if _COMPOSE_SERVICE_RE.fullmatch(name) is None:
+            raise EnvironmentFailure(
+                "environment_path_invalid",
+                f"compose service name is invalid: {service!r}",
+            )
+        if self._compose_project is None or self._compose_file is None:
+            raise EnvironmentFailure(
+                "environment_capability_missing",
+                f"no compose project is up; transfer(service={name!r}) is unavailable",
+            )
+        return name
+
+    def _remote_ref(self, remote: str, service: str | None) -> str:
+        if service is None:
+            assert self._container is not None
+            return f"{self._container}:{remote}"
+        return f"{self._check_service(service)}:{remote}"
+
+    def _cp_argv(self, src: str, dst: str, *, service: str | None) -> list[str]:
+        if service is None:
+            return ["cp", src, dst]
+        assert self._compose_project is not None
+        assert self._compose_file is not None
+        return [
+            "compose",
+            "-p",
+            self._compose_project,
+            "-f",
+            str(self._task_root / self._compose_file),
+            "cp",
+            src,
+            dst,
+        ]
+
     def _assert_started(self) -> None:
         if not self._started:
             raise EnvironmentFailure("environment_not_started", "docker box is not started")
         if self._stopped:
             raise EnvironmentFailure("environment_stopped", "docker box is already stopped")
+
+
+def _absolute_container_path(raw: str) -> str:
+    text = str(raw or "").strip()
+    if not text.startswith("/") or "\\" in text:
+        raise EnvironmentFailure(
+            "environment_path_invalid",
+            f"container path must be absolute: {raw!r}",
+        )
+    pure = PurePosixPath(text)
+    if any(part in {".", ".."} for part in pure.parts):
+        raise EnvironmentFailure(
+            "environment_path_invalid",
+            f"container path escapes its root: {raw!r}",
+        )
+    normalized = pure.as_posix()
+    if normalized != "/":
+        normalized = normalized.rstrip("/")
+    return normalized
 
 
 def copy_bind_tree(src: Path, dest: Path) -> None:

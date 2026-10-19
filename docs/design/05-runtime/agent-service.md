@@ -1,17 +1,15 @@
 # Agent Service / ACP
 
-两条 **独立** 的 coding-agent inlet，都占独占槽 `executor`。不要把第二条折进 ACP 插件，也不要写成 `executor: pi` / `executor: claude`。
+Coding agent 支持两条执行器接入路径，均实现 `executor` 独占槽。每个角色的 `agent_profiles.<role>` 独立绑定自身的 `executor` 实现（例如同一 Attempt 中 `solver` 可使用 `executor: acp`，`judge` 可使用 `executor: openai-http`），`lock.extension_bindings` 按角色 ID 分别记录绑定关系。
 
-`executor` 的独占赢家是 **每个 `agent_profiles` 一行一份**，不是 Attempt 上只许一个机制。同一 Attempt：solver 可以 `executor: acp`，judge 可以 `executor: openai-http`。`environment` 仍是 Attempt 级一份。两个插件仍不得抢**同一 profile graph** 上的 `executor`。lock 的 `extension_bindings` 按 profile id 各记一份。
-
-| 赢家 | JSON-RPC client 在哪 | 环境 cap | 完成信号 |
+| 执行器 | JSON-RPC 客户端位置 | 所需环境能力 | 完成判定信号 |
 | --- | --- | --- | --- |
-| `executor: acp` | **parent 唯一** ACP client（`attach_stdio` 管子） | `attach_stdio` | ACP 帧（`stopReason`） |
-| `executor: acp-oneshot` | **环境内** 一次性 client + ACP server | `exec` only | wrapper 进程退出 |
+| `executor: acp` | **宿主父进程**唯一 ACP 客户端（经 `attach_stdio` 双向流） | `attach_stdio` | ACP 协议帧（`stopReason`） |
+| `executor: acp-oneshot` | **环境内部**单次包装器进程 + ACP 服务端 | `exec` | 包装器子进程退出 |
 
-`executor: acp` 的规则不变：parent 是这条路径上**唯一**的 ACP JSON-RPC client。实现：`src/ageval/runtime/parent_agent.py` + `plugins/contrib/acp/`。结构约束见 [ARCHITECTURE.md](../../../ARCHITECTURE.md)。
+`executor: acp` 的核心实现位于 `src/ageval/runtime/parent_agent.py` 与 `src/ageval/plugins/contrib/acp/`。
 
-## `executor: acp`（parent client）
+## `executor: acp`（父进程客户端）
 
 ```yaml
 # profiles.yaml
@@ -20,200 +18,89 @@ agent_profiles:
   solver:
     executor: acp
     model: …
-    api_key: ${ZHIPU_API_KEY}   # locator；值不进 lock
+    api_key: ${ZHIPU_API_KEY}   # 环境变量名引用；明文不写入 lock
     options:
-      entry: pi   # 或 codex / claude-code / opencode / grok-build
+      entry: pi                 # pi | codex | claude-code | opencode | grok-build
     extensions:
       - plugin: acp
-      - plugin: docker   # 与 environment 赢家一致
+      - plugin: docker
 ```
 
-ACP `inject: [service: environment]`（按服务名拿 host，**不**绑 `plugin_id: e2b`），要求 capability `attach_stdio`。缺则 lock 失败，不要等到 invoke 才检查 attach_stdio。这是稳定接口：docker / e2b / ssh / daytona 都登记为同一个服务名；内部运输收在 `attach_stdio` 里。`exec` 是同一服务上的另一个方法（环境内一次性命令），不是第二 service。dsh / nooa inject `exec` / `upload`；`acp-oneshot` 只要 `exec`。三者都经 `host.exec` 跑环境内 worker，不得在 parent 里假定本机 POSIX 路径。环境没有 `attach_stdio` 时 **`executor: acp` 仍 lock 失败**；改走 `acp-oneshot`（或其它 exec 赢家），不是给 ACP 插件加 fallback。
+ACP 插件通过 `inject: [service: environment]` 声明依赖具备 `attach_stdio` 能力的环境服务；若所选环境不提供 `attach_stdio`，`ageval lock` 在运行前直接报错。
 
 ```python
 host = ctx.services.require("environment")
 pipe = await host.attach_stdio(argv, placement=placement, env=child_env)
-# JSON-RPC 走 pipe.stdin / pipe.stdout
+# JSON-RPC 通信通过 pipe.stdin / pipe.stdout 进行
 ```
 
-Placement 无 `container_id`。ACP 禁止 import docker / e2b / daytona / ssh。`wrap_docker_exec` 缩进 docker 插件。`run_attempt` 也会把赢家放进 `ctx.host`；inject 是 lock 时的依赖声明。
+切换不同的 coding agent 仅需修改 `options.entry`，不应写成 `executor: pi` 或 `executor: codex`。
 
-不要写 `executor: pi` / `executor: codex`。entry 是 ACP / oneshot 的 `options.entry`，不是独占槽赢家。
+## `executor: acp-oneshot`（环境内单次客户端）
 
-## `executor: acp-oneshot`（环境内 oneshot client）
-
-外置 `ageval.plugin/1`，`plugin_id: acp-oneshot`（机制名，不是产品名）。模式同 `plugins/miniswe/` / `plugins/dsh/`：parent 只 `host.exec`，不 `attach_stdio`。
+`acp-oneshot` 为外置插件包（`plugins/acp-oneshot`），仅要求环境提供 `exec` 能力：
 
 ```yaml
-environment: docker   # 或任何声明 exec 的 kind
+environment: docker
 agent_profiles:
   solver:
     executor: acp-oneshot
     options:
-      entry: pi   # 或 claude-code / opencode / …；与 ACP 同一组 id
+      entry: pi
     extensions: [acp-oneshot, docker]
 ```
 
-1. `inject: { service: environment, capabilities: [exec] }`。缺 `exec` 则 lock 失败。**不要** `attach_stdio`。
-2. 一次 `invoke` = 一次 `host.exec`。parent 把 entry 的 `acp_command`（来自 ACP entry 表）、prompt、cwd、模型绑定交给环境内 wrapper；等进程退出后解析 `AgentResult`。
-3. wrapper 在环境内 spawn 该 entry 的 ACP stdio server，自己当一次性 client：`initialize` → `session/new` → `session/prompt`，permission RPC 与 `stopReason` 都留在环境内。默认 **不** 跨 `invoke` 复用 session。
-4. `trajectory_collect` 映射 wrapper 写出的事件。Core **不** 刮 vendor CLI 日志。
-5. entry 表与 ACP 共用 id（pi / claude-code / opencode / …）；本插件的 `execution_mode` 是 oneshot wrap，不是 `acp-stdio`。切厂商只改 `options.entry`。
-6. 笛卡尔积：任何报 `exec` 的环境（docker / ssh B / e2b / 只提供 exec 的云 kind）。`executor: acp` 在没有 `attach_stdio` 的环境上仍然 lock 失败。
+每次 `invoke` 通过一次 `host.exec` 在环境内启动包装器脚本，由包装器在环境内拉起对应 `entry` 的 ACP stdio 服务端并顺序完成 `initialize`、`session/new` 与 `session/prompt`，默认不跨调用复用会话；结束后由 `trajectory_collect` 将事件映射为标准轨迹格式。
 
-环境内 wrapper 是 stdlib JSON-RPC，**不是** 把 Python ACP SDK 装进 Attempt 镜像。SDK 仍只在 parent，且只服务 `executor: acp`。
-
-无新 CLI flag。凭证仍是 locator，投影进 **exec** env（与 ACP 同一套 BYOK，不是 attach 管子）。空 job / 未装此插件 = 现行为。
-
-## 调用链
+## 调用流程与上游重试等待（Upstream Stall）
 
 ```text
 run.py / evaluator.py  Agent.session(profile).invoke
-  → unix socket AGEVAL_AGENT_SERVICE_SOCK
+  → Unix socket (AGEVAL_AGENT_SERVICE_SOCK)
   → ParentAgentService
-       before_agent_invoke（一次，不重试）
+       before_agent_invoke（单次调用仅触发一次）
        executor.invoke → host.attach_stdio(entry argv) 或 host.exec（环境内 worker）
-                        或 openai-http POST /chat/completions
-                        或 anthropic-http POST /messages
-       非 ok → upstream stall（相位时钟停、固定 60 秒、同一 prompt / tools / messages；4xx 除 408 / 429 外不重试）
-       after_agent_invoke（最终结果一次）
+                        或 openai-http / anthropic-http 请求
+       若返回非 ok 且可重试 → 进入 upstream_stall（暂停当前阶段计时器，每 60 秒重试一次）
+       after_agent_invoke（最终结果触发一次）
        normalize_agent_result
-  → 轨迹文件：run 相位 → trajectory.jsonl
-           evaluate 相位 → evaluation/observation.jsonl（省略 user）
+  → 轨迹记录：run 阶段写入 trajectory.jsonl；evaluate 阶段写入 evaluation/observation.jsonl（省略 user 提示行）
 ```
 
-`ParentAgentService.invoke` 只回 `AgentResult`（含可选 `tool_calls`）。**不**在每次 invoke 后 `download` 环境内 workspace。轨迹来自 executor events。publishable 在 **solver writer 停后** 由 run 相位 harvest 一次（Protocol `download`；tree 按 exclude 做快照），evaluate 再把快照 upload 进 **打分 Host**。
+当 `executor.invoke` 返回可重试的传输错误时，`ParentAgentService` 进入 `upstream_stall` 等待重试（详细规则见 [07](../07-budget-evaluation-failure.md)）：
+- 等待预算由 `options.upstream_stall_seconds` 控制（默认读取 `clocks.py` 中的 `3600` 秒；设为 `0` 时禁用重试），重试间隔固定为 `60` 秒，且同一次 `invoke` 的重试不重复扣减 `agent_invocations` 配额。
+- 等待期间暂停 `run` 阶段的 `wall_time_seconds`（或 `evaluate` 阶段的 `evaluate_seconds`）计时器。
+- HTTP 执行器除 `408` 与 `429` 外的 `4xx` 响应属于不可重试的 `ModelConfigError`；ACP 执行器仅在当前 prompt 尚未修改工作区时允许在同一会话上重发。
 
-executor 返回的 `ok` 不是 true、且这次结果可以重试时，这次 invoke 进入 upstream stall，而不是第一次失败就结束 Attempt。规则、预算和 CLI 见 [07](../07-budget-evaluation-failure.md)。要点：
+## 多会话并发调度
 
-- 预算是 profile `options.upstream_stall_seconds`（省略时取 [`clocks.py`](../../../src/ageval/runtime/clocks.py) 的 `upstream_stall`，3600；`0` 关掉）。间隔是 `stall_interval`，60 秒。同一次 invoke 只扣一次 `agent_invocations`。
-- stall 期间 run 的 `wall_time_seconds` 或 evaluate 的 `evaluate_seconds` 不走，worker 等待跟着延长。
-- wall 已到期、额度已用完、redaction 失败、offline forced 这些发生在 executor 之前，立刻拒绝，不显示 `upstream_stall`。
-- HTTP executor 的 4xx，除 408 与 429 外，是模型配置错误，不进入 stall。408、429 和其它非 ok 仍可重试。ACP 的超时、空闲超时、unexpected EOF 和协议/传输错误是 `TransportStall`；只在这条 prompt 还没改 workspace 时，于同一 session 重发；改过则 `repeatable: false`，一行 `not_repeatable`，不等待。
-- miniswe 的 stall 包住进程内当前模型查询，不新开 agent，并关掉该包自己的短 tenacity。内层预算用尽（`stall_exhausted`）时外层不再开一轮。
-- 证据是一条 `upstream_stall` 事实。stall 不是 PASS，也不是 `result.json` 的 status。
+`ParentAgentService` 的 socket 接收循环采用异步并发分发：
+- `run` 阶段的每次调用依次经过 `admitted → queued → running → terminal` 四个状态；`limits.agent_invocations` 在即将执行 `executor.invoke` 时原子扣减一次（排队期间被取消不扣减）。
+- `limits.agent_concurrency`（默认 `1`）限制同时处于 `running` 状态的 `run` 阶段调用数。同一会话内的调用按到达顺序串行；不同会话的调用可在支持并发的执行器（声明了 `concurrent_sessions` 的 `openai-http` 与 `acp`）上并发重叠，直至达到 `agent_concurrency` 上限。未声明并发支持的执行器在发生重叠调用前直接拒绝并返回 `executor_not_concurrent`。
+- 取消操作通过 `op: cancel`（携带 `request_id`）发送至父进程：父进程移除排队项，或通知执行器终止当前调用（如 ACP 发送 `session/cancel` 并关闭对应进程），待调用进入 `terminal` 状态后返回。
+- `run` 阶段结束时，`seal_run` 拒绝新的 solver 调用、移除排队项并取消及排干所有在途 solver 调用，随后标记 `mark_writers_stopped`。`ParentAgentService` 保持运行，供 `evaluate` 阶段的 `judge` 角色串行调用（`judge` 调用不占用 `agent_concurrency` 与 `agent_invocations`）。
 
-Agent Service **跨 evaluate 保持**（或 reopen）：`evaluator.py` 才能 `Agent.session`。run 结束停的是 **solver writer**（该相位已打开的 profile 不得再 invoke），不是把整段服务拆掉再打分。gold 已经在打分 Host；solver 不得在 gold 之后 invoke。Attempt 结束（cleanup / `run_attempt` finally）才停服务。
+## `evaluate` 阶段的环境绑定
 
-## 并发调度
+当启用 `evaluate_host.isolated: true` 时，`evaluator.py` 仍在父进程子进程中运行并通过本机 Unix socket 连接 `ParentAgentService`；`evaluate` 阶段新开启的角色（如 `judge`）会将环境服务绑定至独立评分容器（若声明了 `evaluation.environments` 命名评分容器表，ACP 角色必须通过 `session(profile_id, environment=<name>)` 指定目标评分容器，并在该容器启动后执行一次 `after_environment_ready` 探测）。
 
-Accept 循环接到一帧就交给处理线程，下一帧不必等这只 invoke 结束。SDK 用异步传输。只把阻塞调用丢进线程、parent 仍一帧一帧处理，不算这条路径完成。
+## `openai-http` 与 `anthropic-http` 原生工具调用
 
-run 相位的一只 invoke 有四个状态：admitted（已进入 parent）、queued、running、terminal。排队的可以取消，不调用 executor。`limits.agent_invocations` 在即将调用 executor 时原子扣一次。同一次 invoke 的 upstream stall 重试不另扣。排队期间被取消不扣。wall 已到期、额度已用完、redaction 失败、offline forced 仍在 executor 之前拒绝，不 stall。
+- **`openai-http`：** 支持 `api: chat`（`/chat/completions`，顶层 `reasoning_effort`）与 `api: responses`（`/responses`，嵌套 `reasoning.effort` 及扁平函数工具格式），绝不在失败时从 `responses` 隐式回退至 `chat`。
+- **`anthropic-http`：** 独立实现 Anthropic Messages API（`POST /messages`，使用 `x-api-key` 与 `anthropic-version` 请求头），仅支持 `api: chat`，将 SDK 的 OpenAI 格式 `tools` 与 `messages` 转换为 Anthropic `input_schema`、`tool_use` 与 `tool_result` 块，并支持 `model.extra.thinking`。
+- **Token 与费用记录（`usage`）：** 每次调用的 `AgentResult.usage` 与轨迹 `terminal.usage` 记录标准字段 `prompt_tokens`、`completion_tokens`、`cached_tokens` 与 `cost_usd`（仅在后端实际报告时写入；未报告、超时丢失、解析失败或仅部分返回时标记 `unavailable` 原因：`not_reported` / `lost_on_timeout` / `parse_failed` / `partial`，绝不虚构为 `0`）。厂商附加统计信息保存在同级 `extra` 字段中。若 ACP 入口未直接返回一等 usage 但声明了 `usage_journal`，执行器会从 Attempt `$HOME` 下的会话日志累加对应指标。
 
-`limits.agent_concurrency` 封顶同时处于 running 的 run 相位 executor invoke。省略等于 1。同一 session 按到达顺序串行；占这只额度的是正在跑的那一只。不同 session 可以重叠到这只额度，包括同一个 profile。evaluate 相位的 judge 保持串行准入，不占 `agent_concurrency`，也不占 `agent_invocations`。
+## 凭据管理（BYOK / BYOA）与 Loopback 规则
 
-执行器要重叠，须声明自己可以在不同 session 上并发（`concurrent_sessions`）。没有声明时，第二只会造成重叠的 invoke 在效果前拒绝，错误 `executor_not_concurrent`。不把这种执行器悄悄当成已经并发，也不把进程留在取消之外。`openai-http` 与 `executor: acp`（每个 session 自己的 entry 进程）声明可以重叠。其它执行器在重叠发生前被拒绝。
-
-取消走另一帧 `op: cancel`，带这只 invoke 的 `request_id`。parent 去掉排队项，或要求执行器取消并等到这只 invoke 进入 terminal 再应答。丢掉 socket、取消 Python task、或仍在跑的 `to_thread` 不算排干。`openai-http` 停止本地等待和 stall 重试，不把稍后到达的响应写成这次结果；不声称远端推理已中止。ACP 发协议 `session/cancel`，并在现有关闭路径上结束自己持有的 entry 进程。
-
-`seal_run` 拒绝新的 solver 工作，去掉排队的 solver invoke，取消并排干在途的 solver 执行，然后 run 相位才 `mark_writers_stopped`。harvest、gold upload、evaluate 都在这之后。服务仍在，evaluate 的 judge 仍可开 session。worker 正常返回、崩溃、超时、用户取消、cleanup 都走这条所有权。
-
-每只 invoke 自己的 stall。相位时钟的冻结按只计数：一只恢复不得把另一只还开着的冻结清掉。证据里的 invocation id、observation、usage、错误按 session 与 invocation 归位。并发 begin 的 `seq` 不重复。
-
-## evaluate 相位的 attach 目标与环境内 socket
-
-`executor: acp` 仍 `inject: [service: environment]`，parent 仍是唯一 JSON-RPC client。缺省（同一环境）attach 目标就是 run 那只 Host，与今日相同。
-
-`evaluate_host.isolated: true` 时：
-
-- `evaluator.py` 与 `run.py` 一样是 **parent 子进程**。`AGEVAL_AGENT_SERVICE_SOCK` 是本机 unix 路径，不 bind-mount 进容器。
-- evaluate 相位的 `Agent.session`（judge 等 **未** 在 run 用过的 profile）走同一 Parent Agent Service。ACP `attach_stdio` 打 **打分 Host**（environment 服务 rebound 到当时的打分实例），不是 Agent Host。solver 仍密封。
-- 有 `evaluation.environments` 时，`session(profile_id, environment=<name>)` 只在 evaluate 相位（`seal_run` 之后）把 environment 服务绑到那只命名 Host（懒 start + **对该 profile** 跑 `after_environment_ready`）。未知名、run 相位点名、或 ACP 省略名字一次失败，不 start。省略 `environment=` = 无名表时的那只打分 Host。`openai-http` / `anthropic-http` 忽略 `environment=`。
-- isolated 打分环境 start 之后，对上述 ACP profile 再跑 `after_environment_ready`（probe；bake 已匹配则跳过 `install_command`）。不要把 solver 的 ACP 配方装进打分镜像。
-- Agent 容器 **没有** docker daemon socket。ACP / `attempt` / `run.py` 仍然不见 `container_id`。
-
-observe 这些 invoke：`evaluation/observation.jsonl`（省略 `user` 行）。不是 PASS。
-
-ACP attach 发生在第一次 invoke，不是独立 phase。`acp-oneshot` 每次 invoke 都 exec 一次 wrapper，完成 = 该进程退出码 + 解析出的 `AgentResult`。Harness completed / 轨迹 / judge 输出 **不是** PASS。
-
-Socket 帧可带 `tools` / `messages`（省略 = prompt-only）。parent 原样转给 executor；ACP 忽略这两项。`tool_calls` 回 worker。request.json / trajectory **只记 locator 与目录名，不记密钥**。
-
-## openai-http 原生 tools
-
-kind 名仍是 `openai-http`（api-client，Chat Completions）。**不要**在这个 kind 里加 Anthropic dialect 开关。Core 没有 LiteLLM。DashScope 等 OpenAI 兼容口、以及 Anthropic 官方的 OpenAI 兼容层，仍走 `openai-http`。Anthropic Messages（`POST /messages`、`x-api-key`、`tool_use` 块）是另一独占赢家 `anthropic-http`。
-
-| | 行为 |
-| --- | --- |
-| 省略 `tools` | 今日路径：`messages: [{role: user, content: prompt}]`，读 `choices[0].message.content` |
-| 题包传入 `tools` | POST body 带 `tools`；读 `choices[0].message.tool_calls` → `AgentResult.tool_calls` |
-| `messages` | 若提供，作为 chat 历史（不再只包一轮 prompt） |
-| capability | `tools: native`，`session: new-only`（逻辑 session，无 provider resume） |
-| 凭证 | 一等字段 `model` / `base_url` / `api_key`（env locator）。远程 URL 缺钥则不能进入运行。loopback 空钥是 **HTTP executor 规则**（`openai-http` / `anthropic-http` / `dsh` / `nooa` / `miniswe`），不是 openai-http 特例 |
-| `model` | 嵌套 Spec，字段表见 [16](../16-model.md)。`api: chat` 把 effort 写成顶层 `reasoning_effort`；`api: responses` 只写 `reasoning.effort`，并 POST `/responses`。省略 effort 不发。`timeout` 是单次 HTTP 时钟，`watchdog` 到期是可重试的传输失败。`extra` 只允许 `provider`。evidence：`locked_reasoning_effort` / `actual_reasoning_effort`（HTTP 200 时二者相同；4xx 时 actual 为 null） |
-
-`api: responses` 时，SDK 的 `tools` / `messages` 在这个 executor 边界改写。`tools` 是扁平的 `{type: function, name, description, parameters}`，不再包一层 `function`。assistant 的 `tool_calls` 写成 `function_call`，role `tool` 写成 `function_call_output`。Chat Completions 仍用上面的表。网关没有 `/responses` 时这次调用失败，不退回 chat。
-
-tau2-class harness（`minimal-demo` 的 `tau2-dialog-min`、`examples/datasets/tau3-*`）把域 schema 传入 invoke；收到 `tool_calls` 后走 package `Environment.get_response` / `ToolSet.call`，再 `record_observation` 把回包挂到该 invoke。原生 `tool_calls` 是 **HTTP api-client 的主动作通道**（`openai-http` / `anthropic-http`）；「Return ONLY JSON」只留给没有 `tool_calls` 的文本 executor（ACP）。禁止在 Core 里 scrape vendor stdout 当工具通道。
-
-`openai-http` 的 executor events 用 Core 合同：`kind: tool` + `phase: start` + `tool_call_id` / `function_name` / `args`。环境观察是 `phase: update`（source `ageval`），不是 HTTP 响应的一部分。
-
-`AgentResult.usage` 必填，是 `Usage` 或 `UsageUnavailable`。轨迹 `terminal.usage` 是同一份密封 dict（见 [evidence.md](evidence.md)）：一等 `prompt_tokens` / `completion_tokens` / `cached_tokens` / `cost_usd` 只在后端报告了该量时出现。没有报告、时钟打断前没有数字、usage 载荷解析失败、或超时前只收到一部分，写成 `unavailable`，理由是 `not_reported` / `lost_on_timeout` / `parse_failed` / `partial`。不写 JSON null，不把缺量编成 0。厂商 leftover 与插件袋在兄弟字段 `extra`。`openai-http` 从 Chat Completions `usage` 映射；`anthropic-http` 从 Messages `usage` 映射；ACP 从 `PromptResponse.usage` + `usage_update` 映射。usage / extra 是观察，不是 PASS。
-
-`partial` 可以带上已经收到的量。suite 合计不把这些量算进 token、费用或均价，另计 `questions_with_usage` 与 `questions_usage_unavailable`，并给出理由直方图 `usage_unavailable`。
-
-ACP 的空闲超时、总超时、EOF 和协议异常走同一次映射，保留当时已经收到的量。有数据时理由是 `partial`，`extra` 带 `usage_partial: true` 和 `usage_source`。没有数字的超时是 `lost_on_timeout`。`session/prompt` 正常返回不写这两键；没有数字时理由是 `not_reported`。invoke 未完成时这袋写在该次 metadata 上，record 放进这一轮 terminal。
-
-Entry 可以声明 `usage_journal`：Attempt HOME 下的一个目录、要累加的 JSONL 记录、以及源字段到 `prompt_tokens` / `completion_tokens` / `cached_tokens` / `cost_usd` 的对应。ACP 没有一等 usage 时，执行器读这个目录里的会话文件并累加。`extra.sources.session_journal` 为 true。正常返回不写 `usage_partial` / `usage_source`。超时、EOF 和协议异常再写 `usage_partial: true` 与 `usage_source: session_journal`。目录不存在或没有匹配记录时理由仍是 `not_reported`（超时且没有数字则是 `lost_on_timeout`）。ACP 已经给出一等 usage 时不读这份日志。
-
-## anthropic-http 原生 tools
-
-kind 名是 `anthropic-http`（api-client，Anthropic Messages）。与 `openai-http` **并列**的独占 `executor` 赢家，不是它的 dialect。SDK `tools=` / `messages=` 仍是 OpenAI 形（见 [03](../03-task-run-and-sdk.md)）；翻译发生在 **这个 executor 边界**，Core 不翻译。
-
-| | 行为 |
-| --- | --- |
-| 路径 | `POST {base_url}/messages`（默认 `https://api.anthropic.com/v1`） |
-| 鉴权 | `x-api-key` + `anthropic-version`（默认 `2023-06-01`）。不用 Chat Completions 的 `Authorization: Bearer` |
-| 省略 `tools` | `messages` 仅 user/assistant；`system` / `developer` 提到顶栏 `system`；读 `content[]` 里的 `text` |
-| 题包传入 `tools` | 译成 Anthropic `tools[].input_schema`；读 `content[]` 里的 `tool_use` → `AgentResult.tool_calls` |
-| `messages` | OpenAI 形历史：`tool_calls` → `tool_use` 块；role `tool` → `tool_result`（可合并连续条） |
-| capability | `tools: native`，`session: new-only`，`execution_mode: api-client` |
-| 凭证 | 同 HTTP executor 规则。`api_key` 缺省 locator `ANTHROPIC_API_KEY`。loopback 空钥省略 `x-api-key` |
-| `options` | 冻结 `AnthropicHTTPOptions`。字段与缺省见 [16](../16-model.md) 的 Executor options |
-| `model` | 嵌套 Spec，字段表见 [16](../16-model.md)。本 executor 只接受 `api: chat`。`extra.thinking` 原样进入 Messages JSON。`reasoning.effort` 不在支持字段里。`timeout` / `watchdog` 与 openai-http 同一对时钟 |
-
-`thinking` 块映成 thought 事件（`channel: thought`）。events 合同与 openai-http 相同（`source: anthropic-http`）。
-
-官方 Anthropic 的 OpenAI 兼容口（同一把 `ANTHROPIC_API_KEY` + `base_url: https://api.anthropic.com/v1` 打 `/chat/completions`）继续用 `openai-http`。只有 Messages 的端点、以及要 thinking 块 / prompt cache 原生字段时，用 `anthropic-http`。
-
-## 凭证：BYOK / BYOA
-
-两条，都不是整份 `os.environ`：
-
-| | 含义 | 缺则 |
+| 模式 | 含义 | 缺失时行为 |
 | --- | --- | --- |
-| **BYOK** | 声明过的 API key env（`credential_env_names` / binding `api_key` locator）投影进环境 | 缺钥则不能进入运行 |
-| **BYOA** | `keyless_auth`：allowlist copy 本机订阅 auth 文件进 attempt HOME，**不** mount 宿主 `$HOME` | 仅警告（OAuth / 本机登录 entry） |
+| **BYOK** | 将声明的 API 密钥环境变量（`credential_env_names` 或 profile `api_key` 引用）按白名单注入子进程环境 | 预检或调用直接报错终止 |
+| **BYOA** | `keyless_auth`：按白名单将本机订阅登录凭据复制到 Attempt `$HOME`（不直接挂载宿主机整个 `$HOME`） | 仅输出警告 |
 
-子进程环境只投影 allowlist（`PATH` / `HOME` / `LANG`、entry 声明的 credential 名、binding 的 `api_key` / `base_url`、`fixed_env`）。宿主里未声明的 token 进不了 entry。
+对于 HTTP 类执行器（`openai-http`、`anthropic-http`、`dsh`、`nooa`、`miniswe`），当锁定的 `base_url` 主机名为本机回环地址（`127.0.0.1`、`localhost` 或 `::1`）时，允许省略 `api_key` 或对应的环境变量值为空。
 
-`--probe` / `ageval executors -v`：`credential_missing` 在需要密钥的 entry 上过不了检查就不能进入运行；keyless 只警告。HTTP executor 在锁定 `base_url` 为 loopback 且钥省略 / locator 为空时 **不** 报 `credential_missing`。
+## ACP 运行时配置覆盖与探测（`after_environment_ready`）
 
-### HTTP loopback 空钥
-
-`openai-http` / `anthropic-http` / `dsh` / `nooa` / `miniswe` 共用一条 host-only 判断（`src/ageval/plugins/http_loopback.py`）：host 仅为 `127.0.0.1` / `localhost` / `::1`。不含 RFC1918、不含名字里碰巧带这些子串的 URL。
-
-- loopback 且 `api_key` 省略或 locator env 为空 → invoke 继续（空 `Authorization` 或按该协议省略头）。
-- 非 loopback 缺钥 → 仍不能进入运行。
-- 不改 lock schema；locator **值**不进 lock / overlay / trajectory。ACP / `keyless_auth` 不动。
-
-## Agent 运行时（挂 `after_environment_ready`）
-
-运行时 entry 表是包内 `acp_entries.json`，再并上 `$AGEVAL_HOME/acp-entries.json`（未设置 `AGEVAL_HOME` 时目录是 `~/.ageval`）。文件不存在就不并。家目录里的 `entry_id` 与包内 id 相同则失败，不覆盖包内那一行。官方 Attempt 镜像的 `install-executors.sh` 和 `acp-entries.lock.json` 只收包内 entry。`--agent` 和内置卡仍只用包内 id；家目录文件不是 harness 卡。
-
-0. **lock overlay（Attempt HOME，不拷宿主）。** lock 已有 `model` / `api_key` locator / 可选 `base_url`。箱子 `start` 之后、`attach_stdio` 之前，ACP contrib 按 **entry** 写成该引擎自己的配置文件（Pi：`.pi/agent/models.json` + `settings.json`；OpenCode：`.config/opencode/opencode.json`；Codex：`.codex/config.toml`（Attempt 已隔离，写 `sandbox_mode = danger-full-access`，禁止再套一层 bwrap）；Claude Code：`.claude/settings.json`）。`entry-default` 不写。Pi 与 OpenCode 只写 locator 引用（`$ENV`、`{env:NAME}`），不写密钥。Codex 的 `base_url` 在写 overlay 时把 locator 名解析成 URL；环境变量未设置则省略该键。**禁止**从宿主 `~/.pi` / `~/.config` 拷 catalog。local / docker / e2b 同一条 Attempt HOME。Claude Code 同时把 lock 的 `model` 投影进 attach env（`ANTHROPIC_MODEL`；有 `base_url` 时再写 `ANTHROPIC_DEFAULT_*` / `CLAUDE_CODE_SUBAGENT_MODEL`）。Codex ACP 默认 `workspace-write`（bwrap）；Attempt 里投影 `INITIAL_AGENT_MODE=agent-full-access`，并写 `.codex/models.json` + `model_catalog_json`（slug 等于 `model`）。grok-build 仍 argv `--model`。
-1. 读 `options.entry`（如 `pi`）→ 需要哪些环境内二进制（`pi`、`pi-acp`、…）以及 entry 表钉死的包版本。
-2. `host.exec` 先对每个钉死包跑 `npm ls -g --depth=0`，版本必须相等；再对必需命令做 realpath，必须等于该包 `package.json` 的 `bin`。Mode 1 的必需命令是 `engine_command` 和 `acp_command[0]`；Mode 2/3 只查 `acp_command[0]`。detect 列表里的别名缺失，或别名指到另一份文件，都不算失败。这两项都过了才做一次 stdio JSON-RPC `initialize`（不是 `session/prompt`），argv[0] 是通过检查的绝对路径，后面的参数保持声明。这取代了把 `versions` 留空、只看 PATH 名字的脚本。同名但协议不是 stdio ACP（例如只开 TCP 的旧 `opencode`）算未命中。
-3. **三项都齐就跳过。** docker 上题包配方已叠 ACP `image_layers`、且版本、realpath、stdio `initialize` 都命中时，不跑 `install_command`。版本或 realpath 不对，按 **ACP entry 自己的** `install_command` `exec` 一次，再探一次。安装退出非零则 `acp_runtime_install_failed`，不再探，不 `initialize`，不 `attach_stdio`。第二次仍不对则 `acp_runtime_missing`，同样停。版本和 realpath 已齐、只有 `initialize` 失败时不安装。失败 = environment 相位失败。不把「怎么装 opencode」下放到 environment 插件。invoke 禁止把 `npm i` / 浮动 `npx` 当 happy path。
-4. 不把安装写进 task `setup.sh`。`setup.sh` 只本题依赖。
-5. **build 期 bake（docker）。** ACP 插件声明 `config.image_layers`（`docker/Dockerfile.bake`），合同与 miniswe / dsh / nooa 相同：`ARG BASE_IMAGE` / `FROM ${BASE_IMAGE}`，缺 Node 才装 Node，再 `npm install -g` lock 绑定 `options.entry` 在 `acp_entries.json` 里钉死的 engine + ACP 包。只 bake **当前绑定的 entry**，不把五份 entry 写进每张题图。内容键已含插件层正文（`src/ageval/plugins/contrib/docker/images.py`）：同配方 + 同 entry + 同 platform 复用；同配方换 entry → 新层；换 `model` 不进内容键。题包已 `FROM ageval-attempt:base` 时叠层幂等（pin 已在基座则同 pin）。无浮动 `npx`。
-
-Python ACP SDK 只在 parent，不进 Attempt 镜像。
-
-厂商私有格式翻译在进程外 ACP entry（Mode 1 shim / Mode 2 原生 / Mode 3 厂商包）。禁止在 Core 里再写 vendor stdout scrape。
-
-batch 默认 auto-approve，不提权、不突破未投影路径。decision 进 evidence。
-
-Pi：官方 registry `pi-acp`（npm `pi-acp`，桥 `pi --mode rpc`）。勿与反向桥 `pi-shell-acp` 混淆。
-
-官方 Attempt 镜像 `src/ageval/plugins/contrib/docker/attempt/` 在 **build 期** 写入镜像 最低 entry 的 engine + ACP 入口（Mode 1 同时装 engine 和 adapter：codex/claude/**pi** + 各自 adapter）。配方随 CLI wheel 分发。`ageval run` 先 pull `ghcr.io/zju-real/ageval-attempt:<cli-ver>` 为本地 `ageval-attempt:base`，没有再用包内 Dockerfile 构建。题包配方不是这份基座时（例如 `FROM ubuntu:24.04`），由 ACP `image_layers` 在题图上再 bake **绑定的** `options.entry`；不要为此改写题包 `FROM`，也不要在 invoke 后再 `npm i`。
+运行时 ACP entry 表由包内 `acp_entries.json` 与可选的 `$AGEVAL_HOME/acp-entries.json` 合并而成（包内内置 ID 不可被覆盖）。在环境启动后、`attach_stdio` 之前：
+1. **生成运行时配置覆盖文件：** 在 Attempt `$HOME` 下按 `entry` 生成对应的配置文件（如 Pi 的 `.pi/agent/models.json`、OpenCode 的 `.config/opencode/opencode.json`、Codex 的 `.codex/config.toml`、Claude Code 的 `.claude/settings.json`），其中仅写入环境变量引用或已解析的 `base_url`，不写入明文密钥，也不拷贝宿主机个人目录配置。
+2. **版本与路径探测：** 通过 `host.exec` 核对全局 npm 包版本（`npm ls -g --depth=0`）与必需命令的 `realpath`，随后执行一次 stdio JSON-RPC `initialize` 握手。若三项均通过（如已在构建期写入镜像），则跳过安装；若版本或路径不匹配，则执行一次该 entry 的 `install_command` 并再次探测，仍不满足则以 `acp_runtime_install_failed` 或 `acp_runtime_missing` 终止 `environment` 阶段。

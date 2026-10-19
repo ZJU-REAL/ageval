@@ -1,6 +1,6 @@
 # ssh environment
 
-First-party exclusive-slot winner for `environment: ssh`.
+First-party exclusive-slot implementation for `environment: ssh`.
 Implementation: `src/ageval/plugins/contrib/ssh/host.py`. Protocol verbs
 only; no vendor handle leaks into ACP / `run.py`.
 
@@ -33,12 +33,12 @@ Job knobs are `environment_options` (not `extensions[].options`). `${NAME}` in h
 | `environment_options.user` | unset | Remote user. Locator ok. |
 | `environment_options.port` | unset (ssh default) | Remote port. Locator ok. |
 | `environment_options.key_env` | unset | Env **name** of the private key. If set, that env must be present at preflight. |
-| `environment_options.image` | empty | Empty → **A** (the remote machine is the box). Non-empty existing tag → **B** (`start()` does remote `docker run`; nothing is baked at invoke). |
+| `environment_options.image` | empty | Empty → **A** (the remote machine is the environment). Non-empty existing tag → **B** (`start()` does remote `docker run`; nothing is baked at invoke). |
 | `environment_options.root` | `/tmp/ageval-<id>` | Remote work root created on `start()`. |
 
 ## A vs B
 
-`environment_options.image` empty → **A**: the remote machine is the box.
+`environment_options.image` empty → **A**: the remote machine is the environment.
 `attach_stdio` is `ssh -T -- argv`.
 
 A non-empty **existing** image tag → **B**: `start()` does remote `docker run`
@@ -75,7 +75,7 @@ Until the official remote transport is consumable from the parent client:
 
 `exec` / `upload` / `download` are the Protocol surface for in-environment workers.
 Directory `upload` / `download` copy **contents** (not a nested `dest/src`).
-Agent Service does not harvest the box workspace after every invoke. After
+Agent Service does not harvest the environment workspace after every invoke. After
 writers stop, the run phase downloads **missing** publishable files from
 `/attempt/workspace` onto parent `task-artifacts`.
 

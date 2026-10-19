@@ -22,6 +22,7 @@ from ageval.environments.protocol import (
     EnvironmentFailure,
     ExecResult,
     Placement,
+    reject_foreign_service,
 )
 from ageval.plugins.base import BaseEnvironment
 from ageval.plugins.decorators import environment_plugin
@@ -169,8 +170,9 @@ class LocalHost(BaseEnvironment):
             truncated=truncated,
         )
 
-    async def upload(self, source: Path, dest: str) -> None:
+    async def upload(self, source: Path, dest: str, *, service: str | None = None) -> None:
         self._assert_started()
+        reject_foreign_service(service, kind="local kind", verb="upload")
         src = Path(source).expanduser()
         if not src.exists():
             raise EnvironmentFailure(
@@ -190,8 +192,9 @@ class LocalHost(BaseEnvironment):
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, target)
 
-    async def download(self, source: str, dest: Path) -> None:
+    async def download(self, source: str, dest: Path, *, service: str | None = None) -> None:
         self._assert_started()
+        reject_foreign_service(service, kind="local kind", verb="download")
         src = self.host_path(source)
         if not src.exists():
             raise EnvironmentFailure(

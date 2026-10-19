@@ -1,103 +1,92 @@
-# 09 — Owner 与目标树
+# 09 — 模块职责矩阵与结构约束
 
-完整模块表、依赖图、生命周期图以 [ARCHITECTURE.md](../../ARCHITECTURE.md) 为结构权威。本文给设计侧的 owner 决策表与不可退化的结构规范（产品模型 §4.9 / §4.10 的仓内正文）。
+完整的当前源码树、模块依赖图与生命周期状态机以 [ARCHITECTURE.md](../../ARCHITECTURE.md) 为准。本文列出各核心模块的职责边界与不可退化的结构约束。
 
-## Owner 矩阵
+## 模块职责矩阵（Owner Matrix）
 
-| 谁 | 拥有 | 不拥有 |
+| 模块 | 负责 | 不负责 |
 | --- | --- | --- |
-| Core Config | lock、digest、format 校验 | 开环境、打分 |
-| `ageval.model` | `ModelSpec`、`resolve_model` | 网关参数名单、HTTP body、PASS |
-| Attempt 宿主 | 相位序、identity、deadline、cleanup | 厂商 SDK |
-| 环境 contrib | 一种 kind 的运输 | ACP 协议、PASS |
-| ACP contrib | parent client、`attach_stdio` 消费 | `docker exec` 实现 |
-| 题包 `run.py` | 业务、本地 Tool、publish | PASS、凭据、开环境 |
-| evaluator | 真值算法 | 启动 Agent |
-| evidence | 路径字符串、轨迹轨迹文件 | PASS |
-| CLI | argv、exit code | 业务规则（只调 `build_*`） |
-| Registry HTTP | 包与结果存储 | 颁发 PASS |
-| SDK | 题包 helper | identity / 凭据 / verdict |
+| Core Config (`config/`) | `load_and_lock`、配置摘要（digest）、schema format 与能力依赖校验 | 启动环境、执行任务或评分 |
+| Model (`model/`) | `ModelSpec` 解析与校验（`resolve_model`） | 网关特定参数名单、HTTP 请求构造、评分判定 |
+| Attempt (`attempt/`) | 固定阶段顺序、身份传递、阶段计时器与 `finally cleanup` | 特定厂商 SDK、容器内部细节 |
+| Environment plugins (`plugins/contrib/<kind>/`) | 对应环境的启停、文件传输、命令执行与 `attach_stdio` 实现 | ACP 协议解析、`PASS` 裁决 |
+| ACP plugin (`plugins/contrib/acp/`) | 父进程 JSON-RPC 客户端、ACP entry 注册表、`attach_stdio` 消费 | `docker exec` 底层拼接、非结构化终端输出抓取 |
+| Task `run.py` | 任务交互循环、本地领域工具、产物登记 | `PASS` 裁决、宿主凭据读取、环境启停 |
+| Task `evaluator.py` | 评分逻辑与 `PASS` / `FAIL` 判定 | 启动待测 solver、持有宿主明文密钥 |
+| Evidence (`evidence/`) | `.ageval/runs/` 路径常量、敏感信息脱敏、`trajectory.jsonl` 封存 | 厂商协议解析、`PASS` 裁决 |
+| CLI (`cli/`) | 命令行参数解析、标准输出/错误格式化、退出码 | 业务逻辑组装（仅调用 `application.composition.build_*`） |
+| Registry HTTP (`services/registry/`) | 数据集/插件/Agent 包与评测结果存储、托管作业队列 | 签发单题 `PASS` |
+| Python SDK (`ageval_sdk`) | 任务脚本会话与工具辅助类型 | 控制面内部状态、凭据管理、`PASS` 裁决 |
 
-词汇：module / interface / seam / adapter / locality / depth。施工纪律以 [AGENTS.md](../../AGENTS.md) 为准。
-
-## 目标树（`src/ageval/`）
-
-包名 `ageval`。CLI 只 import `ageval.application.composition`。`.ageval/runs` 路径字符串只出现在 `evidence/`。
+## 目标源码树（`src/ageval/`）
 
 ```text
 src/ageval/
   __init__.py
-  cli/                      # 薄：解析 argv，调 composition.build_*
+  cli/                      # 解析命令行参数，调用 composition.build_*
   application/
-    composition.py          # 唯一 composition root：接线，不写业务规则
-    lock.py                 # load_and_lock + 能力/inject 图
-    run.py                  # 公开 usecase：开 Attempt，调 attempt.run_attempt
+    composition.py          # 唯一生产组合根（composition root）
+    lock.py                 # load_and_lock + 能力与 inject 依赖图校验
+    run.py                  # 签发 Attempt 身份，调用 attempt.run_attempt
+    regrade.py              # 基于产物快照的重新评分入口
     suite/
     plugin_ops/
     registry_ops/
-    agent_ops/              # --agent（+ 可选 --model）投影进 profiles
+    agent_ops/              # --agent（及可选 --model）投影至 profiles
     local_jobs/
-    analysis/               # 跑完之后的 stats / hack / review；不改 PASS
-  attempt/                  # 一次 Attempt 的流水线
-    __init__.py             # run_attempt — 五行相位
-    ctx.py                  # AttemptCtx：host / services / lock / bindings
-    emit.py                 # 链槽 next()
+    analysis/               # 运行后只读分析（stats / hack / review）
+  attempt/                  # 单次 Attempt 阶段流水线
+    __init__.py             # run_attempt 固定阶段序列
+    ctx.py                  # AttemptCtx：持有 host / services / lock / bindings
+    emit.py                 # 链槽调度器
     phases/
-      environment.py        # start · ready · setup
-      run.py                # 调题包 run.py
-      evaluate.py           # 停写 · upload gold · evaluator
-      record.py             # collect → 引擎写轨迹文件
-      cleanup.py            # finally；host.stop
-  config/                   # dataset 根 + task.yaml 缺省；无 Database 名
-  model/                    # ModelSpec · resolve_model；不含网关名单
-  plugins/                  # 槽表 + 服务表 + inject；不是业务
+      environment.py        # 启动环境 · 运行时准备 · setup.sh
+      run.py                # 子进程执行 run.py
+      evaluate.py           # 封存 solver · 路径收集 · 上传参考材料 · evaluator.py
+      record.py             # 收集并封存轨迹与运行摘要
+      cleanup.py            # finally 环境清理
+  config/                   # dataset、task.yaml 与 profiles.yaml 解析
+  model/                    # ModelSpec 与 resolve_model
+  plugins/                  # 插件槽注册表、服务表与依赖注入解析
     base.py                 # BaseEnvironment · BaseExecutor
-    slots.py                # 独占 / 链 id（宿主定名）
-    registry.py / resolve.py / bootstrap.py
-    contrib/                # first-party；按机制命名
-      acp/                  # 独占槽 executor
+    decorators.py           # @environment_plugin · @executor_plugin
+    slots.py                # 独占槽与链槽标识定义
+    registry.py / resolve.py / bootstrap.py / builtin.py
+    contrib/                # 内置环境与执行器插件
+      acp/
       openai_http/
       anthropic_http/
-      docker/               # 独占槽 environment；attach_stdio=exec -i
+      docker/
       local/
-      e2b/                  # SDK 只在本包
-      ssh/                  # A 整机 / B 远端容器
-    defaults/               # environment_setup 认 setup.sh；透传链
-  environments/             # 只有 Protocol + caps，无厂商 SDK
+      e2b/
+      daytona/
+      ssh/
+    defaults/               # environment_setup、默认 evaluation_runtime 与 trajectory_seal
+  environments/             # EnvironmentProvider 协议与能力定义（不含厂商 SDK）
     protocol.py
-  runtime/                  # 身份、协调、limits、ParentAgentService
-    identity.py             # 一次 Attempt 一次 new_run
-    parent_agent.py         # 只认 executor 服务 + host.attach_stdio
-    task_launch.py / task_worker.py
-  evaluation/               # barrier + 绑定 PASS；算法在题包
-  evidence/                 # 布局字符串的唯一主人
-  capabilities/             # 配额 / 授权面；不发明 PASS
-  registry/                 # Hub 客户端
+  runtime/                  # 身份签发、时钟表、ParentAgentService 与子进程启动器
+    identity.py
+    parent_agent.py
+    task_launch.py / task_worker.py / eval_worker.py
+  evaluation/               # 阶段屏障与 bind_evaluation
+  evidence/                 # 证据目录布局与轨迹封存
+  capabilities/             # 授权操作与配额管理
+  registry/                 # Hub HTTP 客户端
 ```
 
-Current 还含 `viewer/`、`control/`、`agents/`（见 ARCHITECTURE Current 树）。外置插件仍在仓库根 `plugins/`（install 进 `~/.ageval/plugins`），不进 `src/ageval`。`sdk/` 仍是题包 `run.py` 用的薄 SDK，不拥有 identity / credential / PASS。
+外置插件位于仓库根目录 `plugins/`（通过 `ageval plugin install` 安装至 `~/.ageval/plugins`）。
 
-**刻意不建（Current 已删除，Target 也不得回潮）：**
+## 结构约束（Structural Invariants）
 
-- `environment/manager.py`
-- `adapters/` 大杂烩、`agent_container.wrap_docker_exec`
-- `run_l0.py` / `run_l1_*.py`
-- 产品 `executor: mock` / FakeHost
-- ACP 里的 `wrap_docker_exec`
+1. **直观的阶段入口：** 打开 `attempt/__init__.py` 即可看到完整的顶层阶段顺序，不将单次运行流程拆散到多个平级脚本中。
+2. **真实环境测试面：** 端到端测试基于公开 CLI 与真实环境实现（`local`、`docker` 等），不使用模拟环境或 `executor: mock` 替代。
+3. **模块局部性（Locality）：** `docker exec` 仅存在于 `plugins/contrib/docker/` 中；ACP、`attempt/` 与 `run.py` 不感知 `container_id`，也不编写 `if kind == "e2b"` 等环境分支；`environments/protocol.py` 不导入任何云厂商或容器 SDK。
+4. **单一插件解析路径：** 环境与执行器统一通过 `ExtensionRegistry` 的独占槽解析，不另建旁路解析函数。
+5. **唯一的组合根：** 平台对象仅在 `application/composition.py` 的 `build_*` 中装配，CLI 仅导入 `composition`。
+6. **进程隔离边界：** 控制面不将任务目录下的 `run.py` 或 `evaluator.py` 作为进程内模块导入，统一通过子进程边界调用；单次 Attempt 仅调用一次 `IdentityFactory.new_run`。
+7. **引擎核心不变量不可覆盖：** `PASS` 绑定、Attempt 身份签发与 `finally cleanup` 不作为可替换插件服务导出。
+8. **按机制命名：** 插件与适配器按协议或执行机制命名（`docker`、`ssh`、`acp`、`openai-http`），禁止按 benchmark 或任务名分支。
+9. **统一证据路径管理：** `.ageval/runs` 布局字符串集中在 `evidence/` 中维护，且绝不写入明文密钥。
+10. **锁定阶段完成依赖注入校验：** 执行器所需的 `environment` 服务能力（如 ACP 要求 `attach_stdio`，环境内 worker 要求 `exec` / `upload`）在 `ageval lock` 阶段完成静态校验，不留到运行期中途报错。
 
-Target 未全部兑现：`plugins/defaults` 与 `contrib/defaults` 不要两套；e2b/ssh 真跑证据；外置 nooa/dsh 真 run。对照 [ARCHITECTURE.md](../../ARCHITECTURE.md) Target。
-
-## 结构规范（不可退化）
-
-1. **少文件跳转。** `attempt/` 打开 `__init__.py` 就能说出阶段。禁止再拆出 `run_l1_prepare.py` 这类把复杂度摊到十个浅文件。删除测试：删掉一个文件若只是把逻辑搬到邻居，说明它是浅的，不要新建。
-2. **测试面是公开 CLI + 真实 kind。** `local` 用真目录；`docker` / `e2b` / `ssh` 用真环境。禁止 `FakeHost` / `executor: mock` / 空 Agent Service 当完成证据。两个真实赢家（docker + e2b/ssh）才使 Protocol seam 成立。无凭证就 skip 该 job，不要标完成。
-3. **locality。** `docker exec` 只活在 `plugins/contrib/docker/`。ACP / `attempt` / `run.py` 不得出现 `container_id`、`if kind == e2b`。厂商 SDK 不得进 `environments/protocol.py`。
-4. **一条路径。** 选 executor / environment 只经注册表独占槽。禁止第二套 `resolve_executor`、CLI 旁路、application 里手 new Docker。
-5. **composition root 唯一。** 平台对象（SDK client、docker CLI、SSH）只在 `application/composition.py` 的 `build_*` 连接。新公开 usecase 必须有 `build_*`。CLI 只 import composition。
-6. **控制面不 import 题包模块当权威。** 经进程/适配器边界调 `run.py` / `evaluator.py`。一次 Attempt 只 `IdentityFactory.new_run` 一次。
-7. **PASS / 身份 / cleanup 不是服务。** 插件 `exports` 不得覆盖这三样。cleanup 必须在 `try/finally`。
-8. **adapter 按机制命名**（`docker` / `ssh` / `acp`），禁止按 bench / task 名分支。
-9. **layout 字符串只在 `evidence/`。** lock / evidence / 默认环境禁止写入 host token。
-10. **inject 在 lock 完成。** executor 只通过已 inject 的 `environment` 服务调用 Protocol。ACP 要 `attach_stdio`；环境内 worker 要 `exec` / `upload`。缺则拒绝，不能进入运行，不要等到 invoke 才检查 attach_stdio。`exec` 不是独立 service。
-
-决策检查：改树先改 ARCHITECTURE；改红线先改 design；不要在代码里发明第二套 owner。
+当修改模块结构或架构约束时，在阶段收尾时同步更新 [ARCHITECTURE.md](../../ARCHITECTURE.md) 与本目录对应文档。

@@ -43,13 +43,21 @@ Landing: more than one dataset → Datasets. Exactly one (including
 2. **Jobs list** — search; filter dropdowns; sortable columns; row click.
    Jobs = that package's `.ageval/suite-runs/` and `.ageval/runs/` only.
    Routes carry the directory key so two packages cannot share a `job_id`.
-3. **Job → tasks** — task table with scores / status / agent-model meta
+   Kind, Source, harness, model, and the suite chart are query parameters on
+   that path. Back restores them. Dataset stays in the path. Kind suite shows
+   finished jobs over the jobs listed and keeps the Trials column visible.
+   The list refreshes while a suite is still running.
+3. **Job → tasks** — task table with scores / status / agent-model meta.
+   A suite job shows finished/total tasks above the task table, and a
+   horizontally scrolling plot of task duration (height) and result (dot
+   color). Time left is the recent gap between finishes times the tasks still
+   open. The page refreshes while tasks are still open.
 4. **Task detail** — trials/run row(s), status/error coloring, **copyable CLI**
 5. **Attempt / trial detail** — `Jobs > job > task > run_id`; Outcome + actors
    (Role / Harness / Model / Time / Usage) + tabs from real evidence only
    (Trajectory · Agent · Verifier · Artifacts · Lock · Runtime). Top bar may show
    framework / environment kind / `provenance.upstream.url`. Multi-role groups Trajectory
-   and Agent tree by `profile_id`. Usage/trajectory are observational ≠ PASS.
+   and Agent tree by `profile_id`.
 6. **Breadcrumb** — `Jobs > jobId > taskId > runId` with `>` separators; click to navigate
 7. **Delete a local Job** — Jobs row menu or bulk selection. Preview paths /
    bytes / cascade `run_id`s, then confirm. Suite delete always removes
@@ -224,7 +232,7 @@ Dev: `ageval view --dev` starts the API and tries to spawn Vite. If that cannot 
 
 ## Delivery rules
 
-- Prefer phase commits: design docs → API → scaffold → pages → polish.
+- Prefer phase commits by functional slice (e.g. API → UI → tests and doc sync); update the relevant documentation when wrapping up a phase rather than making standalone doc-only commits at the start.
 - Do not claim #22 Leaderboard done.
 - `tests/viewer/` is the Python HTTP API. Keep `uv run pytest tests/viewer/ -q` and `pnpm build` green. Website, Hub, and Viewer UI is checked by a person on the rendered page. Do not add a component, snapshot, or browser test file under `apps/` or `website/`. Do not add a pytest that asserts visible copy, class names, DOM ids, or markup the test itself wrote.
 - Column labels map ageval fields for operators, e.g. `Result` ≈ `mean_score` / `pass_rate`, `Trials` ≈ task counts.

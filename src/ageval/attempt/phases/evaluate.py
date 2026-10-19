@@ -14,8 +14,10 @@ from typing import Any
 
 from ageval.attempt.ctx import AttemptCtx
 from ageval.attempt.emit import emit
+from ageval.attempt.verifier_collect import collect_declared_artifacts, place_collected_artifacts
 from ageval.config.errors import ConfigError
 from ageval.config.model import thaw
+from ageval.config.resources import resource_options
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
     EVALUATION_PATH,
@@ -36,6 +38,7 @@ async def run(ctx: AttemptCtx) -> None:
     ctx.arm_phase_budget("evaluate_seconds")
     ctx.assert_writers_stopped()  # solver writers; Agent Service may still be up
     await emit(ctx, BEFORE_EVALUATE)
+    await collect_declared_artifacts(ctx)
     if named_evaluate_environments(ctx):
         # Named hosts start on first exec / session(environment=), not here.
         pass
@@ -221,6 +224,8 @@ def _scoring_environment_options(
         options["image"] = image.strip()
     if str(options.get("egress") or "") == "llm":
         options["egress_allowlist"] = _scoring_egress_allowlist(ctx, options)
+    if str(getattr(ctx.lock, "environment", "")) == "docker":
+        options.update(resource_options(thaw(ctx.lock.parameters), scoring=True))
     return options
 
 
@@ -339,6 +344,7 @@ async def _materialize_on_host(
     if ctx.evaluation_src is not None and ctx.evaluation_src.is_dir():
         await host.upload(ctx.evaluation_src, EVALUATION_PATH)
         ctx.record_fact("gold_materialized", {"at": PHASE, **extra})
+    await place_collected_artifacts(ctx, host, name=name)
 
 
 def _workspace_tree_snapshots(ctx: AttemptCtx, staged: Path) -> list[Path]:

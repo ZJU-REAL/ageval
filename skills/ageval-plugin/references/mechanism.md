@@ -7,11 +7,11 @@ authoring agents only; it does not own new contract.
 
 - First-party contrib: `acp`, `openai-http`, `anthropic-http`, `local`, `docker`, `e2b`, `ssh`, `daytona`. No product mock executor.
 - External `ageval plugin install` joins the same table.
-- `profiles.executor` / `environment` pick exclusive winners. Chain slots are opt-in via `extensions`.
+- `profiles.executor` / `environment` select exclusive-slot implementations. Chain slots are opt-in via `extensions`.
 - `extensions:` is the opt-in list (`- plugin: nooa`, or `slots: [...]`, or `{slot, plugin}`). Installed-but-unlisted plugins stay off MULTI chains and off the image.
 - Local path install and `ageval run` use the short `plugin.yaml` id. Hub publish/install uses `org/name`.
 - README is the public contract Hub previews: export / inject capabilities, and the parameters this plugin reads. `plugin.yaml` is the machine manifest; the README tables are what authors bind against.
-- Resolve: explicit binding > lower priority wins; a tie with no explicit pick is rejected.
+- Resolve: explicit binding > lower priority value; a tie with no explicit selection is rejected.
 - `ageval lock` writes the resolved graph as `extension_bindings` (plugin_id / slot / source / priority / digest).
 
 Do not revive the deleted `ageval.agent_executors` entry-point bypass.
@@ -84,7 +84,7 @@ Registration still does not check `api` or extra keys. An omitted `model` on a c
 
 Ids live in `src/ageval/plugins/slots.py`. Exclusive: `environment`, `executor`, `evaluation_runtime`, `trajectory_seal`. Chain: environment ready/setup, run bookends, agent open/invoke/close, evaluate bookends, `trajectory_collect` / `trajectory_enrich`, `summary_enrich`, `cleanup_report`.
 
-`evaluation_runtime` / `trajectory_seal` have engine defaults (`plugin_id: default`). No job-field sugar; replace only with an explicit `extensions` row. PASS still enters only through `bind_evaluation`.
+`evaluation_runtime` / `trajectory_seal` have engine defaults (`plugin_id: default`). They are replaced only with an explicit `extensions` row. PASS still enters only through `bind_evaluation`.
 
 A public slot must have a production emit, or design / ARCHITECTURE must mark it non-public. No silent dead SPI.
 

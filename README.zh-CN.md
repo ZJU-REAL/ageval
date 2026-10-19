@@ -31,7 +31,7 @@
 - [✨ 功能](#功能)
   - [截图](#截图)
 - [⚙️ 如何运行](#如何运行)
-  - [整体链路](#整体链路)
+  - [整体流程](#整体流程)
   - [基座总览](#基座总览)
   - [插件接入](#插件接入)
 - [📁 目录结构](#目录结构)
@@ -41,9 +41,7 @@
 
 </details>
 
-如何避免为 Agent 运行时、模型与环境的海量组合重复编写脚手架？
-
-**ageval** 用一套稳定的 Core，靠插件切换待测 Agent 和环境。装上 CLI 和 skill，coding agent 可以自己设计或转化 benchmark 并跑完评测；结果上传 Hub 后，dataset、插件和 Agent 包也能公开分享或复用。
+为解耦任务逻辑与执行后端，避免针对不同 harness、模型与环境的组合重复编写适配代码，**ageval** 将可编程任务脚本与声明式插件组合相结合。安装 CLI 和 skill 后，coding agent 可自行编写或转换 benchmark 并执行评测；评测结果、dataset、插件与 Agent 包均可发布至 Hub 共享与复用。
 
 <p align="center">
   <video src="https://github.com/user-attachments/assets/79f54d94-999f-44c1-b2a4-72d79d3ce1f4" controls width="100%" title="ageval highlights"></video>
@@ -60,7 +58,7 @@ uv tool install 'ageval-cli[e2b]' # 按需装单个 extra
 ageval -V
 ```
 
-直接跑 Hub 上的 dataset（[ageval.zjureal.com](https://ageval.zjureal.com)，CLI 默认），或跑任意本地 dataset 根目录：
+直接运行 Hub 上的 dataset（[ageval.zjureal.com](https://ageval.zjureal.com)，CLI 默认源），或运行任意本地 dataset 根目录：
 
 ```bash
 ageval registry list                        # 查看 Hub 上可见的 dataset
@@ -72,7 +70,7 @@ ageval view <org>/<name>@<version> --no-browser
 
 ### 安装 skills
 
-为本机 coding agent 安装 skills（CLI 使用、插件、dataset 编写等）：
+为本机 coding agent 安装 skills（涵盖 CLI 使用、插件开发、dataset 编写与 SDK 调用）：
 
 ```bash
 # 安装全部
@@ -83,7 +81,7 @@ npx skills add ZJU-REAL/ageval --skill ageval-cli
 
 ### 从源码开发
 
-体验仓库内的 dataset 示例以及 Agent 目录包，或需要从源码构建，clone 仓库：
+如需运行仓库内的 dataset 示例与 Agent 包，或从源码构建，请克隆仓库：
 
 ```bash
 git clone https://github.com/ZJU-REAL/ageval.git
@@ -92,7 +90,7 @@ uv sync --frozen --all-packages
 uv run ageval -V
 ```
 
-运行仓库内最小示例并在本地查看器查看结果：
+运行仓库内的最小示例并在本地 Viewer 中查看结果：
 
 ```bash
 uv run ageval tasks examples/datasets/minimal-demo
@@ -108,32 +106,32 @@ uv run ageval view examples/datasets/minimal-demo --no-browser
 
 ## 功能
 
-**快速切换待评测 Agent**
+**通过插件切换待测 Agent 与环境**
 
-环境和 Agent 运行时都经插件接入。默认走 [ACP](https://agentclientprotocol.com)；[nooa](https://github.com/NVIDIA-NeMo/labs-OO-Agents)、[dsh](https://github.com/deepseek-ai/deepseek-harness)、[miniswe](https://github.com/SWE-agent/mini-swe-agent) 也是同一条插件链路。改 `profiles.yaml` 一行，或用 `--agent` 临时指定即可切换。
+执行环境与 Agent 执行器（executor）均通过插件槽接入。Coding agent 默认经 [ACP](https://agentclientprotocol.com)（`pi`、`codex`、`claude-code`、`opencode`）接入；[nooa](https://github.com/NVIDIA-NeMo/labs-OO-Agents)、[dsh](https://github.com/deepseek-ai/deepseek-harness) 与 [miniswe](https://github.com/SWE-agent/mini-swe-agent) 同样通过插件接入。修改 `profiles.yaml` 或通过 `--agent`（配合可选 `--model`）即可切换待测配置，无需改动任务脚本。
 
-**让 Agent 自己跑评测**
+**支持 Agent 自主转换与结果核查**
 
-装上 CLI 和 skill 后，coding agent 能按规范写或转化 dataset，并端到端跑完。跑完用 `ageval view` 打开这一份，或一个放着多份 dataset 的目录，在本地复盘轨迹：各阶段耗时、工具调用，以及失败任务的复现命令。同一个窗口也列出本机上的 Agent 和 Plugin 包。安装见[快速开始](#快速开始)。
+安装 CLI 和 skill 后，coding agent 可按规范编写或转换 dataset 并端到端完成评测。运行结束后，使用 `ageval view` 打开单个或多个 dataset 目录，即可在本地查看各阶段耗时、工具调用轨迹与失败复现命令；迭代评分逻辑时，还可使用 `ageval results regrade` 基于已保存的产物快照直接重新评分，无需重跑模型。
 
-**两种打分方式**
+**严格的阶段边界与双评分策略**
 
-PASS 只由独立的 `evaluator.py` 给出:
+系统将执行（`run`）与评分（`evaluate`）划分为独立阶段，封存 solver 会话后再上传参考材料（`gold`），且 `PASS` 或 `FAIL` 仅由独立的 `evaluator.py` 给出：
 
-- 默认是确定性脚本：对照产物和参考答案，可拆成若干 `checks`
-- 开放题可以在同一份 `profiles.yaml` 里加 judge 角色，走 LLM-as-judge。
+- **确定性脚本：** 比对任务产物或环境状态与参考材料，支持返回分步检查项 `checks`。
+- **Agent-as-judge / LLM-as-judge：** 在同一份 `profiles.yaml` 中配置独立的 `judge` 角色，在评分阶段执行单步或多步工具验证。
 
-**在 Hub 上分享与复用**
+**在 Hub 上共享与对比**
 
-把 dataset、插件、Agent 包和评测结果上传到 [ageval Hub](https://ageval.zjureal.com)。本机一份 suite，正在跑的也行，或者单独一次 Attempt，可以发出只读链接 `/s/{token}`。对方不用登录就能打开，也不会出现在 Leaderboard 上。榜单上的成绩会标明用的 Agent 和环境；已发布的 Agent 可用 `--agent` 直接拉取；也可以按模型横向对比。
+将 dataset、插件、Agent 包和评测结果发布至 [ageval Hub](https://ageval.zjureal.com)，也可将本地正在运行或已完成的 suite / Attempt 生成只读快照链接 `/s/{token}`（支持静态定格或 `--live` 实时更新），无需登录即可查阅。排行榜清晰记录每次评测绑定的 harness、模型与环境，并支持逐级下钻查看单题锁定配置与执行轨迹。
 
 ### 截图
 
 <p align="center"><img src="docs/assets/demo/leaderboard.png" alt="Hub Leaderboard：不同 Agent 与模型下的评测成绩" width="100%"></p>
 <p align="center">Leaderboard：不同 Agent 与模型下的评测成绩</p>
 
-<p align="center"><img src="docs/assets/demo/viewer-trajectory.png" alt="本地查看器：复盘轨迹中的工具调用" width="100%"></p>
-<p align="center">轨迹：本地查看器复盘工具调用</p>
+<p align="center"><img src="docs/assets/demo/viewer-trajectory.png" alt="本地查看器：回放轨迹中的工具调用" width="100%"></p>
+<p align="center">轨迹：本地查看器回放工具调用</p>
 
 <details>
 <summary>更多截图</summary>
@@ -161,12 +159,12 @@ PASS 只由独立的 `evaluator.py` 给出:
 
 ## 如何运行
 
-### 整体链路
+### 整体流程
 
-1. **`ageval lock`** 解析插件依赖图（`ExtensionGraph`），检查能力和凭据，写出 `lock.json`（密钥只当 locator）。
-2. **`ageval run`** 打开环境并上传 task 文件（本机 / Docker / E2B 等）。
-3. **`run.py`** 在环境里跑任务循环；换环境或换 Agent 不需要修改这份文件。
-4. **只有 `evaluator.py` 能给出 PASS**；任务结束后才 upload 参考答案；无论结果如何都会 cleanup。
+1. **`ageval lock`** 解析插件依赖图（`ExtensionGraph`），静态校验能力依赖与 `ModelSpec` 模型参数契约，生成 `lock.json`（密钥仅保留环境变量名引用）。
+2. **`ageval run`** 启动选定环境（`local`、`docker`、`e2b`、`ssh` 或 `daytona`）并上传任务输入数据。
+3. **`run.py`** 在 `run` 阶段驱动任务交互循环；更换环境或待测 Agent 无需修改此文件。
+4. **`evaluator.py`** 在 solver 封存、参考材料（`gold`）上传后进入 `evaluate` 阶段独立给出 `PASS` 或 `FAIL`，并在 `finally` 中始终执行 `cleanup`。
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"actorBkg":"#eaf1ff","actorBorder":"#5B7BFF","actorTextColor":"#10233f","actorLineColor":"rgba(45,49,66,0.2)","signalColor":"#4f5d75","signalTextColor":"#2d3142","labelBoxBkgColor":"#eaf1ff","labelBoxBorderColor":"#5B7BFF","labelTextColor":"#10233f","noteBkgColor":"#f1f5f9","noteBorderColor":"#64748b","noteTextColor":"#1e293b"}}}%%
@@ -179,17 +177,17 @@ sequenceDiagram
     participant v as evaluator.py
 
     u->>r: ageval lock<br/>dataset + profiles → lock.json
-    Note over r: 检查不过就不能进入运行
+    Note over r: 契约或能力校验未通过则直接终止
     u->>r: ageval run
     r->>r: 签发 run 身份
-    r->>e: 打开一个环境
-    r->>e: upload task 文件
+    r->>e: 启动环境
+    r->>e: 上传任务输入数据
     e->>t: 执行 run.py
     loop 任务循环
         t->>t: ACP invoke · attach_stdio
     end
     t-->>r: trajectory.jsonl
-    Note over r,v: 执行结束 → upload 参考答案后进入评测
+    Note over r,v: 封存 solver → 上传参考材料（gold）后进入评分
     r->>v: 运行 evaluator.py
     v-->>r: PASS / FAIL / ERROR
     r->>r: record · finally cleanup<br/>lock.json · result.json · trajectory.jsonl
@@ -197,7 +195,7 @@ sequenceDiagram
 
 ### 基座总览
 
-ageval Core 是固定的五阶段流水线：`lock → environment → run → evaluate → record`。输入是用户、dataset 和 profiles，输出落到 evidence（`lock.json`、`result.json`、`trajectory.jsonl`）。环境插件和 Agent 插件在 `ageval lock` 时各自绑定一个；开跑前按 `limits` 施加资源上限（墙钟 / 内存 / 进程 / 调用次数），`cleanup` 始终会跑。换 Agent 或换环境，不需要修改 Core。
+ageval Core 统一管理固定阶段流水线：`lock → environment → run → evaluate → record`，并在 `finally` 中无条件执行环境清理（`cleanup`）。在 `ageval lock` 阶段，系统解析环境插件与各角色的 executor 插件并校验契约；在运行阶段，Core 在调用前强制执行 `limits` 资源与配额上限，并将配置绑定、评分结果、交互轨迹与产物快照归档至 evidence 目录（`lock.json`、`result.json`、`trajectory.jsonl`、`summary.json` 及 `task-artifacts/`）。
 
 <p align="center">
   <img src="docs/assets/core-base.zh-CN.png" alt="ageval Core 基座总览" width="100%">
@@ -205,7 +203,7 @@ ageval Core 是固定的五阶段流水线：`lock → environment → run → e
 
 ### 插件接入
 
-Core 不会写死某个 Agent 或环境。插件声明自己提供什么、需要什么能力；`ageval lock` 解析成依赖图（`ExtensionGraph`），之后按图调度。
+Core 通过**独占槽**（`exclusive slot`）、**链槽**（`chain slot`）与声明式**依赖注入**（`inject`）组合底层组件。插件声明自身实现的槽位及所需的服务能力，由 `ageval lock` 在运行前解析并校验依赖图（`ExtensionGraph`）。
 
 ```yaml
 # Agent 插件（如 dsh）
@@ -241,35 +239,39 @@ ageval/
 ├── src/ageval/
 │   ├── cli/                         # 参数、帮助、退出码
 │   ├── application/
-│   │   ├── composition.py           # 生产接线唯一入口；CLI 只 import 此处的 build_*
+│   │   ├── composition.py           # 生产装配唯一入口；CLI 仅 import 此处的 build_*
 │   │   ├── lock.py                  # load_and_lock
 │   │   ├── run.py                   # 签发身份 → run_attempt
+│   │   ├── regrade.py               # 基于产物快照的重新评分（跳过 run 阶段）
 │   │   ├── campaign.py / suite/     # 矩阵 · suite · Always-k
-│   │   └── agent_ops/ / plugin_ops / registry_ops/
-│   ├── attempt/                     # 一次运行的流水线
-│   │   ├── __init__.py              # run_attempt
+│   │   └── agent_ops/ / plugin_ops / registry_ops/ / analysis/
+│   ├── attempt/                     # 单次 Attempt 流水线
+│   │   ├── __init__.py              # run_attempt 与 run_regrade
 │   │   └── phases/                  # environment → run → evaluate → record · cleanup
 │   ├── config/                      # dataset + task.yaml + profiles
-│   ├── environments/protocol.py     # EnvironmentProvider · 能力；不含厂商 SDK
+│   ├── model/                       # ModelSpec · resolve_model
+│   ├── environments/protocol.py     # EnvironmentProvider · 能力标记
 │   ├── plugins/
-│   │   ├── slots.py                 # exclusive / chain
-│   │   └── contrib/                 # acp · local · docker/attempt（官方基座，打进 wheel）· e2b · daytona · ssh
+│   │   ├── base.py / decorators.py  # BaseEnvironment · BaseExecutor
+│   │   ├── slots.py                 # exclusive / chain 插件槽
+│   │   └── contrib/                 # acp · local · docker/attempt · e2b · daytona · ssh · openai_http · anthropic_http
 │   ├── runtime/                     # 身份、父进程 Agent Service、task_worker
-│   ├── evaluation/                  # 绑定 PASS
-│   └── evidence/                    # trajectory.jsonl 布局
-├── src/ageval_sdk/                  # run.py 用的 ageval_sdk（不判定 PASS，不持有宿主凭据）
-├── plugins/                         # 外置 ageval.plugin/1（nooa、dsh、miniswe 等）
+│   ├── evaluation/                  # bind_evaluation
+│   └── evidence/                    # .ageval/runs 目录结构与轨迹封存
+├── src/ageval_sdk/                  # 任务脚本使用的 ageval_sdk
+├── plugins/                         # 外置 ageval.plugin/1（nooa、dsh、miniswe、acp-oneshot 等）
 ├── examples/
 │   ├── datasets/
 │   │   ├── minimal-demo/            # terminal-jsonl-agg · tau2-dialog-min · multiagent-env-min
-│   │   └── tau3-airline-5/            # airline-00 … airline-04
-│   └── agents/                      # ageval.agent/1
-├── apps/shared                      # Hub + Viewer 共用 chrome
-├── apps/viewer                      # ageval view SPA
+│   │   ├── concurrent-research/     # 多会话并发示例
+│   │   └── tau3-airline-5/          # airline-00 … airline-04
+│   └── agents/                      # ageval.agent/1 配置包
+├── apps/shared                      # Hub + Viewer 共用组件与令牌
+├── apps/viewer                      # ageval view 本地 SPA
 ├── apps/hub                         # Hub SPA
-├── services/registry/               # 包与结果 HTTP
-├── docs/                            # 机制设计
-└── website/                         # 产品文档
+├── services/registry/               # 包与结果 HTTP 服务及后台 hosted worker
+├── docs/                            # 机制设计文档
+└── website/                         # 双语产品文档站
 ```
 
 <div align="right">

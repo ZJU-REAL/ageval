@@ -1,10 +1,10 @@
 # anthropic-http executor
 
-First-party exclusive-slot winner for `executor: anthropic-http`.
+First-party exclusive-slot implementation for `executor: anthropic-http`.
 
 Thin Anthropic **Messages** HTTP backend. It does not own Run identity,
 PASS, or host credentials beyond a **scoped env locator** for the API
-key. No Attempt box is required; this executor does not inject
+key. No Attempt environment is required; this executor does not inject
 `environment`.
 
 This is not a dialect of `openai-http`. Chat Completions (including
@@ -20,7 +20,7 @@ SDK `tools=` / `messages=` remain OpenAI-shaped. Translation to
 | | Value |
 | --- | --- |
 | export | exclusive `executor` |
-| inject | — (no box) |
+| inject | — (no environment) |
 | chain | — |
 | bake | — |
 
@@ -64,9 +64,6 @@ Native `tools=` from the session catalog is posted as Anthropic
 `tools`. Responses may include `tool_use` (mapped to `AgentResult.tool_calls`)
 and `thinking` (thought events). The raw HTTP body stays under
 `backend_raw`.
-
-`RunTerminal.completed` is not PASS. PASS still comes from the independent
-evaluator.
 
 Not a Hub install. `ageval plugin install anthropic-http` is rejected: the
 id is reserved.

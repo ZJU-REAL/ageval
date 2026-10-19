@@ -3,11 +3,11 @@ title: Export evidence
 description: Pack the files from one run to take elsewhere.
 ---
 
-Materials already live under `.ageval/runs/<id>/`. After a successful write the durable tree is `lock.json` / `result.json` / `trajectory.jsonl` / `summary.json` / `task-artifacts/**`. `--keep-vendor-raw` (off by default) keeps invoke `backend_raw/`, layer B, and `evaluator_raw.json`. `--keep-workspace` is the host work root only; it does not keep vendor raw.
+Evidence archives live under `.ageval/runs/<id>/`. After trajectory sealing completes, the default archived directory retains `lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, and `task-artifacts/**` (plus `verifier-collect/**`, `evaluation/observation.jsonl`, and `evaluation/checks.json` when present). Passing `--keep-vendor-raw` (off by default) additionally retains per-invocation `backend_raw/` dumps, intermediate invocation event files, and `evaluator_raw.json`. `--keep-workspace` preserves the host workspace directory only and is independent of `--keep-vendor-raw`.
 
 ```bash
 ageval evidence --help
 ageval run <dataset> --task <id> --keep-vendor-raw
 ```
 
-No secrets in exports. Open local results with `ageval view`.
+Exports are checked for secret redaction. Open local results with `ageval view`.

@@ -1,95 +1,83 @@
 # 01 — ageval Core
 
-结构地图见 [ARCHITECTURE.md](../../ARCHITECTURE.md)。产品故事与命名见 [00](00-overview-and-product.md)。
+源码结构见 [ARCHITECTURE.md](../../ARCHITECTURE.md)，产品定位与命名见 [00](00-overview-and-product.md)。
 
-Core 拥有：配置锁定、Attempt 身份、环境 Protocol、limits、evaluate 绑定、evidence 布局。不拥有题业务、厂商 SDK、PASS 算法。
+Core 负责：配置锁定（`lock`）、Attempt 身份管理、`EnvironmentProvider` 协议、`limits` 资源与配额强制、阶段边界与评分结果绑定、以及 evidence 归档目录结构。任务交互逻辑、厂商专有 SDK 与具体评分算法不在 Core 内部实现。
 
-## 五组（映射到当前模块）
+## 核心子模块
 
-| 组 | 模块 | 职责 |
+| 模块组 | 路径 | 核心职责 |
 | --- | --- | --- |
-| Config | `src/ageval/config/` | `load_and_lock`、digest、profiles、能力校验 |
-| Lifecycle | `src/ageval/attempt/` + `runtime/identity.py` | Run/Trial/Attempt 身份；五个阶段顺序 |
-| Box | `environments/protocol.py` + `plugins/contrib/{local,docker,e2b,daytona,ssh}` | 物理隔离与运输 |
-| Capability | `capabilities/` + lock `requires` | 已授权操作面；缺 cap 则 lock 失败 |
-| Evaluation | `evaluation/` | barrier、parent `evaluator.py`、`bind_evaluation` |
+| Config | `src/ageval/config/` | `load_and_lock`、配置摘要（digest）、`profiles.yaml` 解析、插件与能力校验 |
+| Lifecycle | `src/ageval/attempt/` + `runtime/identity.py` | Run / Trial / Attempt 身份签发；固定阶段顺序调度 |
+| Environment | `environments/protocol.py` + `plugins/contrib/{local,docker,e2b,daytona,ssh}` | 环境隔离、命令执行、文件传输与 `attach_stdio` 通信 |
+| Capability | `capabilities/` + lock `requires` | 授权操作集合与调用配额检查 |
+| Evaluation | `evaluation/` | 阶段隔离屏障、子进程 `evaluator.py` 执行与 `bind_evaluation` 结果绑定 |
 
-另：`evidence/` 是布局与轨迹轨迹文件 的唯一主人；`plugins/` 是槽表，不是第六组 Core。
+此外，`evidence/` 统一管理 `.ageval/runs/` 路径布局与 `trajectory.jsonl` 封存；`plugins/` 维护插件槽与服务注册表。
 
-## lock
+## 配置锁定（`ageval lock`）
 
-Config 是唯一规范读取者。根 `ageval.yaml`（`ageval.dataset/1`）+ 成员 `task.yaml`（`ageval.task/1`）+ job `profiles.yaml`（`ageval.profiles/1`）。
+Config 模块是配置文件的唯一规范解析入口，读取根 `ageval.yaml`（`ageval.dataset/1`）、成员 `task.yaml`（`ageval.task/1`）与运行配置 `profiles.yaml`（`ageval.profiles/1`）。
 
 ```text
 CLI --task / --profiles / --set
   → dataset.resolve
-  → merge task.yaml + profiles
+  → merge task.yaml + profiles.yaml
   → validate format / keys / requires ⊆ capabilities
-  → resolve exclusive winners + chain order → extension_bindings
-  → inject 检查（executor 要 environment 服务 + 其 capabilities；ACP：attach_stdio）
+  → resolve exclusive-slot implementations + chain-slot order → extension_bindings
+  → verify inject dependencies & ModelSpec contracts
   → canonicalize → digest
-  → LockedTaskConfig（冻结）
+  → LockedTaskConfig (immutable)
 ```
 
-未知 format：`invalid_format` 于 `/format`。`api_key` 只留 locator 名。两个插件抢同一独占槽或同一 export id → 拒绝。绑定图进 lock digest。未列入 `extensions` 的不进链、不进服务表。
+遇到未知 format 时直接报错 `invalid_format`（位于 `/format`）。`api_key` 仅保留环境变量名引用（locator）。若两个插件在同一解析图上竞争同一独占槽或导出相同服务 ID，解析直接拒绝。解析后的插件绑定关系写入 `extension_bindings` 并纳入 lock digest；未列入 `extensions` 的可选插件不进入执行链或服务表。
 
-`--profiles` 整份替换配置文件。`--agent` 与 `--profiles` 互斥。`--model` 是 run 参数（须配合 `--agent`），改已绑角色的 `model.id`；省略则用包缺省。`--set` 白名单见 [02](02-task-package-and-config.md)。`limits.*` 不可 `--set`。
+`--profiles` 可整份替换默认配置文件；`--agent` 与 `--profiles` 互斥；`--model` 需配合 `--agent` 使用以覆盖绑定角色的 `model.id`。`--set` 允许覆盖的字段白名单见 [02](02-task-package-and-config.md)，`limits.*` 不允许通过 `--set` 修改。
 
-## Attempt 流水线（可见链）
+## Attempt 阶段流水线
 
-打开 `src/ageval/attempt/__init__.py` 就是权威时间线。引擎不变量（**不是插件**）：lock / Attempt 身份；deadline；`try/finally` 必调 cleanup；PASS 只从 evaluate 的结果绑定。
+`src/ageval/attempt/__init__.py` 定义单次 Attempt 的权威阶段顺序。Attempt 身份签发、阶段超时控制、`try/finally` 中的 `cleanup` 以及仅通过 `evaluate` 绑定 `PASS` 均属于引擎不变量，不由插件覆盖。
 
 ```python
-# src/ageval/attempt/__init__.py（形状；以源码为准）
+# src/ageval/attempt/__init__.py
 async def run_attempt(ctx) -> None:
     try:
-        await environment.run(ctx)  # start + overlay + setup.entry
-        await run.run(ctx)          # 调 task 的 run.py
-        await evaluate.run(ctx)     # 独立 evaluator.py
+        await environment.run(ctx)  # 启动环境 + 上传数据 + 运行时准备与 setup.sh
+        await run.run(ctx)          # 子进程运行任务 run.py
+        await evaluate.run(ctx)     # 封存 solver 后上传参考材料并运行 evaluator.py
     finally:
-        await record.run(ctx)       # 轨迹落盘（environment 已 start 后，evaluate ERROR 也封）
-        await cleanup.run(ctx)
+        await record.run(ctx)       # 封存轨迹与运行摘要（环境已启动后即使后续阶段报错仍归档已有轨迹）
+        await cleanup.run(ctx)      # 停止并清理已启动的评分环境与运行环境
 ```
 
-environment / run 失败记 `phase_failed` 并跳过未跑的相；**environment 一旦 start，evaluate 无论成败都进 record**，把已有 invoke scratch 封成 `trajectory.jsonl`（Viewer / 上传读轨迹文件）。record 自己再失败且前面已有 `phase_failed` 时记 `record_warning`，不覆盖原相位。取消（`BaseException`）仍传播；cleanup 总是跑。相位失败是结果，不是静默吞掉。
+若 `environment` 或 `run` 阶段失败，系统记录首次 `phase_failed` 事实并跳过后续未执行的业务阶段；一旦环境已启动，即使 `run` 或 `evaluate` 发生 `ERROR`，`finally` 中仍会执行 `record` 将已产生的调用事件封存为 `trajectory.jsonl`，随后执行 `cleanup` 释放环境资源。若 `record` 自身在已有阶段错误后再次异常，仅记录 `record_warning` 而不覆盖原阶段错误。
 
-`emit(slot)` 走 `lock.extension_bindings` 已排好的链。插件改的是绑定，不是运行时改写 `run_attempt`。
+## 阶段（Phase）与插件槽（Slot）
 
-## phase 与 slot
+- **阶段（Phase）：** `run_attempt` 中的顶层生命周期步骤，默认实现位于 `attempt/phases/*.py`。
+- **插件槽（Slot）：** 阶段内部的扩展接入点，仅分为**独占槽**（`exclusive slot`）与**链槽**（`chain slot`）两类：
 
-**phase**：`run_attempt` 里的一大步，默认实现是 `phases/*.py`。  
-**slot**：phase 内部的钩子，分两种（**没有**第三种叫 `provide` 的扩展模型）：
-
-| 槽种类 | 语义 | 例子 |
+| 插件槽类型 | 语义 | 示例 |
 | --- | --- | --- |
-| **独占** | 每个 resolved graph 一个赢家；登记为同名 **service** | `environment`、`executor`、`evaluation_runtime`、`trajectory_seal` |
-| **链** | `(ctx, value, nxt)` | `after_environment_ready`、`environment_setup` |
+| **独占槽 (exclusive)** | 每个解析图绑定唯一实现，并自动注册为同名服务（service） | `environment`、`executor`、`evaluation_runtime`、`trajectory_seal` |
+| **链槽 (chain)** | 按优先级顺序串联执行的钩子函数 `(ctx, value, nxt)` | `after_environment_ready`、`environment_setup`、`trajectory_collect` |
 
-`environment` / `evaluation_runtime` / `trajectory_seal` 是 **Attempt 级** 一份赢家。`executor` 按 `agent_profiles` **每行一份**：solver 与 judge 可以选不同机制。两个插件仍不得抢同一 graph 上的同一独占槽。
+其中，`environment`、`evaluation_runtime` 与 `trajectory_seal` 为 **Attempt 级**独占槽（单次 Attempt 全局绑定一个实现）；`executor` 为**角色 profile 级**独占槽（`agent_profiles` 中每个角色独立解析一份绑定，允许同一 Attempt 中 `solver` 与 `judge` 使用不同的执行器插件）。
 
-`agent_profiles.<id>.executor: acp` = 选该 profile 独占槽 `executor` 的赢家，不是另一套插件系统，也不是 Attempt 上只许一个 executor 插件。
+`evaluation_runtime` 与 `trajectory_seal` 默认绑定引擎内置实现（`plugin_id: default`），分别负责在父进程子进程中运行 `evaluator.py` 和封存 `trajectory.jsonl`（若 `evaluate` 阶段调用了 SDK 会话，则另写 `evaluation/observation.jsonl`）。`PASS` 仅能通过 `AttemptCtx.bind_evaluation` 写入 `Result`，`evaluation_runtime` 实现只返回原始评分输出。
 
-槽名权威：`src/ageval/plugins/slots.py`。新**时间线**槽仍要改 attempt 宿主；插件不可自造槽名。
+各阶段默认行为如下：
 
-Current 独占槽：`environment`、`executor`、`evaluation_runtime`、`trajectory_seal`。后两者的默认赢家是引擎（`plugin_id: default`，`is_default=True`）：parent 子进程跑 `evaluator.py`（与 `run.py` 同一 JSON-RPC 口）与轨迹文件 写入（run 相位 `trajectory.jsonl`；evaluate 相位若有 SDK invoke 则另写 `evaluation/observation.jsonl`）。没有单独的配置字段；替换只能走显式 `extensions` 行（`slot` + `plugin`）。缺默认注册 → lock 失败，不能进入运行。
-
-PASS 仍只经 `AttemptCtx.bind_evaluation` 进入 Result。`evaluation_runtime` 赢家返回 raw，不得自己写 verdict。`pass` / `identity` / `cleanup` / `evidence` 仍不是服务。
-
-默认 phase：
-
-| phase | 默认做什么 |
+| 阶段 | 默认行为 |
 | --- | --- |
-| `environment` | `host.start` + upload seed + 槽（见下） |
-| `run` | 调 task `run.py`；内含 agent open/invoke/close **子槽**。结束时停 solver writer，**保持** Agent Service |
-| `evaluate` | 选打分 Host（缺省 = run 环境；job `evaluate_host.isolated` 则另起同 kind 实例：一份配方 = 一只；`evaluation.environments` = 按名懒启动多只）、放入环境 gold **只进打分 Host**、调 `evaluation_runtime` 赢家（可选 SDK `Agent.session` / `scoring.exec`）、`bind_evaluation` |
-| `record` | collect/enrich → `trajectory_seal` 写 run 相位 `trajectory.jsonl`；evaluate 相位 invoke 另封 `evaluation/observation.jsonl`（省略 user） |
-| `cleanup` | `host.stop`；isolated 时停 **每一只** 已启动的打分 Host 再停 Agent Host。实现可加报告，不能选择跳过 |
+| `environment` | 调用 `host.start` 启动环境，上传 `data/` 至工作区，依次触发 `after_environment_ready` 与 `environment_setup` 链槽 |
+| `run` | 在受限子进程中运行 `run.py`，通过父进程 Agent Service 处理角色会话调用；结束时封存 solver 会话并收集声明的任务产物快照 |
+| `evaluate` | 确定评分环境（默认复用 `run` 环境；若配置 `evaluate_host.isolated: true` 则启动独立 Docker 评分容器；若声明 `evaluation.environments` 则按名称懒启动多个评分容器），执行 `evaluation.collect`，上传产物快照与 `evaluation/` 参考材料，调用 `evaluation_runtime` 运行 `evaluator.py` 并通过 `bind_evaluation` 绑定结果 |
+| `record` | 触发 `trajectory_collect` / `trajectory_enrich`，由 `trajectory_seal` 写出 `trajectory.jsonl`（及可选的 `evaluation/observation.jsonl`），最后触发 `summary_enrich` |
+| `cleanup` | 在 `finally` 中停止所有已启动的独立评分容器与 `run` 环境 |
 
-**没有 `provision` phase。**
-
-槽只有独占与链两种。独占槽就是赢家，没有第三套扩展种类。
-
-### environment 内的 slot 顺序（权威）
+### `environment` 阶段内的执行顺序
 
 以 `src/ageval/attempt/phases/environment.py` 为准：
 
@@ -97,68 +85,55 @@ PASS 仍只经 `AttemptCtx.bind_evaluation` 进入 Result。`evaluation_runtime`
 async def run(ctx) -> None:
     await emit(ctx, "before_environment")
     await ctx.host.start(force_build=ctx.lock.force_build)
-    await ctx.host.upload(ctx.seed_dir, "/attempt/workspace")  # 有 data/ 才 upload
-    await emit(ctx, "after_environment_ready")  # 铺 HOME / 补 env / skills；ACP probe
-    await emit(ctx, "environment_setup")        # 末槽：setup.sh；无则 no-op
+    await ctx.host.upload(ctx.seed_dir, "/attempt/workspace")  # 存在 data/ 时上传
+    await emit(ctx, "after_environment_ready")  # 写入 HOME 配置覆盖层、注入环境变量、执行 ACP 运行时探测
+    await emit(ctx, "environment_setup")        # 执行 environment/setup.sh（不存在则跳过）
     await emit(ctx, "after_environment")
 ```
 
-- `after_environment_ready`：环境已开、`environment_setup` 之前。HOME overlay、env inject、**ACP 探测**挂这里。按 `options.entry` 先要求 `npm ls -g --depth=0` 的版本与钉死包相等，再要求必需命令的 realpath 等于该包 `bin`，然后才做一次 stdio `initialize`，argv[0] 是这个绝对路径。这取代了把 `versions` 留空、只看 PATH 名字的探测。三项都齐则跳过 `install_command`；版本或 realpath 不对则按 entry 的 `install_command` `exec` 一次再探一次。安装退出非零，或第二次仍不对，environment 相位失败，不再装。版本和路径已齐、只有 `initialize` 失败时不安装。不把安装写进 task `setup.sh`。invoke 不是装引擎的 happy path。
-- `environment_setup`：默认插件若存在 `environment/setup.sh`（或 yaml 覆盖的 entry）则 `host.exec`。本题依赖，不是 agent CLI。
-- bake / `image_layers` 消化在 `host.start()` 内部（docker build / e2b template），不是 attempt 上的独立 phase。`kind: ssh` 且 skip_build 时无 bake。
+- `after_environment_ready`：在环境启动后、`environment_setup` 之前执行，负责写入角色配置覆盖层及探测 ACP 运行时（核对 `npm ls -g --depth=0` 版本、可执行文件 `realpath` 与 stdio `initialize` 握手；若已在镜像构建期写入且匹配则直接跳过安装）。
+- `environment_setup`：若任务包含 `environment/setup.sh`，则通过 `host.exec` 安装任务级依赖。
+- 镜像层构建（`image_layers`）在 `host.start()` 内部完成（如 Docker 镜像构建或 E2B 模板构建）。
 
-### evaluate：缺省同一环境晚上传 gold；opt-in 第二 Host（权威）
+### `evaluate` 阶段：延迟上传参考材料与可选独立评分容器
 
-以 `src/ageval/attempt/phases/evaluate.py` 为准。`environment` 仍是 **Attempt 级一份**赢家，只服务 **run**。打分另开环境 **不是新槽、不是第二套 resolve**：同一 `environment` 赢家再构造一个 EnvironmentProvider 实例（不同 `BoxSpec` / 不同 work root）。
+以 `src/ageval/attempt/phases/evaluate.py` 为准：
 
-**缺省**（省略 job `evaluate_host`）：同一环境、进 phase 再 upload gold。形状不变：
+- **默认模式（省略 `evaluate_host`）：** 复用 `run` 阶段已打开的环境，在 solver 会话封存后将 `evaluation/` 上传至 `/attempt/evaluation`，再由父进程启动 `evaluator.py` 子进程完成评分。
 
 ```python
 async def run(ctx) -> None:
-    await emit(ctx, "before_evaluate")          # solver writer 已在 run 结束停掉；Agent Service 仍在
-    # 引擎 upload gold —— 不挂在 before_evaluate 链上
+    await emit(ctx, "before_evaluate")          # solver 会话已在 run 阶段末尾封存
+    # 执行可选的 evaluation.collect 路径收集
     if ctx.evaluation_src.exists():
         await ctx.host.upload(ctx.evaluation_src, "/attempt/evaluation")
-    result = await ctx.evaluation_runtime.evaluate(ctx)  # 独占槽赢家；默认 parent evaluator.py
-    ctx.bind_evaluation(result)                 # PASS 只从这里进；赢家不得 bind
-    await emit(ctx, "after_evaluate")            # 不得改 status
+    result = await ctx.evaluation_runtime.evaluate(ctx)
+    ctx.bind_evaluation(result)                 # PASS / FAIL 唯一绑定入口
+    await emit(ctx, "after_evaluate")            # 可补充指标，不可修改 status
 ```
 
-**opt-in**（job `evaluate_host.isolated: true`）：harvest 之后、evaluate 开头，Runtime 用题包 `environment/evaluate.Dockerfile`（或 `evaluation.docker_image`）`start` **一只**第二实例。gold 与 harvest 快照只进这个 Host。`evaluator.py` 仍在 parent 跑；evaluate 相位的 ACP `attach_stdio` 打第二实例。Agent 环境永不 mount / upload `evaluation/`。cleanup 停两个。Current 要求 kind 是 `docker`；不能再起一份环境的 kind + `isolated: true` → lock 一次失败（不要报假 cap）。
+- **单独立评分容器（`evaluate_host.isolated: true`）：** 在产物快照收集完成后，使用任务的 `environment/evaluate.Dockerfile`（或 `evaluation.docker_image`）启动一个独立的 Docker 评分容器，将产物快照与 `evaluation/` 仅上传至该评分容器。待测 Agent 所在的环境全程不接触 `evaluation/`。
+- **多命名评分容器（`evaluation.environments`）：** 任务声明多个命名评分环境配方，在 `evaluator.py` 首次调用 `scoring.exec(<name>, argv)` 或 `Agent.session(..., environment=<name>)` 时按需启动对应容器并上传产物快照与参考材料。该模式要求 `evaluate_host.isolated: true` 且 `environment: docker`。
 
-**再 opt-in**（成员 `evaluation.environments`）：同一 `environment` 赢家、多只实例，按 yaml 名键。不是新槽、不是第二套 resolve、不是 compose 侧车。evaluate **开头不 start**；`evaluator.py` 第一次 `scoring.exec(<name>, argv)` 或 `Agent.session(..., environment=<name>)` 才 `preflight` + `start` + upload 快照与 gold。未点到的名字不 build。省略 `evaluation.environments` = 上面那只（或同一环境）。写了该键则必须 `evaluate_host.isolated: true` 且 kind docker，否则 lock 一次失败。`ctx.evaluate_host`（单数）在有名表时不用；权威是 `ctx.evaluate_hosts`。
+### 各阶段挂载的插件槽汇总
 
-- Agent / `run.py` / `environment_setup` **禁止**看到 `evaluation/`（不 upload、不 mount、不 COPY 进 Agent 用镜像层）。isolated 时这条红线变成 **空间切开 + 时间切开**：gold 根本不进 Agent 环境。
-- 这不是 `path_views`。evidence 记 `gold_materialized`（at evaluate）；isolated 另记打分 Host 的 start/stop（含 `name`），那些事实 **不是** PASS。`exec` 退出码也不是。
-- gold 进打分环境之后 solver 不得再 invoke。evaluate 相位可以按 **另一** profile（例 `judge`）走同一 Parent Agent Service；isolated 时 attach 目标是当时的打分 Host；有名表时 ACP 必须 `environment=` 选那一只（run 相位点名失败）。
-- 省略开关 = 今日 Attempt。judge 观察不是 PASS。`observation.jsonl` 缺席 = 今日脚本评测路径。可选 `checks` 不是 PASS；缺席 = 不写 `evaluation/checks.json`。
-- 阶梯（顺序、短路、分数混合）在 `evaluator.py`，不在 Core。
-
-### 其他 slot
-
-| 挂在 | slot |
+| 所属阶段 | 插件槽 |
 | --- | --- |
-| run | `before_run` / `after_run`；`before/after_agent_open\|invoke\|close`；`normalize_agent_result` |
-| evaluate | `before_evaluate` / `after_evaluate`（可注 metrics，**不能改 PASS**）。**upload gold 是引擎代码**，不是 `evaluation_runtime` 的方法。独占槽 `evaluation_runtime` 默认 parent 跑 `evaluator.py` |
-| record | `trajectory_collect` / `trajectory_enrich`（失败不挡后续）；独占槽 `trajectory_seal` 写 run 相位轨迹文件（丢文件即阶段失败）；evaluate 相位 invoke 封到 `evaluation/observation.jsonl`（有才写；省略 user）；`summary_enrich`（失败不挡后续，seal 成功后一次，写 Attempt `summary.extra`） |
-| cleanup | `cleanup_report`（链）；cleanup phase 本身由 finally 调用 |
+| `run` | `before_run` / `after_run`；`before/after_agent_open\|invoke\|close`；`normalize_agent_result` |
+| `evaluate` | `before_evaluate` / `after_evaluate`；独占槽 `evaluation_runtime` |
+| `record` | `trajectory_collect` / `trajectory_enrich`；独占槽 `trajectory_seal`；`summary_enrich` |
+| `cleanup` | `cleanup_report`（`cleanup` 阶段本身由 `finally` 无条件调用） |
 
-`executor` 是 **profile graph 里的独占槽**（run 与 evaluate 的 `Agent.session` 都走它），不是 attempt 上的独立 phase。ACP attach 发生在该 profile 第一次 invoke，不是独立 phase。
+`FAIL_OPEN_SLOTS` 包含：`before_run`、`after_run`、`trajectory_collect`、`trajectory_enrich`、`summary_enrich`、`cleanup_report`；其余插件槽抛出异常时直接使当前阶段失败。完整调度顺序见 [ARCHITECTURE.md](../../ARCHITECTURE.md) § Extension Emit Map。
 
-`FAIL_OPEN_SLOTS`：`before_run` / `after_run` / `trajectory_collect` / `trajectory_enrich` / `summary_enrich` / `cleanup_report`。其余槽失败即该相位失败。
+## 环境协议（`EnvironmentProvider`）
 
-完整 emit 图：[ARCHITECTURE.md](../../ARCHITECTURE.md) § Extension emit map、[05-runtime/README.md](05-runtime/README.md)。
-
-## 环境 Protocol
-
-独占槽 `environment`。赢家实现 `src/ageval/environments/protocol.py`。厂商 SDK 只活在 `plugins/contrib/<kind>/`。Protocol 文件禁止出现 `e2b` / `docker` / `paramiko` 实现。
-
-动词：`preflight` / `start` / `exec` / `upload` / `download` / `attach_stdio` / `stop`。另有 `placement()` 与 `visible_path()`。
+`environment` 独占槽实现遵循 `src/ageval/environments/protocol.py` 定义的协议，厂商 SDK 仅封装在 `plugins/contrib/<kind>/` 内：
 
 ```python
 class EnvironmentProvider(Protocol):
     kind: str
-    capabilities: EnvironmentCapabilities  # exec/upload/download/attach_stdio/uid_gid/path_views/compose
+    capabilities: EnvironmentCapabilities  # exec / upload / download / attach_stdio / uid_gid / path_views / compose
     python_command: tuple[str, ...]
 
     async def preflight(self) -> None: ...
@@ -171,25 +146,17 @@ class EnvironmentProvider(Protocol):
     async def stop(self, *, delete: bool) -> None: ...
 ```
 
-`exec(..., service=)` 仅 `capabilities.compose`。Placement 只有 opaque `target_id` + user + workdir/home。ACP 只拿 `StdioTransport`，不写 `if docker`。
+支持的环境类型（`kind`）：`local` | `docker` | `e2b` | `ssh` | `daytona`。环境内标准路径约定为 `/attempt/workspace`、`/attempt/home`、`/attempt/artifacts` 与 `/attempt/evaluation`。
 
-kind：`local` | `docker` | `e2b` | `ssh` | `daytona`。能力矩阵与 `attach_stdio` 运输见 [05-runtime/environment.md](05-runtime/environment.md)。
-
-合同路径：`/attempt/workspace`、`/attempt/home`、`/attempt/artifacts`、`/attempt/evaluation`。
-
-job 选环境：`profiles.yaml` 的 `environment:`，不是 `provider.kind`。
-
-## composition
+## 组合根（Composition Root）
 
 ```text
 cli → application.composition.build_*
         → config.load_and_lock
         → identity.new_run / new_trial / new_attempt
-        → bind environment winner（Attempt 级）+ 各 profile 的 executor 赢家
+        → bind environment plugin (Attempt-wide) + per-profile executor plugins
         → ParentAgentService
         → run_attempt
 ```
 
-平台对象只在 `application/composition.py` 的 `build_*` 接线。CLI 只 import composition。一次 Attempt 只 `IdentityFactory.new_run` 一次。控制面不 import 题包模块；`run.py` / `evaluator.py` 走进程边界。
-
-结构规范（不可退化）全文见 [09](09-owner-matrix-and-structure.md)。
+所有平台对象的实例化与装配均集中在 `application/composition.py` 的 `build_*` 函数中；控制面通过进程边界调用任务脚本 `run.py` 与 `evaluator.py`。模块职责与结构约束详见 [09](09-owner-matrix-and-structure.md)。

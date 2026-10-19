@@ -1,20 +1,18 @@
 ---
 title: What is ageval
-description: Write a dataset once. Swap the environment and the Agent in config.
+description: Decouple benchmark task logic from execution backends. Swap the environment and the evaluated agent in config.
 icon: BookOpen
 ---
 
-How do you avoid rewriting scaffolds for every combination of agent runtime, model, and environment?
+To decouple task logic from execution backends across heterogeneous agent harnesses, models, and environments, **ageval** (agent eval) combines programmable task scripts with declarative plugin composition. Author a dataset once, and swap the execution environment, harness, and model in configuration.
 
-**ageval** (agent eval) evaluates coding agents. Write a dataset once. Swap the environment and the Agent in config.
+Equip your local coding agent with the CLI and skills so it can design, convert, and run benchmarks end to end. Publish datasets, plugins, Agent packages, and evaluation results to the Hub so others can inspect and reproduce them.
 
-Install the CLI and skills, and your coding agent can design, convert, and run a benchmark. Results upload to the Hub together with datasets, plugins, and agent configs, so others can run them too.
+- **Swap the evaluated agent and environment.** Environments and agent executors connect through declarative plugin slots ([ACP](https://agentclientprotocol.com) by default; `nooa`, `dsh`, and `miniswe` use the same plugin mechanism). Update one line in `profiles.yaml`, or pass `--agent` (and optional `--model`) for a single run.
+- **Automate benchmark conversion and execution.** Skills teach your coding agent the CLI, dataset layout, and SDK contracts so it can author or convert a benchmark and execute the evaluation end to end.
+- **Share and compare on the Hub.** Run published datasets directly with `ageval run <org>/<name>@<version>`, inspect trajectories, and compare models and harnesses on the Leaderboard.
 
-- **Swap the agent under test.** Environments and agent runtimes join as plugins ([ACP](https://agentclientprotocol.com) by default; nooa / dsh / miniswe take the same plugin path). One line in `profiles.yaml`, or `--agent` for this run.
-- **Let the Agent run the eval.** Skills teach your coding agent the CLI and dataset authoring. From there it designs or converts a benchmark and runs it.
-- **Share and reuse on the Hub.** Public datasets, plugins, and agent configs: `ageval run <org>/<name>@<version>`.
-
-The CLI is `ageval` (PyPI package `ageval-cli`).
+The CLI command is `ageval` (PyPI package `ageval-cli`).
 
 ## Docs map
 
@@ -29,4 +27,4 @@ The CLI is `ageval` (PyPI package `ageval-cli`).
 | Commands and fields                    | [CLI](./reference/cli.mdx) · [Config](./reference/config-fields.mdx)                    |
 | Local results / Hub                    | [Viewer](./run/local-viewer.mdx) · [Hub](./share/hub.mdx)                               |
 
-Design notes live under [`docs/design/`](https://github.com/ZJU-REAL/ageval/tree/main/docs/design).
+Design specifications live under [`docs/design/`](https://github.com/ZJU-REAL/ageval/tree/main/docs/design).

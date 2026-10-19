@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import contextlib
 import json
+from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 from ageval.application.phase_timing import format_duration_ms
 from ageval.application.suite import document as suite_document
@@ -598,30 +599,82 @@ def _duration_label(phase_timing: dict[str, Any] | None) -> str | None:
     return None
 
 
-def _duration_ms_for_run(root: Path, run_id: str) -> float | None:
-    """Wall time from an Attempt's evidence ``phase_timing.total_ms``."""
-    from ageval.application.suite.suite_usage import duration_s_from_run_dir
+class AttemptClock(TypedDict):
+    """One Attempt's phase clock. Stamps are present only when the seal wrote them."""
 
+    duration_ms: float
+    started_at: NotRequired[str]
+    finished_at: NotRequired[str]
+
+
+class TaskTiming(TypedDict):
+    """Mean duration for a suite task row, plus the finish stamp the pace board orders on."""
+
+    duration: str | None
+    duration_ms: float | None
+    finished_at: str | None
+
+
+def _attempt_clock(root: Path, run_id: str) -> AttemptClock | None:
+    """One Attempt's phase clock: ``duration_ms``, and stamps when sealed."""
     text = str(run_id or "").strip()
     if not text:
         return None
     try:
-        seconds = duration_s_from_run_dir(resolve_attempt_run_dir(root, text))
+        run_dir = resolve_attempt_run_dir(root, text)
     except ConfigError:
         return None
-    if seconds is None:
-        return None
-    return float(seconds) * 1000.0
-
-
-def _mean_duration_label(root: Path, run_ids: list[str], fallback: object) -> str | None:
-    """Mean Attempt duration. Suite summaries omit it; evidence still has timing."""
-    samples = [ms for rid in run_ids if (ms := _duration_ms_for_run(root, rid)) is not None]
-    if samples:
-        return format_duration_ms(sum(samples) / len(samples))
-    if isinstance(fallback, str) and fallback.strip():
-        return fallback.strip()
+    for name in ("summary.json", "result.json"):
+        raw = _read_json_object(run_dir / name)
+        if raw is None:
+            continue
+        timing = raw.get("phase_timing")
+        if not isinstance(timing, dict):
+            result = raw.get("result")
+            timing = result.get("phase_timing") if isinstance(result, dict) else None
+        if not isinstance(timing, dict):
+            continue
+        total_ms = timing.get("total_ms")
+        if not isinstance(total_ms, int | float) or isinstance(total_ms, bool):
+            continue
+        clock: AttemptClock = {"duration_ms": float(total_ms)}
+        started = timing.get("started_at")
+        if isinstance(started, str) and started.strip():
+            clock["started_at"] = started.strip()
+        finished = timing.get("finished_at")
+        if isinstance(finished, str) and finished.strip():
+            clock["finished_at"] = finished.strip()
+        return clock
     return None
+
+
+def _latest_stamp(values: list[str]) -> str | None:
+    best_value: str | None = None
+    best_key: datetime | None = None
+    for value in values:
+        try:
+            key = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if best_key is None or key > best_key:
+            best_key = key
+            best_value = value
+    return best_value
+
+
+def _task_timing(root: Path, run_ids: list[str], fallback: object) -> TaskTiming:
+    """Mean Attempt duration, plus the finish stamp the pace board orders on."""
+    clocks = [clock for rid in run_ids if (clock := _attempt_clock(root, rid)) is not None]
+    if clocks:
+        duration_ms = sum(float(clock["duration_ms"]) for clock in clocks) / len(clocks)
+        finished = [stamp for clock in clocks if (stamp := clock.get("finished_at"))]
+        return {
+            "duration": format_duration_ms(duration_ms),
+            "duration_ms": duration_ms,
+            "finished_at": _latest_stamp(finished),
+        }
+    label = fallback.strip() if isinstance(fallback, str) and fallback.strip() else None
+    return {"duration": label, "duration_ms": None, "finished_at": None}
 
 
 def _reasoning_effort_from_summary(summary: dict[str, Any]) -> str:
@@ -863,6 +916,7 @@ def get_job(dataset_root: Path | str, job_id: str) -> dict[str, Any]:
         if n_val is None:
             n_val = len(attempt_run_ids) or None
         previous = _previous_entries(ref, attempt_rows, dataset_root=root)
+        timing = _task_timing(root, attempt_run_ids, full.get("duration"))
         task_rows.append(
             {
                 "task_id": tid,
@@ -882,11 +936,9 @@ def get_job(dataset_root: Path | str, job_id: str) -> dict[str, Any]:
                 "reasoning_effort": job.get("reasoning_effort") or "",
                 "provider_label": job.get("provider_label") or "",
                 "dataset": job.get("dataset_ref") or job.get("dataset_id"),
-                "duration": _mean_duration_label(
-                    root,
-                    attempt_run_ids,
-                    full.get("duration"),
-                ),
+                "duration": timing["duration"],
+                "duration_ms": timing["duration_ms"],
+                "finished_at": timing["finished_at"],
                 "phase_timing": full.get("phase_timing"),
                 "n": n_val,
                 "c": full.get("c") if full.get("c") is not None else ref.get("c"),

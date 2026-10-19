@@ -1,6 +1,6 @@
 # e2b environment
 
-First-party exclusive-slot winner for `environment: e2b`.
+First-party exclusive-slot implementation for `environment: e2b`.
 
 The Attempt runs in an [E2B](https://e2b.dev) cloud sandbox built from the
 task recipe. Vendor SDK objects stay in this package. Neighbors only call
