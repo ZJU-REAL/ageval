@@ -1,6 +1,6 @@
 import { ListChecks, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { CommandStrip } from "@ageval/shared/components/command-strip";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
@@ -33,7 +33,7 @@ import {
 } from "@ageval/shared/components/leaderboard-waffle";
 import { Button } from "@ageval/shared/components/ui/button";
 import { TableColumnPicker } from "@ageval/shared/components/ui/table-column-picker";
-import type { BoardChart, ChartSuite, ParetoAxis } from "@ageval/shared/lib/leaderboard-charts";
+import type { ChartSuite } from "@ageval/shared/lib/leaderboard-charts";
 import { useTableColumns } from "@ageval/shared/hooks/use-table-columns";
 import {
   Table,
@@ -51,6 +51,7 @@ import {
   type JobPref,
 } from "@/lib/job-prefs";
 import { jobDisplayName, jobHref, jobPath, jobsHome, trialPath } from "@/lib/routes";
+import { jobStillRunning, SUITE_POLL_MS } from "@/lib/suite-pace";
 import { useReadySession } from "@/lib/session";
 import { TruncateTip } from "@ageval/shared/components/hover-tip";
 import { HarnessLabel } from "@ageval/shared/components/harness-label";
@@ -75,10 +76,22 @@ const JOB_OPTIONAL_COLUMNS = [
   { id: "trials_total", label: "Trials" },
 ] as const;
 const JOB_OPTIONAL_IDS = JOB_OPTIONAL_COLUMNS.map((col) => col.id);
+type JobColumnId = (typeof JOB_OPTIONAL_IDS)[number];
 const JOB_OPTIONAL_DEFAULT: typeof JOB_OPTIONAL_IDS = [
   "environment",
   "started",
 ];
+
+const FILTER_KEYS = ["kind", "source", "agent", "model", "chart", "axis"] as const;
+
+function readChoice<T extends string>(
+  raw: string | null,
+  allowed: readonly T[],
+  fallback: T,
+): T {
+  if (raw && (allowed as readonly string[]).includes(raw)) return raw as T;
+  return fallback;
+}
 
 export function JobsPage() {
   const navigate = useNavigate();
@@ -91,11 +104,22 @@ export function JobsPage() {
   const [datasetId, setDatasetId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [params, setParams] = useSearchParams();
   const [q, setQ] = useState("");
-  const [kind, setKind] = useState("all");
-  const [source, setSource] = useState("all");
-  const [agent, setAgent] = useState("all");
-  const [model, setModel] = useState("all");
+  const kind = readChoice(params.get("kind"), ["all", "single", "suite"] as const, "all");
+  const source = params.get("source") || "all";
+  const agent = params.get("agent") || "all";
+  const model = params.get("model") || "all";
+  const boardChart = readChoice(
+    params.get("chart"),
+    ["table", "pareto", "waffle"] as const,
+    "table",
+  );
+  const paretoAxis = readChoice(
+    params.get("axis"),
+    ["cost", "tokens", "time"] as const,
+    "cost",
+  );
   const [sortKey, setSortKey] = useState<string | null>("started");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [pendingDelete, setPendingDelete] = useState<Job[] | null>(null);
@@ -103,13 +127,26 @@ export function JobsPage() {
   const [prefs, setPrefs] = useState<Record<string, JobPref>>({});
   const [selected, setSelected] = useState<Record<string, true>>({});
   const [reloadToken, setReloadToken] = useState(0);
+  const [suiteTrialsHidden, setSuiteTrialsHidden] = useState(false);
   const [columns, setColumns] = useTableColumns(
     "ageval.viewer.columns.jobs",
     JOB_OPTIONAL_IDS,
     JOB_OPTIONAL_DEFAULT,
   );
-  const [boardChart, setBoardChart] = useState<BoardChart>("table");
-  const [paretoAxis, setParetoAxis] = useState<ParetoAxis>("cost");
+  function writeParam(
+    key: string,
+    value: string,
+    fallback: string,
+    extra?: (next: URLSearchParams) => void,
+  ) {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (!value || value === fallback) next.delete(key);
+      else next.set(key, value);
+      extra?.(next);
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!datasetKey) {
@@ -138,6 +175,31 @@ export function JobsPage() {
       cancelled = true;
     };
   }, [datasetKey, reloadToken]);
+
+  const suiteLive =
+    kind === "suite" && jobs.some((job) => job.source_kind !== "single" && jobStillRunning(job));
+
+  useEffect(() => {
+    if (!suiteLive || !datasetKey) return;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      if (document.hidden) return;
+      fetchJobs()
+        .then((data) => {
+          if (cancelled) return;
+          setJobs(data.items || []);
+          setDatasetId(data.dataset_id || "");
+          setError(null);
+        })
+        .catch((e: Error) => {
+          if (!cancelled) setError(e.message);
+        });
+    }, SUITE_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [suiteLive, datasetKey]);
 
   useEffect(() => {
     setPrefs(loadJobPrefs(datasetId));
@@ -187,7 +249,9 @@ export function JobsPage() {
       ).sort(),
     [jobs],
   );
-  const showSourceFilter = kind !== "suite" && sources.length > 0;
+  const showSourceFilter = kind !== "suite" && (sources.length > 0 || source !== "all");
+  const sourceOptions =
+    source !== "all" && !sources.includes(source) ? [...sources, source].sort() : sources;
   const agents = useMemo(
     () =>
       Array.from(new Set(jobs.map((j) => j.agent_label).filter(Boolean) as string[])).sort(),
@@ -198,6 +262,11 @@ export function JobsPage() {
       Array.from(new Set(jobs.map((j) => j.model_label).filter(Boolean) as string[])).sort(),
     [jobs],
   );
+  const agentOptions =
+    agent !== "all" && !agents.includes(agent) ? [...agents, agent].sort() : agents;
+  const modelOptions =
+    model !== "all" && !models.includes(model) ? [...models, model].sort() : models;
+  const kindOptions = kind !== "all" && !kinds.includes(kind) ? [...kinds, kind].sort() : kinds;
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -258,6 +327,13 @@ export function JobsPage() {
     return rows;
   }, [jobs, q, kind, source, showSourceFilter, agent, model, sortKey, sortDir, prefs]);
 
+  const showTrials =
+    columns.includes("trials_total") || (kind === "suite" && !suiteTrialsHidden);
+  const columnPickerValue: JobColumnId[] =
+    showTrials && !columns.includes("trials_total")
+      ? [...columns, "trials_total"]
+      : columns;
+  const suiteFinished = filtered.filter((job) => !jobStillRunning(job)).length;
   const suiteChart = kind === "suite" && boardChart !== "table";
   const chartSuites = useMemo<ChartSuite[]>(
     () =>
@@ -310,12 +386,14 @@ export function JobsPage() {
       sortKey === "started" ||
       sortKey === "trials_total"
     ) {
-      if (!columns.includes(sortKey)) {
+      const visible =
+        columns.includes(sortKey) || (sortKey === "trials_total" && showTrials);
+      if (!visible) {
         setSortKey(columns.includes("started") ? "started" : "job_name");
         setSortDir("desc");
       }
     }
-  }, [columns, sortKey]);
+  }, [columns, showTrials, sortKey]);
 
   function onSort(key: string) {
     const next = nextSort(sortKey, sortDir, key);
@@ -366,8 +444,11 @@ export function JobsPage() {
           {suiteChart ? null : (
           <TableColumnPicker
             options={JOB_OPTIONAL_COLUMNS}
-            value={columns}
-            onChange={setColumns}
+            value={columnPickerValue}
+            onChange={(next) => {
+              setColumns(next);
+              if (kind === "suite") setSuiteTrialsHidden(!next.includes("trials_total"));
+            }}
             ariaLabel="Optional job columns"
           />
           )}
@@ -377,7 +458,9 @@ export function JobsPage() {
           {session.datasets.length > 0 ? (
             <Select
               value={datasetKey || undefined}
-              onValueChange={(next) => navigate(jobsHome(next))}
+              onValueChange={(next) =>
+                navigate({ pathname: jobsHome(next), search: params.toString() })
+              }
             >
               <SelectTrigger aria-label="Dataset" className="h-10">
                 <SelectValue placeholder="Dataset" />
@@ -399,8 +482,9 @@ export function JobsPage() {
           <Select
             value={kind}
             onValueChange={(next) => {
-              setKind(next);
-              if (next === "suite") setSource("all");
+              writeParam("kind", next, "all", (query) => {
+                if (next === "suite") query.delete("source");
+              });
             }}
           >
             <SelectTrigger aria-label="Filter kind" className="h-10">
@@ -408,7 +492,7 @@ export function JobsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All kinds</SelectItem>
-              {kinds.map((k) => (
+              {kindOptions.map((k) => (
                 <SelectItem key={k} value={k}>
                   {k === "single" ? "single" : "suite"}
                 </SelectItem>
@@ -416,13 +500,13 @@ export function JobsPage() {
             </SelectContent>
           </Select>
           {showSourceFilter ? (
-            <Select value={source} onValueChange={setSource}>
+            <Select value={source} onValueChange={(next) => writeParam("source", next, "all")}>
               <SelectTrigger aria-label="Filter source" className="h-10">
                 <SelectValue placeholder="All sources" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All sources</SelectItem>
-                {sources.map((s) => (
+                {sourceOptions.map((s) => (
                   <SelectItem key={s} value={s}>
                     {s}
                   </SelectItem>
@@ -430,26 +514,26 @@ export function JobsPage() {
               </SelectContent>
             </Select>
           ) : null}
-          <Select value={agent} onValueChange={setAgent}>
+          <Select value={agent} onValueChange={(next) => writeParam("agent", next, "all")}>
             <SelectTrigger aria-label="Filter harnesses" className="h-10">
               <SelectValue placeholder="All harnesses" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All harnesses</SelectItem>
-              {agents.map((a) => (
+              {agentOptions.map((a) => (
                 <SelectItem key={a} value={a}>
                   {a}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Select value={model} onValueChange={setModel}>
+          <Select value={model} onValueChange={(next) => writeParam("model", next, "all")}>
             <SelectTrigger aria-label="Filter models" className="h-10">
               <SelectValue placeholder="All models" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All models</SelectItem>
-              {models.map((m) => (
+              {modelOptions.map((m) => (
                 <SelectItem key={m} value={m}>
                   {formatModelLabel(m).text}
                 </SelectItem>
@@ -461,10 +545,27 @@ export function JobsPage() {
             <BoardChartControls
               chart={boardChart}
               axis={paretoAxis}
-              onChart={setBoardChart}
-              onAxis={setParetoAxis}
+              onChart={(next) =>
+                writeParam("chart", next, "table", (query) => {
+                  if (next !== "pareto") query.delete("axis");
+                })
+              }
+              onAxis={(next) => writeParam("axis", next, "cost")}
               triggerClassName="h-10"
             />
+          ) : null}
+          {kind === "suite" ? (
+            <span
+              className="text-sm tabular-nums text-body"
+              aria-label={`${suiteFinished} of ${filtered.length} jobs finished`}
+            >
+              {suiteFinished}/{filtered.length}
+              <span className="ml-1 text-mute">finished</span>
+            </span>
+          ) : selectedCount === 0 ? (
+            <span className="text-xs text-mute">
+              {filtered.length} job{filtered.length === 1 ? "" : "s"}
+            </span>
           ) : null}
           {selectedCount > 0 ? (
             <Button
@@ -479,11 +580,7 @@ export function JobsPage() {
               <Trash2 className="h-3.5 w-3.5" />
               Delete {selectedCount}
             </Button>
-          ) : (
-            <span className="text-xs text-mute">
-              {filtered.length} job{filtered.length === 1 ? "" : "s"}
-            </span>
-          )}
+          ) : null}
         </div>
         {suiteChart ? (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-mute">
@@ -531,10 +628,11 @@ export function JobsPage() {
                 size="sm"
                 onClick={() => {
                   setQ("");
-                  setKind("all");
-                  setSource("all");
-                  setAgent("all");
-                  setModel("all");
+                  setParams((prev) => {
+                    const next = new URLSearchParams(prev);
+                    for (const key of FILTER_KEYS) next.delete(key);
+                    return next;
+                  });
                 }}
               >
                 Clear search
@@ -609,7 +707,7 @@ export function JobsPage() {
                 {columns.includes("duration") ? (
                   <TableHead className="w-[7rem]">Duration</TableHead>
                 ) : null}
-                {columns.includes("trials_total") ? (
+                {showTrials ? (
                   <TableHead className="w-[6rem]">{head("trials_total", "Trials")}</TableHead>
                 ) : null}
                 <TableHead className="w-7 pl-0 pr-2">
@@ -697,7 +795,7 @@ export function JobsPage() {
                         {job.duration || "-"}
                       </TableCell>
                     ) : null}
-                    {columns.includes("trials_total") ? (
+                    {showTrials ? (
                       <TableCell className="tabular">
                         {formatTrials(job.trials_done, job.trials_total)}
                       </TableCell>
