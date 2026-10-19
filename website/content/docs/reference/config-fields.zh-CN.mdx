@@ -72,6 +72,8 @@ role 上可选 `label`。缺省：ACP 用 `options.entry`，其它路径用 `exe
 
 docker 可选 `environment_options`：`image` / `platform` / `network` / `user` / `egress` / `egress_allow` / `python_version`。`python_version` 是官方镜像的 CPython minor（如 `"3.13"`；省略 = 3.12，形状 `^\d+\.\d+$`）；上游 tag 拉不到一次失败，不回退。`egress: llm` 时出站只放行绑定 profile 的 `base_url` 主机；`egress_allow` 是同一 map 上的额外 hostname 列表（省略 = 不加）。`evaluate_host.environment_options` 可写 `network` / `egress` / `egress_allow` / `platform` / `user` / `python_version`（不是 `image`）；省略时打分 Host 只继承 job 的 `platform` / `user` / `python_version`，不继承 agent 的 `egress` / `egress_allow` / `network`。
 
+任务有 `environment/compose.yaml` 时，里面的服务用 `docker compose up -d` 启动。Agent 容器仍是单独的 `docker run`。`depends_on` 里指向 `main` 的条目在这次 up 中去掉。不等待这些服务的 healthcheck。`network_mode: service:<服务名>` 来自 `environment/docker-compose.yaml` 的 service `main`、任务 `parameters.network_mode`，或 `environment_options.network_mode`。Agent 容器以 `--network container:<该服务的容器>` 启动，和那个服务共用网络，`127.0.0.1` 就是那个服务容器里的 `127.0.0.1`。`cap_add` 和 main 的 `environment`（`parameters.cap_add`、`parameters.main_environment`，或 `environment_options` 上的同名键）写在这次 `docker run` 上。打分容器不用这些声明。这些值留在 `docker run` 上，不写入 lock，也不写入 evidence。
+
 ## 成员一级目录白名单
 
 `prompts` · `schemas` · `environment` · `evaluation` · `data` · `lib` · `upstream` · `solution`

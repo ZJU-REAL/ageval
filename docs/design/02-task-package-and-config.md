@@ -119,6 +119,7 @@ yaml 显式字段覆盖缺省。旧 `harness.entrypoint` 与未知 format **拒�
 format: ageval.profiles/1
 environment: local          # 或 docker / e2b / ssh / daytona
 # environment_options:      # docker：image / platform / network / user（`root` 开 root）/ egress / egress_allow / python_version
+#                           #        可选 network_mode / cap_add / main_environment（见 05 environment「compose 与 Attempt」）
 #                           # ssh：host / user / port / key_env / image
 #                           # daytona：image / snapshot / timeout_seconds
 # evaluate_host:            # 省略 = 同一环境 evaluate
@@ -150,7 +151,7 @@ agent_profiles:
 
 | 字段 | 消费者 |
 | --- | --- |
-| `parameters` | `ctx.params` |
+| `parameters` | `ctx.params`。docker Agent 容器在 start 时另读 `network_mode`、`cap_add`、`main_environment`（job `environment_options` 上的同名键优先）。不写回 lock |
 | `limits.*` | Runtime limits |
 | `evaluation/` | evaluate 相位（gold；可含 `docker_image` 供单只 isolated；禁止放 Dockerfile） |
 | `environment/` | Agent 环境配方；`evaluate.Dockerfile` 或 `evaluate/<name>/` 仅 isolated 打分环境 |
