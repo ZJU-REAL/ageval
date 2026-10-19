@@ -60,8 +60,5 @@ nested `function` tool object and `tool_calls`. Responses may include
 `tool_calls` and reasoning `thought` events for the trajectory.
 The raw HTTP body stays under `backend_raw`.
 
-`RunTerminal.completed` is not PASS. PASS still comes from the independent
-evaluator.
-
 Not a Hub install. `ageval plugin install openai-http` is rejected: the
 id is reserved.

@@ -57,7 +57,7 @@ Landing: more than one dataset → Datasets. Exactly one (including
    (Role / Harness / Model / Time / Usage) + tabs from real evidence only
    (Trajectory · Agent · Verifier · Artifacts · Lock · Runtime). Top bar may show
    framework / environment kind / `provenance.upstream.url`. Multi-role groups Trajectory
-   and Agent tree by `profile_id`. Usage/trajectory are observational ≠ PASS.
+   and Agent tree by `profile_id`.
 6. **Breadcrumb** — `Jobs > jobId > taskId > runId` with `>` separators; click to navigate
 7. **Delete a local Job** — Jobs row menu or bulk selection. Preview paths /
    bytes / cascade `run_id`s, then confirm. Suite delete always removes

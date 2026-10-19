@@ -10,7 +10,7 @@ description: 任务循环写在 dataset 里；用 SDK 调 agent。
 | loop、角色、handoff、本地 Tool | 最终 PASS、宿主凭据、自己提隔离 |
 | 经 SDK `session` / `invoke` | 把某家私有 SDK 当 Core |
 
-`RunTerminal.completed` **不等于** PASS。分数由 `evaluator.py` 给出：确定性脚本比对参考答案，或参考答案就位后的可选 LLM-as-judge。
+分数由 `evaluator.py` 给出：确定性脚本比对参考答案，或参考答案就位后的可选 LLM-as-judge。
 
 <Callout type="idea" title="让 agent 代写">
 

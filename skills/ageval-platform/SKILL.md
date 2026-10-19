@@ -2,8 +2,8 @@
 name: ageval-platform
 description: >
   ageval platform map: authority (docs/design vs ARCHITECTURE vs Issues), Core vs
-  dataset ownership, red lines (trajectory≠PASS, no secrets, mechanism-named
-  adapters), evidence grades, which sibling skill to load. Use when entering the
+  dataset ownership, red lines (no secrets, mechanism-named adapters), evidence
+  grades, which sibling skill to load. Use when entering the
   repo, asking "what is ageval", "who owns PASS", "read order", or "evidence grade".
   Not a substitute for docs/design.
 ---
@@ -31,14 +31,13 @@ Core owns configuration locking (`lock`), the Attempt phase pipeline, the `Envir
 
 ## Red lines
 
-1. Trajectory ≠ `PASS` (`trajectory.jsonl` and `evaluation/observation.jsonl`).
-2. No plaintext secrets in `lock.json`, YAML, or evidence archives. Environment variables are locators.
-3. Plugins and adapters are named by mechanism (`acp`, `docker`, `e2b`, `ssh`, `openai-http`), never by benchmark name.
-4. Environment selection uses `environment: local|docker|e2b|ssh|daytona` in `profiles.yaml`.
-5. Unknown schema format fails fast with `invalid_format` at `/format`.
-6. Coding agents bind via `executor: acp` + `options.entry`, not `executor: pi`.
-7. Plugins implement exclusive or chain slots only. `ageval plugin install` never rewrites `profiles.yaml`.
-8. Do not claim `isolated` or `real-benchmark-verified` from a single smoke pass.
+1. No plaintext secrets in `lock.json`, YAML, or evidence archives. Environment variables are locators.
+2. Plugins and adapters are named by mechanism (`acp`, `docker`, `e2b`, `ssh`, `openai-http`), never by benchmark name.
+3. Environment selection uses `environment: local|docker|e2b|ssh|daytona` in `profiles.yaml`.
+4. Unknown schema format fails fast with `invalid_format` at `/format`.
+5. Coding agents bind via `executor: acp` + `options.entry`, not `executor: pi`.
+6. Plugins implement exclusive or chain slots only. `ageval plugin install` never rewrites `profiles.yaml`.
+7. Do not claim `isolated` or `real-benchmark-verified` from a single smoke pass.
 
 ## Skills
 

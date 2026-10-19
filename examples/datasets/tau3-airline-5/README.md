@@ -43,7 +43,6 @@ Host needs `tau2==1.0.1` (see `requirements.txt`) for tools/DB scoring.
 ## Evidence notes
 
 - Attempt PASS only from independent evaluator (tau2 ENV+COMMUNICATE product).
-- `RunTerminal.completed` ≠ PASS.
 - Gold lives under each task's `evaluation/` (not under `shared/`).
 - Presence of this package / Hub Shared UI does not make the evaluation results more credible.
 

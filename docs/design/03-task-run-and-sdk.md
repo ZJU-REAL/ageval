@@ -30,8 +30,6 @@ async def run(ctx: RunContext) -> RunTerminal:
     return RunTerminal.completed("ok")
 ```
 
-`RunTerminal.completed` 仅表示任务执行阶段正常结束，不代表评测通过（`PASS`）。
-
 ## SDK 导出接口
 
 ```python

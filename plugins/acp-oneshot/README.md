@@ -66,4 +66,4 @@ agent_profiles:
       - plugin: docker
 ```
 
-Credentials are locators projected into the **exec** env. Trajectory is not PASS.
+Credentials are locators projected into the **exec** env.

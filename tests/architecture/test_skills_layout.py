@@ -69,11 +69,10 @@ def test_cli_skill_commands_exist_in_production_cli() -> None:
         assert f'@app.command("{cmd}")' in sources, cmd
 
 
-def test_platform_skill_forbids_trajectory_as_pass() -> None:
-    platform = (SKILLS / "ageval-platform" / "SKILL.md").read_text(encoding="utf-8")
-    assert "Trajectory ≠ PASS" in platform or "trajectory ≠ PASS" in platform
+def test_platform_red_lines_forbid_inferring_pass() -> None:
     refs = (SKILLS / "ageval-platform" / "references" / "red-lines.md").read_text(encoding="utf-8")
-    assert "PASS" in refs
+    assert "Infer `PASS`" in refs
+    assert "RunTerminal.completed" in refs
 
 
 def test_no_skill_folder_readme_clutter() -> None:

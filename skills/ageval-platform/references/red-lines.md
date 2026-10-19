@@ -1,11 +1,9 @@
 # Red lines (worked examples)
 
-## Trajectory ≠ PASS
+## Evaluation result
 
 - **OK:** Agent invocation fails; `Result` status is `ERROR` or `FAIL`; trajectory files remain archived for inspection.
 - **Forbidden:** Infer `PASS` because `final-response.json` exists or `run.py` returned `RunTerminal.completed`.
-
-`RunTerminal.completed` ≠ `PASS`. `evaluator.py` is the sole source of `PASS` or `FAIL`.
 
 ## Secrets
 

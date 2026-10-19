@@ -65,8 +65,5 @@ Native `tools=` from the session catalog is posted as Anthropic
 and `thinking` (thought events). The raw HTTP body stays under
 `backend_raw`.
 
-`RunTerminal.completed` is not PASS. PASS still comes from the independent
-evaluator.
-
 Not a Hub install. `ageval plugin install anthropic-http` is rejected: the
 id is reserved.

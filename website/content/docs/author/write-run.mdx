@@ -10,7 +10,7 @@ description: The task loop lives in the dataset; call the agent through the SDK.
 | loop, roles, tools | PASS, host credentials, isolation |
 | SDK `session` / `invoke` | A vendor SDK as Core |
 
-`RunTerminal.completed` is **not** PASS. Scoring lives in `evaluator.py`: a deterministic script against gold, or an optional LLM-as-judge after gold lands.
+Scoring lives in `evaluator.py`: a deterministic script against gold, or an optional LLM-as-judge after gold lands.
 
 <Callout type="idea" title="Have an agent write it">
 

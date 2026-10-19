@@ -22,8 +22,6 @@ async def run(ctx: RunContext) -> RunTerminal:
     return RunTerminal.completed("ok")
 ```
 
-`RunTerminal.completed` is not PASS. Evaluator is a separate process.
-
 Default `evaluator.py` is a script: read artifacts + gold, return `{status, score, metrics}`. Optional extra key `checks` (use `evaluation_check(...)`) — parent writes `evaluation/checks.json`; bind ignores it. Optional LLM-as-judge: after gold is uploaded, `Agent.session(<role>).invoke` on a role declared in the same `profiles.yaml`. Parent injects `inputs["agent"]` when the socket is projected (`environment: local`). Still return `{status, score, metrics}`. `invoke` kwargs must not override `profile_id` / executor.
 
 | May | Must not |

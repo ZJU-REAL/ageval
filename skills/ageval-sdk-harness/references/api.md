@@ -12,9 +12,9 @@ Package: `ageval_sdk` (see `src/ageval_sdk/`, same distribution as `ageval`).
 | `AgentSession` | `open` / `invoke` / `close` via parent socket |
 | `Tool` / `ToolSet` | local tools |
 | `AllowList` / `CallLimit` | soft local guards |
-| `RunTerminal` | completed / failed — not PASS |
+| `RunTerminal` | completed / failed |
 | `ScriptError` | `ScriptError(title, message)` from `run.py` or `evaluator.py` when the script cannot continue. `title` is a stable label; `message` is this occurrence. An Agent that fell short is `RunTerminal.failed` or evaluator FAIL |
-| `bounded_gather` / `collect_results` / `first_success` | workflow helpers. `bounded_gather(aws, *, limit, timeout=None)` keeps input order; a child exception stays in that slot; `timeout` leaves `TimeoutError` in unfinished slots. `first_success(aws, *, limit=None, accept=None)` returns the first result with no exception that passes `accept`. No `accept` means "returned", not PASS. Race an invoke with `accept=lambda reply: reply.get("ok") is True`. These limits cannot raise `limits.agent_concurrency`. |
+| `bounded_gather` / `collect_results` / `first_success` | workflow helpers. `bounded_gather(aws, *, limit, timeout=None)` keeps input order; a child exception stays in that slot; `timeout` leaves `TimeoutError` in unfinished slots. `first_success(aws, *, limit=None, accept=None)` returns the first result with no exception that passes `accept`. No `accept` means the first returned value. Race an invoke with `accept=lambda reply: reply.get("ok") is True`. These limits cannot raise `limits.agent_concurrency`. |
 | `evaluation_check` | optional `checks` row for the evaluator return. `evaluation_check(id, *, title, status, score, script, environment, exit_code, stdout, stderr, exec_result)` — `id` required; `exec_result` fills exit/stdout/stderr when those kwargs are omitted |
 
 ## AgentSession.invoke return keys (parent path)
