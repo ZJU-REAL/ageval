@@ -30,7 +30,7 @@ Default `evaluator.py` is a script: read artifacts + gold, return `{status, scor
 | --- | --- |
 | Open sessions, tools, publish | Decide PASS |
 | Use `ctx.params` | Re-read lock or secrets |
-| Return completed/failed | Raise Core ceilings |
+| Return completed/failed | Override Core `limits` |
 | Raise `ScriptError` when the script cannot continue | Use `ScriptError` for an Agent that fell short |
 
 The Agent fell short: return `RunTerminal.failed` from `run.py`, or `{"status": "FAIL", ...}` from `evaluator.py`. The script, the dataset, or scoring itself cannot continue:

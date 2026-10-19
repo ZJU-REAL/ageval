@@ -9,7 +9,7 @@ for ageval evidence (no tools / reasoning / usage; model is not on
 `config_options`).
 
 The parent does not import the harness. It injects the `environment` service
-(`exec`, `upload`), uploads the worker into the box, and runs it with
+(`exec`, `upload`), uploads the worker into the environment, and runs it with
 `host.exec`. Credentials stay locators until invoke, then project into the
 exec env as `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL`.
 
@@ -100,7 +100,7 @@ write. Do not claim bash confinement on this runtime.
 Batch approval is `never` in the sandboxed tree so an unattended `ageval run`
 cannot hang on a permission prompt. This is a DSH file-effect policy, not
 ageval isolation. Docker + landlock / Seatbelt may fail to start
-(`SANDBOX_UNAVAILABLE`); that fails closed. Do not claim `isolated` from this
+(`SANDBOX_UNAVAILABLE`); that fails immediately. Do not claim `isolated` from this
 knob.
 
 Same `run.py`; switch only via profiles or

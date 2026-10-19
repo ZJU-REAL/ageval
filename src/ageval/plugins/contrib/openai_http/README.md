@@ -1,17 +1,17 @@
 # openai-http executor
 
-First-party exclusive-slot winner for `executor: openai-http`.
+First-party exclusive-slot implementation for `executor: openai-http`.
 
 Thin HTTP Chat backend. It does not own Run identity, PASS, or host
 credentials beyond a **scoped env locator** for the API key. No Attempt
-box is required; this executor does not inject `environment`.
+environment is required; this executor does not inject `environment`.
 
 ## Capabilities
 
 | | Value |
 | --- | --- |
 | export | exclusive `executor` |
-| inject | — (no box) |
+| inject | — (no environment) |
 | chain | — |
 | bake | — |
 

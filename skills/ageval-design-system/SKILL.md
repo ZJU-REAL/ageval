@@ -41,9 +41,7 @@ magnetic / "invent a new identity"). Identity is already locked: cool paper
 | docs         | `website/src/app/global.css` (`--color-fd-*`, `--ageval-link*`)           |
 | landing      | Token block at the top of `website/src/components/landing/landing.css`  |
 
-Change order: edit the table in `docs/design/13` first → sync script `CANONICAL`
-→ sync `apps/shared/DESIGN.md` YAML and `apps/shared/css/tokens.css` → run the machine check.
-If they disagree, fix the copies to match docs/13 + the script.
+Sync order when modifying tokens: keep the table in `docs/design/13`, script `CANONICAL`, `apps/shared/DESIGN.md` YAML, and `apps/shared/css/tokens.css` aligned, then run `python3 scripts/check_design_tokens.py`.
 
 ## Quick rules (full list in docs/design/13)
 

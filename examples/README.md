@@ -12,7 +12,7 @@ examples/
 ```
 
 There is no product `executor: mock`. Offline lock uses the real kinds; a missing
-credential fails closed. Bind a real Agent with `--agent` or `--profiles`.
+credential fails preflight and does not start the run. Bind a real Agent with `--agent` or `--profiles`.
 
 CLI path is always the dataset root (`ageval.yaml`):
 

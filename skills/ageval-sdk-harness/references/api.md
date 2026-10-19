@@ -25,7 +25,7 @@ Optional invoke kwargs: `tools` (OpenAI-style catalog) and `messages` (chat hist
 
 ## Offline
 
-When `AGEVAL_OFFLINE_AGENT=1`, invoke fails closed (`offline_forced`) — never stub PASS on public paths.
+When `AGEVAL_OFFLINE_AGENT=1`, invoke fails immediately (`offline_forced`) — never stub PASS on public paths.
 
 ## Evaluator (optional)
 

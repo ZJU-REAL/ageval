@@ -61,10 +61,10 @@ ageval results revoke-snapshot <token-or-url>
 | `--replace-slot` | 配合 `--resume-suite --task`：重跑那一行；新的一次运行；旧行进 `previous[]` |
 | `--attempt-index N` | Always-k 要换的格（默认 0）。只与 `--replace-slot` 一起用 |
 | `--keep-workspace` | 清理后保留环境工作根（默认删除）。 |
-| `--keep-vendor-raw` | 写入成功后保留 vendor raw / layer B；默认丢掉。`task-artifacts/` 两种情况下都留下。与 `--keep-workspace` 独立 |
+| `--keep-vendor-raw` | 封存后保留 vendor raw 与中间调用事件文件；默认丢掉。`task-artifacts/` 两种情况下都保留。与 `--keep-workspace` 独立 |
 | `--dir <path>` | 只配合 Hub ref：在 `<path>/<dataset_id>/` 找包；已匹配则复用 |
 | `--agent` | 绑定 `ageval.agent/1` Agent 包（`pi`、`org/name@version` 或本地路径）；与 `--profiles` 互斥 |
-| `--model` | 改这次 run 已绑角色的 `model.id`；须配合 `--agent`。不是 `results upload-suite --model`。`results analyze --model` 是另一条旗标，同样必须配合 `--agent` |
+| `--model` | 改这次 run 已绑角色的 `model.id`；须配合 `--agent`。不是 `results upload-suite --model`。`results analyze --model` 是另一条参数，同样必须配合 `--agent` |
 | `--set` / `--profiles` | 覆盖项 / 换一份配置文件 |
 | `--probe` | 只做可行性：按绑定 / `environment` 打印 plan + readiness。不 invoke Agent、不写入镜像、不改 lock digest。选中路径不满足则 exit 1。 |
 | `--json` | stdout 打完整结果文档。TTY 默认是短 recap（整份跑完时含 `summary` 路径与 `ageval view` / `upload-suite`）；管道默认仍是 JSON。 |
@@ -94,7 +94,7 @@ ageval results revoke-snapshot <token-or-url>
 | `/agent_profiles/<role>/api_key` | 环境变量名 |
 | `/agent_profiles/<role>/base_url` | 字面 URL 或环境变量名 |
 | `/agent_profiles/<role>/options/<key>` | job binding 覆盖（含 `entry`、插件 `agent` 等；ACP 仍拒绝 `command` / engine 键） |
-| `limits.*` | 三只时钟、`agent_invocations` 与 `agent_concurrency`（**不可**覆盖 — 见下） |
+| `limits.*` | 三个阶段计时器、`agent_invocations` 与 `agent_concurrency`（**不可**覆盖 — 见下） |
 
 Intent `limits.*` **不能**经 `--set` 覆盖。其它指针在 lock 阶段失败。
 

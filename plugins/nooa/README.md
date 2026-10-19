@@ -5,10 +5,10 @@ External `ageval.plugin/1` package. **Not** first-party ageval core (only ACP is
 This plugin binds ageval profiles to **[NVIDIA-labs OO Agents](https://github.com/NVIDIA-NeMo/labs-OO-Agents)**.
 The parent does not import NVIDIA nooa or LiteLLM as the success path. It
 injects the `environment` service (`exec`, `upload`), uploads the worker and
-the task's agent module into the box, and runs the worker with `host.exec`.
+the task's agent module into the environment, and runs the worker with `host.exec`.
 
 Package-local agents should subclass `nooa.Agent` and use generation methods.
-Plain deterministic classes (e.g. `FixedAnswerAgent`) still run inside the box
+Plain deterministic classes (e.g. `FixedAnswerAgent`) still run inside the environment
 without a network.
 
 Profile `base_url` + `api_key` (env locator) project into the exec env as
@@ -92,7 +92,7 @@ Evidence for a successful invoke includes worker metadata
 
 - **install** → Recognition only (`plugin list` / executor visible)
 - **`host_requires`** → local kind needs the `nooa` import (`uv tool install 'ageval-cli[nooa]'` / repo checkout `uv sync --extra nooa`); docker bake does not
-- **profiles `executor: nooa`** → exclusive slot winner (+ model / base_url / api_key)
+- **profiles `executor: nooa`** → exclusive-slot implementation (+ model / base_url / api_key)
 - **`extensions: [{plugin: nooa}]`** → opt-in bake / trajectory collect
 - **`--probe`** → binding-aware feasibility; no Agent, no bake
-- **image baked** → `Dockerfile.bake` installs `nooa` into the box Python. The worker script is uploaded at invoke and run with `host.exec` + projected credentials
+- **image baked** → `Dockerfile.bake` installs `nooa` into the environment Python. The worker script is uploaded at invoke and run with `host.exec` + projected credentials

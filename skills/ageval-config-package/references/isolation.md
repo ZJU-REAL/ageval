@@ -9,9 +9,9 @@ Authority: `docs/design/06-capability-adapter-visibility.md`, `docs/design/05-ru
 - Evaluator receives allowlisted staged inputs only after writer barrier.
 - Optional LLM-as-judge: `Agent.session` is allowed **after** that upload. Solver profiles that already ran must not invoke. Judge prompts stay out of `evaluation/observation.jsonl` user rows.
 
-## Box kind
+## Environment kind
 
-- Job `environment: local | docker | e2b | ssh | daytona`.
+- Profile `environment: local | docker | e2b | ssh | daytona`.
 - docker / e2b share `environment/Dockerfile` (or an image option). Official base:
   `FROM ageval-attempt:base` (`src/ageval/plugins/contrib/docker/attempt/`). Secrets never baked into layers.
 - Coding agents: `executor: acp` + `options.entry`; parent ACP + `host.attach_stdio`.

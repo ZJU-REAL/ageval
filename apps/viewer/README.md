@@ -19,7 +19,7 @@ Local results console for datasets on this machine, plus read-only plugins and A
 - **Actors**: Role / Harness / Model / **Time** / **Usage**
   - Time = sum of inv `latency_ms` for that `profile_id`
   - Usage = last inv normalized ACP usage for that profile (tokens / cache hit / cost when reported)
-  - Fail-open `-` when the entry did not report usage (e.g. some `pi` / `grok-build` paths)
+  - Displays `-` when the entry did not report usage (e.g. some `pi` / `grok-build` paths)
   - Observational only — trajectory and usage are **not** PASS authority
 - **Tabs** (only if files exist): Trajectory · Agent · Verifier · Artifacts · Lock · Runtime. **Analysis** is on that strip only when `analysis/<analyzer>/report.json` exists
 - **Multi-role**: Trajectory steps and Agent tree group by `profile_id` (virtual folders; on-disk layout unchanged)

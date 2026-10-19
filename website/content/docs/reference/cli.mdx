@@ -61,7 +61,7 @@ Path = dataset root. `run` / `lock` / `view` / `upload-suite` also accept a Hub 
 | `--replace-slot` | With `--resume-suite --task`: re-run that finished slot; new Attempt; old row stays in `previous[]` |
 | `--attempt-index N` | Always-k slot to replace (default 0). Only with `--replace-slot` |
 | `--keep-workspace` | Keep the environment work root after cleanup (default: delete). Uploads never pack it. Docker volumes are still removed |
-| `--keep-vendor-raw` | After seal, keep vendor raw / layer B. Default: drop. `task-artifacts/` stays either way. Independent of `--keep-workspace` |
+| `--keep-vendor-raw` | After seal, keep vendor raw and intermediate invocation event files. Default: drop. `task-artifacts/` stays either way. Independent of `--keep-workspace` |
 | `--dir <path>` | Hub ref only. Looks at `<path>/<dataset_id>/`; reuses a matching child |
 | `--agent` | Bind an `ageval.agent/1` Agent package (`pi`, `org/name@version`, or a local path); mutually exclusive with `--profiles` |
 | `--model` | Override `model.id` on roles `--agent` bound. Requires `--agent`. Not `results upload-suite --model`. `results analyze --model` is a separate flag and still requires `--agent` |
