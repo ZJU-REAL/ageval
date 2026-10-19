@@ -1,106 +1,95 @@
 # ageval Glossary
 
-这是**约束**，不是释义百科。机制定义仍以 [`design/`](design/) 为准。写文档或改文案前先读本文件：同一个概念只用规范名，Avoid 里的写法一律不许新造。
+本文规定仓库文档与对外文案的术语规范。机制定义以 [`design/`](design/) 为准。撰写或修改文档前请先核对本表：同一概念只使用规范名称，Avoid 列中的内部口语或自造黑话不得写入文档。
 
-未知概念先补本表，再写进正文。不要现场起名。
-
-## 表面
+## 适用表面
 
 | 表面 | 范围 |
 | --- | --- |
 | **public** | 根 `README.md` / `README.zh-CN.md`、[`website/`](../website/)、`examples/**/README*` |
 | **internal** | `docs/design/`、`AGENTS.md`、`ARCHITECTURE.md`、skills |
 
-public 只许出现「public」或「both」行的规范名。internal 词出现在 public 里算错。
+public 表面使用标记为 `public` 或 `both` 的规范名称；仅标为 `internal` 的实现符号（如内部类名、协议名）不直接作为用户教程概念。
 
-## 总原则
+## 基本原则
 
-1. 有 CLI / 字段 / format 的词，中英都用同一个拉丁词（`dataset`、`lock`、`PASS`、`gold`、`limits`）。解释用中文短语，不另造术语。
-2. 中文 public：**一次运行** / **整份 dataset 跑完**。`Attempt`、`suite` 留在英文、CLI、Hub 控件和 internal。
-3. 对外说**环境**（本机 / Docker / E2B / SSH / Daytona）。`kind` 和槽只在 internal。禁止「盒子」。
-4. `profiles.yaml` 叫**配置文件 / profiles**。Hub 上的表继续叫 **jobs**。禁止「job 文档」。
-5. 中文「锁定」只用于 `ageval lock` / digest。口号里不要把 lock 当营销动词。
-6. 禁止单独写 `isolated`。证据等级写全名；打分容器写 `evaluate_host.isolated` 或「另起打分容器」。
-7. 全仓不写「硬顶」。中英都写 `limits`。
-8. 家喻户晓且不是本项目切口的词可以留英文：Agent、Harness、PASS、skip、BYOK、BYOA。ageval 自己不是一种 Harness；包身份说 Agent 包。项目名（dsh、Harbor）可保留原词。
-9. 禁止自造组合词当普通中英文用：fail-closed、fail-open、host-loop、in-box、in-image、oneshot（插件 id `acp-oneshot` 除外）、机制卡、字段糖、硬切、一层 C、探测管子、密封轨迹。Inbox、plaza 是普通英文，可留。
+1. 具有 CLI 命令、配置字段或 schema format 的概念，中英文统一保留拉丁标识符（如 `dataset`、`task`、`lock`、`PASS`、`gold`、`limits`、`Attempt`、`suite`），中文辅以自然说明，不另造生僻译名。
+2. 可交付的 Agent 由 **Model + Harness** 构成。`harness` 指管理交互循环、工具调用与执行过程的运行时（如 `pi`、`Codex`、`Claude Code`、`OpenCode`、`miniswe`、`dsh`、`nooa`）；`ageval` 本身是评测框架，不是 harness。`ageval.agent/1` 打包产物称为 **Agent 包**（Agent package）。
+3. 执行后端统一称为**环境**（`environment`：本机 `local`、容器 `docker`、云沙箱 `e2b` / `daytona`、远程主机 `ssh`）。禁止在文档中将环境或容器称为「盒子」「箱子」「打分盒」或 `box`（引用源码类名 `BoxSpec` 除外）。
+4. 插件系统使用标准软件工程术语：**插件槽**（`slot`），分为**独占槽**（`exclusive slot`）与**链槽**（`chain slot`），以及**依赖注入**（`inject`）与服务导出（`export`）。禁止将独占槽绑定的插件实现称为「赢家」（`winner`），应写「独占槽实现」或「绑定的实现」。
+5. 生命周期中的 `environment → run → evaluate → record` 统一称为**阶段**（`phase`）。禁止写「相位」。
+6. `profiles.yaml` 称为**配置文件**或 `profiles`；Hub 与 Viewer 上的运行记录列表称为 **jobs**。禁止将 `profiles.yaml` 称为「job 文档」。
+7. 资源与调用预算统一写 `limits` 或「资源上限 / 调用配额」，禁止写「硬顶」或 `hard ceilings`。
+8. 禁止使用自造隐喻或工程黑话：如「题包」「证据包」「金标」「观察袋 / 插件袋 / 袋子」「层 B / 层 C」「时间切 / 空间切」「探测管子」「字段糖」「硬切」「机制卡」「勾选机」，也不要用量词「只」修饰会话、容器、环境或配额（如「一只 session」「那只容器」）。
 
-## 写法（public）
-
-- 直接说谁做什么。删「此外」「至关重要」「不仅仅……而是……」「作为……的证明」。
-- 不造隐喻，不挂三条口令。不要「一等评测维度」「harness 之下的 harness」「可见 Attempt」。
-- 中文阶段名写 phase 名（environment / run / evaluate），可说「阶段」。Avoid：相位。
-- 导航和专名写 **Core**，不译「内核」。
-- 破折号不当节奏拐杖。金句删掉，换成可检验的事实。
-
-检查：`python3 scripts/check_public_terms.py`。
+检查脚本：`python3 scripts/check_public_terms.py`。
 
 ## 词表
 
-| 规范中文 | 规范英文 | 表面 | 含义（一句话） | Avoid |
+| 规范中文 | 规范英文 | 表面 | 含义 | Avoid |
 | --- | --- | --- | --- | --- |
-| ageval | ageval | both | 产品名 | AgEval 当产品名、agent-eval 当 CLI |
-| dataset | dataset | both | 交付单位：根 `ageval.yaml` + `tasks/<id>/` | Database、`database_id`、task package；public 禁止「题包」 |
-| （内部口语）题包 | — | internal | 仅口头，等于 dataset | 当作规范名；英文 task package |
-| task | task | both | dataset 成员：`task.yaml` + `run.py` + `evaluator.py` | 题目、用例（指这一层时） |
-| 配置文件 / profiles | profiles / `profiles.yaml` | both | 环境和 Agent 绑定写在这里 | job 文档、job 文件 |
-| jobs | jobs | both | Hub / Viewer 上的运行记录表 | 用 job 统称一次运行或 `profiles.yaml` |
-| Agent 包 | Agent package | both | format `ageval.agent/1`（executor、entry、overlays） | 把包身份叫 harness |
-| Agent 运行时 / coding agent | agent runtime / coding agent | public | pi / Codex / Claude Code / dsh 等外部运行时 | 用 Harness 当 ageval 的产品主词 |
-| — | harness | internal | 仅行业对比或项目名（Harbor、deepseek-harness） | harness 之下的 harness；一等评测维度；first-class eval axis |
-| 一次运行 | Attempt | 见原则 2 | 一次外层执行；失败重试 = 新 Attempt。目录 `.ageval/runs/<id>/` | public 中文写 Attempt；可见 Attempt |
-| — | Trial | internal | 一题 × 一套 profile（lock digest） | public 教 Trial |
-| — | Run | both | CLI 顶层 `ageval run`，不当中文「一次评测」的规范名 | 用 run 指 Attempt |
-| 整份 dataset 跑完 | suite | 见原则 2 | 一份 dataset 去掉 `--task` 的全成员跑。指标是观测，不是 suite PASS | public 中文写 suite（CLI `upload-suite` 除外） |
-| Campaign | Campaign | both | `ageval campaign` 矩阵展开 | — |
-| Core | Core | both | 产品层专名 | 内核、把 Runtime / 控制面写进 public |
-| 环境 | environment | public | 本机 / Docker / E2B / SSH / Daytona | 盒子、box；public 写 kind |
-| environment（槽） | environment slot | internal | 独占槽名；kind 是它的取值 | public 教槽 |
-| kind | kind | internal | 环境类型字段 | public 当正文词 |
-| executor | executor | both | `profiles.yaml` 里 Agent 后端字段 | Agent 后端当规范名 |
-| 独占槽 | exclusive slot | internal | 每个 graph 一个实现 | public 写独占槽 / 赢家 / exclusive-slot winner |
-| 链槽 | chain slot | internal | phase 内钩子 | public 写链槽 |
-| inject / export | inject / export | internal | lock 期按名取服务 | public 写按名注入 |
-| `ageval lock` / digest | lock / digest | both | 合成可复现绑定。中文「锁定」只指这件事 | 一并锁定、锁定评测维度 |
-| limits | limits | both | 执行前强制的墙钟 / 内存 / 进程 / 调用次数 | 硬顶、配额、ceilings |
-| 参考答案 | gold | both | 评分对照的标准答案，在 `tasks/*/evaluation/`；evaluate 才 upload。zh public 写「参考答案」，EN / CLI / 路径用 gold | 金标；zh public 直接写 gold |
-| evidence | evidence | both | 目录 `.ageval/runs/<id>/` | 用 evidence 指那条 jsonl；存证 |
-| 轨迹 | trajectory | both | `trajectory.jsonl`。复盘用，不能发明 PASS | 用轨迹指整个 runs 目录 |
-| 分析 | analyzer | both | 跑完之后对一次运行的只读观察。`stats` / `hack` / `review`。不改 PASS，不改 `evaluation/checks.json` | 把 analyzer 报告当分数；本轮上传到 Hub |
-| checks | checks / `evaluation/checks.json` | both | 确定性 evaluator 可选返回的检查项观察；parent 写入 `evaluation/checks.json`。不是 PASS | 把 check 退出码 / stdout 当 PASS；Verifier 检查点 |
-| 投影 / Agent 能看见 | projected workspace | both | Agent 看见的文件 | 单独写「可见性」指这件事 |
-| 公开 / 私有 | public / private | both | Hub 范围。CLI 旗标仍是 `--visibility` | 单独写可见性、visibility 当正文（旗标除外） |
-| 快照分享 | snapshot share | both | 只读链接 `/s/{token}`。默认定格在创建时的 suite 与 Attempt 证据；`mode=live` 时 owner 按 job 终态更新同一条链接 | 用它指 `results share` 的身份 ACL；写成公开或上榜；把默认定格写成会跟着跑；把 live 写成单次 job 内的轨迹直播 |
-| PASS / FAIL / ERROR | PASS / FAIL / ERROR | both | 见下 | completed、轨迹完整当通过；用超时文本决定 FAIL |
-| 阶段 | phase | both | environment → run → evaluate → record；cleanup 始终执行 | 相位；用「步骤」指这些阶段（轨迹 tool step 除外） |
-| attach_stdio | attach_stdio | both | 已开环境里起前台进程，交回 stdin/stdout | — |
-| ACP entry | ACP entry | both | `options.entry`。包内 id 是 `pi` / `codex` / `claude-code` / `opencode` / `grok-build`。运行时表再并上 `$AGEVAL_HOME/acp-entries.json`（文件存在时）；包内 id 不能被覆盖。官方 `install-executors.sh` / `acp-entries.lock.json` 只收包内 entry | 用家目录 entry 当内置卡 |
-| capabilities | capabilities | both | 环境声明能兑现什么；`requires ⊆ capabilities`，否则 lock 失败 | — |
-| BYOK / BYOA | BYOK / BYOA | internal | 密钥 / 本机 auth 投影 | public 不必教这两个缩写 |
-| 托管运行 | hosted job | both | Hub 提交、Registry 排队、部署里的 worker 在 E2B 或 Daytona 上跑完并上传的 suite | `--launch`；在共享 Hub 主机上跑 Docker；用 hosted job 的成功冒充题的 PASS |
-| 组织密钥 | org secret | both | 组织保存的模型密钥或 E2B / Daytona 提供方密钥。列表不返回明文 | vault；把提供方密钥写进 task 环境 |
-| composition root | composition root | internal | `application/composition.py` | 不必中译 |
-| 控制面 | Control Plane | internal | — | public 出现 |
-| 检查不过就不能进入运行 | the check fails; the run does not start | both | 探测或配置检查不过，就不能进入真正运行 | fail-closed、fail closed |
-| bake | bake | internal | 镜像在 build 期写入 | 烘焙；public 写「写入镜像」 |
-| isolated | isolated | — | 禁止单独出现。证据等级写 `runnable-mvp` 等全名；字段写 `evaluate_host.isolated` | isolated 当形容词裸用 |
-| —（内部分级，勿外露） | evidence grade | internal | `runnable-mvp` 等内部验收分级，只在 AGENTS / Issue / evidence 声明里出现 | public 出现「证据等级 / evidence grade」；「证据等级升级 / evidence-grade upgrade」当公开文案——public 写事实：「不影响评测结果」「不会让结果更可信」 |
-| Model | Model | internal | profile 上的嵌套 `model:`，解析成 `ModelSpec`。字段表在 `docs/design/16-model.md` | 把 `api_key` / `base_url` 写成 Model 字段；在 Spec 里写网关允许名单；format `ageval.model/1` |
-| — | ModelSpec | internal | `ageval.model` 的冻结规格：`id` / `api` / `reasoning_effort` / `timeout` / `watchdog` / `extra` | 第二套 Spec；把 watchdog 省略读成无限 |
-| — | BaseEnvironment | internal | 环境 ABC。`capabilities` 用 `EnvironmentCapabilities` | 再造一套 capability 类型 |
-| — | BaseExecutor | internal | executor ABC。每个 executor 实现 `supports_model` 与 `bind_model` | `consumes_model` |
-| — | extra_allowlist | internal | executor 类体声明的 `model.extra` 键。空集拒绝全部 | 写进 `ModelSpec` 的全局名单；未声明却当空集用 |
+| ageval | ageval | both | 产品与 CLI 名称 | AgEval 当产品名、agent-eval 当 CLI |
+| dataset | dataset | both | 评测数据集交付单位：根 `ageval.yaml` + `tasks/<id>/` | Database、`database_id`、题包、task package |
+| task / 任务 | task | both | dataset 成员：`task.yaml` + `run.py` + `evaluator.py` | 把单题目录称为题包 |
+| 任务脚本 | task script | both | 任务目录下的 `run.py` 与 `evaluator.py` | 把 `run.py` 称为 harness.py |
+| 配置文件 / profiles | profiles / `profiles.yaml` | both | 环境、角色 executor 与模型绑定配置 | job 文档、job document |
+| jobs | jobs | both | Hub / Viewer 上的运行记录表 | 用 job 称呼 `profiles.yaml` |
+| Agent 包 | Agent package | both | `ageval.agent/1` 配置包（含 executor、entry、overlays） | 把包格式本身称为 harness |
+| harness / Agent 运行时 | harness / agent runtime | both | 管理交互循环与工具调用的待测运行时（pi、Codex、Claude Code、dsh、miniswe 等） | 把 ageval 称为 harness；受测；一等评测维度；first-class eval axis；harness 之下的 harness |
+| 单次运行 / Attempt | Attempt | both | 单题单次执行，目录为 `.ageval/runs/<id>/`；重跑或重评会生成新 Attempt | 可见 Attempt |
+| Trial | Trial | internal | 单题 × 单套锁定配置（lock digest）的多次采样序列 | 在基础教程中混用 Trial 与 Attempt |
+| `ageval run` | Run | both | CLI 运行入口，不作单次 Attempt 的同义词 | 用 run 指代 Attempt 目录 |
+| 整份 dataset 运行 / suite | suite | both | 省略 `--task` 时对 dataset 全部成员的执行，结果位于 `.ageval/suite-runs/<id>/` | 把 suite 汇总指标称为 suite PASS |
+| Campaign | Campaign | both | `ageval campaign` 参数矩阵展开运行 | — |
+| Core | Core | both | 运行时引擎专名，管理配置锁定与四个固定执行阶段 | 内核 |
+| 环境 | environment | both | 本机 `local`、容器 `docker`、云沙箱 `e2b` / `daytona`、远程 `ssh` | 盒子、箱子、打分盒、box、in-box、in-image |
+| 评分环境 / 评分容器 | scoring host / scoring container | both | `evaluate` 阶段运行评分命令或 judge 的环境实例 | 打分盒、scoring box |
+| executor / 执行器 | executor | both | `profiles.yaml` 中角色绑定的 Agent 执行插件（如 `acp`、`openai-http`、`miniswe`） | — |
+| 插件槽 | plugin slot / slot | both | Core 预留的扩展接入点 | — |
+| 独占槽 | exclusive slot | both | 每个解析图绑定唯一实现并导出为同名服务的插件槽（如 `environment`、`executor`） | 赢家、独占赢家、exclusive-slot winner、exclusive winner |
+| 链槽 | chain slot | both | 生命周期节点上按顺序串联执行的钩子槽 | — |
+| 插件依赖图 / `ExtensionGraph` | plugin dependency graph / `ExtensionGraph` | both | `ageval lock` 解析出的槽位绑定与服务依赖图，驱动运行时调度 | — |
+| 依赖注入 / 服务导出 | inject / export | both | 插件通过 `inject` 声明所需服务名与能力，通过独占槽或 `exports` 提供服务 | 按名注入 |
+| `ageval lock` / 配置锁定 | configuration locking / lock / digest | both | 执行前校验组件契约、能力依赖与模型参数，生成配置摘要（digest） | 一并锁定、锁定评测维度 |
+| limits / 资源上限 | limits | both | 执行前强制检查的时长与调用次数上限 | 硬顶、hard ceiling、hard ceilings |
+| 参考材料 / 参考答案 / gold | reference materials / gold | both | `tasks/*/evaluation/` 下用于评分的标准答案与测试套件，仅在 `evaluate` 阶段上传 | 金标 |
+| 执行证据 / evidence | evidence | both | 单次 Attempt 的归档目录 `.ageval/runs/<id>/` | 证据包、存证 |
+| 轨迹 | trajectory | both | `trajectory.jsonl`（及评分阶段的 `evaluation/observation.jsonl`），仅作交互记录，不决定 PASS | 密封轨迹、层 C、layer-C |
+| 扩展字段 / `extra` | `extra` field | both | `terminal.extra` 或 `summary.extra` 中的结构化附加观测数据 | 观察袋、插件袋、袋子、这袋 |
+| 分析器 / analyzer | analyzer | both | 运行结束后对归档证据的只读分析（`stats` / `hack` / `review`），不修改 PASS 或 `checks.json` | — |
+| 检查项 / checks | checks / `evaluation/checks.json` | both | `evaluator.py` 可选返回的分步检查明细，不直接替代顶层 PASS/FAIL | — |
+| 工作区可见文件 | projected workspace | both | `run` 阶段向待测 Agent 暴露的工作区文件 | 单独用「可见性」代指文件挂载边界 |
+| 公开 / 私有 | public / private | both | Hub 资源访问范围（CLI 参数为 `--visibility`） | — |
+| 快照分享 | snapshot share | both | 只读分享链接 `/s/{token}`，默认定格在创建时的结果快照；`--live` 模式下随子任务完成更新 | — |
+| PASS / FAIL / ERROR | PASS / FAIL / ERROR | both | 评测结果状态（定义见下表） | 把进程正常退出或轨迹完整当作 PASS |
+| 阶段 | phase | both | `environment → run → evaluate → record`，以及 `finally` 中的 `cleanup` | 相位 |
+| `attach_stdio` | `attach_stdio` | both | 在已启动环境中拉起前台进程并返回双向标准流（stdin/stdout） | 探测管子、attach 管子 |
+| ACP entry | ACP entry | both | `options.entry`，包内内置 `pi` / `codex` / `claude-code` / `opencode` / `grok-build`，可叠加 `$AGEVAL_HOME/acp-entries.json` 中的自定义项 | 内置卡 |
+| 能力标记 | capabilities | both | 环境插件声明支持的操作集合；lock 阶段校验 `requires ⊆ capabilities` | — |
+| BYOK / BYOA | BYOK / BYOA | internal | 环境变量密钥投影 / 本机订阅认证文件按白名单复制 | — |
+| 托管评测 / 托管运行 | hosted job | both | Hub 提交、后台 worker 在 E2B 或 Daytona 云沙箱中执行的评测作业 | — |
+| 组织密钥 | org secret | both | 组织保存的模型密钥或云沙箱提供方密钥，列表接口不返回明文 | vault |
+| 组合根 | composition root | internal | `application/composition.py`，生产环境对象唯一装配入口 | — |
+| 控制面 | Control Plane | internal | 宿主父进程编排层 | — |
+| 校验失败即终止 | fail fast before execution | both | 配置锁定或预检未通过时直接报错退出，不启动运行阶段 | fail-closed、fail closed |
+| 构建期写入镜像 | image bake | both | 在镜像构建阶段安装运行时与依赖层，不在调用期间执行包安装 | 烘焙 |
+| 独立评分容器 | `evaluate_host.isolated` | both | `evaluate` 阶段启动独立容器环境执行评分 | 禁止单独写裸词 `isolated` 指代评分容器 |
+| 内部验收分级 | evidence grade | internal | `runnable-mvp` 等仓库内部交付验收等级，仅用于 `AGENTS.md` 与 Issue 验收说明 | 在对外文档中出现「证据等级 / evidence grade」 |
+| `ModelSpec` | `ModelSpec` | both | 从角色 profile 嵌套 `model:` 解析出的独立模型配置规格（`id` / `api` / `reasoning_effort` / `timeout` / `watchdog` / `extra`） | — |
+| `BaseEnvironment` | `BaseEnvironment` | internal | 环境插件抽象基类，配合 `@environment_plugin` 注册 | — |
+| `BaseExecutor` | `BaseExecutor` | internal | 执行器插件抽象基类，实现 `supports_model` 与 `bind_model` | `consumes_model` |
+| `extra_allowlist` | `extra_allowlist` | internal | 执行器类声明允许传递的 `model.extra` 键集合，空集合拒绝全部扩展键 | — |
 
 ### PASS / FAIL / ERROR
 
-| 词 | 含义 |
+| 状态 | 含义 |
 | --- | --- |
-| **PASS** | 只来自 `evaluator.py` 绑定的 `status: PASS`。`RunTerminal.completed`、轨迹、ACP `end_turn`、`limit` 都不是 PASS |
-| **FAIL** | 只来自 `evaluator.py` 绑定的 `status: FAIL`（评测低分）。run 阶段触到的 limit 仍由 evaluator 打分 |
-| **ERROR** | 环境起不来、environment / evaluate 时钟到期、evaluator 崩或返回的 status 不是 PASS / FAIL、配置。`error` 是 `{phase, title, message}`；`title` 标注这次 ERROR，不是裁决。PASS / FAIL 时 `error` 为 `null`。`limit` 是 run 阶段触到的 limits 键，没有则为 `null` |
+| **PASS** | 仅来自 `evaluator.py` 返回并绑定的 `status: PASS`。`RunTerminal.completed`、轨迹完成、ACP `end_turn` 或未触发 `limit` 均不代表 PASS |
+| **FAIL** | 仅来自 `evaluator.py` 返回并绑定的 `status: FAIL`（未达到通过标准）。`run` 阶段触及 `limits` 后仍进入 `evaluate` 由 `evaluator.py` 给出 PASS 或 FAIL |
+| **ERROR** | 环境启动失败、`environment` / `evaluate` 阶段超时、`evaluator.py` 崩溃或返回非 `PASS`/`FAIL` 状态、配置或收集错误。`result.json` 中 `error` 为 `{phase, title, message}`；PASS 与 FAIL 时 `error` 为 `null`，若 `run` 阶段触及配额则在 `limit` 字段记录对应键名 |
 
-## format
+## Schema Formats
 
 `ageval.dataset/1` · `ageval.task/1` · `ageval.plugin/1` · `ageval.profiles/1` · `ageval.agent/1` · `ageval.trajectory.event/1`
 
-未知 format：一个错误，停。
+遇到未知 format 时直接报错 `invalid_format`（位于 `/format`）并终止，不做旧名兼容映射。

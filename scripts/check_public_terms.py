@@ -18,20 +18,29 @@ PUBLIC_GLOBS = (
     "examples/**/README.zh-CN.md",
 )
 
-# Whole-phrase bans. CLI flags and forbidden-field teaching are skipped per line.
+# Whole-phrase bans on public surfaces. CLI flags and forbidden-field teaching are skipped per line.
 BANNED = (
     "题包",
+    "证据包",
+    "金标",
     "一等评测维度",
     "first-class eval",
     "first-class evaluation",
     "harness 之下",
     "harness beneath",
     "硬顶",
-    "独占槽",
-    "exclusive-slot",
-    "exclusive slot",
-    "按名注入",
+    "hard ceiling",
+    "hard ceilings",
+    "赢家",
+    "exclusive-slot winner",
+    "exclusive winner",
+    "相位",
     "盒子",
+    "箱子",
+    "打分盒",
+    "scoring box",
+    "agent box",
+    "Attempt box",
     "可见 Attempt",
     "job 文档",
     "job document",
@@ -52,26 +61,17 @@ BANNED = (
     "硬切",
     "一层 C",
     "层 C",
+    "层 B",
+    r"\blayer[- ]?[BC]\b",
+    "观察袋",
+    "插件袋",
     "探测管子",
     "密封轨迹",
     "oneshot",
     "证据等级",
     "evidence grade",
     "evidence-grade",
-    r"([^-]|\b)slots?\b",
-    "槽",
-)
-
-# Banned only in Chinese-facing files. EN pages and path literals (gold.json,
-# evaluation/gold) keep these words; landing copy.ts mixes zh and en in one
-# file, so it is outside this channel.
-ZH_ONLY_BANNED = (r"\bgold\b",)
-ZH_ONLY_ALLOW_IF_LINE_HAS = ("gold.json", "evaluation/gold")
-
-# These fire only when not part of a longer allowed token.
-SOFT = (
-    ("赢家", ("赢家",)),
-    ("相位", ("相位",)),
+    "勾选机",
 )
 
 ALLOW_IF_LINE_HAS = (
@@ -98,34 +98,23 @@ def line_allowed(line: str) -> bool:
     return any(tok in line for tok in ALLOW_IF_LINE_HAS)
 
 
-def is_zh_facing(path: Path) -> bool:
-    name = path.name
-    return ".zh-CN." in name
-
-
 def main() -> int:
     hits: list[str] = []
     for path in iter_public_files():
         rel = path.relative_to(ROOT)
-        zh_facing = is_zh_facing(path)
         for i, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if line_allowed(raw):
                 continue
             for phrase in BANNED:
                 pat = (
                     phrase
-                    if phrase.startswith("(?") or phrase.startswith(r"(")
+                    if phrase.startswith("(?")
+                    or phrase.startswith(r"(")
+                    or phrase.startswith(r"\b")
                     else re.escape(phrase)
                 )
-                if re.search(pat, raw):
+                if re.search(pat, raw, flags=re.IGNORECASE if phrase.isascii() else 0):
                     hits.append(f"{rel}:{i}: {phrase!r}")
-            for phrase, _ in SOFT:
-                if phrase in raw:
-                    hits.append(f"{rel}:{i}: {phrase!r}")
-            if zh_facing and not any(tok in raw for tok in ZH_ONLY_ALLOW_IF_LINE_HAS):
-                for phrase in ZH_ONLY_BANNED:
-                    if re.search(phrase, raw):
-                        hits.append(f"{rel}:{i}: {phrase!r} (zh-only)")
     if hits:
         print("public copy still uses glossary Avoid terms:")
         print("\n".join(hits))
