@@ -42,6 +42,8 @@ export type Job = {
   duration?: string | null;
   trials_done?: number;
   trials_total?: number;
+  /** Suite progress: running / cancelling while the suite is open, else a terminal label. */
+  status?: string | null;
   exit_code?: number | null;
   task_count?: number;
   task_id?: string | null;
@@ -64,6 +66,10 @@ export type TaskRow = {
   provider_label?: string;
   dataset?: string | null;
   duration?: string | null;
+  /** Mean Attempt wall time in milliseconds, when evidence has phase_timing. */
+  duration_ms?: number | null;
+  /** Latest Attempt finish stamp. The pace board orders recent tasks on this. */
+  finished_at?: string | null;
   n?: number | null;
   attempt_run_ids?: string[];
   previous?: Array<{
