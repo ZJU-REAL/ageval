@@ -415,7 +415,7 @@ Phase detail: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifec
 | Platform capability | Owner | Notes |
 | --- | --- | --- |
 | `environment: local` | `plugins/contrib/local` | Real directory |
-| `environment: docker` | `plugins/contrib/docker` | Real container; compose / uid_gid / path_views. `network_mode: service:<name>` shares that sidecar namespace; declared main env and `cap_add` go on the attempt `docker run` |
+| `environment: docker` | `plugins/contrib/docker` | Real container; compose / uid_gid / path_views. `network_mode: service:<name>` puts the attempt on that compose service's network; declared main env and `cap_add` go on the attempt `docker run` |
 | `environment: e2b` | `plugins/contrib/e2b` | SDK only in this package; missing `E2B_API_KEY` fails preflight |
 | `environment: ssh` A/B | `plugins/contrib/ssh` | A has no image; B has a remote tag |
 | ACP coding-agent | `plugins/contrib/acp` | Sole coding-agent inlet; `attach_stdio` |

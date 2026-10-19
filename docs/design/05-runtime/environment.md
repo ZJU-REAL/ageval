@@ -144,9 +144,9 @@ contrib/local    → 本机目录
 
 ## compose 与 Attempt
 
-任务带 `environment/compose.yaml` 时，`docker compose up -d` 只启动这份文件里的侧车。Attempt 仍是单独的 `docker run`，不进入 compose service `main`。
+任务带 `environment/compose.yaml` 时，`docker compose up -d` 启动这份文件里的服务。Agent 所在容器仍是单独的 `docker run`。compose 里的 `main` 不会被启动。
 
-侧车之间的 `depends_on` 和 `healthcheck` 由这次 `compose up` 执行。`depends_on` 里指向 `main` 的条目会在 up 用的副本里去掉，因为 `main` 不在这份文件里；题包原文件不改。`compose up -d` 不加 `--wait`。Attempt 不等待侧车变健康。要等的话写在 `setup.sh` 或 Agent 自己的逻辑里。
+这些服务之间的 `depends_on` 和 `healthcheck` 随这次 `compose up` 生效。`depends_on` 里指向 `main` 的条目，在 up 用的副本里去掉，因为 `main` 不在这份文件里。任务原来的 compose 文件不改。`compose up -d` 不加 `--wait`。Agent 容器不会等这些服务的 healthcheck 通过。要等的话写在 `setup.sh` 里，或由 Agent 自己等。
 
 下面三样只加在 **Agent** 这只容器的 `docker run` 上。打分容器 `compose_file` 为空，不读这些声明，也不加入 compose 网络。`evaluate_host.environment_options` 不接收这三个键，写了则 lock 失败。
 
@@ -156,13 +156,13 @@ contrib/local    → 本机目录
 2. 任务 `parameters.network_mode`、`parameters.cap_add`、`parameters.main_environment`。这三个键仍进入 `ctx.params`。
 3. job `environment_options` 的同名键。写了就整份 job 共用，盖过该任务的声明。
 
-`network_mode` 只有 `service:<sidecar>` 会改 Attempt 的网络：`compose up` 之后取该侧车正在运行的容器 id，`docker run --network container:<id>`。这是 compose `network_mode: service:<name>` 的同等写法，Attempt 的 localhost 就是该侧车的 localhost。Attempt 不再加入 `{project}_default`。其它值（空、`bridge`、`host`）保持今日网络。`service:` 后面不是服务名、没有 compose 文件、或该服务不是恰好一个运行中的容器，启动一次失败。
+`network_mode` 只有 `service:<服务名>` 会改 Agent 容器的网络。`compose up` 之后取该服务正在运行的容器 id，执行 `docker run --network container:<id>`。Agent 容器和那个服务共用网络，`127.0.0.1` 就是那个服务容器里的 `127.0.0.1`。这时用的网络是 `container:<id>`。其它值（空、`bridge`、`host`）不改网络。`service:` 后面不是服务名、没有 compose 文件、或该服务不是恰好一个正在运行的容器，启动一次失败。
 
-`services.main.environment` / `parameters.main_environment` / `environment_options.main_environment` 用 `docker run -e` 注入。声明里的键盖过镜像里的同名 ENV。条目必须带值（mapping，或 `KEY=VALUE`）。只写名字的条目一次失败，不从 parent 环境代入。`DOCKER_HOST` 等 daemon locator 不注入。
+`services.main.environment` / `parameters.main_environment` / `environment_options.main_environment` 用 `docker run -e` 传进容器。声明里的键盖过镜像里的同名环境变量。每条必须带值（mapping，或 `KEY=VALUE`）。只写名字、没有值的条目一次失败，不会去读本机环境变量。`DOCKER_HOST` 这类指向 Docker 守护进程的名字不传进容器。
 
 `cap_add` 变成 `--cap-add`。名字是 `SYS_PTRACE` 这种能力名（大小写不敏感，运行时用大写）。容器仍带 `no-new-privileges`，不改 seccomp。
 
-`egress: llm` 与 `network_mode: service:*` 一起写则启动一次失败：共享网络命名空间时不能再加 `--add-host`。
+`egress: llm` 与 `network_mode: service:*` 写在一起则启动一次失败。共用这一个网络时，Docker 不能再加 `--add-host`。
 
 这些值留在进程内的 `docker run` 参数上。不写入 lock，不写入 evidence。
 
