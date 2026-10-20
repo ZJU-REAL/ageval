@@ -69,9 +69,7 @@ def test_eval_digest_ignores_readme_but_tracks_tests(tmp_path: Path) -> None:
 
 
 def _git(cwd: Path, *args: str) -> str:
-    proc = subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True, check=True
-    )
+    proc = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True)
     return proc.stdout.strip()
 
 
@@ -128,9 +126,7 @@ def test_self_contained_rejects_escaping_symlink(tmp_path: Path) -> None:
 def test_resolve_git_branch_ref_fails(tmp_path: Path) -> None:
     remote = _make_remote(tmp_path)
     with pytest.raises(ConfigError) as exc:
-        resolve_dataset_root(
-            f"file://{remote}@feature-x", cache=PackageCache(tmp_path / "cache")
-        )
+        resolve_dataset_root(f"file://{remote}@feature-x", cache=PackageCache(tmp_path / "cache"))
     assert exc.value.error_code == "invalid_package"
 
 

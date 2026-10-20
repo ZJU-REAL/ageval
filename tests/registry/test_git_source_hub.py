@@ -30,9 +30,7 @@ def _services(tmp_path: Path) -> tuple[PackageService, ResultService]:
     meta = open_sqlite_stores(tmp_path / "meta.sqlite3")
     blobs = MemoryBlobStore()
     access = AccessPolicy(orgs=meta.orgs, packages=meta.packages, results=meta.results)
-    packages = PackageService(
-        meta.packages, meta.orgs, blobs, access, max_upload=64 * 1024 * 1024
-    )
+    packages = PackageService(meta.packages, meta.orgs, blobs, access, max_upload=64 * 1024 * 1024)
     results = ResultService(
         meta.results,
         meta.packages,

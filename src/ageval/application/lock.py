@@ -92,8 +92,12 @@ class LockCommand:
             force_build=force_build,
         )
         return LockResult(
-            lock=lock, resolved=resolved, manifest=manifest, job=job,
-            source=source, eval_digest=eval_digest,
+            lock=lock,
+            resolved=resolved,
+            manifest=manifest,
+            job=job,
+            source=source,
+            eval_digest=eval_digest,
         )
 
     def run(

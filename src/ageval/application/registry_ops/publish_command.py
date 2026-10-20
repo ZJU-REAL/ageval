@@ -131,9 +131,7 @@ class PublishCommand:
                 visibility="public" if public else "private",
                 task_ids=list_tasks(root, manifest=manifest),
                 prepare=manifest.prepare,
-                assets=[
-                    {"path": a.path, "sha256": a.sha256} for a in manifest.assets
-                ],
+                assets=[{"path": a.path, "sha256": a.sha256} for a in manifest.assets],
             )
         except RegistryError as exc:
             raise ConfigError(exc.code, exc.message, location="registry") from exc

@@ -35,9 +35,7 @@ def _validate_subdir(subdir: str | None, *, location: str) -> str | None:
 def _validate_git_ref(ref: str, *, location: str) -> str:
     text = ref.strip()
     if not text or "@" in text or "#" in text or any(ch.isspace() for ch in text):
-        raise ConfigError(
-            "invalid_package", "git ref requires @<tag|full-sha>", location=location
-        )
+        raise ConfigError("invalid_package", "git ref requires @<tag|full-sha>", location=location)
     if text.casefold() in _BRANCH_NAMES or text.startswith("refs/"):
         raise ConfigError(
             "invalid_package",
@@ -63,9 +61,7 @@ def _parse_git_ref(text: str) -> PackageRef | None:
         coord = body[len("github:") :]
         head, at, ref = coord.rpartition("@")
         if not at:
-            raise ConfigError(
-                "invalid_package", "git ref requires @<tag|full-sha>", location=text
-            )
+            raise ConfigError("invalid_package", "git ref requires @<tag|full-sha>", location=text)
         parts = [p for p in head.split("/") if p]
         if len(parts) != 2 or not all(_GIT_SEGMENT_RE.fullmatch(p) for p in parts):
             raise ConfigError(

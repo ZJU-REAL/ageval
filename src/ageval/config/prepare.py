@@ -112,9 +112,7 @@ def _ensure_asset(root: Path, asset: DatasetAsset, acc: _Acc) -> None:
     acc.downloaded.append(asset.path)
 
 
-def _run_prepare_script(
-    root: Path, script_rel: str, *, timeout: int
-) -> None:
+def _run_prepare_script(root: Path, script_rel: str, *, timeout: int) -> None:
     script = root / script_rel
     if not script.is_file():
         raise ConfigError(
@@ -163,10 +161,7 @@ PREPARE_MARKER = ".ageval-prepare.json"
 def _prepare_key(root: Path, manifest: object) -> str:
     import json
 
-    assets = [
-        {"path": a.path, "sha256": a.sha256}
-        for a in getattr(manifest, "assets", ())
-    ]
+    assets = [{"path": a.path, "sha256": a.sha256} for a in getattr(manifest, "assets", ())]
     script = getattr(manifest, "prepare", None)
     script_hash = ""
     if script and (root / script).is_file():
@@ -198,9 +193,7 @@ def _write_prepare_marker(root: Path, manifest: object) -> None:
         "key": _prepare_key(root, manifest),
         "dataset_id": getattr(manifest, "dataset_id", ""),
     }
-    (root / PREPARE_MARKER).write_text(
-        json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    (root / PREPARE_MARKER).write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def prepare_dataset(

@@ -149,9 +149,7 @@ class PackageCache:
         sub_key = hashlib.sha256((subdir or "").encode("utf-8")).hexdigest()[:16]
         return self.root / "git" / url_key / commit / sub_key
 
-    def lookup_git(
-        self, git_url: str, commit: str, subdir: str | None
-    ) -> Path | None:
+    def lookup_git(self, git_url: str, commit: str, subdir: str | None) -> Path | None:
         entry = self.git_entry_dir(git_url, commit, subdir)
         marker = entry / GIT_SOURCE_MARKER
         if not marker.is_file() or not (entry / "ageval.yaml").is_file():

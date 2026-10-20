@@ -166,9 +166,7 @@ def resolve_dataset_root(
         assert ref.path is not None
         return ref.path
     if ref.kind == "git":
-        root, _source = resolve_dataset_root_with_source(
-            raw, cwd=cwd, cache=cache, client=client
-        )
+        root, _source = resolve_dataset_root_with_source(raw, cwd=cwd, cache=cache, client=client)
         return root
 
     pkg_cache = cache or PackageCache()

@@ -82,15 +82,11 @@ def compute_eval_digest(dataset_root: Path) -> str:
 
     raw_manifest = yaml.safe_load((root / "ageval.yaml").read_text(encoding="utf-8")) or {}
     if isinstance(raw_manifest, dict):
-        scrubbed = {
-            k: v for k, v in raw_manifest.items() if k not in _DESCRIPTIVE_MANIFEST_KEYS
-        }
+        scrubbed = {k: v for k, v in raw_manifest.items() if k not in _DESCRIPTIVE_MANIFEST_KEYS}
         assets = scrubbed.get("assets")
         if isinstance(assets, list):
             scrubbed["assets"] = [
-                {"path": a.get("path"), "sha256": a.get("sha256")}
-                if isinstance(a, dict)
-                else a
+                {"path": a.get("path"), "sha256": a.get("sha256")} if isinstance(a, dict) else a
                 for a in assets
             ]
     else:  # pragma: no cover - load_dataset_manifest already rejects this
