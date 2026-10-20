@@ -242,7 +242,7 @@ export function JobDetailPage() {
 
   return (
     <Shell>
-      <div className="space-y-4">
+      <div className="space-y-4 pb-6">
         <BreadcrumbNav
           items={[
             { label: "Jobs", href: jobsHome(datasetKey) },
