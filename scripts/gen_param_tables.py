@@ -15,13 +15,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-for extra in ("miniswe", "nooa", "dsh", "acp-oneshot"):
+for extra in ("miniswe", "nooa", "dsh", "acp-oneshot", "terminus-2"):
     sys.path.insert(0, str(ROOT / "plugins" / extra / "src"))
 
 from acp_oneshot_plugin.options import AcpOneshotOptions  # noqa: E402
 from dsh_plugin.options import DshOptions  # noqa: E402
 from miniswe_plugin.options import MinisweOptions  # noqa: E402
 from nooa_plugin.options import NooaOptions  # noqa: E402
+from terminus2_plugin.options import Terminus2Options  # noqa: E402
 
 from ageval.plugins.contrib.acp.options import AcpOptions  # noqa: E402
 from ageval.plugins.contrib.anthropic_http.options import AnthropicHTTPOptions  # noqa: E402
@@ -33,6 +34,7 @@ CLASSES: dict[str, type] = {
     "anthropic-http": AnthropicHTTPOptions,
     "acp": AcpOptions,
     "miniswe": MinisweOptions,
+    "terminus-2": Terminus2Options,
     "nooa": NooaOptions,
     "dsh": DshOptions,
     "acp-oneshot": AcpOneshotOptions,
@@ -54,6 +56,10 @@ SURFACES: dict[str, tuple[str, ...]] = {
     ),
     "miniswe": (
         "plugins/miniswe/README.md",
+        "docs/design/16-model.md",
+    ),
+    "terminus-2": (
+        "plugins/terminus-2/README.md",
         "docs/design/16-model.md",
     ),
     "nooa": (

@@ -110,6 +110,22 @@ model:
 | `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
 <!-- /ageval:param-table -->
 
+### terminus-2
+
+宿主循环。模型 HTTP 留在父进程；tmux 在 Attempt 环境里，经 `environment.exec` 收发按键和窗格文本。缺 tmux 时由插件安装，安装失败是 `environment_setup_failed`。
+
+<!-- ageval:param-table executor=terminus-2 -->
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `options.parser` | json | Command batch format: json or xml. Anything else is rejected. |
+| `options.step_limit` | 30 | Model turns before the episode stops. 0 is unlimited. |
+| `options.cmd_timeout` | 60 | Seconds per environment.exec, including tmux install and pane capture. |
+| `options.pane_width` | 160 | tmux pane width in columns. |
+| `options.pane_height` | 40 | tmux pane height in rows. |
+| `options.max_format_errors` | 3 | Malformed replies returned to the model before the episode stops. |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
+
 ### nooa
 
 <!-- ageval:param-table executor=nooa -->

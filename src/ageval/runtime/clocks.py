@@ -51,7 +51,7 @@ CLOCKS: dict[str, Clock] = {
         name="watchdog",
         default=180.0,
         zero="reject",
-        readers=("anthropic-http", "miniswe", "openai-http"),
+        readers=("anthropic-http", "miniswe", "openai-http", "terminus-2"),
     ),
     "upstream_stall": Clock(
         name="upstream_stall",

@@ -71,7 +71,7 @@ _GOLDEN = {
         "integral": False,
         "non_positive": False,
         "stall_freezes_parent": False,
-        "readers": ["anthropic-http", "miniswe", "openai-http"],
+        "readers": ["anthropic-http", "miniswe", "openai-http", "terminus-2"],
     },
 }
 

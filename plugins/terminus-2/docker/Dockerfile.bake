@@ -1,0 +1,12 @@
+# Optional tmux bake. The executor still installs tmux at setup when this
+# layer is absent, and fails closed if that install cannot finish.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tmux \
+    && rm -rf /var/lib/apt/lists/*
+
+USER ageval
+WORKDIR /attempt/workspace
