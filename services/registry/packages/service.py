@@ -193,7 +193,8 @@ class PackageService:
             raise RegistryAppError(
                 "invalid_request", "commit must be a full 40-char sha", http_status=400
             )
-        if not eval_digest.startswith("sha256:") or len(eval_digest) != 71:
+        digest_hex = eval_digest.removeprefix("sha256:")
+        if len(digest_hex) != 64 or any(c not in "0123456789abcdef" for c in digest_hex):
             raise RegistryAppError(
                 "invalid_request", "eval_digest must be sha256:<64 hex>", http_status=400
             )

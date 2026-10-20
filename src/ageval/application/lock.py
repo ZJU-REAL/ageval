@@ -69,12 +69,19 @@ class LockCommand:
         # eval_digest is computed over the resolved tree before preparation:
         # prepare output is pinned transitively via the script content and
         # the assets manifest, so publish-time and run-time digests agree.
-        eval_digest = compute_eval_digest(root)
+        # On later locks the marker replays the recorded digest, because
+        # prepare output left on disk would otherwise drift the value.
+        from ageval.config.prepare import prepare_dataset, stored_eval_digest
+
+        eval_digest = stored_eval_digest(root) or compute_eval_digest(root)
         # Dataset preparation (assets + gated prepare script) completes
         # before any Attempt can open.
-        from ageval.config.prepare import prepare_dataset
-
-        prepare_dataset(root, allow_prepare=allow_prepare, on_prepare_script=on_prepare_script)
+        prepare_dataset(
+            root,
+            allow_prepare=allow_prepare,
+            on_prepare_script=on_prepare_script,
+            eval_digest=eval_digest,
+        )
         manifest = load_dataset_manifest(root)
         resolved = resolve_task(root, task_id, manifest=manifest)
         # Host credential locators from the dataset-root .env (values never

@@ -187,13 +187,45 @@ def _prepare_marker_matches(root: Path, manifest: object) -> bool:
     return isinstance(data, dict) and data.get("key") == _prepare_key(root, manifest)
 
 
-def _write_prepare_marker(root: Path, manifest: object) -> None:
+def _marker_data(root: Path) -> dict[str, object] | None:
     import json
 
-    payload = {
+    marker = root / PREPARE_MARKER
+    if not marker.is_file():
+        return None
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def stored_eval_digest(root: Path) -> str | None:
+    """Digest recorded when the prepare script first ran, when still valid.
+
+    Prepare output stays on disk, so recomputing over the working tree on a
+    later lock would drift. The marker pins the pre-prepare digest while
+    the script + assets key is unchanged.
+    """
+    manifest = load_dataset_manifest(root)
+    if not manifest.prepare:
+        return None
+    data = _marker_data(root)
+    if data is None or data.get("key") != _prepare_key(root, manifest):
+        return None
+    digest = data.get("eval_digest")
+    return digest if isinstance(digest, str) and digest.startswith("sha256:") else None
+
+
+def _write_prepare_marker(root: Path, manifest: object, eval_digest: str | None = None) -> None:
+    import json
+
+    payload: dict[str, object] = {
         "key": _prepare_key(root, manifest),
         "dataset_id": getattr(manifest, "dataset_id", ""),
     }
+    if eval_digest:
+        payload["eval_digest"] = eval_digest
     (root / PREPARE_MARKER).write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
 
 
@@ -204,6 +236,7 @@ def prepare_dataset(
     trusted: bool = False,
     timeout: int = DEFAULT_PREPARE_TIMEOUT_SECONDS,
     on_prepare_script: Callable[[str, str], None] | None = None,
+    eval_digest: str | None = None,
 ) -> PrepareReport:
     """Fetch declared assets and, when allowed, run the prepare script.
 
@@ -242,7 +275,7 @@ def prepare_dataset(
                     location=asset.path,
                 )
         if prepare_ran:
-            _write_prepare_marker(root, manifest)
+            _write_prepare_marker(root, manifest, eval_digest=eval_digest)
     return PrepareReport(
         downloaded=tuple(acc.downloaded),
         skipped=tuple(acc.skipped),

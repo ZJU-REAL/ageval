@@ -113,7 +113,9 @@ class PublishCommand:
         if source is None:  # pragma: no cover - git refs always carry source
             raise ConfigError("invalid_package", "--repo requires a git ref", location="--repo")
         manifest = load_dataset_manifest(root)
-        eval_digest = compute_eval_digest(root)
+        from ageval.config.prepare import stored_eval_digest
+
+        eval_digest = stored_eval_digest(root) or compute_eval_digest(root)
         client = self._client_factory(
             registry_url=registry_url,
             token=token,

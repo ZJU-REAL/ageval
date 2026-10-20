@@ -186,6 +186,11 @@ def test_lock_digest_matches_pre_prepare_tree(tmp_path: Path) -> None:
     assert (root / "tasks" / "hello" / "data" / "generated.txt").is_file()
     payload = json.loads(result.output[result.output.index("{") :])
     assert payload["eval_digest"] == expected
+    # Second lock over the prepared tree replays the recorded digest.
+    again = CliRunner().invoke(app, ["lock", str(root), "--task", "hello", "--allow-prepare"])
+    assert again.exit_code == 0, again.output
+    payload2 = json.loads(again.output[again.output.index("{") :])
+    assert payload2["eval_digest"] == expected
 
 
 def test_manifest_rejects_escaping_asset(tmp_path: Path) -> None:
