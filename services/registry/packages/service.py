@@ -166,6 +166,19 @@ class PackageService:
             if isinstance(task_ids_raw, list)
             else []
         )
+        prepare = str(body.get("prepare") or "").strip().removeprefix("./")
+        if prepare and ".." in Path(prepare).parts:
+            raise RegistryAppError("invalid_request", "bad prepare path", http_status=400)
+        assets: list[dict[str, str]] = []
+        assets_raw = body.get("assets")
+        if isinstance(assets_raw, list):
+            for item in assets_raw:
+                if not isinstance(item, dict):
+                    continue
+                path = str(item.get("path") or "").strip()
+                sha = str(item.get("sha256") or "").strip()
+                if path and sha:
+                    assets.append({"path": path, "sha256": sha})
         if not dataset_id or not version or not git_url or not commit or not eval_digest:
             raise RegistryAppError(
                 "invalid_request",
@@ -220,6 +233,8 @@ class PackageService:
             tasks_json=json.dumps(task_ids),
             source_available=True,
             created_at=now(),
+            prepare=prepare,
+            assets_json=json.dumps(assets),
         )
         try:
             self.packages.insert_source(row)
@@ -783,6 +798,8 @@ class PackageService:
         except ValueError as exc:
             raise RegistryAppError("invalid_format", str(exc), http_status=400) from exc
         payload["package_kind"] = kind
+        if kind == "dataset":
+            payload.update(self._dataset_review_fields(row))
         if kind == "plugin":
             data = read_blob(self.blobs, row.blob_digest, prefix="packages")
             if data is not None:
@@ -794,6 +811,38 @@ class PackageService:
                 with contextlib.suppress(*_PREVIEW_ERRORS):
                     payload["agent_preview"] = agent_preview_from_archive(data)
         return payload
+
+    def _dataset_review_fields(self, row: ReleaseRow) -> dict[str, Any]:
+        """Declared ``prepare`` / ``assets`` from the uploaded ageval.yaml."""
+        from services.registry.content.files import read_member
+
+        archive = read_blob(self.blobs, row.blob_digest, prefix="packages")
+        if archive is None:
+            return {}
+        try:
+            data, _size, _trunc = read_member(archive, "ageval.yaml", max_bytes=262144)
+            import yaml
+
+            doc = yaml.safe_load(data.decode("utf-8")) or {}
+        except Exception:  # noqa: BLE001 - review fields are best-effort
+            return {}
+        if not isinstance(doc, dict):
+            return {}
+        out: dict[str, Any] = {}
+        prepare = doc.get("prepare")
+        if isinstance(prepare, str) and prepare.strip():
+            out["prepare"] = prepare.strip().removeprefix("./")
+            out["has_prepare"] = True
+        assets_raw = doc.get("assets")
+        if isinstance(assets_raw, list):
+            assets = [
+                {"path": str(a.get("path") or ""), "sha256": str(a.get("sha256") or "")}
+                for a in assets_raw
+                if isinstance(a, dict) and a.get("path")
+            ]
+            if assets:
+                out["assets"] = assets
+        return out
 
     def serve_content(
         self,

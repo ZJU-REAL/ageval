@@ -11,6 +11,7 @@ Dataset 唯一标识符字段为 `dataset_id`。软件包与评测结果的上�
 - **结果归因：** `upload-suite` 携带 lock 中的 `eval_digest`。Hub 按字符串比对：与已注册版本一致 → 结果归因到该版本（`bound_kind: source`，任务完备性按注册时记录的任务集判定，批准后可上榜）；未注册或 digest 不符 → 结果照常保存但不上榜（`bound_kind: unknown`）。
 - **源健康：** `POST /v1/packages/{dataset_id}/versions/{version}/source-check` 探测源仓库可达性；不可达时标记 `source_available: false`（Dataset 页面显示 "source unavailable"），既有结果不受影响。
 - **Hub 链接：** git 源版本的页面链接指向钉版 commit（`/tree/<sha>/<subdir>`、`/blob/<sha>/…`），永不指向分支。
+- **Prepare 审查：** Dataset 详情页展示声明的 `prepare` 脚本（徽标 + 内容；git 源版本链接到钉版 commit 上的文件）、`assets` 清单（path + sha256 前缀）与源不可达标记，便于在运行前审查数据集级准备逻辑。带 prepare 脚本的版本在 CLI 执行前也会打印提示。
 
 ## Dataset Leaderboard 与准入规则
 

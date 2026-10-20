@@ -65,6 +65,8 @@ class SourceRow:
     tasks_json: str = "[]"
     source_available: bool = True
     created_at: float = 0.0
+    prepare: str = ""
+    assets_json: str = "[]"
 
 
 @dataclass(frozen=True, slots=True)

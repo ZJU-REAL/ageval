@@ -80,6 +80,18 @@ export type PackageRelease = {
   favorite_count?: number;
   /** True when the current caller has favorited this package. */
   favorited?: boolean;
+  /** Git-sourced version registered without upload (design/12). */
+  source_only?: boolean;
+  git_url?: string;
+  commit?: string;
+  eval_digest?: string;
+  subdir?: string;
+  source_available?: boolean;
+  /** Declared dataset prepare script (root-relative), when present. */
+  prepare?: string;
+  has_prepare?: boolean;
+  /** Declarative assets pinned by the manifest (contents not uploaded). */
+  assets?: Array<{ path: string; sha256: string }>;
 };
 
 export type OrgRow = {

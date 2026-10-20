@@ -69,6 +69,8 @@ class PackageStore(PackageStoreProtocol):
                         row.tasks_json,
                         1 if row.source_available else 0,
                         row.created_at,
+                        row.prepare,
+                        row.assets_json,
                     ),
                 )
                 conn.commit()
@@ -108,6 +110,8 @@ class PackageStore(PackageStoreProtocol):
             tasks_json=str(r["tasks_json"] or "[]"),
             source_available=bool(int(r["source_available"] or 0)),
             created_at=float(r["created_at"]),
+            prepare=str(r["prepare"] or "") if "prepare" in r.keys() else "",
+            assets_json=str(r["assets_json"] or "[]") if "assets_json" in r.keys() else "[]",
         )
 
     def get_by_version(self, dataset_id: str, version: str) -> ReleaseRow | None:

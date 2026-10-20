@@ -214,6 +214,8 @@ class RegistryClient:
         org_id: str | None = None,
         visibility: str = "public",
         task_ids: list[str] | None = None,
+        prepare: str | None = None,
+        assets: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         """Register a git-sourced version without uploading files (#305)."""
         body: dict[str, Any] = {
@@ -224,6 +226,10 @@ class RegistryClient:
             "visibility": visibility,
             "task_ids": list(task_ids or []),
         }
+        if prepare:
+            body["prepare"] = prepare
+        if assets:
+            body["assets"] = assets
         if subdir:
             body["subdir"] = subdir
         if org_id:

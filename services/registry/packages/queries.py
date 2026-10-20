@@ -304,6 +304,8 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
         tasks_json TEXT NOT NULL DEFAULT '[]',
         source_available INTEGER NOT NULL DEFAULT 1,
         created_at REAL NOT NULL,
+        prepare TEXT NOT NULL DEFAULT '',
+        assets_json TEXT NOT NULL DEFAULT '[]',
         PRIMARY KEY (dataset_id, version)
     )
     """,
@@ -322,8 +324,9 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
 INSERT_SOURCE = """
 INSERT INTO dataset_sources(
     dataset_id, version, git_url, commit_sha, eval_digest, subdir,
-    org_id, visibility, uploaded_by, tasks_json, source_available, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    org_id, visibility, uploaded_by, tasks_json, source_available, created_at,
+    prepare, assets_json
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 SELECT_SOURCE = "SELECT * FROM dataset_sources WHERE dataset_id=? AND version=?"
@@ -337,6 +340,8 @@ UPDATE_SOURCE_AVAILABILITY = (
 SCHEMA_INTEGER_FLAGS: tuple[tuple[str, str], ...] = ()
 
 SCHEMA_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    ("dataset_sources", "prepare", "TEXT NOT NULL DEFAULT ''"),
+    ("dataset_sources", "assets_json", "TEXT NOT NULL DEFAULT '[]'"),
     ("releases", "org_id", "TEXT"),
     ("releases", "uploaded_by", "TEXT NOT NULL DEFAULT ''"),
     ("package_task_summaries", "overlay_prefixes_json", "TEXT"),

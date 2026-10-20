@@ -72,6 +72,31 @@ def test_register_source_idempotent_and_conflict(tmp_path: Path) -> None:
     assert "bump version" in exc.value.message
 
 
+def test_register_source_carries_prepare_review_fields(tmp_path: Path) -> None:
+    packages, _results = _services(tmp_path)
+    auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
+    payload = packages.register_source(
+        body={
+            "dataset_id": "test/publish-min",
+            "version": "0.2.0",
+            "git_url": "https://github.com/org/repo.git",
+            "commit": COMMIT,
+            "eval_digest": DIGEST,
+            "task_ids": ["hello"],
+            "prepare": "prepare.sh",
+            "assets": [{"path": "tasks/hello/data/clip.bin", "sha256": "c" * 64}],
+        },
+        auth=auth,
+    )
+    assert payload["prepare"] == "prepare.sh"
+    assert payload["has_prepare"] is True
+    assert payload["assets"][0]["path"] == "tasks/hello/data/clip.bin"
+    meta = packages.serve_meta(
+        dataset_id="test/publish-min", version="0.2.0", package_digest=None, auth=auth
+    )
+    assert meta["has_prepare"] is True
+
+
 def test_serve_meta_source_only(tmp_path: Path) -> None:
     packages, _results = _services(tmp_path)
     _register(packages)

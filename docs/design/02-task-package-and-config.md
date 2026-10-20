@@ -14,6 +14,18 @@ tasks:
 
 未知 `format` 在 `lock` 阶段直接报错 `invalid_format`（位于 `/format`）。CLI 的 dataset 参数始终指向 dataset 根目录或 Hub 引用：
 
+根清单还可以声明数据集级 **assets 与 prepare**（在解析 Dataset 与打开任何 Attempt 之间执行，与逐任务的 `environment/setup.sh` 不同）：
+
+```yaml
+assets:
+  - path: tasks/clip-01/data/clip.mp4   # 相对 dataset 根，禁止 `..`
+    url: https://cdn.example.com/clip-01.mp4
+    sha256: <64 位十六进制>
+prepare: ./prepare.sh                    # 可选
+```
+
+`ageval prepare <dataset>`（`run` / `lock` 自动先行）逐项处理 assets：文件已存在且 sha256 一致则跳过，否则下载、校验、落盘；下载失败报错 `asset_download_failed`，摘要不一致报错 `asset_digest_mismatch`，均在打开 Attempt 前停止。`prepare` 脚本默认禁用：仅在 `--allow-prepare` 或 dataset 位于信任列表（环境变量 `AGEVAL_PREPARE_TRUST`，逗号分隔 dataset_id 或根路径）时运行；约束为 cwd = dataset 根、超时（默认 600 秒）、以调用用户身份运行、不得引用根外路径，运行后声明的 assets 仍须通过 sha256 校验，报错分别为 `prepare_not_allowed` / `prepare_failed`。脚本按（脚本内容 + assets 清单）哈希写完成标记 `.ageval-prepare.json`，同一次 suite 内不重复执行。下载的文件内容不进入 `eval_digest`（清单的 `path + sha256` 已计入），脚本内容计入，详见 [12](12-hub-dataset-and-leaderboard.md)。
+
 ```bash
 ageval lock examples/datasets/minimal-demo --task terminal-jsonl-agg
 ageval run  examples/datasets/minimal-demo --task terminal-jsonl-agg

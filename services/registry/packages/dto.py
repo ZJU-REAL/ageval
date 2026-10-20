@@ -59,6 +59,10 @@ def source_to_dict(row: SourceRow) -> dict[str, Any]:
         task_ids = json.loads(row.tasks_json)
     except (TypeError, json.JSONDecodeError):
         task_ids = []
+    try:
+        assets = json.loads(row.assets_json)
+    except (TypeError, json.JSONDecodeError):
+        assets = []
     return {
         "dataset_id": row.dataset_id,
         "version": row.version,
@@ -76,6 +80,9 @@ def source_to_dict(row: SourceRow) -> dict[str, Any]:
         "subdir": row.subdir,
         "source_available": row.source_available,
         "task_ids": task_ids if isinstance(task_ids, list) else [],
+        "prepare": row.prepare,
+        "has_prepare": bool(row.prepare),
+        "assets": assets if isinstance(assets, list) else [],
         **({"org_id": row.org_id} if row.org_id else {}),
         **({"uploaded_by": row.uploaded_by} if row.uploaded_by else {}),
     }
