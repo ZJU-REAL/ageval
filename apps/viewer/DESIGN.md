@@ -92,6 +92,7 @@ Before drawing a control:
 | Row / theme overflow | `DropdownMenu` |
 | Evidence section switcher | `UnderlineTabs` (Liquid Move). Unselected hover is Button `quietHoverClass` |
 | Icon action | Button `ghost` `size="icon"`. `className` is layout only (gap, opacity reveal, shrink, position). No hover, border, background, text color, or radius classes. Do not add `transition-opacity` |
+| Back to top | `BackToTop`, once in the shell. Outline `size="icon"`. Appears after an upward scroll of the page or a tall panel; hides while scrolling down, and hides near the top |
 | Inline icon on a text line | Button `ghost` `size="iconSm"` (trajectory step copy / expand, expand all). 20px box, 14px icon. Do not shrink `size="icon"` with a height class |
 | Header destination | Inactive text is `mute`. Hover is `sidebarHoverClass` (the header is `canvas-soft`). Do not use `quietHoverClass` here |
 | In-app link | `INTERNAL_LINK_CLASS` |

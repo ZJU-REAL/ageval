@@ -34,6 +34,7 @@ import { OfficialMark } from "@/components/official-mark";
 import { OwlIcon } from "@ageval/shared/components/owl-icon";
 import { PageHeadSlotProvider } from "@/components/page-head";
 import { SignInButton } from "@/components/sign-in-button";
+import { BackToTop } from "@ageval/shared/components/back-to-top";
 import { ThemeToggle } from "@ageval/shared/components/theme-toggle";
 import { Button, buttonVariants, sidebarHoverClass } from "@ageval/shared/components/ui/button";
 import { Toaster } from "@ageval/shared/components/ui/toaster";
@@ -586,6 +587,7 @@ export function Shell({
           </main>
         </div>
       </div>
+      <BackToTop />
       <Toaster />
     </PageHeadSlotProvider>
   );

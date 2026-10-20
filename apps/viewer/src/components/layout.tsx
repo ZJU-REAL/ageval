@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 
+import { BackToTop } from "@ageval/shared/components/back-to-top";
 import { ThemeToggle } from "@ageval/shared/components/theme-toggle";
 import { OwlIcon } from "@ageval/shared/components/owl-icon";
 import { Toaster } from "@ageval/shared/components/ui/toaster";
@@ -82,6 +83,7 @@ export function Shell({
           {children}
         </div>
       </main>
+      <BackToTop />
       <Toaster />
     </div>
   );

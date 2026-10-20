@@ -73,6 +73,7 @@ Token values, type stacks, radii, and motion curves: the YAML in [`apps/shared/D
 | Wrapping label | `Chip` (overlay paths, plugin names in a preview — **not** model browse) |
 | Fill-in slot (Attach role / agent / model) | `DashButton` (hairline dashed underline → mute on hover, 200ms ease-smooth; hover list expands downward 0fr→1fr + fade; click opens the search palette) |
 | Icon action | Button `ghost` `size="icon"`. `className` is layout only. Star, when lit, may add `text-star hover:text-star` and nothing else. A control sitting on a text line (trajectory step copy / expand) uses `size="iconSm"` |
+| Back to top | `BackToTop`, once in the shell. Outline `size="icon"`. Appears after an upward scroll of the page or a tall panel; hides while scrolling down, and hides near the top |
 | Sidebar row | `sidebarHoverClass` on the nav row. Collapsed icons are ghost `size="icon"` plus that class. Do not restate `hover:bg-canvas/50` |
 | Button group | `SegmentedControl` |
 | Scan trigger | `scanTriggerClass` (same field as `Select`) |
