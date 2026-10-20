@@ -178,10 +178,11 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   ├── datasets/
 │   │   ├── minimal-demo/            # terminal-jsonl-agg / tau2-dialog-min / multiagent-env-min
 │   │   ├── concurrent-research/     # fanout concurrent-session example
-│   │   └── tau3-airline-5/          # airline-00 … airline-04
-│   └── agents/                      # ageval.agent/1: dsh / nooa / miniswe defaults
+│   │   ├── tau3-airline-5/          # airline-00 … airline-04
+│   │   └── terminus-2-min/          # hello: host-loop tmux on docker
+│   └── agents/                      # ageval.agent/1: dsh / nooa / miniswe / terminus-2 defaults
 ├── plugins/                         # External ageval.plugin/1 packages
-│   ├── nooa/ / dsh/ / miniswe/ / acp-oneshot/
+│   ├── nooa/ / dsh/ / miniswe/ / terminus-2/ / acp-oneshot/
 │   └── home-files/ / agent-skills/
 ├── tests/
 ├── docs/
@@ -373,7 +374,7 @@ Detailed phase rules: [docs/design/05-runtime/lifecycle.md](docs/design/05-runti
 | `environment: ssh` (A / B) | `plugins/contrib/ssh` | Mode A: remote host; Mode B: remote container |
 | `environment: daytona` | `plugins/contrib/daytona` | Daytona snapshot/sandbox integration; missing `DAYTONA_API_KEY` fails preflight |
 | ACP executor | `plugins/contrib/acp` | Parent JSON-RPC client over `attach_stdio` |
-| Other executors | `openai-http`, `anthropic-http`, external `nooa`, `dsh`, `miniswe`, `acp-oneshot` | Uniform session interface via `BaseExecutor` |
+| Other executors | `openai-http`, `anthropic-http`, external `nooa`, `dsh`, `miniswe`, `terminus-2`, `acp-oneshot` | Uniform session interface via `BaseExecutor`. `terminus-2` keeps model HTTP on the parent and drives tmux with `environment.exec` |
 | Official Attempt image | `plugins/contrib/docker/attempt/` | Pulls `ghcr.io/zju-real/ageval-attempt:<cli-ver>` as `ageval-attempt:base` or builds from packaged Dockerfile |
 | Registry HTTP service | `services/registry/` | Six aggregate stores (`packages`, `results`, `shares`, `orgs`, `inbox`, `hosted`) behind service classes; hosted worker runs `e2b` and `daytona` jobs ([docs/design/15](docs/design/15-hosted-jobs.md)) |
 

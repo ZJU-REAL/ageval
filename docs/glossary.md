@@ -14,7 +14,7 @@ public 表面使用标记为 `public` 或 `both` 的规范名称；仅标为 `in
 ## 基本原则
 
 1. 具有 CLI 命令、配置字段或 schema format 的概念，中英文统一保留拉丁标识符（如 `dataset`、`task`、`lock`、`PASS`、`gold`、`limits`、`Attempt`、`suite`），中文辅以自然说明，不另造生僻译名。
-2. 可交付的 Agent 由 **Model + Harness** 构成。`harness` 指管理交互循环、工具调用与执行过程的运行时（如 `pi`、`Codex`、`Claude Code`、`OpenCode`、`miniswe`、`dsh`、`nooa`）；`ageval` 本身是评测框架，不是 harness。`ageval.agent/1` 打包产物称为 **Agent 包**（Agent package）。
+2. 可交付的 Agent 由 **Model + Harness** 构成。`harness` 指管理交互循环、工具调用与执行过程的运行时（如 `pi`、`Codex`、`Claude Code`、`OpenCode`、`miniswe`、`terminus-2`、`dsh`、`nooa`）；`ageval` 本身是评测框架，不是 harness。`ageval.agent/1` 打包产物称为 **Agent 包**（Agent package）。
 3. 执行后端统一称为**环境**（`environment`：本机 `local`、容器 `docker`、云沙箱 `e2b` / `daytona`、远程主机 `ssh`）。禁止在文档中将环境或容器称为「盒子」「箱子」「打分盒」或 `box`（引用源码类名 `BoxSpec` 除外）。
 4. 插件系统使用标准软件工程术语：**插件槽**（`slot`），分为**独占槽**（`exclusive slot`）与**链槽**（`chain slot`），以及**依赖注入**（`inject`）与服务导出（`export`）。禁止将独占槽绑定的插件实现称为「赢家」（`winner`），应写「独占槽实现」或「绑定的实现」。
 5. 生命周期中的 `environment → run → evaluate → record` 统一称为**阶段**（`phase`）。禁止写「相位」。

@@ -5,7 +5,7 @@ description: 装插件，在 profiles 里切一行，同一份 dataset 原样跑
 
 换 Agent 或环境不必改 dataset：装上对应插件，在 `profiles.yaml` 里切换。
 
-默认走 ACP（pi / Codex / Claude Code / OpenCode）。dsh、nooa、miniswe 也是同一类插件。把 `environment: docker` 换成 `e2b` / `ssh` / `daytona` 时，ACP 的 profiles 只改环境那一行。
+默认走 ACP（pi / Codex / Claude Code / OpenCode）。dsh、nooa、miniswe、terminus-2 也是同一类插件。把 `environment: docker` 换成 `e2b` / `ssh` / `daytona` 时，ACP 的 profiles 只改环境那一行。
 
 ## 安装
 
@@ -13,6 +13,7 @@ description: 装插件，在 profiles 里切一行，同一份 dataset 原样跑
 ageval plugin install plugins/nooa
 # 或：ageval plugin install plugins/dsh
 # 或：ageval plugin install plugins/miniswe   # 模型在本机，bash 走 environment.exec
+# 或：ageval plugin install plugins/terminus-2  # 模型在本机，tmux 走 environment.exec
 # 或：ageval plugin install plugins/acp-oneshot  # 环境内一次性 ACP client+server，只要 exec
 ageval plugin list
 ```
@@ -75,7 +76,7 @@ ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
 
 ## 和 ACP 的关系
 
-默认 coding-agent 路径仍是 `executor: acp` + `options.entry`（parent JSON-RPC，要 `attach_stdio`）。`acp-oneshot` 是另一条路径：环境内一次性 client+server，只要 `exec`。插件是可选的；同一份 dataset 只靠 profiles 切换。miniswe 把模型放在本机，bash 只经 `host.exec`；缺 `exec` 则 lock 失败。
+默认 coding-agent 路径仍是 `executor: acp` + `options.entry`（parent JSON-RPC，要 `attach_stdio`）。`acp-oneshot` 是另一条路径：环境内一次性 client+server，只要 `exec`。插件是可选的；同一份 dataset 只靠 profiles 切换。miniswe 把模型放在本机，bash 只经 `environment.exec`。terminus-2 同样把模型放在本机，在环境里开 tmux 窗格；环境里没有 tmux 时由插件安装。缺 `exec` 则 lock 失败。
 
 PASS 仍只来自 `evaluator.py`。
 

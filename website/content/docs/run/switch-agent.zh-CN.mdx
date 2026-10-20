@@ -61,4 +61,4 @@ ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
 
 `api_key` 永远写**环境变量名**，不要写密钥本身。可选 profile 字段还有 `model.reasoning.effort`（思考档位）、`options.idle_timeout_seconds`（静默上限）与 `base_url`。
 
-非 ACP 的 Agent 运行时（nooa / dsh / miniswe）用 `--profiles` 整份替换。它们以插件提供：`ageval plugin install plugins/<名>` 装好后，profiles 里 `executor:` 写对应名字，并挂上同名 `plugin:` 行。
+非 ACP 的 Agent 运行时（nooa / dsh / miniswe / terminus-2）用 `--profiles` 整份替换。它们以插件提供：`ageval plugin install plugins/<名>` 装好后，profiles 里 `executor:` 写对应名字，并挂上同名 `plugin:` 行。

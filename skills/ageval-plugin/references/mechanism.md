@@ -29,7 +29,7 @@ First-party environments and executors load from explicit module tuples in `agev
 | `_BUILTIN_ENVIRONMENT_MODULES` | `ageval.plugins.contrib.local.host`, `ageval.plugins.contrib.docker.host`, `ageval.plugins.contrib.e2b.host`, `ageval.plugins.contrib.daytona.host`, `ageval.plugins.contrib.ssh.host` |
 | `_BUILTIN_EXECUTOR_MODULES` | `ageval.plugins.contrib.acp.executor`, `ageval.plugins.contrib.openai_http.executor`, `ageval.plugins.contrib.anthropic_http.executor` |
 
-`miniswe`, `nooa`, `dsh`, and `acp-oneshot` are not on `_BUILTIN_EXECUTOR_MODULES`. Each stays an installed plugin loaded by `load_installed_plugins` after `ageval plugin install`. The exclusive entry is the `BaseExecutor` class. Do not add them to the builtin executor tuple.
+`miniswe`, `terminus-2`, `nooa`, `dsh`, and `acp-oneshot` are not on `_BUILTIN_EXECUTOR_MODULES`. Each stays an installed plugin loaded by `load_installed_plugins` after `ageval plugin install`. The exclusive entry is the `BaseExecutor` class. Do not add them to the builtin executor tuple.
 
 Commenting out a tuple entry disables that contrib. Adding a builtin means editing the tuple. Do not add a scan or a `@builtin_*` discovery pass.
 

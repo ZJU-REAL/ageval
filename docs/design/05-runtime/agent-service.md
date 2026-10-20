@@ -97,7 +97,7 @@ run.py / evaluator.py  Agent.session(profile).invoke
 | **BYOK** | 将声明的 API 密钥环境变量（`credential_env_names` 或 profile `api_key` 引用）按白名单注入子进程环境 | 预检或调用直接报错终止 |
 | **BYOA** | `keyless_auth`：按白名单将本机订阅登录凭据复制到 Attempt `$HOME`（不直接挂载宿主机整个 `$HOME`） | 仅输出警告 |
 
-对于 HTTP 类执行器（`openai-http`、`anthropic-http`、`dsh`、`nooa`、`miniswe`），当锁定的 `base_url` 主机名为本机回环地址（`127.0.0.1`、`localhost` 或 `::1`）时，允许省略 `api_key` 或对应的环境变量值为空。
+对于 HTTP 类执行器（`openai-http`、`anthropic-http`、`dsh`、`nooa`、`miniswe`、`terminus-2`），当锁定的 `base_url` 主机名为本机回环地址（`127.0.0.1`、`localhost` 或 `::1`）时，允许省略 `api_key` 或对应的环境变量值为空。
 
 ## ACP 运行时配置覆盖与探测（`after_environment_ready`）
 

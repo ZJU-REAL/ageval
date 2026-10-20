@@ -10,7 +10,7 @@
 | `image_contribute_unsatisfied` / missing bake | Bound external executor but `config.image_layers` / `Dockerfile.bake` empty — `$ageval-plugin` |
 | `nooa_package_missing` / `No module named 'nooa'` | Host needs `uv sync --extra nooa`; docker writes the package into the image |
 | ACP entry not ready | `ageval executors -v` → that `entry_id` `host_ready` / install pin; no invoke-time `npm i` |
-| `credential_missing` | Declared credential env names unset and no `api_key` locator. Required ACP entries fail at `--probe` / session-open; keyless (OAuth) warn only. HTTP executors (`openai-http` / `anthropic-http` / `dsh` / `nooa` / `miniswe`) skip this when locked `base_url` host is `127.0.0.1` / `localhost` / `::1` |
+| `credential_missing` | Declared credential env names unset and no `api_key` locator. Required ACP entries fail at `--probe` / session-open; keyless (OAuth) warn only. HTTP executors (`openai-http` / `anthropic-http` / `dsh` / `nooa` / `miniswe` / `terminus-2`) skip this when locked `base_url` host is `127.0.0.1` / `localhost` / `::1` |
 | e2b / ssh probe not ready | Missing `E2B_API_KEY` or SSH locator — the check fails and the run does not start; `started: false`. Skip is not a pass |
 | PASS without real model | Forbidden — do not use fixtures as public proof |
 | Trajectory empty | Non-empty `agent_profiles` + `run.py` `Agent.session`/`invoke` |

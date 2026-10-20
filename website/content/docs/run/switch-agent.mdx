@@ -61,4 +61,4 @@ Only allowlisted `--set` pointers work, e.g. `/agent_profiles/solver/model/reaso
 
 `api_key` is always an env **name**, never the secret. Optional profile fields: `model.reasoning.effort` (thinking level), `options.idle_timeout_seconds` (stall ceiling), and `base_url`.
 
-Non-ACP agent runtimes (nooa / dsh / miniswe) switch with a whole `--profiles` file. They ship as plugins: `ageval plugin install plugins/<name>`, then set `executor:` to that name and attach the matching `plugin:` line in profiles.
+Non-ACP agent runtimes (nooa / dsh / miniswe / terminus-2) switch with a whole `--profiles` file. They ship as plugins: `ageval plugin install plugins/<name>`, then set `executor:` to that name and attach the matching `plugin:` line in profiles.

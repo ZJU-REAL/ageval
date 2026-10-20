@@ -6,8 +6,8 @@ description: Install a plugin, flip one line in profiles, run the same dataset.
 Swapping the Agent or the environment does not rewrite the dataset: install the
 plugin and switch it in `profiles.yaml`.
 
-ACP is the default path (pi / Codex / Claude Code / OpenCode). dsh, nooa, and
-miniswe are the same kind of plugin. Switching `environment: docker` to `e2b`,
+ACP is the default path (pi / Codex / Claude Code / OpenCode). dsh, nooa,
+miniswe, and terminus-2 are the same kind of plugin. Switching `environment: docker` to `e2b`,
 `ssh`, or `daytona` changes that one line in the ACP profiles — not ACP code.
 
 ## Install
@@ -16,6 +16,7 @@ miniswe are the same kind of plugin. Switching `environment: docker` to `e2b`,
 ageval plugin install plugins/nooa
 # or: ageval plugin install plugins/dsh
 # or: ageval plugin install plugins/miniswe   # model on the host; bash via environment.exec
+# or: ageval plugin install plugins/terminus-2  # model on the host; tmux via environment.exec
 # or: ageval plugin install plugins/acp-oneshot  # one-shot ACP pair in the environment; exec only
 ageval plugin list
 ```
@@ -79,7 +80,7 @@ ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
 
 ## Relation to ACP
 
-The default coding-agent path remains `executor: acp` + `options.entry` (parent JSON-RPC, needs `attach_stdio`). `acp-oneshot` is the other path: a one-shot client+server inside the environment, over `exec` only. Plugins are optional; the same dataset switches only via profiles. miniswe keeps the model on the host; bash goes only through `host.exec`. Missing `exec` fails at lock.
+The default coding-agent path remains `executor: acp` + `options.entry` (parent JSON-RPC, needs `attach_stdio`). `acp-oneshot` is the other path: a one-shot client+server inside the environment, over `exec` only. Plugins are optional; the same dataset switches only via profiles. miniswe keeps the model on the host and sends bash through `environment.exec`. terminus-2 does the same with a tmux pane: the plugin installs tmux in the attempt environment when it is missing. Missing `exec` fails at lock.
 
 PASS still comes only from `evaluator.py`.
 

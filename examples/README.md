@@ -5,10 +5,11 @@ one abbreviated popular-bench conversion.
 
 ```text
 examples/
-├── agents/           # ageval.agent/1 (dsh / nooa / miniswe; builtin ACP is --agent pi)
+├── agents/           # ageval.agent/1 (dsh / nooa / miniswe / terminus-2; builtin ACP is --agent pi)
 └── datasets/
     ├── minimal-demo/   # dataset official/minimal-demo — case-class fidelity
-    └── tau3-airline-5/   # dataset official/tau3-airline-5 — 5-task airline cut
+    ├── tau3-airline-5/   # dataset official/tau3-airline-5 — 5-task airline cut
+    └── terminus-2-min/   # dataset examples/terminus-2-min — tmux host loop
 ```
 
 There is no product `executor: mock`. Offline lock uses the real kinds; a missing
@@ -143,10 +144,22 @@ ageval run examples/datasets/concurrent-research --task fanout
 
 Needs `glm_coding_api_key`. Detail: [`datasets/concurrent-research/README.md`](datasets/concurrent-research/README.md).
 
+## `datasets/terminus-2-min/` (`dataset_id: examples/terminus-2-min`)
+
+One docker task. The model stays on the parent; the agent types into tmux inside the attempt environment and writes `hello.txt`. Install `plugins/terminus-2` first. PASS is `evaluator.py`.
+
+```bash
+ageval plugin install plugins/terminus-2
+ageval lock examples/datasets/terminus-2-min --task hello
+ageval run examples/datasets/terminus-2-min --task hello
+```
+
+Detail: [`datasets/terminus-2-min/README.md`](datasets/terminus-2-min/README.md).
+
 ## `agents/` (`ageval.agent/1`)
 
 Custom overlay packages for executors that are **not** builtin catalog cards:
-`dsh-default`, `nooa-default`, `miniswe-default`. Built-in Agent packages
+`dsh-default`, `nooa-default`, `miniswe-default`, `terminus-2-default`. Built-in Agent packages
 (`pi`, `opencode`, `codex`, `claude-code`, `grok-build`, `openai-http`,
 `anthropic-http`) ship with ageval — `--agent pi` needs no install.
 `model.id` is the package default, not identity. `--agent` is mutually

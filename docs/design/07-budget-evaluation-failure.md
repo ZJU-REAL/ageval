@@ -27,6 +27,7 @@
 - **`openai-http` 与 `anthropic-http`：** 读取超时、连接失败、HTTP `408`、`429` 与 `5xx` 归为可重试的 `TransportStall`；其余 HTTP `4xx` 响应属于不可重试的 `ModelConfigError`（`repeatable=False`）；非法 JSON 为 `ProtocolError`。
 - **ACP：** 超时、空闲超时、非预期 EOF 与协议传输错误归为 `TransportStall`，仅当该次 prompt 尚未修改工作区文件（`repeatable=True`）时允许在同一会话上重发。
 - **`miniswe`：** 在进程内针对当前单步模型请求执行 stall 重试（关闭其内置的短周期 tenacity 重试），保留已有的对话上下文。
+- **`terminus-2`：** 同一次 episode 里对单次模型 POST 做 stall 重试。tmux 安装失败或按键已经写入窗格时不再把整段 episode 交给父进程重放。
 
 证据中的 `summary.json` 会记录一条 `upstream_stall` 事实（含原因、`started_at`、重试次数与结果 `resumed` / `budget_exhausted` / `not_repeatable`）。
 
