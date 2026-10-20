@@ -1,5 +1,5 @@
 import type { MouseEvent as ReactMouseEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 
 import { BreadcrumbNav } from "@ageval/shared/components/breadcrumb";
@@ -8,11 +8,11 @@ import { Shell } from "@/components/layout";
 import { SuitePaceBoard } from "@/components/suite-pace-board";
 import { SnapshotShareControl } from "@/components/snapshot-share";
 import {
-  compareValues,
   nextSort,
   SortableHead,
   type SortDir,
 } from "@ageval/shared/components/sortable-head";
+import { Button } from "@ageval/shared/components/ui/button";
 import {
   Table,
   TableBody,
@@ -28,6 +28,8 @@ import {
   fetchJobOverlays,
   setDatasetQuery,
   type Job,
+  type JobPaceTask,
+  type JobTaskPage,
   type TaskRow,
   type TreeEntry,
 } from "@/lib/api";
@@ -38,10 +40,10 @@ import { HarnessLabel } from "@ageval/shared/components/harness-label";
 import { ModelLabel } from "@ageval/shared/components/model-label";
 import { useDocumentTitle } from "@/lib/document-title";
 import { ReasonSelect } from "@ageval/shared/components/reason-select";
-import { distinctReasons, reasonText } from "@ageval/shared/lib/reason";
+import { reasonText } from "@ageval/shared/lib/reason";
 import { formatScore } from "@ageval/shared/lib/utils";
 
-type SortKey = "task_id" | "agent_label" | "model_label" | "score" | "status";
+const TASK_PAGE_SIZE = 50;
 
 export function JobDetailPage() {
   const { datasetKey = "", jobId = "" } = useParams();
@@ -50,11 +52,32 @@ export function JobDetailPage() {
   useDocumentTitle(jobId || "Job");
   const [job, setJob] = useState<Job | null>(null);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [pace, setPace] = useState<JobPaceTask[]>([]);
+  const [reasons, setReasons] = useState<string[]>([]);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(TASK_PAGE_SIZE);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
   const [sortKey, setSortKey] = useState<string | null>("task_id");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [reason, setReason] = useState("all");
+  const [page, setPage] = useState(1);
+  const scopeKey = `${datasetKey}\0${jobId}`;
+  const [scope, setScope] = useState(scopeKey);
+  if (scope !== scopeKey) {
+    setScope(scopeKey);
+    setJob(null);
+    setTasks([]);
+    setPace([]);
+    setReasons([]);
+    setTotal(0);
+    setError(null);
+    setReady(false);
+    setSortKey("task_id");
+    setSortDir("asc");
+    setReason("all");
+    setPage(1);
+  }
   const [overlayTree, setOverlayTree] = useState<TreeEntry[]>([]);
   const [overlayPath, setOverlayPath] = useState<string | null>(null);
   const [overlayContent, setOverlayContent] = useState<string | null>(null);
@@ -62,46 +85,65 @@ export function JobDetailPage() {
   const [overlayFileLoading, setOverlayFileLoading] = useState(false);
   const [overlayNote, setOverlayNote] = useState<string | null>(null);
 
+  const taskPage = useMemo<JobTaskPage>(
+    () => ({
+      page,
+      pageSize: TASK_PAGE_SIZE,
+      reason,
+      sort: sortKey,
+      dir: sortDir,
+    }),
+    [page, reason, sortKey, sortDir],
+  );
+
+  const applyJob = useCallback((data: Awaited<ReturnType<typeof fetchJob>>) => {
+    setJob(data.job);
+    setTasks(data.tasks || []);
+    setPace(data.pace || []);
+    setReasons(data.reasons || []);
+    setTotal(data.total ?? data.task_count ?? (data.tasks || []).length);
+    setPageSize(data.page_size || TASK_PAGE_SIZE);
+    const reported = data.page;
+    if (typeof reported === "number") {
+      setPage((current) => (reported !== current ? reported : current));
+    }
+    setError(null);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    fetchJob(jobId)
+    fetchJob(jobId, taskPage)
       .then((data) => {
-        if (cancelled) return;
-        setJob(data.job);
-        setTasks(data.tasks || []);
-        setError(null);
+        if (!cancelled) applyJob(data);
       })
       .catch((e: Error) => {
         if (!cancelled) setError(e.message);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setReady(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [datasetKey, jobId]);
+  }, [datasetKey, jobId, taskPage, applyJob]);
 
+  const chartTasks = pace.length > 0 ? pace : tasks;
   const suiteOpen =
     job?.source_kind !== "single" &&
     (jobStillRunning(job ?? {}) ||
-      tasks.some((task) => {
+      chartTasks.some((task) => {
         const status = (task.status || "").toUpperCase();
         return status === "PENDING" || status === "RUNNING" || status === "CANCELLING";
       }));
 
   useEffect(() => {
-    if (loading || !suiteOpen) return;
+    if (!ready || !suiteOpen) return;
     let cancelled = false;
     const timer = window.setInterval(() => {
       if (document.hidden) return;
-      fetchJob(jobId)
+      fetchJob(jobId, taskPage)
         .then((data) => {
-          if (cancelled) return;
-          setJob(data.job);
-          setTasks(data.tasks || []);
-          setError(null);
+          if (!cancelled) applyJob(data);
         })
         .catch((e: Error) => {
           if (!cancelled) setError(e.message);
@@ -111,7 +153,7 @@ export function JobDetailPage() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [datasetKey, jobId, loading, suiteOpen]);
+  }, [datasetKey, jobId, ready, suiteOpen, taskPage, applyJob]);
 
   const overlayPrefixes = job?.overlays ?? [];
 
@@ -173,19 +215,14 @@ export function JobDetailPage() {
     };
   }, [datasetKey, jobId, overlayPath]);
 
-  const reasons = useMemo(() => distinctReasons(tasks, reasonText), [tasks]);
-  const rows = useMemo(() => {
-    const filtered =
-      reason === "all" ? tasks : tasks.filter((row) => reasonText(row) === reason);
-    if (!sortKey || !sortDir) return filtered;
-    const key = sortKey as SortKey;
-    return [...filtered].sort((a, b) => compareValues(a[key], b[key], sortDir));
-  }, [tasks, reason, sortKey, sortDir]);
+  const reasonOptions =
+    reason !== "all" && !reasons.includes(reason) ? [...reasons, reason] : reasons;
 
   function onSort(key: string) {
     const next = nextSort(sortKey, sortDir, key);
     setSortKey(next.dir ? next.key : null);
     setSortDir(next.dir);
+    setPage(1);
   }
 
   function head(key: string, label: string) {
@@ -199,7 +236,7 @@ export function JobDetailPage() {
     );
   }
 
-  if (!loading && !error && job?.source_kind === "single" && tasks.length === 1) {
+  if (ready && !error && job?.source_kind === "single" && tasks.length === 1) {
     return <Navigate to={taskHref(datasetKey, jobId, tasks[0])} replace />;
   }
 
@@ -243,15 +280,22 @@ export function JobDetailPage() {
             {job && job.source_kind !== "single" ? (
               <SnapshotShareControl jobId={jobId} />
             ) : null}
-            <ReasonSelect value={reason} reasons={reasons} onChange={setReason} />
+            <ReasonSelect
+              value={reason}
+              reasons={reasonOptions}
+              onChange={(next) => {
+                setReason(next);
+                setPage(1);
+              }}
+            />
           </div>
         </div>
 
-        {job && job.source_kind !== "single" && !loading ? (
+        {job && job.source_kind !== "single" && ready ? (
           <SuitePaceBoard
-            tasks={tasks}
+            tasks={chartTasks}
             onOpenTask={(taskId) => {
-              const task = tasks.find((row) => row.task_id === taskId);
+              const task = chartTasks.find((row) => row.task_id === taskId);
               if (!task) return;
               const status = (task.status || "").toUpperCase();
               if (status === "PENDING" || status === "RUNNING") return;
@@ -260,9 +304,10 @@ export function JobDetailPage() {
           />
         ) : null}
 
-        {loading ? (
+        {!ready ? (
           <LoadingState label="Loading tasks" />
         ) : (
+        <>
         <div className="blob-panel overflow-x-auto">
           <Table
             wrapClassName="overflow-visible"
@@ -294,9 +339,15 @@ export function JobDetailPage() {
                   </TableCell>
                 </TableRow>
               )}
-              {!loading &&
-                !error &&
-                rows.map((t) => {
+              {!error && tasks.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-10 text-center text-mute">
+                    No matches
+                  </TableCell>
+                </TableRow>
+              ) : null}
+              {!error &&
+                tasks.map((t) => {
                   const statusUpper = (t.status || "").toUpperCase();
                   // Planned-but-unrun (and still-running) tasks have no
                   // attempt yet: placeholder rows, muted, navigate nowhere.
@@ -390,6 +441,33 @@ export function JobDetailPage() {
             </TableBody>
           </Table>
         </div>
+        {total > pageSize ? (
+          <div className="flex items-center justify-end gap-2">
+            <span className="text-sm tabular-nums text-body">
+              {total === 0 ? 0 : (page - 1) * pageSize + 1}-{Math.min(page * pageSize, total)}
+              <span className="text-mute"> of {total}</span>
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page * pageSize >= total}
+              onClick={() => setPage((current) => current + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        ) : null}
+        </>
         )}
 
         {overlayPrefixes.length ? (

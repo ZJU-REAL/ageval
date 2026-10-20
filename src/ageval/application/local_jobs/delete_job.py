@@ -206,8 +206,8 @@ class LocalJobsCommands:
     def list_jobs(self, dataset_root: Path | str) -> dict[str, Any]:
         return listing.list_jobs(Path(dataset_root))
 
-    def get_job(self, dataset_root: Path | str, job_id: str) -> dict[str, Any]:
-        return listing.get_job(dataset_root, job_id)
+    def get_job(self, dataset_root: Path | str, job_id: str, **page: Any) -> dict[str, Any]:
+        return listing.get_job(dataset_root, job_id, **page)
 
     def get_job_task(self, dataset_root: Path | str, job_id: str, task_id: str) -> dict[str, Any]:
         return listing.get_job_task(dataset_root, job_id, task_id)

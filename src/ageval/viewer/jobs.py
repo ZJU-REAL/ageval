@@ -32,8 +32,8 @@ def list_jobs(dataset_root: Path) -> dict[str, Any]:
     return build_local_jobs_commands().list_jobs(dataset_root)
 
 
-def get_job(dataset_root: Path, job_id: str) -> dict[str, Any]:
-    return build_local_jobs_commands().get_job(dataset_root, job_id)
+def get_job(dataset_root: Path, job_id: str, **page: Any) -> dict[str, Any]:
+    return build_local_jobs_commands().get_job(dataset_root, job_id, **page)
 
 
 def get_job_task(dataset_root: Path, job_id: str, task_id: str) -> dict[str, Any]:

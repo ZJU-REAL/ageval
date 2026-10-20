@@ -65,7 +65,11 @@ export function jobHref(datasetKey: string, job: Job): string {
 }
 
 /** One attempt → trial; k>1 → this job's filtered trial list. */
-export function taskHref(datasetKey: string, jobId: string, task: TaskRow): string {
+export function taskHref(
+  datasetKey: string,
+  jobId: string,
+  task: Pick<TaskRow, "task_id" | "attempt_run_ids" | "run_id">,
+): string {
   const ids = taskRunIds(task);
   if (ids.length === 1) {
     return trialPath(datasetKey, jobId, task.task_id, ids[0]);

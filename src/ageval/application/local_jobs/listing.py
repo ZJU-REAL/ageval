@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 from datetime import datetime
+from functools import cmp_to_key
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict
 
@@ -851,7 +853,195 @@ def job_overlay_mapping(dataset_root: Path | str, job_id: str) -> dict[str, Any]
     return None
 
 
-def get_job(dataset_root: Path | str, job_id: str) -> dict[str, Any]:
+_TASK_SORT_KEYS = frozenset({"task_id", "agent_label", "model_label", "score", "status"})
+_NATURAL_CHUNK = re.compile(r"(\d+)")
+DEFAULT_TASK_PAGE_SIZE = 50
+MAX_TASK_PAGE_SIZE = 200
+
+
+def _reason_text(row: dict[str, Any]) -> str:
+    """Same key the task-table reason filter uses in the Viewer."""
+    status = str(row.get("status") or "").upper()
+    error = row.get("error")
+    if status == "ERROR" or _error_present(error):
+        fields = _error_fields(error)
+        if fields is not None:
+            title, message = fields
+            if title:
+                return title
+            if message:
+                return message
+        return _plain_error(error)
+    limit = row.get("limit")
+    if isinstance(limit, str) and limit.strip():
+        return limit.strip()
+    return ""
+
+
+def _error_present(error: object) -> bool:
+    if error is None or error == "":
+        return False
+    return isinstance(error, (str, dict))
+
+
+def _error_fields(error: object) -> tuple[str, str] | None:
+    if not isinstance(error, dict):
+        return None
+    title = error.get("title")
+    message = error.get("message")
+    title_s = title.strip() if isinstance(title, str) else ""
+    message_s = message.strip() if isinstance(message, str) else ""
+    if not title_s and not message_s:
+        return None
+    if message_s == title_s:
+        message_s = ""
+    return title_s, message_s
+
+
+def _plain_error(error: object) -> str:
+    if isinstance(error, str):
+        return error
+    if isinstance(error, dict):
+        return json.dumps(error, ensure_ascii=False, separators=(",", ":"))
+    if error is None or error == "":
+        return ""
+    return str(error)
+
+
+def _distinct_reasons(rows: list[dict[str, Any]]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for row in rows:
+        value = _reason_text(row)
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        out.append(value)
+    return out
+
+
+def _natural_cmp(left: str, right: str) -> int:
+    left_parts = _NATURAL_CHUNK.split(left.casefold())
+    right_parts = _NATURAL_CHUNK.split(right.casefold())
+    for lpart, rpart in zip(left_parts, right_parts, strict=False):
+        if lpart == rpart:
+            continue
+        if lpart.isdigit() and rpart.isdigit():
+            diff = int(lpart) - int(rpart)
+            return -1 if diff < 0 else 1 if diff > 0 else 0
+        if lpart < rpart:
+            return -1
+        return 1
+    return (len(left_parts) > len(right_parts)) - (len(left_parts) < len(right_parts))
+
+
+def _cmp_task_values(left: object, right: object, direction: str) -> int:
+    """Nulls stay last. Numbers compare as numbers. Text is numeric-aware."""
+    if left is None and right is None:
+        return 0
+    if left is None:
+        return 1
+    if right is None:
+        return -1
+    mul = 1 if direction == "asc" else -1
+    if (
+        isinstance(left, (int, float))
+        and isinstance(right, (int, float))
+        and not isinstance(left, bool)
+        and not isinstance(right, bool)
+    ):
+        diff = float(left) - float(right)
+        if diff < 0:
+            return -mul
+        if diff > 0:
+            return mul
+        return 0
+    return mul * _natural_cmp(str(left), str(right))
+
+
+def _pace_row(row: dict[str, Any]) -> dict[str, Any]:
+    run_ids = row.get("attempt_run_ids")
+    return {
+        "task_id": row.get("task_id"),
+        "status": row.get("status"),
+        "score": row.get("score"),
+        "duration_ms": row.get("duration_ms"),
+        "finished_at": row.get("finished_at"),
+        "run_id": row.get("run_id"),
+        "attempt_run_ids": list(run_ids) if isinstance(run_ids, list) else [],
+    }
+
+
+def paginate_job_tasks(
+    payload: dict[str, Any],
+    *,
+    page: int,
+    page_size: int,
+    reason: str,
+    sort: str | None,
+    direction: str | None,
+) -> dict[str, Any]:
+    """One page of task rows, plus a slim pace row for every task.
+
+    The duration plot reads ``pace`` (the whole suite). The table reads
+    ``tasks`` (this page only). Omitting ``page`` keeps the unpaged payload.
+    """
+    tasks = [row for row in (payload.get("tasks") or []) if isinstance(row, dict)]
+    pace = [_pace_row(row) for row in tasks]
+    reasons = _distinct_reasons(tasks)
+    filtered = tasks
+    reason_key = reason.strip()
+    if reason_key and reason_key != "all":
+        filtered = [row for row in tasks if _reason_text(row) == reason_key]
+    ordered = list(filtered)
+    sort_key = sort if sort in _TASK_SORT_KEYS else None
+    sort_dir = direction if direction in {"asc", "desc"} else None
+    if sort_key and sort_dir:
+        ordered.sort(
+            key=cmp_to_key(
+                lambda left, right: _cmp_task_values(
+                    left.get(sort_key), right.get(sort_key), sort_dir
+                )
+            )
+        )
+    size = page_size if isinstance(page_size, int) else DEFAULT_TASK_PAGE_SIZE
+    size = min(MAX_TASK_PAGE_SIZE, max(1, size))
+    pages = max(1, (len(ordered) + size - 1) // size) if ordered else 1
+    current = min(max(int(page), 1), pages)
+    start = (current - 1) * size
+    out = dict(payload)
+    out["tasks"] = ordered[start : start + size]
+    out["task_count"] = len(tasks)
+    out["total"] = len(ordered)
+    out["page"] = current
+    out["page_size"] = size
+    out["pace"] = pace
+    out["reasons"] = reasons
+    return out
+
+
+def get_job(
+    dataset_root: Path | str,
+    job_id: str,
+    *,
+    page: int | None = None,
+    page_size: int = DEFAULT_TASK_PAGE_SIZE,
+    reason: str = "",
+    sort: str | None = None,
+    direction: str | None = None,
+) -> dict[str, Any]:
+    def finish(payload: dict[str, Any]) -> dict[str, Any]:
+        if page is None:
+            return payload
+        return paginate_job_tasks(
+            payload,
+            page=page,
+            page_size=page_size,
+            reason=reason,
+            sort=sort,
+            direction=direction,
+        )
+
     root = Path(dataset_root).expanduser().resolve(strict=False)
     job_id = safe_id_segment(job_id, field="job_id")
     suite_dir = _suite_root(root) / job_id
@@ -869,8 +1059,8 @@ def get_job(dataset_root: Path | str, job_id: str) -> dict[str, Any]:
     if not summary_path.is_file():
         progress = _load_progress(suite_dir)
         if progress is not None:
-            return _get_in_progress_suite_job(root, suite_dir=suite_dir, progress=progress)
-        return _get_single_job(root, job_id)
+            return finish(_get_in_progress_suite_job(root, suite_dir=suite_dir, progress=progress))
+        return finish(_get_single_job(root, job_id))
     summary = _load_summary(summary_path)
     job = _job_row(summary, suite_dir=suite_dir, dataset_root=root)
     progress = _load_progress(suite_dir)
@@ -915,7 +1105,14 @@ def get_job(dataset_root: Path | str, job_id: str) -> dict[str, Any]:
         n_val = full.get("n") if full.get("n") is not None else ref.get("n")
         if n_val is None:
             n_val = len(attempt_run_ids) or None
-        previous = _previous_entries(ref, attempt_rows, dataset_root=root)
+        # Paged responses only render this page. Skip the per-attempt stamp
+        # lookup for rows the table will not return; the pace plot does not
+        # read previous[].
+        previous = _previous_entries(
+            ref,
+            attempt_rows,
+            dataset_root=None if page is not None else root,
+        )
         timing = _task_timing(root, attempt_run_ids, full.get("duration"))
         task_rows.append(
             {
@@ -948,15 +1145,17 @@ def get_job(dataset_root: Path | str, job_id: str) -> dict[str, Any]:
     settled_ids = {str(row.get("task_id") or "") for row in task_rows}
     task_rows.extend(_planned_pending_rows(progress, settled_ids))
 
-    return {
-        "ok": True,
-        "job": job,
-        "tasks": task_rows,
-        "task_count": len(task_rows),
-        "progress": progress,
-        "commands": commands_for(root),
-        "note": job.get("note"),
-    }
+    return finish(
+        {
+            "ok": True,
+            "job": job,
+            "tasks": task_rows,
+            "task_count": len(task_rows),
+            "progress": progress,
+            "commands": commands_for(root),
+            "note": job.get("note"),
+        }
+    )
 
 
 def _get_in_progress_suite_job(

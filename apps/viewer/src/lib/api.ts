@@ -380,15 +380,50 @@ export function revokeSnapshotShare(jobId: string, runId?: string) {
   return shareRequest(sharePath(jobId, runId), "DELETE");
 }
 
-export function fetchJob(jobId: string) {
+/** Slim row for the suite duration plot. One entry per task, not one page. */
+export type JobPaceTask = {
+  task_id: string;
+  status?: string | null;
+  score?: number | null;
+  duration_ms?: number | null;
+  finished_at?: string | null;
+  run_id?: string | null;
+  attempt_run_ids?: string[];
+};
+
+export type JobTaskPage = {
+  page: number;
+  pageSize: number;
+  reason?: string;
+  sort?: string | null;
+  dir?: "asc" | "desc" | null;
+};
+
+export function fetchJob(jobId: string, taskPage?: JobTaskPage) {
+  const params = new URLSearchParams();
+  if (taskPage) {
+    params.set("page", String(taskPage.page));
+    params.set("page_size", String(taskPage.pageSize));
+    if (taskPage.reason && taskPage.reason !== "all") params.set("reason", taskPage.reason);
+    if (taskPage.sort && taskPage.dir) {
+      params.set("sort", taskPage.sort);
+      params.set("dir", taskPage.dir);
+    }
+  }
+  const qs = params.toString();
   return getJson<{
     ok: boolean;
     job: Job;
     tasks: TaskRow[];
     task_count: number;
+    total?: number;
+    page?: number;
+    page_size?: number;
+    pace?: JobPaceTask[];
+    reasons?: string[];
     commands?: Record<string, string>;
     note?: string;
-  }>(`/api/jobs/${encodeURIComponent(jobId)}`);
+  }>(`/api/jobs/${encodeURIComponent(jobId)}${qs ? `?${qs}` : ""}`);
 }
 
 export function fetchJobTask(jobId: string, taskId: string) {
