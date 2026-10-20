@@ -100,10 +100,12 @@ class TmuxSession:
         work = shlex.quote(self.cwd)
         width = int(self.pane_width)
         height = int(self.pane_height)
+        # bash and its flags are separate tmux argv. One quoted string is a
+        # missing binary, the session exits, and the server goes with it.
         script = (
             "export TERM=xterm-256color; "
             f"tmux new-session -d -s {name} -x {width} -y {height} -c {work} "
-            "'/bin/bash --noprofile --norc' && "
+            "/bin/bash --noprofile --norc && "
             "tmux set-option -g default-shell /bin/bash && "
             "tmux set-option -g default-command /bin/bash && "
             "tmux set-option -g history-limit 100000"
