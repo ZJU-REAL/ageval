@@ -103,7 +103,7 @@ def _dataset_query_value(url: str, name: str) -> str:
     return (parse_qs(urlparse(url).query).get(name) or [""])[0].strip()
 
 
-def _task_page_query(query: str) -> dict[str, Any]:
+def _task_page_query(query: str) -> dict[str, int | str | None]:
     """Page the suite task table. Absent ``page`` keeps the full task list."""
     parsed = parse_qs(query)
     if "page" not in parsed:
