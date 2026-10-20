@@ -189,19 +189,32 @@ class PackageService:
             raise RegistryAppError("invalid_request", "bad visibility", http_status=400)
         if subdir and ".." in Path(subdir).parts:
             raise RegistryAppError("invalid_request", "bad subdir", http_status=400)
-        if org_id:
-            if self.orgs.get_org(org_id) is None:
-                raise RegistryAppError(
-                    "org_not_found", f"org {org_id!r} not found", http_status=400
-                )
-            user_id = auth.user_id or ""
-            if (
-                not AccessPolicy.is_admin(auth.scopes)
-                and self.orgs.membership(org_id, user_id) is None
-            ):
-                raise RegistryAppError(
-                    "forbidden", "must be org member to register under this org", http_status=403
-                )
+        if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
+            raise RegistryAppError(
+                "invalid_request", "commit must be a full 40-char sha", http_status=400
+            )
+        if not eval_digest.startswith("sha256:") or len(eval_digest) != 71:
+            raise RegistryAppError(
+                "invalid_request", "eval_digest must be sha256:<64 hex>", http_status=400
+            )
+        # Ownership follows the publish model: the dataset belongs to an
+        # org (explicit, or the dataset_id prefix) and the caller must be
+        # a member of it.
+        if not org_id and "/" in dataset_id:
+            org_id = dataset_id.split("/", 1)[0].casefold()
+        if not org_id:
+            raise RegistryAppError(
+                "org_required",
+                "register requires org_id or an org/name dataset_id",
+                http_status=400,
+            )
+        if self.orgs.get_org(org_id) is None:
+            raise RegistryAppError("org_not_found", f"org {org_id!r} not found", http_status=400)
+        user_id = auth.user_id or ""
+        if not AccessPolicy.is_admin(auth.scopes) and self.orgs.membership(org_id, user_id) is None:
+            raise RegistryAppError(
+                "forbidden", "must be org member to register under this org", http_status=403
+            )
         existing = self.packages.get_source(dataset_id, version)
         if existing is not None:
             if existing.eval_digest != eval_digest:
@@ -210,11 +223,36 @@ class PackageService:
                     "tasks changed, bump version",
                     http_status=409,
                 )
-            return source_to_dict(existing)
+            # Same scoring files at a newer commit (e.g. README-only):
+            # refresh the pinned source fields in place.
+            refreshed = SourceRow(
+                dataset_id=dataset_id,
+                version=version,
+                git_url=git_url,
+                commit=commit,
+                eval_digest=eval_digest,
+                subdir=subdir,
+                org_id=org_id,
+                visibility=visibility,
+                uploaded_by=existing.uploaded_by or user_id,
+                tasks_json=json.dumps(task_ids),
+                source_available=True,
+                created_at=existing.created_at,
+                prepare=prepare,
+                assets_json=json.dumps(assets),
+            )
+            self.packages.update_source(refreshed)
+            return source_to_dict(refreshed)
         release = self.packages.get_by_version(dataset_id, version)
         if release is not None:
             uploaded = self._eval_digest_of_release(release)
-            if uploaded is not None and uploaded != eval_digest:
+            if uploaded is None:
+                raise RegistryAppError(
+                    "eval_digest_mismatch",
+                    "cannot verify eval_digest against the uploaded release",
+                    http_status=409,
+                )
+            if uploaded != eval_digest:
                 raise RegistryAppError(
                     "eval_digest_mismatch",
                     "tasks changed, bump version",

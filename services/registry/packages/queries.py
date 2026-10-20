@@ -331,6 +331,13 @@ INSERT INTO dataset_sources(
 
 SELECT_SOURCE = "SELECT * FROM dataset_sources WHERE dataset_id=? AND version=?"
 
+UPDATE_SOURCE = """
+UPDATE dataset_sources SET
+    git_url=?, commit_sha=?, eval_digest=?, subdir=?, org_id=?,
+    visibility=?, tasks_json=?, source_available=?, prepare=?, assets_json=?
+WHERE dataset_id=? AND version=?
+"""
+
 LIST_SOURCES = "SELECT * FROM dataset_sources ORDER BY dataset_id, version"
 
 UPDATE_SOURCE_AVAILABILITY = (

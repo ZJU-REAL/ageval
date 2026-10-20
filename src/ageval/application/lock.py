@@ -66,13 +66,16 @@ class LockCommand:
         from ageval.registry.resolve import resolve_dataset_root_with_source
 
         root, source = resolve_dataset_root_with_source(dataset_root)
+        # eval_digest is computed over the resolved tree before preparation:
+        # prepare output is pinned transitively via the script content and
+        # the assets manifest, so publish-time and run-time digests agree.
+        eval_digest = compute_eval_digest(root)
         # Dataset preparation (assets + gated prepare script) completes
-        # before the manifest/digest are read and any Attempt can open.
+        # before any Attempt can open.
         from ageval.config.prepare import prepare_dataset
 
         prepare_dataset(root, allow_prepare=allow_prepare, on_prepare_script=on_prepare_script)
         manifest = load_dataset_manifest(root)
-        eval_digest = compute_eval_digest(root)
         resolved = resolve_task(root, task_id, manifest=manifest)
         # Host credential locators from the dataset-root .env (values never
         # enter the lock or evidence).

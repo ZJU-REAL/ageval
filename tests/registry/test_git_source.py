@@ -150,6 +150,24 @@ def test_lock_records_resolved_commit(tmp_path: Path, monkeypatch: pytest.Monkey
     assert payload["eval_digest"].startswith("sha256:")
 
 
+def test_lock_from_cache_root_records_source(tmp_path: Path) -> None:
+    """Suite runs lock the resolved cache root; the marker restores source."""
+    import json
+
+    from typer.testing import CliRunner
+
+    from ageval.cli.main import app
+
+    remote = _make_remote(tmp_path)
+    cache = PackageCache(tmp_path / "cache")
+    root = resolve_dataset_root(f"file://{remote}@v1.0.0#datasets/a", cache=cache)
+    result = CliRunner().invoke(app, ["lock", str(root), "--task", "hello"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["source"]["git_url"].startswith("file://")
+    assert len(payload["source"]["commit"]) == 40
+
+
 def test_resolve_git_subdir_without_manifest_fails(tmp_path: Path) -> None:
     remote = _make_remote(tmp_path)
     with pytest.raises(ConfigError) as exc:

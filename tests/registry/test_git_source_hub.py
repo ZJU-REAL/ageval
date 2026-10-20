@@ -43,7 +43,13 @@ def _services(tmp_path: Path) -> tuple[PackageService, ResultService]:
     return packages, results
 
 
+def _ensure_org(packages: PackageService) -> None:
+    if packages.orgs.get_org("test") is None:
+        packages.orgs.create_org(name="test", owner_user_id="alice", display_name="Test")
+
+
 def _register(packages: PackageService, *, digest: str = DIGEST) -> dict:
+    _ensure_org(packages)
     auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     return packages.register_source(
         body={
@@ -72,6 +78,7 @@ def test_register_source_idempotent_and_conflict(tmp_path: Path) -> None:
 
 def test_register_source_carries_prepare_review_fields(tmp_path: Path) -> None:
     packages, _results = _services(tmp_path)
+    _ensure_org(packages)
     auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
     payload = packages.register_source(
         body={
@@ -93,6 +100,25 @@ def test_register_source_carries_prepare_review_fields(tmp_path: Path) -> None:
         dataset_id="test/publish-min", version="0.2.0", package_digest=None, auth=auth
     )
     assert meta["has_prepare"] is True
+
+
+def test_register_source_requires_org_membership(tmp_path: Path) -> None:
+    packages, _results = _services(tmp_path)
+    _ensure_org(packages)
+    bob = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="bob")
+    with pytest.raises(RegistryAppError) as exc:
+        packages.register_source(
+            body={
+                "dataset_id": "test/publish-min",
+                "version": "0.1.0",
+                "git_url": "https://github.com/org/repo.git",
+                "commit": COMMIT,
+                "eval_digest": DIGEST,
+                "task_ids": ["hello"],
+            },
+            auth=bob,
+        )
+    assert exc.value.error == "forbidden"
 
 
 def test_serve_meta_source_only(tmp_path: Path) -> None:

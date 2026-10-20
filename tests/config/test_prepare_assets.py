@@ -169,6 +169,25 @@ def test_lock_carries_prepare_gate(tmp_path: Path) -> None:
     assert ok.exit_code == 0, ok.output
 
 
+def test_lock_digest_matches_pre_prepare_tree(tmp_path: Path) -> None:
+    """Registration (fresh tree) and run (after prepare) digests agree."""
+    import json
+
+    root = _dataset(
+        tmp_path,
+        prepare="./prepare.sh",
+        script="mkdir -p tasks/hello/data && echo generated > tasks/hello/data/generated.txt\n",
+    )
+    pristine = tmp_path / "pristine"
+    shutil.copytree(root, pristine)
+    expected = compute_eval_digest(pristine)
+    result = CliRunner().invoke(app, ["lock", str(root), "--task", "hello", "--allow-prepare"])
+    assert result.exit_code == 0, result.output
+    assert (root / "tasks" / "hello" / "data" / "generated.txt").is_file()
+    payload = json.loads(result.output[result.output.index("{") :])
+    assert payload["eval_digest"] == expected
+
+
 def test_manifest_rejects_escaping_asset(tmp_path: Path) -> None:
     root = _dataset(
         tmp_path,

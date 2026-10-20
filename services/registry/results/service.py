@@ -1151,7 +1151,12 @@ class ResultService:
         if blob is None:
             if kind == BOUND_UNKNOWN:
                 source = self.packages.get_source(dataset_id, dataset_version)
-                if source is not None and eval_digest and eval_digest == source.eval_digest:
+                visible_source = source is not None and (
+                    source.visibility == "public"
+                    or AccessPolicy.is_admin(auth.scopes)
+                    or (auth.user_id and source.uploaded_by == auth.user_id)
+                )
+                if visible_source and eval_digest and eval_digest == source.eval_digest:
                     try:
                         ids = json.loads(source.tasks_json)
                     except (TypeError, json.JSONDecodeError):

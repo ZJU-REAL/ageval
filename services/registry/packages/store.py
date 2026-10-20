@@ -77,6 +77,28 @@ class PackageStore(PackageStoreProtocol):
             except self._adapter.integrity_error as exc:
                 raise ValueError("source already exists") from exc
 
+    def update_source(self, row: SourceRow) -> None:
+        with self._connect() as conn:
+            self._exec(
+                conn,
+                Q.UPDATE_SOURCE,
+                (
+                    row.git_url,
+                    row.commit,
+                    row.eval_digest,
+                    row.subdir,
+                    row.org_id,
+                    row.visibility,
+                    row.tasks_json,
+                    1 if row.source_available else 0,
+                    row.prepare,
+                    row.assets_json,
+                    row.dataset_id,
+                    row.version,
+                ),
+            )
+            conn.commit()
+
     def get_source(self, dataset_id: str, version: str) -> SourceRow | None:
         with self._connect() as conn:
             cur = self._exec(conn, Q.SELECT_SOURCE, (dataset_id, version))

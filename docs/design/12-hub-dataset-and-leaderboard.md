@@ -7,7 +7,7 @@ Dataset 唯一标识符字段为 `dataset_id`。软件包与评测结果的上�
 除上传整包外，Dataset 可以只注册 git 源：`ageval publish --repo github:org/repo@v1.0.0`（可带 `#<subdir>`）将 `{dataset_id, version, git_url, commit, eval_digest}` 写入 Hub（`POST /v1/packages/{dataset_id}/source`），不上传文件。git 引用的解析规则见 [02](02-task-package-and-config.md)。
 
 - **eval_digest：** 由 CLI 本地计算并写入 lock。它只覆盖影响评分的文件：根清单 `ageval.yaml`（去掉描述性字段，其中 `assets` 清单只取 `path + sha256`）、每个任务成员的全部文件、数据集级 `shared/`，以及声明的 `prepare` 脚本内容。README、LICENSE 与其他根目录文档不计入，改文档不改变 digest。`package_digest` 仍覆盖整包，两者并存。
-- **注册冲突：** 同一 `dataset_id@version` 已注册（或已上传发布）且 `eval_digest` 不同 → 拒绝（`eval_digest_mismatch`，"tasks changed, bump version"）；digest 相同（例如只改 README）→ 幂等接受。
+- **注册冲突：** 同一 `dataset_id@version` 已注册（或已上传发布）且 `eval_digest` 不同 → 拒绝（`eval_digest_mismatch`，"tasks changed, bump version"）；digest 相同（例如只改 README）→ 接受并刷新钉版 commit。注册遵循发布的所有权模型：dataset 属于组织（显式 `--org` 或 dataset_id 前缀），调用方必须是组织成员。`eval_digest` 在 lock 时按解析出的原始目录树计算（prepare 执行前），prepare 产物经脚本内容与 assets 清单传递性钉版，因此注册与运行的 digest 一致。
 - **结果归因：** `upload-suite` 携带 lock 中的 `eval_digest`。Hub 按字符串比对：与已注册版本一致 → 结果归因到该版本（`bound_kind: source`，任务完备性按注册时记录的任务集判定，批准后可上榜）；未注册或 digest 不符 → 结果照常保存但不上榜（`bound_kind: unknown`）。
 - **源健康：** `POST /v1/packages/{dataset_id}/versions/{version}/source-check` 探测源仓库可达性；不可达时标记 `source_available: false`（Dataset 页面显示 "source unavailable"），既有结果不受影响。
 - **Hub 链接：** git 源版本的页面链接指向钉版 commit（`/tree/<sha>/<subdir>`、`/blob/<sha>/…`），永不指向分支。

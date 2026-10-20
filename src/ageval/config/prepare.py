@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import hashlib
 import shutil
-from collections.abc import Callable
 import subprocess
 import tempfile
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -212,10 +212,7 @@ def prepare_dataset(
     """
     root = dataset_root.expanduser().resolve(strict=False)
     manifest = load_dataset_manifest(root)
-    acc = _Acc()
-    for asset in manifest.assets:
-        _ensure_asset(root, asset, acc)
-    prepare_ran = False
+    # The gate comes first: an unapproved dataset downloads nothing.
     if manifest.prepare:
         allowed = allow_prepare or trusted or is_trusted_dataset(manifest.dataset_id, root)
         if not allowed:
@@ -225,6 +222,11 @@ def prepare_dataset(
                 f"or add {manifest.dataset_id} to {TRUST_ENV}",
                 location="/prepare",
             )
+    acc = _Acc()
+    for asset in manifest.assets:
+        _ensure_asset(root, asset, acc)
+    prepare_ran = False
+    if manifest.prepare:
         if not _prepare_marker_matches(root, manifest):
             if callable(on_prepare_script):
                 on_prepare_script(manifest.prepare, manifest.dataset_id)

@@ -131,6 +131,31 @@ def _fetch_git_dataset(ref: PackageRef, commit: str, pkg_cache: PackageCache) ->
         )
 
 
+def _source_from_marker(root: Path) -> dict[str, str] | None:
+    """Rebuild lock ``source`` from a git cache marker, when present.
+
+    Suite runs resolve the ref to a local cache root first; the marker is
+    how the attempt lock still records the pinned commit.
+    """
+    import json
+
+    from ageval.registry.cache import GIT_SOURCE_MARKER
+
+    marker = root / GIT_SOURCE_MARKER
+    if not marker.is_file():
+        return None
+    try:
+        meta = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not meta.get("git_url") or not meta.get("commit"):
+        return None
+    source: dict[str, str] = {"git_url": str(meta["git_url"]), "commit": str(meta["commit"])}
+    if meta.get("subdir"):
+        source["subdir"] = str(meta["subdir"])
+    return source
+
+
 def resolve_dataset_root_with_source(
     raw: str | Path,
     *,
@@ -146,11 +171,13 @@ def resolve_dataset_root_with_source(
         commit = resolve_git_commit(ref)
         hit = pkg_cache.lookup_git(ref.git_url, commit, ref.subdir)
         root = hit if hit is not None else _fetch_git_dataset(ref, commit, pkg_cache)
+        assert_self_contained(root)
         source: dict[str, str] = {"git_url": ref.git_url, "commit": commit}
         if ref.subdir:
             source["subdir"] = ref.subdir
         return root, source
-    return resolve_dataset_root(raw, cwd=cwd, cache=cache, client=client), None
+    root = resolve_dataset_root(raw, cwd=cwd, cache=cache, client=client)
+    return root, _source_from_marker(root)
 
 
 def resolve_dataset_root(
