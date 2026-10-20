@@ -214,6 +214,13 @@ def register(app: typer.Typer) -> None:
             str | None,
             typer.Option("--model", help=MODEL_OPTION_HELP),
         ] = None,
+        allow_prepare: Annotated[
+            bool,
+            typer.Option(
+                "--allow-prepare",
+                help="Allow running the dataset's declared prepare script before the run.",
+            ),
+        ] = False,
         probe: Annotated[
             bool,
             typer.Option(
@@ -384,6 +391,7 @@ def register(app: typer.Typer) -> None:
                             profiles_path=profiles,
                             keep_workspace=keep_workspace,
                             keep_vendor_raw=keep_vendor_raw,
+                            allow_prepare=allow_prepare,
                             on_phase=spinner.phase,
                             on_progress=spinner.stall,
                         )
@@ -447,6 +455,7 @@ def register(app: typer.Typer) -> None:
                         on_progress=progress.handle,
                         keep_workspace=keep_workspace,
                         keep_vendor_raw=keep_vendor_raw,
+                        allow_prepare=allow_prepare,
                     )
                 )
             finally:

@@ -288,6 +288,7 @@ async def _run_one(
     keep_vendor_raw: bool = False,
     on_phase: PhaseObserver | None = None,
     on_progress: ProgressCallback | None = None,
+    allow_prepare: bool = False,
 ) -> dict[str, Any]:
     """Run one (task_id, attempt_index) unit. Concurrency is owned by the claim pool."""
     global _inflight_current, _inflight_peak
@@ -305,6 +306,7 @@ async def _run_one(
             on_phase=on_phase,
             on_progress=on_progress,
             attempt_index=attempt_index,
+            **({"allow_prepare": True} if allow_prepare else {}),
         )
         status = getattr(result, "status", None) or "ERROR"
         run_id = extract_run_id(
@@ -776,6 +778,7 @@ async def execute_suite_run(
     on_progress: ProgressCallback | None = None,
     keep_workspace: bool = False,
     keep_vendor_raw: bool = False,
+    allow_prepare: bool = False,
 ) -> dict[str, Any]:
     """Execute the suite. A bound live share is patched on the same token.
 
@@ -799,6 +802,7 @@ async def execute_suite_run(
             on_progress=on_progress,
             keep_workspace=keep_workspace,
             keep_vendor_raw=keep_vendor_raw,
+            allow_prepare=allow_prepare,
         )
     finally:
         stop_heartbeat()
@@ -822,6 +826,7 @@ async def _execute_suite_run(
     on_progress: ProgressCallback | None = None,
     keep_workspace: bool = False,
     keep_vendor_raw: bool = False,
+    allow_prepare: bool = False,
 ) -> dict[str, Any]:
     """Execute planned task×attempt units with a concurrency pool; write summary.
 
@@ -1047,6 +1052,7 @@ async def _execute_suite_run(
                 profiles_path=profiles_path,
                 keep_workspace=keep_workspace,
                 keep_vendor_raw=keep_vendor_raw,
+                allow_prepare=allow_prepare,
                 on_phase=_phase_forwarder(on_progress, tid, idx),
                 on_progress=on_progress,
             )

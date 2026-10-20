@@ -14,6 +14,172 @@ from ageval.registry.digest import compute_package_digest
 from ageval.registry.ref import PackageRef, parse_package_ref
 
 
+def _git(args: list[str], *, cwd: Path | None = None) -> str:
+    import subprocess
+
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=str(cwd) if cwd else None,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+    )
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        tail = detail[-1] if detail else f"git exited {proc.returncode}"
+        raise ConfigError("invalid_package", f"git source fetch failed: {tail}", location="git")
+    return proc.stdout
+
+
+def resolve_git_commit(ref: PackageRef) -> str:
+    """Resolve a pinned tag to a full commit sha; reject branch heads."""
+    assert ref.git_url is not None and ref.git_ref is not None
+    if len(ref.git_ref) == 40 and all(c in "0123456789abcdef" for c in ref.git_ref):
+        return ref.git_ref
+    out = _git(
+        [
+            "ls-remote",
+            ref.git_url,
+            f"refs/tags/{ref.git_ref}",
+            f"refs/tags/{ref.git_ref}^{{}}",
+            f"refs/heads/{ref.git_ref}",
+        ]
+    )
+    tag_sha = ""
+    peeled = ""
+    is_branch = False
+    for line in out.splitlines():
+        sha, _, name = line.partition("\t")
+        if name == f"refs/heads/{ref.git_ref}":
+            is_branch = True
+        elif name == f"refs/tags/{ref.git_ref}^{{}}":
+            peeled = sha.strip()
+        elif name == f"refs/tags/{ref.git_ref}":
+            tag_sha = sha.strip()
+    if peeled or tag_sha:
+        return peeled or tag_sha
+    if is_branch:
+        raise ConfigError(
+            "invalid_package",
+            f"mutable branch ref {ref.git_ref!r} is not allowed; pin a tag or full commit sha",
+            location=ref.display(),
+        )
+    raise ConfigError(
+        "invalid_package",
+        f"git tag {ref.git_ref!r} not found at {ref.git_url}",
+        location=ref.display(),
+    )
+
+
+def assert_self_contained(root: Path) -> None:
+    """A (subdirectory) Dataset must not reference paths outside its root."""
+    resolved_root = root.resolve(strict=False)
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            target = path.resolve(strict=False)
+            if target != resolved_root and resolved_root not in target.parents:
+                raise ConfigError(
+                    "invalid_package",
+                    f"dataset path escapes its root: {path.relative_to(root).as_posix()}",
+                    location=str(path),
+                )
+
+
+def _fetch_git_dataset(ref: PackageRef, commit: str, pkg_cache: PackageCache) -> Path:
+    import tempfile
+
+    assert ref.git_url is not None
+    with tempfile.TemporaryDirectory(prefix="ageval-git-") as tmp:
+        clone = Path(tmp) / "repo"
+        clone.mkdir()
+        _git(["init", "-q"], cwd=clone)
+        _git(["remote", "add", "origin", ref.git_url], cwd=clone)
+        fetched = False
+        for extra in (["--filter=blob:none"], []):
+            try:
+                _git(["fetch", "-q", "--depth", "1", *extra, "origin", commit], cwd=clone)
+                fetched = True
+                break
+            except ConfigError:
+                continue
+        if not fetched:
+            raise ConfigError(
+                "invalid_package",
+                f"cannot fetch commit {commit} from {ref.git_url}",
+                location=ref.display(),
+            )
+        if ref.subdir:
+            _git(["sparse-checkout", "init", "--cone"], cwd=clone)
+            _git(["sparse-checkout", "set", ref.subdir], cwd=clone)
+        _git(["checkout", "-q", "--detach", "FETCH_HEAD"], cwd=clone)
+        dataset_root = clone / ref.subdir if ref.subdir else clone
+        if not (dataset_root / "ageval.yaml").is_file():
+            where = f"#{ref.subdir}" if ref.subdir else ""
+            raise ConfigError(
+                "invalid_package",
+                f"ageval.yaml not found at git source root{where}",
+                location=ref.display(),
+            )
+        assert_self_contained(dataset_root)
+        return pkg_cache.publish_git(
+            git_url=ref.git_url,
+            commit=commit,
+            git_ref=ref.git_ref or commit,
+            subdir=ref.subdir,
+            source_root=dataset_root,
+        )
+
+
+def _source_from_marker(root: Path) -> dict[str, str] | None:
+    """Rebuild lock ``source`` from a git cache marker, when present.
+
+    Suite runs resolve the ref to a local cache root first; the marker is
+    how the attempt lock still records the pinned commit.
+    """
+    import json
+
+    from ageval.registry.cache import GIT_SOURCE_MARKER
+
+    marker = root / GIT_SOURCE_MARKER
+    if not marker.is_file():
+        return None
+    try:
+        meta = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not meta.get("git_url") or not meta.get("commit"):
+        return None
+    source: dict[str, str] = {"git_url": str(meta["git_url"]), "commit": str(meta["commit"])}
+    if meta.get("subdir"):
+        source["subdir"] = str(meta["subdir"])
+    return source
+
+
+def resolve_dataset_root_with_source(
+    raw: str | Path,
+    *,
+    cwd: Path | None = None,
+    cache: PackageCache | None = None,
+    client: RegistryClient | None = None,
+) -> tuple[Path, dict[str, str] | None]:
+    """Resolve *raw* and also return lock ``source`` fields for git refs."""
+    ref = parse_package_ref(raw, cwd=cwd)
+    if ref.kind == "git":
+        pkg_cache = cache or PackageCache()
+        assert ref.git_url is not None
+        commit = resolve_git_commit(ref)
+        hit = pkg_cache.lookup_git(ref.git_url, commit, ref.subdir)
+        root = hit if hit is not None else _fetch_git_dataset(ref, commit, pkg_cache)
+        assert_self_contained(root)
+        source: dict[str, str] = {"git_url": ref.git_url, "commit": commit}
+        if ref.subdir:
+            source["subdir"] = ref.subdir
+        return root, source
+    root = resolve_dataset_root(raw, cwd=cwd, cache=cache, client=client)
+    return root, _source_from_marker(root)
+
+
 def resolve_dataset_root(
     raw: str | Path,
     *,
@@ -26,6 +192,9 @@ def resolve_dataset_root(
     if ref.kind == "path":
         assert ref.path is not None
         return ref.path
+    if ref.kind == "git":
+        root, _source = resolve_dataset_root_with_source(raw, cwd=cwd, cache=cache, client=client)
+        return root
 
     pkg_cache = cache or PackageCache()
     assert ref.dataset_id is not None
@@ -117,7 +286,7 @@ def checkout_dataset(
     into it. *dest* itself is the parent, not the dataset root.
     """
     ref = parse_package_ref(raw, cwd=cwd)
-    if ref.kind == "path":
+    if ref.kind in {"path", "git"}:
         raise ConfigError(
             "invalid_override",
             "--dir requires a registry ref (dataset_id@version or @sha256:…)",

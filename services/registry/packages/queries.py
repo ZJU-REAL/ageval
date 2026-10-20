@@ -291,6 +291,25 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS dataset_sources (
+        dataset_id TEXT NOT NULL,
+        version TEXT NOT NULL,
+        git_url TEXT NOT NULL,
+        commit_sha TEXT NOT NULL,
+        eval_digest TEXT NOT NULL,
+        subdir TEXT NOT NULL DEFAULT '',
+        org_id TEXT,
+        visibility TEXT NOT NULL DEFAULT 'public',
+        uploaded_by TEXT NOT NULL DEFAULT '',
+        tasks_json TEXT NOT NULL DEFAULT '[]',
+        source_available INTEGER NOT NULL DEFAULT 1,
+        created_at REAL NOT NULL,
+        prepare TEXT NOT NULL DEFAULT '',
+        assets_json TEXT NOT NULL DEFAULT '[]',
+        PRIMARY KEY (dataset_id, version)
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS package_task_summaries (
         package_digest TEXT PRIMARY KEY,
         has_shared INTEGER NOT NULL,
@@ -302,9 +321,34 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
     """,
 )
 
+INSERT_SOURCE = """
+INSERT INTO dataset_sources(
+    dataset_id, version, git_url, commit_sha, eval_digest, subdir,
+    org_id, visibility, uploaded_by, tasks_json, source_available, created_at,
+    prepare, assets_json
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+SELECT_SOURCE = "SELECT * FROM dataset_sources WHERE dataset_id=? AND version=?"
+
+UPDATE_SOURCE = """
+UPDATE dataset_sources SET
+    git_url=?, commit_sha=?, eval_digest=?, subdir=?, org_id=?,
+    visibility=?, tasks_json=?, source_available=?, prepare=?, assets_json=?
+WHERE dataset_id=? AND version=?
+"""
+
+LIST_SOURCES = "SELECT * FROM dataset_sources ORDER BY dataset_id, version"
+
+UPDATE_SOURCE_AVAILABILITY = (
+    "UPDATE dataset_sources SET source_available=? WHERE dataset_id=? AND version=?"
+)
+
 SCHEMA_INTEGER_FLAGS: tuple[tuple[str, str], ...] = ()
 
 SCHEMA_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    ("dataset_sources", "prepare", "TEXT NOT NULL DEFAULT ''"),
+    ("dataset_sources", "assets_json", "TEXT NOT NULL DEFAULT '[]'"),
     ("releases", "org_id", "TEXT"),
     ("releases", "uploaded_by", "TEXT NOT NULL DEFAULT ''"),
     ("package_task_summaries", "overlay_prefixes_json", "TEXT"),

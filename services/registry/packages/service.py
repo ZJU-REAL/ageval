@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import tarfile
 import tempfile
 from pathlib import Path
@@ -31,10 +32,12 @@ from services.registry.packages.builtin_plugins import (
 from services.registry.packages.dto import (
     package_kind_for_media_type,
     release_to_dict,
+    source_to_dict,
 )
 from services.registry.packages.rows import (
     DraftRow,
     ReleaseRow,
+    SourceRow,
 )
 from services.registry.paging import page_slice
 
@@ -140,6 +143,190 @@ class PackageService:
 
     def get(self, dataset_id: str, version: str) -> ReleaseRow | None:
         return self.packages.get_by_version(dataset_id, version)
+
+    def register_source(self, *, body: dict[str, Any], auth: TokenInfo) -> dict[str, Any]:
+        """Register a git-sourced version without uploading files (#305).
+
+        Same ``dataset_id@version`` with a different ``eval_digest`` is a
+        conflict; a matching digest is idempotent (README-only changes keep
+        the digest and are accepted).
+        """
+        dataset_id = str(body.get("dataset_id") or "").strip()
+        version = str(body.get("version") or "").strip()
+        git_url = str(body.get("git_url") or "").strip()
+        commit = str(body.get("commit") or "").strip()
+        eval_digest = str(body.get("eval_digest") or "").strip()
+        subdir = str(body.get("subdir") or "").strip().strip("/")
+        visibility = str(body.get("visibility") or "public")
+        raw_org = str(body.get("org_id") or body.get("org") or "").strip()
+        org_id = raw_org.casefold() if raw_org else None
+        task_ids_raw = body.get("task_ids")
+        task_ids = (
+            sorted({str(t).strip() for t in task_ids_raw if str(t).strip()})
+            if isinstance(task_ids_raw, list)
+            else []
+        )
+        prepare = str(body.get("prepare") or "").strip().removeprefix("./")
+        if prepare and ".." in Path(prepare).parts:
+            raise RegistryAppError("invalid_request", "bad prepare path", http_status=400)
+        assets: list[dict[str, str]] = []
+        assets_raw = body.get("assets")
+        if isinstance(assets_raw, list):
+            for item in assets_raw:
+                if not isinstance(item, dict):
+                    continue
+                path = str(item.get("path") or "").strip()
+                sha = str(item.get("sha256") or "").strip()
+                if path and sha:
+                    assets.append({"path": path, "sha256": sha})
+        if not dataset_id or not version or not git_url or not commit or not eval_digest:
+            raise RegistryAppError(
+                "invalid_request",
+                "dataset_id, version, git_url, commit and eval_digest are required",
+                http_status=400,
+            )
+        if visibility not in {"private", "public"}:
+            raise RegistryAppError("invalid_request", "bad visibility", http_status=400)
+        if subdir and ".." in Path(subdir).parts:
+            raise RegistryAppError("invalid_request", "bad subdir", http_status=400)
+        if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
+            raise RegistryAppError(
+                "invalid_request", "commit must be a full 40-char sha", http_status=400
+            )
+        digest_hex = eval_digest.removeprefix("sha256:")
+        if len(digest_hex) != 64 or any(c not in "0123456789abcdef" for c in digest_hex):
+            raise RegistryAppError(
+                "invalid_request", "eval_digest must be sha256:<64 hex>", http_status=400
+            )
+        # Ownership follows the publish model: the dataset belongs to an
+        # org (explicit, or the dataset_id prefix) and the caller must be
+        # a member of it.
+        if not org_id and "/" in dataset_id:
+            org_id = dataset_id.split("/", 1)[0].casefold()
+        if not org_id:
+            raise RegistryAppError(
+                "org_required",
+                "register requires org_id or an org/name dataset_id",
+                http_status=400,
+            )
+        if self.orgs.get_org(org_id) is None:
+            raise RegistryAppError("org_not_found", f"org {org_id!r} not found", http_status=400)
+        user_id = auth.user_id or ""
+        if not AccessPolicy.is_admin(auth.scopes) and self.orgs.membership(org_id, user_id) is None:
+            raise RegistryAppError(
+                "forbidden", "must be org member to register under this org", http_status=403
+            )
+        existing = self.packages.get_source(dataset_id, version)
+        if existing is not None:
+            if existing.eval_digest != eval_digest:
+                raise RegistryAppError(
+                    "eval_digest_mismatch",
+                    "tasks changed, bump version",
+                    http_status=409,
+                )
+            # Same scoring files at a newer commit (e.g. README-only):
+            # refresh the pinned source fields in place.
+            refreshed = SourceRow(
+                dataset_id=dataset_id,
+                version=version,
+                git_url=git_url,
+                commit=commit,
+                eval_digest=eval_digest,
+                subdir=subdir,
+                org_id=org_id,
+                visibility=visibility,
+                uploaded_by=existing.uploaded_by or user_id,
+                tasks_json=json.dumps(task_ids),
+                source_available=True,
+                created_at=existing.created_at,
+                prepare=prepare,
+                assets_json=json.dumps(assets),
+            )
+            self.packages.update_source(refreshed)
+            return source_to_dict(refreshed)
+        release = self.packages.get_by_version(dataset_id, version)
+        if release is not None:
+            uploaded = self._eval_digest_of_release(release)
+            if uploaded is None:
+                raise RegistryAppError(
+                    "eval_digest_mismatch",
+                    "cannot verify eval_digest against the uploaded release",
+                    http_status=409,
+                )
+            if uploaded != eval_digest:
+                raise RegistryAppError(
+                    "eval_digest_mismatch",
+                    "tasks changed, bump version",
+                    http_status=409,
+                )
+        row = SourceRow(
+            dataset_id=dataset_id,
+            version=version,
+            git_url=git_url,
+            commit=commit,
+            eval_digest=eval_digest,
+            subdir=subdir,
+            org_id=org_id,
+            visibility=visibility,
+            uploaded_by=auth.user_id or "",
+            tasks_json=json.dumps(task_ids),
+            source_available=True,
+            created_at=now(),
+            prepare=prepare,
+            assets_json=json.dumps(assets),
+        )
+        try:
+            self.packages.insert_source(row)
+        except ValueError as exc:
+            raise RegistryAppError("conflict", "source already exists", http_status=409) from exc
+        return source_to_dict(row)
+
+    def _eval_digest_of_release(self, release: ReleaseRow) -> str | None:
+        """Recompute eval_digest from an uploaded blob, when it is present."""
+        from ageval.registry.archive import extract_archive
+        from ageval.registry.digest import compute_eval_digest
+
+        archive = read_blob(self.blobs, release.blob_digest, prefix="packages")
+        if archive is None:
+            return None
+        try:
+            with tempfile.TemporaryDirectory(prefix="ageval-src-") as tmp:
+                root = Path(tmp)
+                (root / "package.tar.gz").write_bytes(archive)
+                extract_archive(root / "package.tar.gz", root / "pkg")
+                return compute_eval_digest(root / "pkg")
+        except Exception:  # noqa: BLE001 - unverifiable blob: do not block registration
+            return None
+
+    def check_source_health(self, *, dataset_id: str, version: str) -> dict[str, Any]:
+        """Mark a source version unavailable when its commit is unreachable."""
+        row = self.packages.get_source(dataset_id, version)
+        if row is None:
+            raise RegistryAppError("not_found", "source not found", http_status=404)
+        import subprocess
+
+        proc = subprocess.run(
+            ["git", "ls-remote", row.git_url, row.commit],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        # ls-remote with a raw sha pattern lists nothing even when reachable;
+        # reachability is proven by a successful listing of HEAD.
+        if proc.returncode != 0:
+            proc = subprocess.run(
+                ["git", "ls-remote", row.git_url, "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+        available = proc.returncode == 0
+        self.packages.set_source_available(dataset_id, version, available)
+        updated = self.packages.get_source(dataset_id, version)
+        assert updated is not None
+        return source_to_dict(updated)
 
     def can_manage(self, row: ReleaseRow, auth: TokenInfo) -> bool:
         return self.access.can_manage_package(row, auth)
@@ -449,6 +636,19 @@ class PackageService:
         )
         items = [release_to_dict(r) for r in rows if self.access.visible_package(r, auth)]
         if package_kind in (None, "dataset"):
+            have = {(str(i.get("dataset_id")), str(i.get("version"))) for i in items}
+            for source in self.packages.list_sources():
+                if (source.dataset_id, source.version) in have:
+                    continue
+                if prefix and not source.dataset_id.startswith(prefix):
+                    continue
+                if visibility in {"public", "private"} and source.visibility != visibility:
+                    continue
+                if source.visibility != "public" and not (
+                    auth.user_id and source.uploaded_by == auth.user_id
+                ):
+                    continue
+                items.append(source_to_dict(source))
             for draft in self.packages.list_drafts():
                 if not self.access.entitled_to_draft(draft, auth):
                     continue
@@ -557,6 +757,15 @@ class PackageService:
             return {"dataset_id": builtin["dataset_id"], "items": [builtin]}
         rows = self.packages.list_versions(dataset_id, include_private=True)
         items = [release_to_dict(r) for r in rows if self.access.visible_package(r, auth)]
+        have_versions = {str(i.get("version")) for i in items}
+        for source in self.packages.list_sources():
+            if source.dataset_id != dataset_id or source.version in have_versions:
+                continue
+            if source.visibility != "public" and not (
+                auth.user_id and source.uploaded_by == auth.user_id
+            ):
+                continue
+            items.append(source_to_dict(source))
         draft = self.packages.get_draft(dataset_id)
         if draft is not None and self.access.entitled_to_draft(draft, auth):
             items.insert(0, release_to_dict(draft.as_release()))
@@ -588,13 +797,34 @@ class PackageService:
                     "not_found", f"builtin {kind} has no version", http_status=404
                 )
             return _builtin_item(dataset_id, kind)
-        row = self._visible_release(
-            dataset_id=dataset_id,
-            auth=auth,
-            package_digest=package_digest,
-            version=version,
-        )
+        try:
+            row = self._visible_release(
+                dataset_id=dataset_id,
+                auth=auth,
+                package_digest=package_digest,
+                version=version,
+            )
+        except RegistryAppError:
+            if version:
+                source = self.packages.get_source(dataset_id, version)
+                if source is not None and (
+                    source.visibility == "public"
+                    or (auth.user_id and source.uploaded_by == auth.user_id)
+                ):
+                    return source_to_dict(source)
+            raise
         payload = self._with_download_count(release_to_dict(row), auth)
+        source = self.packages.get_source(dataset_id, row.version)
+        if source is not None:
+            payload.update(
+                {
+                    "git_url": source.git_url,
+                    "commit": source.commit,
+                    "eval_digest": source.eval_digest,
+                    "subdir": source.subdir,
+                    "source_available": source.source_available,
+                }
+            )
         label = self.packages.get_package_display_name(dataset_id)
         if label:
             payload["display_name"] = label
@@ -607,6 +837,8 @@ class PackageService:
         except ValueError as exc:
             raise RegistryAppError("invalid_format", str(exc), http_status=400) from exc
         payload["package_kind"] = kind
+        if kind == "dataset":
+            payload.update(self._dataset_review_fields(row))
         if kind == "plugin":
             data = read_blob(self.blobs, row.blob_digest, prefix="packages")
             if data is not None:
@@ -618,6 +850,38 @@ class PackageService:
                 with contextlib.suppress(*_PREVIEW_ERRORS):
                     payload["agent_preview"] = agent_preview_from_archive(data)
         return payload
+
+    def _dataset_review_fields(self, row: ReleaseRow) -> dict[str, Any]:
+        """Declared ``prepare`` / ``assets`` from the uploaded ageval.yaml."""
+        from services.registry.content.files import read_member
+
+        archive = read_blob(self.blobs, row.blob_digest, prefix="packages")
+        if archive is None:
+            return {}
+        try:
+            data, _size, _trunc = read_member(archive, "ageval.yaml", max_bytes=262144)
+            import yaml
+
+            doc = yaml.safe_load(data.decode("utf-8")) or {}
+        except Exception:  # noqa: BLE001 - review fields are best-effort
+            return {}
+        if not isinstance(doc, dict):
+            return {}
+        out: dict[str, Any] = {}
+        prepare = doc.get("prepare")
+        if isinstance(prepare, str) and prepare.strip():
+            out["prepare"] = prepare.strip().removeprefix("./")
+            out["has_prepare"] = True
+        assets_raw = doc.get("assets")
+        if isinstance(assets_raw, list):
+            assets = [
+                {"path": str(a.get("path") or ""), "sha256": str(a.get("sha256") or "")}
+                for a in assets_raw
+                if isinstance(a, dict) and a.get("path")
+            ]
+            if assets:
+                out["assets"] = assets
+        return out
 
     def serve_content(
         self,

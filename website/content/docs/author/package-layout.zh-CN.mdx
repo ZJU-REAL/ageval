@@ -75,11 +75,19 @@ dataset_id: org/my-suite    # 推荐 org/name；有字符集限制
 version: "0.1.0"
 tasks:
   root: tasks
+# 可选的数据集级准备（在打开任何 Attempt 之前执行）：
+# assets:
+#   - path: tasks/clip-01/data/clip.mp4
+#     url: https://cdn.example.com/clip-01.mp4
+#     sha256: <64 位十六进制>
+# prepare: ./prepare.sh   # 受门控：需 --allow-prepare 或受信任的 dataset
 # defaults:
 #   max_concurrent_tasks: 2   # 仅整份 dataset 调度；不要写 harness/limits
 ```
 
 `dataset_id`：1–128 字符，小写字母数字开头结尾，中间可有 `.` `_` `/` `-`，禁止 `..` 与 `//`。**不参与打分**。
+
+能用脚本拉取的大文件应写进 `assets`，不要提交进 git。`ageval prepare`（`run` / `lock` 也会自动执行）会下载缺失的 asset、校验 sha256 并放到 `path`；摘要不一致会在打开任何 Attempt 前停下。`prepare` 脚本默认禁用，只有 `--allow-prepare` 或受信任的 dataset 才会运行；运行后仍会重新校验声明的 assets。
 
 根上**不能**写 `harness` / `provider` / `agent_profiles` / `evaluation`。
 

@@ -14,6 +14,18 @@ tasks:
 
 未知 `format` 在 `lock` 阶段直接报错 `invalid_format`（位于 `/format`）。CLI 的 dataset 参数始终指向 dataset 根目录或 Hub 引用：
 
+根清单还可以声明数据集级 **assets 与 prepare**（在解析 Dataset 与打开任何 Attempt 之间执行，与逐任务的 `environment/setup.sh` 不同）：
+
+```yaml
+assets:
+  - path: tasks/clip-01/data/clip.mp4   # 相对 dataset 根，禁止 `..`
+    url: https://cdn.example.com/clip-01.mp4
+    sha256: <64 位十六进制>
+prepare: ./prepare.sh                    # 可选
+```
+
+`ageval prepare <dataset>`（`run` / `lock` 自动先行）逐项处理 assets：文件已存在且 sha256 一致则跳过，否则下载、校验、落盘；下载失败报错 `asset_download_failed`，摘要不一致报错 `asset_digest_mismatch`，均在打开 Attempt 前停止。`prepare` 脚本默认禁用：仅在 `--allow-prepare` 或 dataset 位于信任列表（环境变量 `AGEVAL_PREPARE_TRUST`，逗号分隔 dataset_id 或根路径）时运行；约束为 cwd = dataset 根、超时（默认 600 秒）、以调用用户身份运行、不得引用根外路径，运行后声明的 assets 仍须通过 sha256 校验，报错分别为 `prepare_not_allowed` / `prepare_failed`。脚本按（脚本内容 + assets 清单）哈希写完成标记 `.ageval-prepare.json`，同一次 suite 内不重复执行。下载的文件内容不进入 `eval_digest`（清单的 `path + sha256` 已计入），脚本内容计入，详见 [12](12-hub-dataset-and-leaderboard.md)。
+
 ```bash
 ageval lock examples/datasets/minimal-demo --task terminal-jsonl-agg
 ageval run  examples/datasets/minimal-demo --task terminal-jsonl-agg
@@ -22,6 +34,8 @@ ageval run  official/demo@0.1.0 --dir tmp
 ```
 
 `run`、`lock`、`view` 与 `results upload-suite` 的首个参数支持本地 dataset 根目录或 Hub 引用（`dataset_id@version` / `@sha256:…`）。`--dir <path>` 仅在 `ageval run` 配合 Hub 引用时使用，将数据集检出至 `<path>/<dataset_id>/`（若已存在匹配目录则直接复用）；本地路径搭配 `--dir` 会报错 `invalid_override`。`lock`、`view` 与 `upload-suite` 优先读取本地已校验缓存。`tasks` 与 `campaign` 仅接受本地目录。
+
+此外，首个参数可以是 **git 源引用**：`github:org/repo@<tag|全长 sha>` 或 `https://…@<tag|全长 sha>`（GitHub、Hugging Face datasets 等），可选 `#<subdir>` 选择仓库内的一个 Dataset 子目录（相对路径、禁止 `..`、必须包含 `ageval.yaml`；一个仓库可托管多个 Dataset，各自独立）。缺少 `@` 钉版或指向分支名的引用报错 `invalid_package`。CLI 将引用解析为完整 commit sha，以 partial + sparse checkout 拉取该 commit（远端不支持时回退全量拉取）并写入注册表 git 缓存（键为 `(git_url, commit, subdir)`），后续 lock/run 流程不变；子目录 Dataset 不得通过符号链接引用根外路径，lock 时报错 `invalid_package`。私有仓库使用本地 git / gh 凭据，URL 禁止内嵌密码，凭据不进入 lock。lock 摘要记录 `source.git_url`、`source.commit`（及 `source.subdir`）与 `eval_digest`（见 [12](12-hub-dataset-and-leaderboard.md)）。
 
 `--profiles` 整份替换默认配置文件；`--agent` 与 `--profiles` 互斥；`--model` 需配合 `--agent` 覆盖已绑定角色的 `model.id`。`--set` 允许覆盖的白名单路径包括：`/parameters/seed`、`/parameters/active_profile`、`/agent_profiles/<role>/{model,executor,api_key,base_url,options/<key>}`，以及嵌套模型字段 `model/id`、`model/api`、`model/timeout`、`model/watchdog`、`model/reasoning/effort`（`model` 必须为嵌套对象）。`limits.*` 不允许通过 `--set` 修改。
 

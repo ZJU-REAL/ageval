@@ -7,7 +7,7 @@ from typing import Any
 
 from services.registry.auth.tokens import TokenInfo
 from services.registry.clock import now
-from services.registry.dataset import BOUND_RELEASE
+from services.registry.dataset import RANKED_BOUND_KINDS
 from services.registry.errors import RegistryAppError
 from services.registry.inbox.maintainers import MAINTAINER_INBOX_ORG, auth_is_maintainer
 from services.registry.inbox.rows import ResourceRequestRow, request_to_dict
@@ -165,7 +165,7 @@ class RequestService:
         return {"ok": True, "ids": ids}
 
     def _apply_listing(self, suite: Any, auth: TokenInfo) -> dict[str, Any]:
-        if not suite.complete or suite.bound_kind != BOUND_RELEASE:
+        if not suite.complete or suite.bound_kind not in RANKED_BOUND_KINDS:
             raise RegistryAppError(
                 "invalid_request",
                 "listing requires a complete release-bound suite",

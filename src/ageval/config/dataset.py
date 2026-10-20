@@ -54,6 +54,89 @@ class DatasetDefaults:
 
 
 @dataclass(frozen=True, slots=True)
+class DatasetAsset:
+    """One declarative downloadable asset (path + url + pinned sha256)."""
+
+    path: str
+    url: str
+    sha256: str
+
+
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_ASSET_URL_PREFIXES = ("https://", "http://", "file://")
+
+
+def _validate_asset_relpath(value: object, *, location: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA, "asset path must be a non-empty string", location=location
+        )
+    text = value.strip().replace("\\", "/")
+    while text.startswith("./"):
+        text = text[2:]
+    if text.startswith("/") or ".." in Path(text).parts or not text:
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "asset path must be relative to the dataset root without '..'",
+            location=location,
+        )
+    return text
+
+
+def _parse_assets(raw: object) -> tuple[DatasetAsset, ...]:
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise ConfigError(ERROR_INVALID_SCHEMA, "assets must be a list", location="/assets")
+    out: list[DatasetAsset] = []
+    for i, item in enumerate(raw):
+        loc = f"/assets/{i}"
+        if not isinstance(item, dict):
+            raise ConfigError(ERROR_INVALID_SCHEMA, "asset must be a mapping", location=loc)
+        unknown = set(item) - {"path", "url", "sha256"}
+        if unknown:
+            raise ConfigError(
+                ERROR_INVALID_SCHEMA, f"unknown asset keys: {sorted(unknown)}", location=loc
+            )
+        path = _validate_asset_relpath(item.get("path"), location=f"{loc}/path")
+        url = item.get("url")
+        if not isinstance(url, str) or not url.startswith(_ASSET_URL_PREFIXES):
+            raise ConfigError(
+                ERROR_INVALID_SCHEMA,
+                "asset url must start with https://, http:// or file://",
+                location=f"{loc}/url",
+            )
+        sha = item.get("sha256")
+        if not isinstance(sha, str) or not _SHA256_RE.fullmatch(sha):
+            raise ConfigError(
+                ERROR_INVALID_SCHEMA,
+                "asset sha256 must be 64 lowercase hex characters",
+                location=f"{loc}/sha256",
+            )
+        out.append(DatasetAsset(path=path, url=url, sha256=sha))
+    return tuple(out)
+
+
+def _parse_prepare(raw: object) -> str | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, str) or not raw.strip():
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA, "prepare must be a non-empty string", location="/prepare"
+        )
+    text = raw.strip().replace("\\", "/")
+    while text.startswith("./"):
+        text = text[2:]
+    if text.startswith("/") or ".." in Path(text).parts or not text:
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "prepare must be relative to the dataset root without '..'",
+            location="/prepare",
+        )
+    return text
+
+
+@dataclass(frozen=True, slots=True)
 class DatasetManifest:
     """Immutable dataset root document (``ageval.dataset/1``)."""
 
@@ -65,6 +148,8 @@ class DatasetManifest:
     defaults: DatasetDefaults | None = None
     # Optional dataset-wide provenance; member task.yaml may fully override.
     provenance: dict[str, object] | None = None
+    assets: tuple[DatasetAsset, ...] = ()
+    prepare: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -285,6 +370,9 @@ def _manifest_from_mapping(raw: dict[str, Any]) -> DatasetManifest:
 
         provenance_obj = validate_provenance(raw.get("provenance"), location="/provenance")
 
+    assets_obj = _parse_assets(raw.get("assets"))
+    prepare_obj = _parse_prepare(raw.get("prepare"))
+
     # Reject unknown top-level keys beyond the wire schema.
     allowed = {
         "format",
@@ -294,6 +382,8 @@ def _manifest_from_mapping(raw: dict[str, Any]) -> DatasetManifest:
         "description",
         "defaults",
         "provenance",
+        "assets",
+        "prepare",
     }
     unknown_top = set(raw) - allowed
     if unknown_top:
@@ -311,6 +401,8 @@ def _manifest_from_mapping(raw: dict[str, Any]) -> DatasetManifest:
         description=description,
         defaults=defaults_obj,
         provenance=provenance_obj,
+        assets=assets_obj,
+        prepare=prepare_obj,
     )
 
 

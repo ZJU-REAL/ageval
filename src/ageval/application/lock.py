@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -28,9 +28,16 @@ class LockResult:
     resolved: ResolvedTask
     manifest: DatasetManifest
     job: JobDocument
+    source: dict[str, str] | None = None
+    eval_digest: str | None = None
 
     def summary(self) -> dict[str, Any]:
-        return locked_to_summary(self.lock).as_dict()
+        out = locked_to_summary(self.lock).as_dict()
+        if self.source:
+            out["source"] = dict(self.source)
+        if self.eval_digest:
+            out["eval_digest"] = self.eval_digest
+        return out
 
 
 class LockCommand:
@@ -50,12 +57,31 @@ class LockCommand:
         set_overrides: Sequence[str] = (),
         overrides: dict[str, Any] | None = None,
         force_build: bool = False,
+        allow_prepare: bool = False,
+        on_prepare_script: Callable[[str, str], None] | None = None,
     ) -> LockResult:
         """Lock one member and return the config plus its dataset context."""
         from ageval.application.host_env import load_host_env_files
-        from ageval.registry.resolve import resolve_dataset_root
+        from ageval.registry.digest import compute_eval_digest
+        from ageval.registry.resolve import resolve_dataset_root_with_source
 
-        root = resolve_dataset_root(dataset_root)
+        root, source = resolve_dataset_root_with_source(dataset_root)
+        # eval_digest is computed over the resolved tree before preparation:
+        # prepare output is pinned transitively via the script content and
+        # the assets manifest, so publish-time and run-time digests agree.
+        # On later locks the marker replays the recorded digest, because
+        # prepare output left on disk would otherwise drift the value.
+        from ageval.config.prepare import prepare_dataset, stored_eval_digest
+
+        eval_digest = stored_eval_digest(root) or compute_eval_digest(root)
+        # Dataset preparation (assets + gated prepare script) completes
+        # before any Attempt can open.
+        prepare_dataset(
+            root,
+            allow_prepare=allow_prepare,
+            on_prepare_script=on_prepare_script,
+            eval_digest=eval_digest,
+        )
         manifest = load_dataset_manifest(root)
         resolved = resolve_task(root, task_id, manifest=manifest)
         # Host credential locators from the dataset-root .env (values never
@@ -76,7 +102,14 @@ class LockCommand:
             dataset_provenance=manifest.provenance,
             force_build=force_build,
         )
-        return LockResult(lock=lock, resolved=resolved, manifest=manifest, job=job)
+        return LockResult(
+            lock=lock,
+            resolved=resolved,
+            manifest=manifest,
+            job=job,
+            source=source,
+            eval_digest=eval_digest,
+        )
 
     def run(
         self,
@@ -86,6 +119,8 @@ class LockCommand:
         set_overrides: Sequence[str] = (),
         profiles_path: Path | str | None = None,
         profile: str | None = None,
+        allow_prepare: bool = False,
+        on_prepare_script: Callable[[str, str], None] | None = None,
     ) -> dict[str, Any]:
         """CLI-facing form: return the deterministic lock summary document."""
         return self.lock(
@@ -94,6 +129,8 @@ class LockCommand:
             profile=profile,
             profiles_path=profiles_path,
             set_overrides=set_overrides,
+            allow_prepare=allow_prepare,
+            on_prepare_script=on_prepare_script,
         ).summary()
 
     def tasks(self, dataset_root: Path | str) -> list[str]:

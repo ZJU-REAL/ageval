@@ -35,6 +35,10 @@ CLI 默认连公开 Hub（`https://ageval.zjureal.com`），登录不必先填 U
 邀请码在创建时只完整展示一次，之后只能看到前缀。  
 owner 或 admin 按 GitHub login 加减成员（`ageval registry org-add-member` / `org-remove-member`），用 `org-set-role` 改已有成员角色，用 `org-transfer` 把组织交给现有成员（调用者变为 `member`）。最后一名 owner 不能离开、降级或被移除。对方不必在线。allowlist 上的官方 slug（默认 `official`）不能自助 create / claim，只有 admin bootstrap token 能 `org-create`。
 
+## Git 源 Dataset
+
+托管在 git 仓库里的 Dataset 可以直接运行（`ageval run github:org/repo@v1.0.0`，可选 `#<subdir>`），也能不上传文件就注册到 Hub：`ageval publish --repo github:org/repo@v1.0.0`。注册会钉住解析出的 commit，并记录只覆盖评分文件的评测摘要；同一版本评分文件变了再注册会被拒绝，只改文档则接受。来自已注册源的 suite 结果会归因到该版本；未注册源的结果照常保存但不上榜。Dataset 页面会链接到钉版 commit，并展示声明的 prepare 脚本与 assets 供审查。
+
 ## 发布后 owner 操作（CLI）
 
 创建时 `--public` 只决定**当时**公开还是私有；之后可用 CLI 改，不必重新发包或重传结果：
