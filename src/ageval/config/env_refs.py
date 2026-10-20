@@ -17,6 +17,26 @@ _ENV_REF = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 _LOCATOR_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
+PREPARE_TRUST_ENV = "AGEVAL_PREPARE_TRUST"
+
+
+def prepare_trust_entries() -> frozenset[str]:
+    """Trust list for dataset prepare scripts (dataset_ids or root paths)."""
+    import os
+
+    raw = os.environ.get(PREPARE_TRUST_ENV) or ""
+    return frozenset(item.strip() for item in raw.split(",") if item.strip())
+
+
+def prepare_script_env(dataset_root: str) -> dict[str, str]:
+    """Child environment for a dataset prepare script."""
+    import os
+
+    env = dict(os.environ)
+    env["AGEVAL_DATASET_ROOT"] = dataset_root
+    return env
+
+
 def parse_env_ref(raw: str) -> str | None:
     text = raw.strip()
     match = _ENV_REF.fullmatch(text)

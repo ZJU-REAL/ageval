@@ -132,27 +132,21 @@ def register(app: typer.Typer) -> None:
         ] = False,
     ) -> None:
         """Fetch declarative assets and (when allowed) run the prepare script."""
+        from ageval.application.composition import build_prepare_command
         from ageval.config.errors import ConfigError
-        from ageval.config.prepare import prepare_dataset
-        from ageval.registry.resolve import resolve_dataset_root
+
+        def _notice(script: str, dataset_id: str) -> None:
+            typer.echo(
+                f"notice: running prepare script {script} for dataset {dataset_id}",
+                err=True,
+            )
 
         try:
-            root = resolve_dataset_root(package)
-            if allow_prepare:
-                from ageval.config.dataset import load_dataset_manifest
-
-                manifest = load_dataset_manifest(root)
-                if manifest.prepare:
-                    typer.echo(
-                        f"notice: running prepare script {manifest.prepare} "
-                        f"for dataset {manifest.dataset_id}",
-                        err=True,
-                    )
-            report = prepare_dataset(root, allow_prepare=allow_prepare)
+            summary = build_prepare_command()(package, allow_prepare=allow_prepare, notify=_notice)
         except ConfigError as exc:
             typer.echo(str(exc), err=True)
             raise typer.Exit(code=2) from exc
-        emit({"ok": True, "dataset_root": str(root), **report.as_dict()})
+        emit(summary)
 
     @app.command("lock")
     def lock_command(
@@ -229,6 +223,13 @@ def register(app: typer.Typer) -> None:
         from ageval.plugins.errors import PluginContractError
 
         profiles = resolve_agent_option(agent, profiles, model=model)
+
+        def _notice(script: str, dataset_id: str) -> None:
+            typer.echo(
+                f"notice: running prepare script {script} for dataset {dataset_id}",
+                err=True,
+            )
+
         try:
             summary = build_lock_command().run(
                 dataset_root=package,
@@ -237,6 +238,7 @@ def register(app: typer.Typer) -> None:
                 profiles_path=profiles,
                 profile=profile,
                 allow_prepare=allow_prepare,
+                on_prepare_script=_notice,
             )
         except (ConfigError, ModelConfigError, PluginContractError) as exc:
             # Stable operator-facing failure: exit 2, message on stderr, empty stdout.

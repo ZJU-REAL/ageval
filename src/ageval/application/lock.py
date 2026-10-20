@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -58,6 +58,7 @@ class LockCommand:
         overrides: dict[str, Any] | None = None,
         force_build: bool = False,
         allow_prepare: bool = False,
+        on_prepare_script: Callable[[str, str], None] | None = None,
     ) -> LockResult:
         """Lock one member and return the config plus its dataset context."""
         from ageval.application.host_env import load_host_env_files
@@ -69,7 +70,7 @@ class LockCommand:
         # before the manifest/digest are read and any Attempt can open.
         from ageval.config.prepare import prepare_dataset
 
-        prepare_dataset(root, allow_prepare=allow_prepare)
+        prepare_dataset(root, allow_prepare=allow_prepare, on_prepare_script=on_prepare_script)
         manifest = load_dataset_manifest(root)
         eval_digest = compute_eval_digest(root)
         resolved = resolve_task(root, task_id, manifest=manifest)
@@ -109,6 +110,7 @@ class LockCommand:
         profiles_path: Path | str | None = None,
         profile: str | None = None,
         allow_prepare: bool = False,
+        on_prepare_script: Callable[[str, str], None] | None = None,
     ) -> dict[str, Any]:
         """CLI-facing form: return the deterministic lock summary document."""
         return self.lock(
@@ -118,6 +120,7 @@ class LockCommand:
             profiles_path=profiles_path,
             set_overrides=set_overrides,
             allow_prepare=allow_prepare,
+            on_prepare_script=on_prepare_script,
         ).summary()
 
     def tasks(self, dataset_root: Path | str) -> list[str]:

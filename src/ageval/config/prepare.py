@@ -10,8 +10,8 @@ trusted as Dockerfiles — the gate is about consent, not sandboxing.
 from __future__ import annotations
 
 import hashlib
-import os
 import shutil
+from collections.abc import Callable
 import subprocess
 import tempfile
 import urllib.error
@@ -66,8 +66,9 @@ def file_sha256(path: Path) -> str:
 
 def is_trusted_dataset(dataset_id: str, root: Path) -> bool:
     """Trust list: ``AGEVAL_PREPARE_TRUST`` holds dataset_ids or root paths."""
-    raw = os.environ.get(TRUST_ENV) or ""
-    entries = {item.strip() for item in raw.split(",") if item.strip()}
+    from ageval.config.env_refs import prepare_trust_entries
+
+    entries = prepare_trust_entries()
     return dataset_id in entries or str(root) in entries
 
 
@@ -125,13 +126,13 @@ def _run_prepare_script(root: Path, script_rel: str, *, timeout: int) -> None:
             "prepare script must not reference paths outside the dataset root",
             location="/prepare",
         )
-    env = dict(os.environ)
-    env["AGEVAL_DATASET_ROOT"] = str(root)
+    from ageval.config.env_refs import prepare_script_env
+
     try:
         proc = subprocess.run(
             ["/bin/sh", script_rel],
             cwd=str(root),
-            env=env,
+            env=prepare_script_env(str(root)),
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -202,6 +203,7 @@ def prepare_dataset(
     allow_prepare: bool = False,
     trusted: bool = False,
     timeout: int = DEFAULT_PREPARE_TIMEOUT_SECONDS,
+    on_prepare_script: Callable[[str, str], None] | None = None,
 ) -> PrepareReport:
     """Fetch declared assets and, when allowed, run the prepare script.
 
@@ -224,6 +226,8 @@ def prepare_dataset(
                 location="/prepare",
             )
         if not _prepare_marker_matches(root, manifest):
+            if callable(on_prepare_script):
+                on_prepare_script(manifest.prepare, manifest.dataset_id)
             _run_prepare_script(root, manifest.prepare, timeout=timeout)
             prepare_ran = True
         # Declared assets are still sha256-verified after the script runs.
