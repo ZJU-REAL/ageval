@@ -1,0 +1,6 @@
+format: ageval.dataset/1
+dataset_id: examples/terminus-2-min
+version: "0.1.0"
+description: "One docker task for the terminus-2 host loop"
+tasks:
+  root: tasks

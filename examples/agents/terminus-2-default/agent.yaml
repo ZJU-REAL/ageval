@@ -1,0 +1,23 @@
+format: ageval.agent/1
+agent_id: terminus-2-default
+version: "0.1.0"
+label: "terminus-2 (glm-5.2)"
+description: >-
+  Terminus 2 host loop. Model HTTP stays on the parent; tmux runs in the
+  attempt environment. Credentials are locators. Install plugins/terminus-2 first.
+tags: [coding, terminus-2]
+binding:
+  executor: terminus-2
+  model:
+    id: dashscope/glm-5.2
+    api: chat
+    reasoning:
+      effort: max
+  api_key: ${litellm_api_key}
+  base_url: ${litellm_base_url}
+  extensions:
+    - plugin: terminus-2
+      options:
+        parser: json
+        step_limit: 20
+        cmd_timeout: 60

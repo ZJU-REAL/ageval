@@ -1,0 +1,17 @@
+format: ageval.profiles/1
+environment: docker
+agent_profiles:
+  solver:
+    executor: terminus-2
+    model:
+      id: openai/mock
+      api: chat
+    api_key: ${OPENAI_API_KEY}
+    base_url: ${OPENAI_BASE_URL}
+    extensions:
+      - plugin: terminus-2
+        options:
+          parser: json
+          step_limit: 4
+          cmd_timeout: 60
+      - plugin: docker

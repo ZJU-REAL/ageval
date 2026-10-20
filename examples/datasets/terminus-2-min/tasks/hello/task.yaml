@@ -1,0 +1,20 @@
+format: ageval.task/1
+task_id: hello
+description: Write hello.txt from the terminus-2 tmux session.
+parameters:
+  active_profile: solver
+agent_profiles:
+  - id: solver
+limits:
+  wall_time_seconds: 1800
+  environment_seconds: 1800
+  evaluate_seconds: 120
+  agent_invocations: 1
+artifacts:
+  publishable:
+    - id: hello
+      path: artifacts/hello.txt
+evaluation:
+  inputs:
+    - artifact: hello
+      target: artifacts/hello.txt
