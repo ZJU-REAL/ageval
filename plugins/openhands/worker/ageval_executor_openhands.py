@@ -34,6 +34,60 @@ def _clip(text: str) -> str:
     return text[:_CLIP]
 
 
+def _plain(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if value is None or isinstance(value, bool | int | float):
+        return ""
+    if type(value).__name__ == "RedactedThinkingBlock":
+        return ""
+    if isinstance(value, dict):
+        if value.get("type") in {"redacted_thinking", "redacted"}:
+            return ""
+        for key in ("thinking", "text"):
+            found = value.get(key)
+            if isinstance(found, str) and found.strip():
+                return found.strip()
+        return ""
+    if isinstance(value, list | tuple):
+        parts = [_plain(item) for item in value]
+        return "\n".join(part for part in parts if part).strip()
+    for attr in ("thinking", "text"):
+        found = getattr(value, attr, None)
+        if isinstance(found, str) and found.strip():
+            return found.strip()
+    return ""
+
+
+def _responses_reasoning(item: Any) -> str:
+    """Plaintext Responses reasoning. Encrypted blobs are not copied."""
+    if item is None:
+        return ""
+    chunks = [_plain(getattr(item, attr, None)) for attr in ("summary", "content")]
+    return "\n".join(chunk for chunk in chunks if chunk).strip()
+
+
+def _thought_text(event: Any) -> str:
+    """Visible thinking attached to one SDK event, without the spoken reply."""
+    chunks: list[str] = []
+
+    def add(text: str) -> None:
+        cleaned = text.strip()
+        if cleaned and cleaned not in chunks:
+            chunks.append(cleaned)
+
+    add(_plain(getattr(event, "reasoning_content", None)))
+    add(_plain(getattr(event, "thought", None)))
+    add(_plain(getattr(event, "thinking_blocks", None)))
+    add(_responses_reasoning(getattr(event, "responses_reasoning_item", None)))
+    message = getattr(event, "llm_message", None)
+    if message is not None:
+        add(_plain(getattr(message, "reasoning_content", None)))
+        add(_plain(getattr(message, "thinking_blocks", None)))
+        add(_responses_reasoning(getattr(message, "responses_reasoning_item", None)))
+    return _clip("\n\n".join(chunks))
+
+
 def _message_text(event: Any) -> str:
     message = getattr(event, "llm_message", None)
     content = getattr(message, "content", None) if message is not None else None
@@ -84,6 +138,20 @@ def _action_args(event: Any) -> dict[str, Any]:
 def steps_from_events(events: list[Any]) -> list[dict[str, Any]]:
     """Structured steps from SDK event objects. Names, not stdout."""
     steps: list[dict[str, Any]] = []
+    last_thought: tuple[str, str] | None = None
+
+    def push_thought(event: Any, text: str) -> None:
+        nonlocal last_thought
+        cleaned = text.strip()
+        if not cleaned:
+            return
+        response_id = str(getattr(event, "llm_response_id", "") or "")
+        key = (response_id, cleaned)
+        if response_id and key == last_thought:
+            return
+        steps.append({"type": "thought", "content": cleaned})
+        last_thought = key
+
     for event in events:
         name = type(event).__name__
         if name == "MessageEvent":
@@ -91,10 +159,16 @@ def steps_from_events(events: list[Any]) -> list[dict[str, Any]]:
             content = _clip(_message_text(event))
             if source == "user":
                 steps.append({"type": "user_message", "content": content})
-            elif source == "agent" and content.strip():
-                steps.append({"type": "assistant_message", "content": content})
+            elif source == "agent":
+                spoken = content.strip()
+                thought = _thought_text(event)
+                if thought and thought != spoken:
+                    push_thought(event, thought)
+                if spoken:
+                    steps.append({"type": "assistant_message", "content": content})
             continue
         if name == "ActionEvent":
+            push_thought(event, _thought_text(event))
             call_id = str(getattr(event, "tool_call_id", "") or "")
             tool_name = str(getattr(event, "tool_name", "") or "tool")
             steps.append(

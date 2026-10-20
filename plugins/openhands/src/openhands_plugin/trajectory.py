@@ -66,6 +66,22 @@ def to_ageval_trajectory_events(
                 }
             )
             continue
+        if kind == "thought":
+            text = str(raw.get("content") or "").strip()
+            if text:
+                seq += 1
+                out.append(
+                    {
+                        "schema": SCHEMA,
+                        "seq": seq,
+                        "session_id": session_id,
+                        "source": _SOURCE,
+                        "kind": "text",
+                        "channel": "thought",
+                        "text": _clip(text),
+                    }
+                )
+            continue
         if kind == "assistant_message":
             text = str(raw.get("content") or "").strip()
             if text:

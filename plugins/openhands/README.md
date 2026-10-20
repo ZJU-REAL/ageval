@@ -15,7 +15,11 @@ Profile `base_url` + `api_key` (env locator) project into the exec env as
 `OPENAI_BASE_URL` / `LLM_BASE_URL` and `OPENAI_API_KEY` / `LLM_API_KEY`.
 Values never enter the lock. The trajectory file is a structured step list
 (`openhands.trajectory/1`), mapped to `ageval.trajectory.event/1` at record
-time. Stdout is not the transcript.
+time. Stdout is not the transcript. Thinking stored on an action
+(`thought`, `reasoning_content`, thinking blocks, and visible Responses
+reasoning) is a `thought` step before that tool call. Record writes it as
+an assistant turn with `part: thought`. The final reply stays a normal
+assistant turn.
 
 A missing SDK at setup is installed at the pinned version. If that install
 fails, invoke returns `openhands_sdk_install_failed` and does not scrape a

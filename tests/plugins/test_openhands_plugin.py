@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -309,6 +310,7 @@ async def test_missing_sdk_installs_the_pin_or_fails_closed() -> None:
 def test_trajectory_maps_steps_and_leaves_foreign_events() -> None:
     mapped = to_ageval_trajectory_events(
         (
+            {"type": "thought", "content": "need the file list"},
             {"type": "assistant_message", "content": "look"},
             {
                 "type": "tool_call",
@@ -320,9 +322,12 @@ def test_trajectory_maps_steps_and_leaves_foreign_events() -> None:
     )
     assert mapped[0]["source"] == "openhands"
     assert mapped[0]["schema"] == "ageval.trajectory.event/1"
-    assert mapped[1]["kind"] == "tool"
-    assert mapped[1]["phase"] == "start"
-    assert mapped[1]["args"] == {"command": "ls"}
+    assert mapped[0]["kind"] == "text"
+    assert mapped[0]["channel"] == "thought"
+    assert mapped[0]["text"] == "need the file list"
+    assert mapped[2]["kind"] == "tool"
+    assert mapped[2]["phase"] == "start"
+    assert mapped[2]["args"] == {"command": "ls"}
 
 
 @pytest.mark.asyncio
@@ -339,6 +344,115 @@ async def test_trajectory_collect_stamps_own_source_only() -> None:
     mapped = await trajectory_collect(None, {"events": native, "metadata": {}}, nxt)
     assert mapped["metadata"]["trajectory_source"] == "openhands"
     assert mapped["events"][0]["source"] == "openhands"
+
+
+def _load_worker() -> Any:
+    path = ROOT / "plugins" / "openhands" / "worker" / "ageval_executor_openhands.py"
+    spec = importlib.util.spec_from_file_location("ageval_executor_openhands_under_test", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_steps_keep_thought_between_tool_calls() -> None:
+    worker = _load_worker()
+
+    class Text:
+        def __init__(self, text: str) -> None:
+            self.text = text
+
+    class RedactedThinkingBlock:
+        def __init__(self) -> None:
+            self.data = "secret-trace"
+
+    class Reasoning:
+        def __init__(self) -> None:
+            self.summary = ["visible summary"]
+            self.content = None
+            self.encrypted_content = "cipher-blob"
+
+    class MessageEvent:
+        def __init__(
+            self,
+            source: str,
+            content: str,
+            reasoning: str = "",
+            response_id: str = "",
+        ) -> None:
+            self.source = source
+            self.llm_response_id = response_id
+            self.llm_message = type(
+                "M",
+                (),
+                {"content": content, "reasoning_content": reasoning},
+            )()
+
+    class ActionEvent:
+        def __init__(
+            self,
+            call_id: str,
+            *,
+            response_id: str,
+            command: str,
+            blocks: list[Any] | None = None,
+        ) -> None:
+            self.tool_call_id = call_id
+            self.tool_name = "terminal"
+            self.llm_response_id = response_id
+            self.reasoning_content = "need the file list"
+            self.thought = [Text("inspect the directory")]
+            self.thinking_blocks = blocks or []
+            self.responses_reasoning_item = None
+            self.action = type(
+                "A",
+                (),
+                {"model_dump": lambda self, command=command: {"command": command, "kind": "x"}},
+            )()
+
+    class ObservationEvent:
+        def __init__(self, call_id: str) -> None:
+            self.tool_call_id = call_id
+            self.tool_name = "terminal"
+            self.observation = type("O", (), {"content": "listed"})()
+
+    shared = [Text("extra block"), RedactedThinkingBlock()]
+    first = ActionEvent("c1", response_id="resp-1", command="ls", blocks=shared)
+    first.responses_reasoning_item = Reasoning()
+    second = ActionEvent("c2", response_id="resp-1", command="pwd", blocks=list(shared))
+    second.responses_reasoning_item = Reasoning()
+    events = [
+        MessageEvent("user", "count"),
+        first,
+        ObservationEvent("c1"),
+        second,
+        ObservationEvent("c2"),
+        MessageEvent("agent", "wrote aggregates", reasoning="final check", response_id="resp-2"),
+        MessageEvent("agent", "same words", reasoning="same words", response_id="resp-3"),
+    ]
+    steps = worker.steps_from_events(events)
+    assert [step["type"] for step in steps] == [
+        "user_message",
+        "thought",
+        "tool_call",
+        "tool_result",
+        "tool_call",
+        "tool_result",
+        "thought",
+        "assistant_message",
+        "assistant_message",
+    ]
+    thought = steps[1]["content"]
+    assert (
+        thought == "need the file list\n\ninspect the directory\n\nextra block\n\nvisible summary"
+    )
+    assert "secret-trace" not in thought
+    assert "cipher-blob" not in thought
+    assert steps[2]["arguments"] == {"command": "ls"}
+    assert steps[4]["arguments"] == {"command": "pwd"}
+    assert steps[6]["content"] == "final check"
+    assert steps[7]["content"] == "wrote aggregates"
+    assert steps[8]["content"] == "same words"
 
 
 def test_worker_writes_a_trajectory_without_the_sdk(tmp_path: Path) -> None:
@@ -364,6 +478,9 @@ def test_worker_writes_a_trajectory_without_the_sdk(tmp_path: Path) -> None:
                 "    def __init__(self):",
                 "        self.tool_call_id = 'call-1'",
                 "        self.tool_name = 'terminal'",
+                "        self.llm_response_id = 'resp-1'",
+                "        self.reasoning_content = 'need the file list'",
+                "        self.thought = [type('T', (), {'text': 'inspect the directory'})()]",
                 "        self.action = type('A', (), {",
                 "            'model_dump': lambda self: {'command': 'ls', 'kind': 'x'},",
                 "        })()",
@@ -451,8 +568,11 @@ def test_worker_writes_a_trajectory_without_the_sdk(tmp_path: Path) -> None:
     assert document["text"] == "wrote aggregates"
     assert document["steps"][0]["type"] == "user_message"
     assert document["steps"][0]["content"] == "count the rows\n"
-    assert document["steps"][1]["type"] == "tool_call"
-    assert document["steps"][1]["arguments"] == {"command": "ls"}
+    assert document["steps"][1]["type"] == "thought"
+    assert "need the file list" in document["steps"][1]["content"]
+    assert "inspect the directory" in document["steps"][1]["content"]
+    assert document["steps"][2]["type"] == "tool_call"
+    assert document["steps"][2]["arguments"] == {"command": "ls"}
     assert document["usage"]["prompt_tokens"] == 2
     assert "sk-not-for-file" not in trajectory.read_text(encoding="utf-8")
     assert str(instruction) in proc.args
