@@ -202,6 +202,42 @@ class RegistryClient:
         data = json.loads(raw.decode("utf-8"))
         return ReleaseInfo.from_payload(data)
 
+    def register_source(
+        self,
+        *,
+        dataset_id: str,
+        version: str,
+        git_url: str,
+        commit: str,
+        eval_digest: str,
+        subdir: str | None = None,
+        org_id: str | None = None,
+        visibility: str = "public",
+        task_ids: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Register a git-sourced version without uploading files (#305)."""
+        body: dict[str, Any] = {
+            "version": version,
+            "git_url": git_url,
+            "commit": commit,
+            "eval_digest": eval_digest,
+            "visibility": visibility,
+            "task_ids": list(task_ids or []),
+        }
+        if subdir:
+            body["subdir"] = subdir
+        if org_id:
+            body["org_id"] = org_id
+        status, raw, _ = self._request(
+            "POST",
+            f"/v1/packages/{quote(dataset_id, safe='/')}/source",
+            body=json.dumps(body, sort_keys=True).encode("utf-8"),
+            headers=self._headers(content_type="application/json", auth=True),
+        )
+        if status not in {200, 201}:
+            raise RegistryError("register_failed", f"unexpected status {status}", status=status)
+        return json.loads(raw.decode("utf-8"))
+
     def release_draft(
         self,
         *,
@@ -494,6 +530,7 @@ class RegistryClient:
         job_overlay: dict[str, Any] | None = None,
         plugins: list[dict[str, Any]] | None = None,
         replace: bool = False,
+        eval_digest: str | None = None,
     ) -> dict[str, Any]:
         meta: dict[str, Any] = {
             "suite_run_id": suite_run_id,
@@ -524,6 +561,8 @@ class RegistryClient:
             meta["job_overlay"] = job_overlay
         if isinstance(plugins, list) and plugins:
             meta["plugins"] = plugins
+        if eval_digest:
+            meta["eval_digest"] = eval_digest
         http_status, raw, _ = self._put_multipart(
             "/v1/results/suites",
             meta=meta,

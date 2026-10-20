@@ -28,9 +28,16 @@ class LockResult:
     resolved: ResolvedTask
     manifest: DatasetManifest
     job: JobDocument
+    source: dict[str, str] | None = None
+    eval_digest: str | None = None
 
     def summary(self) -> dict[str, Any]:
-        return locked_to_summary(self.lock).as_dict()
+        out = locked_to_summary(self.lock).as_dict()
+        if self.source:
+            out["source"] = dict(self.source)
+        if self.eval_digest:
+            out["eval_digest"] = self.eval_digest
+        return out
 
 
 class LockCommand:
@@ -50,13 +57,16 @@ class LockCommand:
         set_overrides: Sequence[str] = (),
         overrides: dict[str, Any] | None = None,
         force_build: bool = False,
+        allow_prepare: bool = False,
     ) -> LockResult:
         """Lock one member and return the config plus its dataset context."""
         from ageval.application.host_env import load_host_env_files
-        from ageval.registry.resolve import resolve_dataset_root
+        from ageval.registry.digest import compute_eval_digest
+        from ageval.registry.resolve import resolve_dataset_root_with_source
 
-        root = resolve_dataset_root(dataset_root)
+        root, source = resolve_dataset_root_with_source(dataset_root)
         manifest = load_dataset_manifest(root)
+        eval_digest = compute_eval_digest(root)
         resolved = resolve_task(root, task_id, manifest=manifest)
         # Host credential locators from the dataset-root .env (values never
         # enter the lock or evidence).
@@ -76,7 +86,10 @@ class LockCommand:
             dataset_provenance=manifest.provenance,
             force_build=force_build,
         )
-        return LockResult(lock=lock, resolved=resolved, manifest=manifest, job=job)
+        return LockResult(
+            lock=lock, resolved=resolved, manifest=manifest, job=job,
+            source=source, eval_digest=eval_digest,
+        )
 
     def run(
         self,

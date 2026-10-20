@@ -134,6 +134,26 @@ def test_resolve_git_branch_ref_fails(tmp_path: Path) -> None:
     assert exc.value.error_code == "invalid_package"
 
 
+def test_lock_records_resolved_commit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import json
+
+    from typer.testing import CliRunner
+
+    from ageval.cli.main import app
+
+    remote = _make_remote(tmp_path)
+    monkeypatch.setenv("AGEVAL_CACHE_ROOT", str(tmp_path / "cache"))
+    result = CliRunner().invoke(
+        app, ["lock", f"file://{remote}@v1.0.0#datasets/a", "--task", "hello"]
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    commit = payload["source"]["commit"]
+    assert len(commit) == 40 and all(c in "0123456789abcdef" for c in commit)
+    assert payload["source"]["subdir"] == "datasets/a"
+    assert payload["eval_digest"].startswith("sha256:")
+
+
 def test_resolve_git_subdir_without_manifest_fails(tmp_path: Path) -> None:
     remote = _make_remote(tmp_path)
     with pytest.raises(ConfigError) as exc:

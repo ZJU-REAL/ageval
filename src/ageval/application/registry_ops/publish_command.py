@@ -95,6 +95,57 @@ class PublishCommand:
             out["is_draft"] = True
         return out
 
+    def publish_from_repo(
+        self,
+        repo_ref: str,
+        *,
+        public: bool = False,
+        org: str | None = None,
+        registry_url: str | None = None,
+        token: str | None = None,
+    ) -> dict[str, Any]:
+        """Register a git-sourced Dataset version; no files are uploaded."""
+        from ageval.config.dataset import list_tasks
+        from ageval.registry.digest import compute_eval_digest
+        from ageval.registry.resolve import resolve_dataset_root_with_source
+
+        root, source = resolve_dataset_root_with_source(repo_ref)
+        if source is None:  # pragma: no cover - git refs always carry source
+            raise ConfigError("invalid_package", "--repo requires a git ref", location="--repo")
+        manifest = load_dataset_manifest(root)
+        eval_digest = compute_eval_digest(root)
+        client = self._client_factory(
+            registry_url=registry_url,
+            token=token,
+            require_token=True,
+        )
+        try:
+            info = client.register_source(
+                dataset_id=manifest.dataset_id,
+                version=manifest.version,
+                git_url=source["git_url"],
+                commit=source["commit"],
+                eval_digest=eval_digest,
+                subdir=source.get("subdir"),
+                org_id=(org or "").strip() or None,
+                visibility="public" if public else "private",
+                task_ids=list_tasks(root, manifest=manifest),
+            )
+        except RegistryError as exc:
+            raise ConfigError(exc.code, exc.message, location="registry") from exc
+        return {
+            "ok": True,
+            "dataset_id": manifest.dataset_id,
+            "version": manifest.version,
+            "source_only": True,
+            "git_url": source["git_url"],
+            "commit": source["commit"],
+            "eval_digest": eval_digest,
+            **({"subdir": source["subdir"]} if source.get("subdir") else {}),
+            "ref": f"{manifest.dataset_id}@{manifest.version}",
+            "registration": info,
+        }
+
     def release_draft(
         self,
         dataset_id: str,

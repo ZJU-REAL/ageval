@@ -50,6 +50,24 @@ class DraftRow:
 
 
 @dataclass(frozen=True, slots=True)
+class SourceRow:
+    """Source-only registration: a git commit, no uploaded blob (#305)."""
+
+    dataset_id: str
+    version: str
+    git_url: str
+    commit: str
+    eval_digest: str
+    subdir: str = ""
+    org_id: str | None = None
+    visibility: str = "public"
+    uploaded_by: str = ""
+    tasks_json: str = "[]"
+    source_available: bool = True
+    created_at: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
 class DatasetAclRow:
     dataset_id: str
     user_id: str

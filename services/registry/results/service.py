@@ -16,7 +16,9 @@ from services.registry.content.blob_io import read_blob, sha256_file
 from services.registry.dataset import (
     BOUND_DRAFT,
     BOUND_RELEASE,
+    BOUND_SOURCE,
     BOUND_UNKNOWN,
+    RANKED_BOUND_KINDS,
     is_draft_version,
     parse_task_refs,
     suite_is_complete,
@@ -436,7 +438,12 @@ class ResultService:
                 raise RegistryAppError("not_found", "suite not found", http_status=404)
             self.results.delete_suite(suite_run_id)
             self._gc_suite_blob(existing.blob_digest)
-        bound_kind, bound_ids = self._bound_task_ids(dataset_id, dataset_version, auth=auth)
+        eval_digest = str(meta.get("eval_digest") or "")
+        if eval_digest:
+            config_payload["eval_digest"] = eval_digest
+        bound_kind, bound_ids = self._bound_task_ids(
+            dataset_id, dataset_version, auth=auth, eval_digest=eval_digest or None
+        )
         digest = task_set_digest(bound_ids) if bound_ids else ""
         complete = suite_is_complete(bound_task_ids=bound_ids, task_refs=task_refs)
         row = SuiteResultRow(
@@ -655,7 +662,7 @@ class ResultService:
             visible = [
                 r
                 for r in visible
-                if r.complete and r.bound_kind == BOUND_RELEASE and r.board_listed
+                if r.complete and r.bound_kind in RANKED_BOUND_KINDS and r.board_listed
             ]
         want_task = (task_id or "").strip()
         if want_task:
@@ -1101,12 +1108,20 @@ class ResultService:
         )
 
     def _bound_task_ids(
-        self, dataset_id: str, dataset_version: str, *, auth: TokenInfo
+        self,
+        dataset_id: str,
+        dataset_version: str,
+        *,
+        auth: TokenInfo,
+        eval_digest: str | None = None,
     ) -> tuple[str, frozenset[str]]:
         """Resolve bound package + task set at upload time.
 
         Release match wins. Otherwise a live draft the caller may see is
-        draft-bound. Unauthorized draft reads and missing packages → unknown
+        draft-bound. A registered git source whose ``eval_digest`` matches
+        the upload is source-bound (ranked once approved); a mismatch or an
+        unregistered source stays unknown (stored, not ranked).
+        Unauthorized draft reads and missing packages → unknown
         / empty set (incomplete, not on the public board; no existence leak).
         """
         release = None
@@ -1134,6 +1149,17 @@ class ResultService:
             blob = read_blob(self.blobs, draft.blob_digest, prefix="packages")
             digest = draft.package_digest
         if blob is None:
+            if kind == BOUND_UNKNOWN:
+                source = self.packages.get_source(dataset_id, dataset_version)
+                if source is not None and eval_digest and eval_digest == source.eval_digest:
+                    try:
+                        ids = json.loads(source.tasks_json)
+                    except (TypeError, json.JSONDecodeError):
+                        ids = []
+                    if isinstance(ids, list):
+                        return BOUND_SOURCE, frozenset(
+                            str(t).strip() for t in ids if str(t).strip()
+                        )
             return kind, frozenset()
         try:
             from services.registry.content.files import get_or_build_index

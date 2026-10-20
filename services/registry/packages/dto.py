@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 from typing import Any
 
-from services.registry.packages.rows import ReleaseRow
+from services.registry.packages.rows import ReleaseRow, SourceRow
 
 
 def package_kind_for_media_type(media_type: str) -> str:
@@ -49,3 +49,33 @@ def release_to_dict(row: ReleaseRow) -> dict[str, Any]:
         out["slot"] = "draft"
         out["is_draft"] = True
     return out
+
+
+def source_to_dict(row: SourceRow) -> dict[str, Any]:
+    """Source-only registration payload (no blob was uploaded)."""
+    import json
+
+    try:
+        task_ids = json.loads(row.tasks_json)
+    except (TypeError, json.JSONDecodeError):
+        task_ids = []
+    return {
+        "dataset_id": row.dataset_id,
+        "version": row.version,
+        "visibility": row.visibility,
+        "package_digest": "",
+        "blob_digest": "",
+        "size": 0,
+        "media_type": "",
+        "package_kind": "dataset",
+        "created_at": row.created_at,
+        "source_only": True,
+        "git_url": row.git_url,
+        "commit": row.commit,
+        "eval_digest": row.eval_digest,
+        "subdir": row.subdir,
+        "source_available": row.source_available,
+        "task_ids": task_ids if isinstance(task_ids, list) else [],
+        **({"org_id": row.org_id} if row.org_id else {}),
+        **({"uploaded_by": row.uploaded_by} if row.uploaded_by else {}),
+    }

@@ -28,6 +28,30 @@ class PackageHandlers:
                 shutil.rmtree(work, ignore_errors=True)
         return json_result(201, payload)
 
+    def _register_package_source(self, *, dataset_id: str, auth: TokenInfo) -> HttpResult:
+        body = self._read_json_body()
+        if isinstance(body, HttpResult):
+            return body
+        payload_body = dict(body)
+        payload_body["dataset_id"] = dataset_id
+        try:
+            payload = self.state.packages.register_source(body=payload_body, auth=auth)
+        except RegistryAppError as exc:
+            return _caught(exc)
+        return json_result(201, payload)
+
+    def _check_package_source(
+        self, *, dataset_id: str, version: str, auth: TokenInfo
+    ) -> HttpResult:
+        del auth
+        try:
+            payload = self.state.packages.check_source_health(
+                dataset_id=dataset_id, version=version
+            )
+        except RegistryAppError as exc:
+            return _caught(exc)
+        return json_result(200, payload)
+
     def _release_draft(self, *, dataset_id: str, auth: TokenInfo) -> HttpResult:
         body = self._read_json_body()
         if isinstance(body, HttpResult):

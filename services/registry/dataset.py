@@ -16,7 +16,10 @@ DRAFT_SLOT = "draft"
 
 BOUND_RELEASE = "release"
 BOUND_DRAFT = "draft"
+BOUND_SOURCE = "source"
 BOUND_UNKNOWN = "unknown"
+# Bound kinds that may rank on a public board once approved.
+RANKED_BOUND_KINDS = frozenset({BOUND_RELEASE, BOUND_SOURCE})
 
 
 def is_draft_version(version: str | None) -> bool:
