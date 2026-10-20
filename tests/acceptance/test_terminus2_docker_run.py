@@ -54,8 +54,8 @@ def _gateway() -> tuple[ThreadingHTTPServer, str]:
             self.end_headers()
             self.wfile.write(raw)
 
-        def log_message(self, fmt: str, *args: object) -> None:
-            del fmt, args
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+            del format, args
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, name="terminus2-gateway", daemon=True)
