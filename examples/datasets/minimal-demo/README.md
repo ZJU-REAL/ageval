@@ -32,6 +32,7 @@ env.example               # copy to .env; locator names only, never real keys
 profiles.yaml             # default job: environment=docker, executor=acp
 profiles.nooa.yaml        # NVIDIA OO-Agents harness (LiteLLM)
 profiles.dsh.yaml         # DeepSeek harness (wildcard role row)
+profiles.openhands.yaml   # OpenHands SDK in the attempt environment (LiteLLM)
 overlays/                 # per-entry overlay packs (pi / opencode litellm)
 tasks/<task_id>/
   task.yaml / run.py / evaluator.py
@@ -60,6 +61,8 @@ Other bindings:
 ```bash
 uv run ageval run examples/datasets/minimal-demo --task multiagent-env-min \
   --profiles examples/datasets/minimal-demo/profiles.dsh.yaml
+ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
+  --profiles examples/datasets/minimal-demo/profiles.openhands.yaml
 ```
 
 ## Credentials
@@ -69,6 +72,6 @@ cp env.example .env       # fill locally; never commit real keys
 ```
 
 Locators referenced by the shipped profiles: `ZHIPU_API_KEY` (ACP GLM plan),
-`litellm_api_key` / `litellm_base_url` (nooa), `deepseek_api_key` (dsh),
+`litellm_api_key` / `litellm_base_url` (nooa, openhands), `deepseek_api_key` (dsh),
 `AGEVAL_SSH_*` (ssh environment kind). Missing locators fail at `lock` —
 before any environment opens.

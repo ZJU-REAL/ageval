@@ -128,3 +128,26 @@ def test_lock_nooa_profile_records_inject(tmp_path: Path, monkeypatch: pytest.Mo
     )
     assert set(caps) == {"exec", "upload"}
     assert "sk-lock-must-not-see" not in json.dumps(data)
+
+
+def test_lock_openhands_profile_records_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = _isolated_home(tmp_path, monkeypatch, "openhands")
+    data = _lock(
+        "--profiles",
+        str(ROOT / "examples/datasets/minimal-demo/profiles.openhands.yaml"),
+        env=env,
+    )
+    solver = data["extension_bindings"]["solver"]
+    assert solver["slots"]["executor"]["plugin"] == "openhands"
+    collect = _chain_plugins(solver, "trajectory_collect")
+    assert "openhands" in collect
+    inject = (solver.get("inject") or {}).get("openhands") or []
+    caps = next(
+        tuple(row.get("capabilities") or ())
+        for row in inject
+        if row.get("service") == "environment"
+    )
+    assert set(caps) == {"exec", "upload", "download"}
+    assert "sk-lock-must-not-see" not in json.dumps(data)

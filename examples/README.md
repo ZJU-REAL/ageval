@@ -5,7 +5,7 @@ one abbreviated popular-bench conversion.
 
 ```text
 examples/
-├── agents/           # ageval.agent/1 (dsh / nooa / miniswe / terminus-2; builtin ACP is --agent pi)
+├── agents/           # ageval.agent/1 (dsh / nooa / miniswe / terminus-2 / openhands; builtin ACP is --agent pi)
 └── datasets/
     ├── minimal-demo/   # dataset official/minimal-demo — case-class fidelity
     ├── tau3-airline-5/   # dataset official/tau3-airline-5 — 5-task airline cut
@@ -94,6 +94,23 @@ This task writes `aggregates.json`, so omit `options.permission` or use
 `workspace-write`. `read-only` fences DSH file-tool writes only; bash can still
 write on the bundled jsonrpc runtime. That is not ageval isolation.
 
+### External openhands plugin (optional profiles)
+
+The [OpenHands Software Agent SDK](https://docs.openhands.dev/sdk) runs inside
+the Attempt environment. The instruction is a file in that environment. Install
+never rewrites dataset profiles. The SDK is imported only inside the environment.
+
+```bash
+ageval plugin install plugins/openhands
+# repo/.env: litellm_api_key and litellm_base_url
+ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg \
+  --profiles examples/datasets/minimal-demo/profiles.openhands.yaml
+```
+
+Docker bake pins `openhands-sdk` and `openhands-tools`. An environment that
+does not already have that pin installs it at setup. A failed install stops
+the run with `openhands_sdk_install_failed`.
+
 ### Probing without invoking
 
 ```bash
@@ -159,7 +176,7 @@ Detail: [`datasets/terminus-2-min/README.md`](datasets/terminus-2-min/README.md)
 ## `agents/` (`ageval.agent/1`)
 
 Custom overlay packages for executors that are **not** builtin catalog cards:
-`dsh-default`, `nooa-default`, `miniswe-default`, `terminus-2-default`. Built-in Agent packages
+`dsh-default`, `nooa-default`, `miniswe-default`, `terminus-2-default`, `openhands-default`. Built-in Agent packages
 (`pi`, `opencode`, `codex`, `claude-code`, `grok-build`, `openai-http`,
 `anthropic-http`) ship with ageval — `--agent pi` needs no install.
 `model.id` is the package default, not identity. `--agent` is mutually
@@ -169,6 +186,8 @@ exclusive with `--profiles`. Optional `--model` overrides this run:
 uv run ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg --agent pi --model glm-4.7
 uv run ageval agent install examples/agents/dsh-default
 uv run ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg --agent local/dsh-default@0.1.0
+ageval agent install examples/agents/openhands-default
+ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg --agent local/openhands-default@0.1.0
 ```
 
 ## Hub-only conversions

@@ -229,7 +229,7 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.pyright]
 include = ["src", "tests"]
-extraPaths = ["plugins/nooa/src", "plugins/dsh/src", "plugins/home-files/src", "plugins/agent-skills/src", "plugins/miniswe/src", "plugins/acp-oneshot/src", "plugins/terminus-2/src"]
+extraPaths = ["plugins/nooa/src", "plugins/dsh/src", "plugins/home-files/src", "plugins/agent-skills/src", "plugins/miniswe/src", "plugins/acp-oneshot/src", "plugins/terminus-2/src", "plugins/openhands/src"]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 # Optional-extra SDKs are imported inside their own contrib and nowhere else.

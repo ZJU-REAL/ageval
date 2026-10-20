@@ -1,0 +1,21 @@
+format: ageval.plugin/1
+plugin_id: openhands
+version: 0.1.0
+description: >-
+  Run the [OpenHands Software Agent SDK](https://docs.openhands.dev/sdk)
+  inside the Attempt environment. Headless local workspace only — the parent
+  does not start a second Docker sandbox, and it does not import the SDK.
+slots:
+  exclusive:
+    - id: executor
+      priority: 110
+      entry: "openhands_plugin.factory:OpenHandsExecutorSPI"
+  chain:
+    - id: trajectory_collect
+      priority: 110
+      entry: "openhands_plugin.hooks:trajectory_collect"
+inject:
+  - service: environment
+    capabilities: [exec, upload, download]
+config:
+  image_layers: docker/Dockerfile.bake

@@ -55,7 +55,9 @@ def test_is_http_loopback_host_only(url: str | None, expected: bool) -> None:
 
 def test_http_executors_include_first_party_and_plugin_http_kinds() -> None:
     assert (
-        frozenset({"openai-http", "anthropic-http", "dsh", "nooa", "miniswe", "terminus-2"})
+        frozenset(
+            {"openai-http", "anthropic-http", "dsh", "nooa", "miniswe", "terminus-2", "openhands"}
+        )
         == HTTP_EXECUTORS
     )
 

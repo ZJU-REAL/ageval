@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from urllib.parse import urlparse
 
 HTTP_EXECUTORS = frozenset(
-    {"openai-http", "anthropic-http", "dsh", "nooa", "miniswe", "terminus-2"}
+    {"openai-http", "anthropic-http", "dsh", "nooa", "miniswe", "terminus-2", "openhands"}
 )
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 

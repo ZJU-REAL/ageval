@@ -22,7 +22,7 @@ ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg --probe
 
 Missing extras or keys: `--probe` must report `ready: false` and `started: false`. ACP only sees `attach_stdio`.
 
-**ssh A does not support live ACP stdio.** dsh / nooa on that surface use `host.exec`, not a long ACP session.
+**ssh A does not support live ACP stdio.** dsh / nooa / openhands on that surface use `host.exec`, not a long ACP session.
 
 `environment/setup.sh` is the last step of the environment phase, not its own phase. Gold (`evaluation/`) enters the scoring host at evaluate. `profiles.yaml` may set `evaluate_host.isolated: true` (Current: `docker`) to start a second scoring environment so gold never enters the Agent environment; omit it to stay on the run environment.
 

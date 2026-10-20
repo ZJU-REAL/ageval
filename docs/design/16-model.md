@@ -148,6 +148,16 @@ model:
 | `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
 <!-- /ageval:param-table -->
 
+### openhands
+
+<!-- ageval:param-table executor=openhands -->
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `options.version` | 1.56.0 | Exact openhands-sdk and openhands-tools version (X.Y.Z). Omit uses the packaged pin. Ranges, blanks, and non-pins are rejected. |
+| `options.max_iterations` | 40 | Cap on SDK iterations for one invoke. A non-positive value, bool, or non-integer is rejected. |
+| `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
+<!-- /ageval:param-table -->
+
 ### acp-oneshot
 
 <!-- ageval:param-table executor=acp-oneshot -->

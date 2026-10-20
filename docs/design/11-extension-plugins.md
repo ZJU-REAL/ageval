@@ -80,7 +80,7 @@ profiles.environment / agent_profiles.<id>.executor / extensions
 ## 内置插件与外置插件目录
 
 - **内置插件（First-party contrib）：** 位于 `src/ageval/plugins/contrib/`，共 8 个保留短 ID：`local`、`docker`、`e2b`、`ssh`、`daytona`、`acp`、`openai-http`、`anthropic-http`。它们通过 `services/registry/packages/builtin_plugins.json` 在 Hub `/plugins` 页面展示为内置目录项，无需通过 `ageval plugin install` 安装（尝试发布或安装同名短 ID 会被拒绝）。
-- **外置插件（External plugins）：** 位于仓库根 `plugins/`（`nooa`、`dsh`、`miniswe`、`terminus-2`、`acp-oneshot`、`home-files`、`agent-skills`），或发布在 Hub 上。每个插件目录必须包含 `plugin.yaml` 与包含 **Capabilities** 和 **Parameters** 表格的 `README.md`（详见 `skills/ageval-plugin`）。
+- **外置插件（External plugins）：** 位于仓库根 `plugins/`（`nooa`、`dsh`、`miniswe`、`terminus-2`、`openhands`、`acp-oneshot`、`home-files`、`agent-skills`），或发布在 Hub 上。每个插件目录必须包含 `plugin.yaml` 与包含 **Capabilities** 和 **Parameters** 表格的 `README.md`（详见 `skills/ageval-plugin`）。`openhands` 在 Attempt 环境内运行固定版本的 OpenHands SDK，注入 `exec`、`upload`、`download`。任务说明以上传文件进入环境。worker 写出 `openhands.trajectory/1`，记录阶段映射为 `ageval.trajectory.event/1`。每次 tool call 前的 `thought`、`reasoning_content` 与可见 thinking 映射为 channel `thought`，封存为 assistant turn 的 `part: thought`。SDK 只在该环境内导入。镜像层与环境内安装使用同一精确 pin；安装失败时 invoke 返回 `openhands_sdk_install_failed`。
 
 注意区分四个独立状态：**Hub 目录可见** ≠ **本机已安装插件包** ≠ **本机满足 `host_requires` 运行条件** ≠ **Docker 镜像已写入插件层**。
 
