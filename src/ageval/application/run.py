@@ -125,6 +125,7 @@ async def run_attempt(
     on_phase: PhaseObserver | None = None,
     on_progress: Any = None,
     attempt_index: int = 0,
+    allow_prepare: bool = False,
 ) -> tuple[int, AttemptResult]:
     """Run one foreground Attempt and return its exit code and result."""
     from ageval.application.composition import build_lock_command
@@ -140,6 +141,7 @@ async def run_attempt(
         profiles_path=profiles_path,
         overrides=overrides,
         force_build=force_build,
+        allow_prepare=allow_prepare,
     )
     if on_phase is not None:
         on_phase("finished", "lock")

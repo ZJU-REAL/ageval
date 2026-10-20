@@ -116,6 +116,10 @@ def compute_eval_digest(dataset_root: Path) -> str:
         rel = str(prepare_rel).replace("\\", "/").removeprefix("./")
         if (root / rel).is_file():
             rels.add(rel)
+    # Downloaded asset contents stay out: the manifest pins path + sha256,
+    # so presence on disk must not move the digest between publish and run.
+    asset_paths = {a.path for a in getattr(man, "assets", ())}
+    rels -= asset_paths
     for rel in sorted(rels):
         lines.append(f"{file_sha256(root / rel)}  {rel}\n")
     blob = "".join(lines).encode("utf-8")

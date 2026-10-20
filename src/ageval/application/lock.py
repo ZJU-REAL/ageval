@@ -65,6 +65,11 @@ class LockCommand:
         from ageval.registry.resolve import resolve_dataset_root_with_source
 
         root, source = resolve_dataset_root_with_source(dataset_root)
+        # Dataset preparation (assets + gated prepare script) completes
+        # before the manifest/digest are read and any Attempt can open.
+        from ageval.config.prepare import prepare_dataset
+
+        prepare_dataset(root, allow_prepare=allow_prepare)
         manifest = load_dataset_manifest(root)
         eval_digest = compute_eval_digest(root)
         resolved = resolve_task(root, task_id, manifest=manifest)
@@ -99,6 +104,7 @@ class LockCommand:
         set_overrides: Sequence[str] = (),
         profiles_path: Path | str | None = None,
         profile: str | None = None,
+        allow_prepare: bool = False,
     ) -> dict[str, Any]:
         """CLI-facing form: return the deterministic lock summary document."""
         return self.lock(
@@ -107,6 +113,7 @@ class LockCommand:
             profile=profile,
             profiles_path=profiles_path,
             set_overrides=set_overrides,
+            allow_prepare=allow_prepare,
         ).summary()
 
     def tasks(self, dataset_root: Path | str) -> list[str]:
