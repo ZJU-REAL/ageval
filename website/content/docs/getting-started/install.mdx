@@ -30,7 +30,7 @@ uv tool install 'ageval-cli[all]'   # every CLI extra
 | `daytona` | [Daytona](https://www.daytona.io) sandbox environment |
 | `nooa` / `dsh` / `miniswe` | The matching external agent-runtime plugins |
 
-`[all]` is those CLI extras, not a self-hosted Hub. To run the Registry service from a checkout: `uv sync --extra registry`.
+`[all]` is those CLI extras, not a self-hosted Hub. To run the Registry service from a checkout: `uv sync --extra registry`. OpenHands installs with `ageval plugin install plugins/openhands`. Its SDK runs inside the attempt environment.
 
 Missing extras or credentials fail lock/run. The error names the install command.
 

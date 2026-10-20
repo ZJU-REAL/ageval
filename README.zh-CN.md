@@ -108,7 +108,7 @@ uv run ageval view examples/datasets/minimal-demo --no-browser
 
 **通过插件切换待测 Agent 与环境**
 
-执行环境与 Agent 执行器（executor）均通过插件槽接入。Coding agent 默认经 [ACP](https://agentclientprotocol.com)（`pi`、`codex`、`claude-code`、`opencode`）接入；[nooa](https://github.com/NVIDIA-NeMo/labs-OO-Agents)、[dsh](https://github.com/deepseek-ai/deepseek-harness) 与 [miniswe](https://github.com/SWE-agent/mini-swe-agent) 同样通过插件接入。修改 `profiles.yaml` 或通过 `--agent`（配合可选 `--model`）即可切换待测配置，无需改动任务脚本。
+执行环境与 Agent 执行器（executor）均通过插件槽接入。Coding agent 默认经 [ACP](https://agentclientprotocol.com)（`pi`、`codex`、`claude-code`、`opencode`）接入；[nooa](https://github.com/NVIDIA-NeMo/labs-OO-Agents)、[dsh](https://github.com/deepseek-ai/deepseek-harness)、[miniswe](https://github.com/SWE-agent/mini-swe-agent) 与 [OpenHands](https://docs.openhands.dev/sdk) 同样通过插件接入。修改 `profiles.yaml` 或通过 `--agent`（配合可选 `--model`）即可切换待测配置，无需改动任务脚本。
 
 **支持 Agent 自主转换与结果核查**
 
@@ -259,7 +259,7 @@ ageval/
 │   ├── evaluation/                  # bind_evaluation
 │   └── evidence/                    # .ageval/runs 目录结构与轨迹封存
 ├── src/ageval_sdk/                  # 任务脚本使用的 ageval_sdk
-├── plugins/                         # 外置 ageval.plugin/1（nooa、dsh、miniswe、acp-oneshot 等）
+├── plugins/                         # 外置 ageval.plugin/1（nooa、dsh、miniswe、openhands、acp-oneshot 等）
 ├── examples/
 │   ├── datasets/
 │   │   ├── minimal-demo/            # terminal-jsonl-agg · tau2-dialog-min · multiagent-env-min

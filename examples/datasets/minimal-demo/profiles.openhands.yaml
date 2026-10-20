@@ -1,0 +1,17 @@
+format: ageval.profiles/1
+environment: docker
+
+# One coding agent for every role slot. The instruction is a file inside
+# the attempt environment. The SDK runs on that workspace.
+agent_profiles:
+  '*':
+    executor: openhands
+    extensions:
+    - plugin: openhands
+    - plugin: docker
+    model:
+      id: openai/dashscope/qwen3.8-max
+      reasoning:
+        effort: max
+    api_key: ${litellm_api_key}
+    base_url: ${litellm_base_url}

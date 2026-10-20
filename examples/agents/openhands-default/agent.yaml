@@ -1,0 +1,21 @@
+format: ageval.agent/1
+agent_id: openhands-default
+version: "0.1.0"
+label: "OpenHands SDK (glm-5.2)"
+description: >-
+  OpenHands Software Agent SDK inside the attempt environment. The SDK is
+  imported only there. Install plugins/openhands first. Credentials are
+  litellm locators.
+tags: [coding, openhands]
+binding:
+  executor: openhands
+  model:
+    id: openai/glm-5.2
+    reasoning:
+      effort: max
+  api_key: ${litellm_api_key}
+  base_url: ${litellm_base_url}
+  extensions:
+    - plugin: openhands
+      options:
+        max_iterations: 40

@@ -22,7 +22,7 @@ ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg --probe
 
 缺 extras 或钥时 `--probe` 应 `ready: false`、`started: false`。ACP 只使用 `attach_stdio`，代码里不应出现 `container_id`。
 
-**ssh A 不支持 live ACP stdio。** 该面上的 dsh / nooa 走 `host.exec`，不是 ACP 长会话。
+**ssh A 不支持 live ACP stdio。** 该面上的 dsh / nooa / openhands 走 `host.exec`，不是 ACP 长会话。
 
 `environment/setup.sh` 是 environment 阶段最后一步，不是独立 phase。参考答案（`evaluation/`）在 evaluate 才进打分 Host。`profiles.yaml` 可写 `evaluate_host.isolated: true`（Current：`docker`）：另起打分环境，参考答案只上第二环境；省略 = 同一环境。
 

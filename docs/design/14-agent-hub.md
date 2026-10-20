@@ -7,7 +7,7 @@ Agent 包的 Schema 格式为 `ageval.agent/1`。包内的 `model.id` 仅作为�
 1. **内置 Agent 包（Builtin catalog overlay）：** 维护在 `src/ageval/agents/builtin/catalog.json` 及同级目录树中（`builtin: true`，无 `org_id`），供 CLI `--agent <id>` 与 Hub `/agents` 页面直接读取，无需预先执行 `ageval agent install`。保留短 ID 包括：
    - **ACP 入口：** `pi`、`opencode`、`codex`、`claude-code`、`grok-build`（对应 `options.entry`；`$AGEVAL_HOME/acp-entries.json` 可扩展本机自定义 entry，但不可覆盖包内保留 ID）；
    - **HTTP 执行器：** `openai-http`、`anthropic-http`。
-   环境类型（`docker`、`local` 等）不属于 Agent 包；外置执行器（`dsh`、`nooa`、`miniswe`）通过 `examples/agents/` 或 Hub 自定义包提供。
+   环境类型（`docker`、`local` 等）不属于 Agent 包；外置执行器（`dsh`、`nooa`、`miniswe`、`openhands`）通过 `examples/agents/` 或 Hub 自定义包提供。
 2. **自定义 Agent 包（Uploaded packages）：** 通过 `ageval agent publish` 发布为 `org/name@version`。其核心 harness 标识由 `executor` 与 ACP `options.entry` 共同决定；默认 `model`（含 `id` 与 `reasoning.effort`）、`overlays/` 配置文件与其余插件选项共同组成运行配方。
 
 ## CLI 行为

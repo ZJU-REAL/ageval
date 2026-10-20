@@ -108,7 +108,7 @@ uv run ageval view examples/datasets/minimal-demo --no-browser
 
 **Swap the evaluated agent and environment via plugins**
 
-Environments and agent executors both connect through plugin slots. Coding agents connect by default over [ACP](https://agentclientprotocol.com) (`pi`, `codex`, `claude-code`, `opencode`), while [nooa](https://github.com/NVIDIA-NeMo/labs-OO-Agents), [dsh](https://github.com/deepseek-ai/deepseek-harness), and [miniswe](https://github.com/SWE-agent/mini-swe-agent) use the same plugin mechanism. Update `profiles.yaml` or pass `--agent` (and optional `--model`) to switch configurations without modifying task scripts.
+Environments and agent executors both connect through plugin slots. Coding agents connect by default over [ACP](https://agentclientprotocol.com) (`pi`, `codex`, `claude-code`, `opencode`), while [nooa](https://github.com/NVIDIA-NeMo/labs-OO-Agents), [dsh](https://github.com/deepseek-ai/deepseek-harness), [miniswe](https://github.com/SWE-agent/mini-swe-agent), and [OpenHands](https://docs.openhands.dev/sdk) use the same plugin mechanism. Update `profiles.yaml` or pass `--agent` (and optional `--model`) to switch configurations without modifying task scripts.
 
 **Automated benchmark conversion and inspection**
 
@@ -259,7 +259,7 @@ ageval/
 │   ├── evaluation/                  # bind_evaluation
 │   └── evidence/                    # .ageval/runs layout & trajectory sealing
 ├── src/ageval_sdk/                  # ageval_sdk for run.py and evaluator.py
-├── plugins/                         # external ageval.plugin/1 (nooa, dsh, miniswe, acp-oneshot, …)
+├── plugins/                         # external ageval.plugin/1 (nooa, dsh, miniswe, openhands, acp-oneshot, …)
 ├── examples/
 │   ├── datasets/
 │   │   ├── minimal-demo/            # terminal-jsonl-agg · tau2-dialog-min · multiagent-env-min
