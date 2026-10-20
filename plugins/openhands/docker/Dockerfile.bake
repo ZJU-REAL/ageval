@@ -1,0 +1,19 @@
+# Bake the pinned OpenHands SDK into the Attempt image.
+# The worker script is uploaded at invoke (same path for local / docker / e2b / ssh).
+# Build context = installed openhands plugin package root.
+# Usage (host):
+#   docker build --build-arg BASE_IMAGE=<pkg-tag> -f docker/Dockerfile.bake -t <out> .
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+# Optional. Parent forwards AGEVAL_PIP_INDEX as this ARG. Empty = pip default.
+# Do not ENV an empty PIP_INDEX_URL — a blank value overrides pip's default index.
+ARG PIP_INDEX_URL=
+
+USER root
+# Pin matches openhands_plugin.pin.SDK_VERSION. Bake needs network at image build.
+RUN if [ -z "${PIP_INDEX_URL}" ]; then unset PIP_INDEX_URL; fi; \
+    python3 -m pip install --no-cache-dir "openhands-sdk==1.56.0" "openhands-tools==1.56.0"
+
+USER ageval
+WORKDIR /attempt/workspace

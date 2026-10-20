@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
+
+# Parent modules may name the SDK in a probe command string. They must not import it.
+_OPENHANDS_SDK_IMPORT = re.compile(r"^\s*(?:import|from)\s+openhands(?:\.|\s)", re.MULTILINE)
 
 REPO = Path(__file__).resolve().parents[2]
 _PARENT_PY = (
@@ -12,6 +16,8 @@ _PARENT_PY = (
     REPO / "plugins" / "nooa" / "src" / "nooa_plugin" / "container.py",
     REPO / "plugins" / "acp-oneshot" / "src" / "acp_oneshot_plugin" / "factory.py",
     REPO / "plugins" / "acp-oneshot" / "src" / "acp_oneshot_plugin" / "container.py",
+    REPO / "plugins" / "openhands" / "src" / "openhands_plugin" / "factory.py",
+    REPO / "plugins" / "openhands" / "src" / "openhands_plugin" / "container.py",
 )
 
 
@@ -21,6 +27,7 @@ def test_bind_to_target_absent_from_core_and_dsh_nooa() -> None:
         REPO / "plugins" / "dsh",
         REPO / "plugins" / "nooa",
         REPO / "plugins" / "acp-oneshot",
+        REPO / "plugins" / "openhands",
     )
     offenders: list[str] = []
     for root in roots:
@@ -45,4 +52,5 @@ def test_dsh_nooa_parent_does_not_import_vendor_sdk() -> None:
         assert "import deepseek_harness" not in text, path
         assert "from nooa.unifiedllm" not in text, path
         assert "get_llm_client" not in text, path
+        assert _OPENHANDS_SDK_IMPORT.search(text) is None, path
         assert "container_id" not in text, path

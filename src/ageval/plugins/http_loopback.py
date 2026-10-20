@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from urllib.parse import urlparse
 
-HTTP_EXECUTORS = frozenset({"openai-http", "anthropic-http", "dsh", "nooa", "miniswe"})
+HTTP_EXECUTORS = frozenset({"openai-http", "anthropic-http", "dsh", "nooa", "miniswe", "openhands"})
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 

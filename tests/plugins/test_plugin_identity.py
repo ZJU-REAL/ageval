@@ -93,7 +93,7 @@ def test_repo_plugins_declare_description() -> None:
     from ageval.plugins.manifest import load_manifest
 
     root = Path(__file__).resolve().parents[2] / "plugins"
-    names = ("agent-skills", "dsh", "home-files", "miniswe", "nooa")
+    names = ("agent-skills", "dsh", "home-files", "miniswe", "nooa", "openhands")
     for name in names:
         man = load_manifest(root / name)
         assert man.description, f"{name} missing description"
