@@ -37,7 +37,7 @@ owner 或 admin 按 GitHub login 加减成员（`ageval registry org-add-member`
 
 ## Git 源 Dataset
 
-托管在 git 仓库里的 Dataset 可以直接运行（`ageval run github:org/repo@v1.0.0`，可选 `#<subdir>`），也能不上传文件就注册到 Hub：`ageval publish --repo github:org/repo@v1.0.0`。注册会钉住解析出的 commit，并记录只覆盖评分文件的评测摘要；同一版本评分文件变了再注册会被拒绝，只改文档则接受。来自已注册源的 suite 结果会归因到该版本；未注册源的结果照常保存但不上榜。Dataset 页面会链接到钉版 commit，并展示声明的 prepare 脚本与 assets 供审查。
+托管在 git 仓库里的 Dataset 可以直接运行（`ageval run github:org/repo@v1.0.0`，可选 `#<subdir>`），也能不上传文件就注册到 Hub：`ageval publish --repo github:org/repo@v1.0.0`。https URL 不能内嵌 userinfo（`https://<token>@host` 或 `https://user:pass@host`）；Hub 只保存无 userinfo 的 https URL，或 `git@host:path`。注册会钉住解析出的 commit，并记录只覆盖评分文件的评测摘要；同一版本评分文件变了再注册会被拒绝，只改文档则接受。来自已注册源的 suite 结果会归因到该版本；未注册源的结果照常保存但不上榜。Dataset 页面会链接到钉版 commit，并展示声明的 prepare 脚本与 assets 供审查。
 
 ## 发布后 owner 操作（CLI）
 

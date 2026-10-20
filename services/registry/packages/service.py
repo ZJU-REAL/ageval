@@ -43,6 +43,7 @@ from services.registry.paging import page_slice
 
 from ageval.config.errors import ConfigError
 from ageval.plugins.manifest import PluginManifestError
+from ageval.registry.ref import REGISTRY_GIT_URL_MESSAGE, validate_registry_git_url
 
 _PREVIEW_ERRORS = (
     OSError,
@@ -125,6 +126,15 @@ def _normalize_marketplace_description(raw: object) -> str:
     return text
 
 
+def _require_registry_git_url(git_url: str) -> str:
+    try:
+        return validate_registry_git_url(git_url)
+    except ValueError as exc:
+        raise RegistryAppError(
+            "invalid_request", REGISTRY_GIT_URL_MESSAGE, http_status=400
+        ) from exc
+
+
 class PackageService:
     def __init__(
         self,
@@ -185,6 +195,7 @@ class PackageService:
                 "dataset_id, version, git_url, commit and eval_digest are required",
                 http_status=400,
             )
+        git_url = _require_registry_git_url(git_url)
         if visibility not in {"private", "public"}:
             raise RegistryAppError("invalid_request", "bad visibility", http_status=400)
         if subdir and ".." in Path(subdir).parts:
@@ -303,10 +314,11 @@ class PackageService:
         row = self.packages.get_source(dataset_id, version)
         if row is None:
             raise RegistryAppError("not_found", "source not found", http_status=404)
+        _require_registry_git_url(row.git_url)
         import subprocess
 
         proc = subprocess.run(
-            ["git", "ls-remote", row.git_url, row.commit],
+            ["git", "ls-remote", "--", row.git_url, row.commit],
             capture_output=True,
             text=True,
             timeout=60,
@@ -316,7 +328,7 @@ class PackageService:
         # reachability is proven by a successful listing of HEAD.
         if proc.returncode != 0:
             proc = subprocess.run(
-                ["git", "ls-remote", row.git_url, "HEAD"],
+                ["git", "ls-remote", "--", row.git_url, "HEAD"],
                 capture_output=True,
                 text=True,
                 timeout=60,

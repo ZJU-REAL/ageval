@@ -148,24 +148,42 @@ function isInternalSuite(suite: SuiteRow): boolean {
   );
 }
 
-/** Web base for commit-pinned source links; never a branch. */
-function gitWebBase(gitUrl: string): string {
-  const trimmed = gitUrl.trim().replace(/\.git$/, "");
-  const ssh = trimmed.match(/^git@([^:]+):(.+)$/);
-  if (ssh) return `https://${ssh[1]}/${ssh[2]}`;
-  return trimmed;
+const SSH_GIT_URL =
+  /^git@([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?):([A-Za-z0-9][A-Za-z0-9._/-]*)$/;
+
+/** https base for commit-pinned links. Anything else stays plain text. */
+function gitWebBase(gitUrl: string): string | null {
+  const trimmed = gitUrl.trim();
+  if (!trimmed || /[\s\\]/.test(trimmed)) return null;
+  const ssh = trimmed.match(SSH_GIT_URL);
+  const candidate = ssh
+    ? `https://${ssh[1]}/${ssh[2].replace(/\.git$/, "")}`
+    : trimmed.replace(/\.git$/, "");
+  if (candidate.includes("@") || candidate.includes("..")) return null;
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || url.username || url.password || !url.hostname) return null;
+  return candidate;
 }
 
 function gitTreeUrl(release: PackageRelease): string | null {
   if (!release.git_url || !release.commit) return null;
+  const base = gitWebBase(release.git_url);
+  if (!base) return null;
   const sub = release.subdir ? `/${release.subdir}` : "";
-  return `${gitWebBase(release.git_url)}/tree/${release.commit}${sub}`;
+  return `${base}/tree/${release.commit}${sub}`;
 }
 
 function gitBlobUrl(release: PackageRelease, path: string): string | null {
   if (!release.git_url || !release.commit) return null;
+  const base = gitWebBase(release.git_url);
+  if (!base) return null;
   const sub = release.subdir ? `${release.subdir}/` : "";
-  return `${gitWebBase(release.git_url)}/blob/${release.commit}/${sub}${path}`;
+  return `${base}/blob/${release.commit}/${sub}${path}`;
 }
 
 export function DatasetDetailPage() {

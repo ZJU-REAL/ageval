@@ -13,6 +13,7 @@ from services.registry.auth.tokens import TokenInfo
 from services.registry.content.blobs import MemoryBlobStore
 from services.registry.db.schema import open_sqlite_stores
 from services.registry.errors import RegistryAppError
+from services.registry.packages.rows import SourceRow
 from services.registry.packages.service import PackageService
 from services.registry.results.service import ResultService
 from typer.testing import CliRunner
@@ -100,6 +101,103 @@ def test_register_source_carries_prepare_review_fields(tmp_path: Path) -> None:
         dataset_id="test/publish-min", version="0.2.0", package_digest=None, auth=auth
     )
     assert meta["has_prepare"] is True
+
+
+@pytest.mark.parametrize(
+    "git_url",
+    [
+        "--upload-pack=id",
+        "ext::id",
+        "file:///etc/passwd",
+        "javascript:alert(1)",
+        "https://token@github.com/org/repo.git",
+        "http://github.com/org/repo.git",
+    ],
+)
+def test_register_source_rejects_unsafe_git_url(tmp_path: Path, git_url: str) -> None:
+    packages, _results = _services(tmp_path)
+    _ensure_org(packages)
+    auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
+    with pytest.raises(RegistryAppError) as exc:
+        packages.register_source(
+            body={
+                "dataset_id": "test/publish-min",
+                "version": "0.1.0",
+                "git_url": git_url,
+                "commit": COMMIT,
+                "eval_digest": DIGEST,
+                "task_ids": ["hello"],
+            },
+            auth=auth,
+        )
+    assert exc.value.error == "invalid_request"
+    assert exc.value.http_status == 400
+    assert git_url not in exc.value.message
+
+
+def test_register_source_accepts_ssh_form(tmp_path: Path) -> None:
+    packages, _results = _services(tmp_path)
+    _ensure_org(packages)
+    auth = TokenInfo(scopes=frozenset({"registry:publish"}), user_id="alice")
+    git_url = "git@github.com:org/repo.git"
+    payload = packages.register_source(
+        body={
+            "dataset_id": "test/publish-min",
+            "version": "0.1.0",
+            "git_url": git_url,
+            "commit": COMMIT,
+            "eval_digest": DIGEST,
+            "task_ids": ["hello"],
+        },
+        auth=auth,
+    )
+    assert payload["git_url"] == git_url
+
+
+def test_source_health_does_not_exec_unsafe_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import subprocess
+
+    packages, _results = _services(tmp_path)
+    _ensure_org(packages)
+    packages.packages.insert_source(
+        SourceRow(
+            dataset_id="test/publish-min",
+            version="0.1.0",
+            git_url="--upload-pack=id",
+            commit=COMMIT,
+            eval_digest=DIGEST,
+            org_id="test",
+            created_at=1.0,
+        )
+    )
+
+    def fail_run(*args: object, **kwargs: object) -> None:
+        raise AssertionError(args)
+
+    monkeypatch.setattr(subprocess, "run", fail_run)
+    with pytest.raises(RegistryAppError) as exc:
+        packages.check_source_health(dataset_id="test/publish-min", version="0.1.0")
+    assert exc.value.http_status == 400
+
+
+def test_source_health_ends_options_before_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import subprocess
+
+    packages, _results = _services(tmp_path)
+    _register(packages)
+    calls: list[list[str]] = []
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    packages.check_source_health(dataset_id="test/publish-min", version="0.1.0")
+    assert calls[0][:4] == ["git", "ls-remote", "--", "https://github.com/org/repo.git"]
 
 
 def test_register_source_requires_org_membership(tmp_path: Path) -> None:

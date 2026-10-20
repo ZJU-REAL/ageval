@@ -4,7 +4,7 @@ Dataset 唯一标识符字段为 `dataset_id`。软件包与评测结果的上�
 
 ## Git 源注册与 eval_digest
 
-除上传整包外，Dataset 可以只注册 git 源：`ageval publish --repo github:org/repo@v1.0.0`（可带 `#<subdir>`）将 `{dataset_id, version, git_url, commit, eval_digest}` 写入 Hub（`POST /v1/packages/{dataset_id}/source`），不上传文件。git 引用的解析规则见 [02](02-task-package-and-config.md)。
+除上传整包外，Dataset 可以只注册 git 源：`ageval publish --repo github:org/repo@v1.0.0`（可带 `#<subdir>`）将 `{dataset_id, version, git_url, commit, eval_digest}` 写入 Hub（`POST /v1/packages/{dataset_id}/source`），不上传文件。git 引用的解析规则见 [02](02-task-package-and-config.md)。Hub 只保存无 userinfo 的 `https://` URL，或 `git@host:path`；`file://`、`http://`、`ext::`、以 `-` 开头的值，以及其它 scheme，在写入前拒绝。source-check 在调用 `git ls-remote` 前再校验一次，并且把 `--` 放在 URL 前面。页面只把通过同一规则的地址渲染成链接。
 
 - **eval_digest：** 由 CLI 本地计算并写入 lock。它只覆盖影响评分的文件：根清单 `ageval.yaml`（去掉描述性字段，其中 `assets` 清单只取 `path + sha256`）、每个任务成员的全部文件、数据集级 `shared/`，以及声明的 `prepare` 脚本内容。README、LICENSE 与其他根目录文档不计入，改文档不改变 digest。`package_digest` 仍覆盖整包，两者并存。
 - **注册冲突：** 同一 `dataset_id@version` 已注册（或已上传发布）且 `eval_digest` 不同 → 拒绝（`eval_digest_mismatch`，"tasks changed, bump version"）；digest 相同（例如只改 README）→ 接受并刷新钉版 commit。注册遵循发布的所有权模型：dataset 属于组织（显式 `--org` 或 dataset_id 前缀），调用方必须是组织成员。`eval_digest` 在 lock 时按解析出的原始目录树计算（prepare 执行前），prepare 产物经脚本内容与 assets 清单传递性钉版，因此注册与运行的 digest 一致。

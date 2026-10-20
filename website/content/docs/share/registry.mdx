@@ -37,7 +37,7 @@ Owners or admins add / remove members by GitHub login (`ageval registry org-add-
 
 ## Git-sourced datasets
 
-A Dataset hosted in a git repository can be run directly (`ageval run github:org/repo@v1.0.0`, optionally `#<subdir>`) and registered on the Hub without uploading files: `ageval publish --repo github:org/repo@v1.0.0`. Registration pins the resolved commit and an evaluation digest over the scoring files; re-registering the same version with different scoring files is rejected, while documentation-only changes are accepted. Suite results from a registered source are attributed to that version; results from unregistered sources are stored but not ranked. The Dataset page links to the pinned commit and shows any declared prepare script and assets for review.
+A Dataset hosted in a git repository can be run directly (`ageval run github:org/repo@v1.0.0`, optionally `#<subdir>`) and registered on the Hub without uploading files: `ageval publish --repo github:org/repo@v1.0.0`. An https URL must not embed userinfo (`https://<token>@host` or `https://user:pass@host`); the Hub stores only an https URL without userinfo, or `git@host:path`. Registration pins the resolved commit and an evaluation digest over the scoring files; re-registering the same version with different scoring files is rejected, while documentation-only changes are accepted. Suite results from a registered source are attributed to that version; results from unregistered sources are stored but not ranked. The Dataset page links to the pinned commit and shows any declared prepare script and assets for review.
 
 ## Owner ops after create (CLI)
 

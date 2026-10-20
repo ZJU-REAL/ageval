@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -11,7 +12,11 @@ import pytest
 from ageval.config.errors import ConfigError
 from ageval.registry.cache import PackageCache
 from ageval.registry.digest import compute_eval_digest
-from ageval.registry.ref import parse_package_ref
+from ageval.registry.ref import (
+    REGISTRY_GIT_URL_MESSAGE,
+    parse_package_ref,
+    validate_registry_git_url,
+)
 from ageval.registry.resolve import resolve_dataset_root
 
 REPO = Path(__file__).resolve().parents[2]
@@ -34,6 +39,53 @@ def test_parse_https_ref_with_subdir() -> None:
     assert ref.git_url == "https://huggingface.co/datasets/org/name"
     assert ref.git_ref == "v2"
     assert ref.subdir == "datasets/a"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "https://token@github.com/org/repo.git@v1.0.0",
+        "https://user:pass@github.com/org/repo.git@v1.0.0",
+        "https://token:@github.com/org/repo.git@v1.0.0",
+    ],
+)
+def test_parse_rejects_embedded_credentials(raw: str) -> None:
+    with pytest.raises(ConfigError) as exc:
+        parse_package_ref(raw)
+    assert exc.value.error_code == "invalid_package"
+    assert raw.split("@", 1)[0] not in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "git_url",
+    [
+        "https://github.com/org/repo.git",
+        "https://huggingface.co/datasets/org/name",
+        "https://example.com:8443/org/repo.git",
+        "git@github.com:org/repo.git",
+    ],
+)
+def test_registry_git_url_accepts_https_and_ssh(git_url: str) -> None:
+    assert validate_registry_git_url(git_url) == git_url
+
+
+@pytest.mark.parametrize(
+    "git_url",
+    [
+        "--upload-pack=id",
+        "ext::id",
+        "file:///etc/passwd",
+        "javascript:alert(1)",
+        "https://token@github.com/org/repo.git",
+        "https://user:pass@github.com/org/repo.git",
+        "http://github.com/org/repo.git",
+        "git@github.com:org/../repo.git",
+        "https://github.com/org/../repo.git",
+    ],
+)
+def test_registry_git_url_rejects_unsafe(git_url: str) -> None:
+    with pytest.raises(ValueError, match=re.escape(REGISTRY_GIT_URL_MESSAGE)):
+        validate_registry_git_url(git_url)
 
 
 @pytest.mark.parametrize(

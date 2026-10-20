@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 from ageval.config.dataset import validate_dataset_id
 from ageval.config.errors import ConfigError
@@ -17,6 +18,11 @@ _DIGEST_TAIL_RE = re.compile(r"^sha256:([0-9a-f]{64})$")
 _BRANCH_NAMES = frozenset({"main", "master", "head", "develop", "dev", "trunk", "canary"})
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _GIT_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_GIT_HOST_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?")
+_SSH_GIT_RE = re.compile(
+    rf"^git@(?P<host>{_GIT_HOST_RE.pattern}):(?P<path>[A-Za-z0-9][A-Za-z0-9._/-]*)$"
+)
+REGISTRY_GIT_URL_MESSAGE = "git_url must be an https URL without userinfo, or git@host:path"
 
 
 def _validate_subdir(subdir: str | None, *, location: str) -> str | None:
@@ -77,15 +83,13 @@ def _parse_git_ref(text: str) -> PackageRef | None:
     git_url = head.strip()
     if not git_url:
         raise ConfigError("invalid_package", "empty git url in ref", location=text)
-    # Credentials never enter the lock: reject embedded passwords outright.
-    from urllib.parse import urlparse
-
-    parsed = urlparse(git_url)
-    if parsed.password:
+    # Credentials never enter the lock. Token-as-username (`https://<pat>@host`)
+    # has password=None, so any userinfo is rejected. location stays off the raw
+    # URL so the token is not echoed.
+    if _url_has_userinfo(git_url):
         raise ConfigError(
             "invalid_package",
             "git URL must not embed credentials; use local git credentials",
-            location=text,
         )
     pinned = _validate_git_ref(ref, location=text)
     return PackageRef(kind="git", git_url=git_url, git_ref=pinned, subdir=subdir)
@@ -113,6 +117,60 @@ class PackageRef:
         if self.kind == "version":
             return f"{self.dataset_id}@{self.version}"
         return f"{self.dataset_id}@{self.package_digest}"
+
+
+def _url_has_userinfo(git_url: str) -> bool:
+    parsed = urlparse(git_url)
+    return parsed.username is not None or parsed.password is not None
+
+
+def _git_path_ok(path: str) -> bool:
+    if not path or path.startswith(("/", "-")) or path.endswith("/"):
+        return False
+    parts = path.split("/")
+    return all(part not in {"", ".", ".."} and not part.startswith("-") for part in parts)
+
+
+def validate_registry_git_url(git_url: str) -> str:
+    """Accept an https URL without userinfo, or ``git@host:path``.
+
+    Registry storage and ``git ls-remote`` share this check. ``file://``,
+    ``ext::``, option-shaped values, and ``javascript:`` are rejected.
+    """
+    if (
+        not git_url
+        or git_url.strip() != git_url
+        or any(ord(ch) < 33 or ch in "%\\?#@" for ch in git_url.removeprefix("git@"))
+    ):
+        raise ValueError(REGISTRY_GIT_URL_MESSAGE)
+    if git_url.startswith("git@"):
+        match = _SSH_GIT_RE.fullmatch(git_url)
+        if match is None or ".." in match.group("host") or not _git_path_ok(match.group("path")):
+            raise ValueError(REGISTRY_GIT_URL_MESSAGE)
+        return git_url
+    parsed = urlparse(git_url)
+    try:
+        port = parsed.port
+    except ValueError:
+        raise ValueError(REGISTRY_GIT_URL_MESSAGE) from None
+    if port is not None and not 1 <= port <= 65535:
+        raise ValueError(REGISTRY_GIT_URL_MESSAGE)
+    path = parsed.path
+    path_ok = path in {"", "/"} or (path.startswith("/") and _git_path_ok(path[1:]))
+    host = parsed.hostname or ""
+    if (
+        parsed.scheme != "https"
+        or parsed.username is not None
+        or parsed.password is not None
+        or _GIT_HOST_RE.fullmatch(host) is None
+        or ".." in host
+        or parsed.query
+        or parsed.fragment
+        or parsed.params
+        or not path_ok
+    ):
+        raise ValueError(REGISTRY_GIT_URL_MESSAGE)
+    return git_url
 
 
 def parse_package_ref(raw: str | Path, *, cwd: Path | None = None) -> PackageRef:
