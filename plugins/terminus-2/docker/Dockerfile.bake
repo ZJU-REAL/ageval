@@ -3,6 +3,9 @@
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
+# Optional. Parent forwards AGEVAL_PIP_INDEX as this ARG. This layer uses apt.
+ARG PIP_INDEX_URL=
+
 USER root
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tmux \
