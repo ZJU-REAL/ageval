@@ -2,6 +2,16 @@
 
 Dataset 唯一标识符字段为 `dataset_id`。软件包与评测结果的上传分别通过 `ageval publish` / `ageval plugin publish` / `ageval agent publish` 以及 `ageval results upload` / `upload-suite` 完成。此外，Hub 支持提交云端托管评测作业（详见 [15](15-hosted-jobs.md)），由后台 worker 在 E2B 或 Daytona 云沙箱中运行 `ageval run` 并回传结果。
 
+## Git 源注册与 eval_digest
+
+除上传整包外，Dataset 可以只注册 git 源：`ageval publish --repo github:org/repo@v1.0.0`（可带 `#<subdir>`）将 `{dataset_id, version, git_url, commit, eval_digest}` 写入 Hub（`POST /v1/packages/{dataset_id}/source`），不上传文件。git 引用的解析规则见 [02](02-task-package-and-config.md)。
+
+- **eval_digest：** 由 CLI 本地计算并写入 lock。它只覆盖影响评分的文件：根清单 `ageval.yaml`（去掉描述性字段，其中 `assets` 清单只取 `path + sha256`）、每个任务成员的全部文件、数据集级 `shared/`，以及声明的 `prepare` 脚本内容。README、LICENSE 与其他根目录文档不计入，改文档不改变 digest。`package_digest` 仍覆盖整包，两者并存。
+- **注册冲突：** 同一 `dataset_id@version` 已注册（或已上传发布）且 `eval_digest` 不同 → 拒绝（`eval_digest_mismatch`，"tasks changed, bump version"）；digest 相同（例如只改 README）→ 幂等接受。
+- **结果归因：** `upload-suite` 携带 lock 中的 `eval_digest`。Hub 按字符串比对：与已注册版本一致 → 结果归因到该版本（`bound_kind: source`，任务完备性按注册时记录的任务集判定，批准后可上榜）；未注册或 digest 不符 → 结果照常保存但不上榜（`bound_kind: unknown`）。
+- **源健康：** `POST /v1/packages/{dataset_id}/versions/{version}/source-check` 探测源仓库可达性；不可达时标记 `source_available: false`（Dataset 页面显示 "source unavailable"），既有结果不受影响。
+- **Hub 链接：** git 源版本的页面链接指向钉版 commit（`/tree/<sha>/<subdir>`、`/blob/<sha>/…`），永不指向分支。
+
 ## Dataset Leaderboard 与准入规则
 
 每个 Dataset 详情页的 Leaderboard 包含两个视图：

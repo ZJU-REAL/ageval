@@ -23,6 +23,8 @@ ageval run  official/demo@0.1.0 --dir tmp
 
 `run`、`lock`、`view` 与 `results upload-suite` 的首个参数支持本地 dataset 根目录或 Hub 引用（`dataset_id@version` / `@sha256:…`）。`--dir <path>` 仅在 `ageval run` 配合 Hub 引用时使用，将数据集检出至 `<path>/<dataset_id>/`（若已存在匹配目录则直接复用）；本地路径搭配 `--dir` 会报错 `invalid_override`。`lock`、`view` 与 `upload-suite` 优先读取本地已校验缓存。`tasks` 与 `campaign` 仅接受本地目录。
 
+此外，首个参数可以是 **git 源引用**：`github:org/repo@<tag|全长 sha>` 或 `https://…@<tag|全长 sha>`（GitHub、Hugging Face datasets 等），可选 `#<subdir>` 选择仓库内的一个 Dataset 子目录（相对路径、禁止 `..`、必须包含 `ageval.yaml`；一个仓库可托管多个 Dataset，各自独立）。缺少 `@` 钉版或指向分支名的引用报错 `invalid_package`。CLI 将引用解析为完整 commit sha，以 partial + sparse checkout 拉取该 commit（远端不支持时回退全量拉取）并写入注册表 git 缓存（键为 `(git_url, commit, subdir)`），后续 lock/run 流程不变；子目录 Dataset 不得通过符号链接引用根外路径，lock 时报错 `invalid_package`。私有仓库使用本地 git / gh 凭据，URL 禁止内嵌密码，凭据不进入 lock。lock 摘要记录 `source.git_url`、`source.commit`（及 `source.subdir`）与 `eval_digest`（见 [12](12-hub-dataset-and-leaderboard.md)）。
+
 `--profiles` 整份替换默认配置文件；`--agent` 与 `--profiles` 互斥；`--model` 需配合 `--agent` 覆盖已绑定角色的 `model.id`。`--set` 允许覆盖的白名单路径包括：`/parameters/seed`、`/parameters/active_profile`、`/agent_profiles/<role>/{model,executor,api_key,base_url,options/<key>}`，以及嵌套模型字段 `model/id`、`model/api`、`model/timeout`、`model/watchdog`、`model/reasoning/effort`（`model` 必须为嵌套对象）。`limits.*` 不允许通过 `--set` 修改。
 
 ## 任务成员 `task.yaml`
