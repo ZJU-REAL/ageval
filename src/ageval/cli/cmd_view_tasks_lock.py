@@ -117,6 +117,37 @@ def register(app: typer.Typer) -> None:
         }
         emit(payload)
 
+    @app.command("prepare")
+    def prepare_command(
+        package: Annotated[
+            str,
+            typer.Argument(help="Dataset root path, registry ref, or git source ref."),
+        ],
+        allow_prepare: Annotated[
+            bool,
+            typer.Option(
+                "--allow-prepare",
+                help="Allow running the dataset's declared prepare script.",
+            ),
+        ] = False,
+    ) -> None:
+        """Fetch declarative assets and (when allowed) run the prepare script."""
+        from ageval.application.composition import build_prepare_command
+        from ageval.config.errors import ConfigError
+
+        def _notice(script: str, dataset_id: str) -> None:
+            typer.echo(
+                f"notice: running prepare script {script} for dataset {dataset_id}",
+                err=True,
+            )
+
+        try:
+            summary = build_prepare_command()(package, allow_prepare=allow_prepare, notify=_notice)
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        emit(summary)
+
     @app.command("lock")
     def lock_command(
         package: Annotated[
@@ -171,6 +202,13 @@ def register(app: typer.Typer) -> None:
             str | None,
             typer.Option("--model", help=MODEL_OPTION_HELP),
         ] = None,
+        allow_prepare: Annotated[
+            bool,
+            typer.Option(
+                "--allow-prepare",
+                help="Allow running the dataset's declared prepare script before locking.",
+            ),
+        ] = False,
     ) -> None:
         """Resolve a Dataset member, lock its task.yaml; print a deterministic JSON summary."""
         if task is None or not str(task).strip():
@@ -185,6 +223,13 @@ def register(app: typer.Typer) -> None:
         from ageval.plugins.errors import PluginContractError
 
         profiles = resolve_agent_option(agent, profiles, model=model)
+
+        def _notice(script: str, dataset_id: str) -> None:
+            typer.echo(
+                f"notice: running prepare script {script} for dataset {dataset_id}",
+                err=True,
+            )
+
         try:
             summary = build_lock_command().run(
                 dataset_root=package,
@@ -192,6 +237,8 @@ def register(app: typer.Typer) -> None:
                 set_overrides=set_overrides or (),
                 profiles_path=profiles,
                 profile=profile,
+                allow_prepare=allow_prepare,
+                on_prepare_script=_notice,
             )
         except (ConfigError, ModelConfigError, PluginContractError) as exc:
             # Stable operator-facing failure: exit 2, message on stderr, empty stdout.

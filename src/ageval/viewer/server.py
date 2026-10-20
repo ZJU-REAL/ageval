@@ -103,6 +103,32 @@ def _dataset_query_value(url: str, name: str) -> str:
     return (parse_qs(urlparse(url).query).get(name) or [""])[0].strip()
 
 
+def _task_page_query(query: str) -> dict[str, int | str | None]:
+    """Page the suite task table. Absent ``page`` keeps the full task list."""
+    parsed = parse_qs(query)
+    if "page" not in parsed:
+        return {}
+    raw_page = (parsed.get("page") or [""])[0].strip()
+    try:
+        page = int(raw_page)
+    except ValueError:
+        page = 1
+    raw_size = (parsed.get("page_size") or [""])[0].strip()
+    try:
+        page_size = int(raw_size) if raw_size else 50
+    except ValueError:
+        page_size = 50
+    sort = (parsed.get("sort") or [""])[0].strip()
+    direction = (parsed.get("dir") or [""])[0].strip()
+    return {
+        "page": page,
+        "page_size": page_size,
+        "reason": (parsed.get("reason") or [""])[0],
+        "sort": sort or None,
+        "direction": direction or None,
+    }
+
+
 def _config_status(exc: ConfigError) -> int:
     if "unknown" in exc.error_code:
         return 404
@@ -519,7 +545,7 @@ def make_handler(
                     self._api_job_share_status(job_id)
                     return
                 if len(parts) == 1:
-                    _json(self, 200, jobs.get_job(root, job_id))
+                    _json(self, 200, jobs.get_job(root, job_id, **_task_page_query(query)))
                     return
                 if len(parts) >= 2 and parts[1] == "overlays":
                     from ageval.viewer.overlays import (

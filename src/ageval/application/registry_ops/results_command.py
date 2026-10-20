@@ -26,6 +26,29 @@ from ageval.registry.results_archive import (
 )
 
 
+def _eval_digest_from_locks(root: Path, task_refs: list[Any]) -> str | None:
+    """First ``eval_digest`` recorded in an Attempt lock of this suite."""
+    run_ids: list[str] = []
+    for ref in task_refs:
+        if isinstance(ref, dict) and ref.get("run_id"):
+            run_ids.append(str(ref["run_id"]))
+    for rid in run_ids:
+        try:
+            run_dir = resolve_attempt_run_dir(root, rid)
+        except ConfigError:
+            continue
+        lock_path = run_dir / "lock.json"
+        if not lock_path.is_file():
+            continue
+        try:
+            loaded = json.loads(lock_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        if isinstance(loaded, dict) and loaded.get("eval_digest"):
+            return str(loaded["eval_digest"])
+    return None
+
+
 def _attempt_job_fields(run_dir: Path, meta: dict[str, Any]) -> dict[str, Any]:
     """Labels Hub Jobs needs for a standalone Attempt (not a suite row)."""
     from ageval.config.profiles import display_labels_from_overlay, environment_from_overlay
@@ -477,6 +500,7 @@ class ResultsCommands:
                     if isinstance(config_proj.get("plugins"), list)
                     else None,
                     replace=replace,
+                    eval_digest=_eval_digest_from_locks(root, list(task_refs)),
                 )
             except RegistryError as exc:
                 raise ConfigError(exc.code, exc.message, location="registry") from exc

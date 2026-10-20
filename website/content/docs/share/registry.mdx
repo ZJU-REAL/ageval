@@ -35,6 +35,10 @@ Any org **member** may `publish` under that org; **package delete / set-visibili
 Invite keys show the full secret only once at create time; later you only see a prefix.  
 Owners or admins add / remove members by GitHub login (`ageval registry org-add-member` / `org-remove-member`); change an existing member’s role with `org-set-role`; hand the org to a current member with `org-transfer` (caller becomes `member`). The last owner cannot leave, be demoted, or be removed. The person need not be logged in. Allowlisted official slugs (default `official`) cannot be self-serve created or claimed — only an admin bootstrap token can `org-create` them.
 
+## Git-sourced datasets
+
+A Dataset hosted in a git repository can be run directly (`ageval run github:org/repo@v1.0.0`, optionally `#<subdir>`) and registered on the Hub without uploading files: `ageval publish --repo github:org/repo@v1.0.0`. An https URL must not embed userinfo (`https://<token>@host` or `https://user:pass@host`); the Hub stores only an https URL without userinfo, or `git@host:path`. Registration pins the resolved commit and an evaluation digest over the scoring files; re-registering the same version with different scoring files is rejected, while documentation-only changes are accepted. Suite results from a registered source are attributed to that version; results from unregistered sources are stored but not ranked. The Dataset page links to the pinned commit and shows any declared prepare script and assets for review.
+
 ## Owner ops after create (CLI)
 
 `--public` at create time only sets **initial** visibility. Owners can change it later without republishing:

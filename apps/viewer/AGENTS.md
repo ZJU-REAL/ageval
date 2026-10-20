@@ -51,7 +51,8 @@ Landing: more than one dataset → Datasets. Exactly one (including
    A suite job shows finished/total tasks above the task table, and a
    horizontally scrolling plot of task duration (height) and result (dot
    color). Time left is the recent gap between finishes times the tasks still
-   open. The page refreshes while tasks are still open.
+   open. The task table is paged; the plot still includes every task. The page
+   refreshes while tasks are still open.
 4. **Task detail** — trials/run row(s), status/error coloring, **copyable CLI**
 5. **Attempt / trial detail** — `Jobs > job > task > run_id`; Outcome + actors
    (Role / Harness / Model / Time / Usage) + tabs from real evidence only
@@ -174,7 +175,7 @@ Python API under `/api/*` (see `src/ageval/viewer/`):
 | `GET /api/agents/tree` | Tree confined to that package root |
 | `GET /api/agents/file?path=` | Preview. Same refusal rules |
 | `GET /api/jobs?dataset=` | Job list for that directory key. Omitted when exactly one dataset is open |
-| `GET /api/jobs/{id}` | Job detail + task rows |
+| `GET /api/jobs/{id}` | Job detail. No `page`: every task row. `page` (optional `page_size`, `reason`, `sort`, `dir`): one page of task rows, plus `pace` for every task |
 | `GET /api/jobs/{id}/delete-preview` | Paths, bytes, cascade run ids, confirm token; refuse reasons |
 | `DELETE /api/jobs/{id}?confirm=` | Hard-delete after preview token (suite cascades Attempts) |
 | `GET /api/jobs/{id}/tasks/{task_id}` | Task detail + enriched trials list + commands |

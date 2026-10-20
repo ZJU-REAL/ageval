@@ -19,6 +19,9 @@ def default_cache_root() -> Path:
     return (Path.cwd() / ".ageval" / "cache").resolve()
 
 
+GIT_SOURCE_MARKER = ".ageval-git-source.json"
+
+
 class PackageCache:
     """Filesystem cache: ``<root>/datasets/<id>/<packageDigest>/``."""
 
@@ -129,6 +132,71 @@ class PackageCache:
                 json.dumps(marker, sort_keys=True) + "\n", encoding="utf-8"
             )
             # Atomic publish: rename temp → final (replace if partial exists).
+            if final.exists():
+                shutil.rmtree(final)
+            tmp.rename(final)
+            return final
+        except Exception:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise
+
+    # --- git sources -------------------------------------------------------
+
+    def git_entry_dir(self, git_url: str, commit: str, subdir: str | None) -> Path:
+        import hashlib
+
+        url_key = hashlib.sha256(git_url.encode("utf-8")).hexdigest()[:24]
+        sub_key = hashlib.sha256((subdir or "").encode("utf-8")).hexdigest()[:16]
+        return self.root / "git" / url_key / commit / sub_key
+
+    def lookup_git(self, git_url: str, commit: str, subdir: str | None) -> Path | None:
+        entry = self.git_entry_dir(git_url, commit, subdir)
+        marker = entry / GIT_SOURCE_MARKER
+        if not marker.is_file() or not (entry / "ageval.yaml").is_file():
+            return None
+        try:
+            meta = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        if meta.get("git_url") != git_url or meta.get("commit") != commit:
+            return None
+        if (meta.get("subdir") or None) != (subdir or None):
+            return None
+        return entry
+
+    def publish_git(
+        self,
+        *,
+        git_url: str,
+        commit: str,
+        git_ref: str,
+        subdir: str | None,
+        source_root: Path,
+    ) -> Path:
+        """Copy a checked-out Dataset tree into the git cache atomically."""
+        final = self.git_entry_dir(git_url, commit, subdir)
+        hit = self.lookup_git(git_url, commit, subdir)
+        if hit is not None:
+            return hit
+        final.parent.mkdir(parents=True, exist_ok=True)
+        tmp = Path(tempfile.mkdtemp(prefix=".ageval-git-tmp-", dir=str(final.parent)))
+        try:
+            shutil.copytree(
+                source_root,
+                tmp,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(".git"),
+            )
+            marker = {
+                "schema": "ageval.git-source/1",
+                "git_url": git_url,
+                "commit": commit,
+                "git_ref": git_ref,
+                "subdir": subdir,
+            }
+            (tmp / GIT_SOURCE_MARKER).write_text(
+                json.dumps(marker, sort_keys=True) + "\n", encoding="utf-8"
+            )
             if final.exists():
                 shutil.rmtree(final)
             tmp.rename(final)

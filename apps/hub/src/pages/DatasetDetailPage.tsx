@@ -30,7 +30,8 @@ import {
 import { TableColumnPicker } from "@ageval/shared/components/ui/table-column-picker";
 import { useTableColumns } from "@ageval/shared/hooks/use-table-columns";
 import { OfficialMark } from "@/components/official-mark";
-import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
+import { EXTERNAL_LINK_CLASS, INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
+import { Chip } from "@/components/ui/chip";
 import { OverlayFilePanel } from "@/components/overlay-file-panel";
 import { Markdown } from "@ageval/shared/components/markdown";
 import { PackageOwnerOps } from "@/components/package-owner-ops";
@@ -141,7 +142,48 @@ const TASK_OPTIONAL_IDS = TASK_OPTIONAL_COLUMNS.map((col) => col.id);
 const TASK_OPTIONAL_DEFAULT: typeof TASK_OPTIONAL_IDS = ["job_count"];
 
 function isInternalSuite(suite: SuiteRow): boolean {
-  return suite.complete !== true || suite.bound_kind !== "release";
+  return (
+    suite.complete !== true ||
+    (suite.bound_kind !== "release" && suite.bound_kind !== "source")
+  );
+}
+
+const SSH_GIT_URL =
+  /^git@([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?):([A-Za-z0-9][A-Za-z0-9._/-]*)$/;
+
+/** https base for commit-pinned links. Anything else stays plain text. */
+function gitWebBase(gitUrl: string): string | null {
+  const trimmed = gitUrl.trim();
+  if (!trimmed || /[\s\\]/.test(trimmed)) return null;
+  const ssh = trimmed.match(SSH_GIT_URL);
+  const candidate = ssh
+    ? `https://${ssh[1]}/${ssh[2].replace(/\.git$/, "")}`
+    : trimmed.replace(/\.git$/, "");
+  if (candidate.includes("@") || candidate.includes("..")) return null;
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || url.username || url.password || !url.hostname) return null;
+  return candidate;
+}
+
+function gitTreeUrl(release: PackageRelease): string | null {
+  if (!release.git_url || !release.commit) return null;
+  const base = gitWebBase(release.git_url);
+  if (!base) return null;
+  const sub = release.subdir ? `/${release.subdir}` : "";
+  return `${base}/tree/${release.commit}${sub}`;
+}
+
+function gitBlobUrl(release: PackageRelease, path: string): string | null {
+  if (!release.git_url || !release.commit) return null;
+  const base = gitWebBase(release.git_url);
+  if (!base) return null;
+  const sub = release.subdir ? `${release.subdir}/` : "";
+  return `${base}/blob/${release.commit}/${sub}${path}`;
 }
 
 export function DatasetDetailPage() {
@@ -181,6 +223,7 @@ export function DatasetDetailPage() {
   const [sharedContent, setSharedContent] = useState<string | null>(null);
   const [sharedNote, setSharedNote] = useState<string | null>(null);
   const [sharedFileLoading, setSharedFileLoading] = useState(false);
+  const [prepareContent, setPrepareContent] = useState<string | null>(null);
   const [overlayPrefixes, setOverlayPrefixes] = useState<string[]>([]);
   const [canEditName, setCanEditName] = useState(false);
   const [leaderboardColumns, setLeaderboardColumns] = useTableColumns(
@@ -376,6 +419,26 @@ export function DatasetDetailPage() {
       cancelled = true;
     };
   }, [datasetId, release, token, tab]);
+
+  // Review surface: uploaded packages serve prepare.sh from the archive;
+  // git-sourced versions link to the file at the pinned commit instead.
+  useEffect(() => {
+    if (!release?.prepare || release.source_only || !release.package_digest) {
+      setPrepareContent(null);
+      return;
+    }
+    let cancelled = false;
+    getPackageFile(datasetId, release.package_digest, release.prepare, token)
+      .then((f) => {
+        if (!cancelled) setPrepareContent(decodeFileContent(f));
+      })
+      .catch(() => {
+        if (!cancelled) setPrepareContent(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId, release, token]);
 
   const sharedPresent = hasShared;
   const overlaysPresent = overlayPrefixes.length > 0;
@@ -617,7 +680,11 @@ export function DatasetDetailPage() {
               ) : null}{" "}
               ·{" "}
               <span>
-                {release.package_digest.slice(0, 19)}…
+                {release.package_digest
+                  ? `${release.package_digest.slice(0, 19)}…`
+                  : release.eval_digest
+                    ? `eval ${release.eval_digest.slice(0, 19)}…`
+                    : "source only"}
               </span>
             </p>
           ) : null}
@@ -679,6 +746,73 @@ export function DatasetDetailPage() {
       <div className="mb-4 max-w-3xl">
         <CommandStrip command={runCmd} />
       </div>
+
+      {release && (release.git_url || release.prepare || release.source_only) ? (
+        <div className="blob-panel mb-4 max-w-3xl space-y-2 p-4 text-sm">
+          {release.git_url ? (
+            <p className="flex flex-wrap items-center gap-2">
+              <Chip size="sm">git source</Chip>
+              {gitTreeUrl(release) ? (
+                <a
+                  className={EXTERNAL_LINK_CLASS}
+                  href={gitTreeUrl(release) ?? undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {release.git_url}@{release.commit?.slice(0, 12)}
+                  {release.subdir ? ` · ${release.subdir}` : ""}
+                </a>
+              ) : (
+                <span>{release.git_url}</span>
+              )}
+              {release.source_available === false ? (
+                <span className="text-error">source unavailable</span>
+              ) : null}
+            </p>
+          ) : null}
+          {release.prepare ? (
+            <div className="space-y-2">
+              <p className="flex flex-wrap items-center gap-2">
+                <Chip size="sm">prepare script</Chip>
+                <code className="text-body">{release.prepare}</code>
+                <span className="text-mute">
+                  runs only with --allow-prepare
+                </span>
+                {release.source_only && gitBlobUrl(release, release.prepare) ? (
+                  <a
+                    className={EXTERNAL_LINK_CLASS}
+                    href={gitBlobUrl(release, release.prepare) ?? undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    view at commit
+                  </a>
+                ) : null}
+              </p>
+              {prepareContent ? (
+                <pre className="overflow-x-auto whitespace-pre-wrap text-body">
+                  {prepareContent}
+                </pre>
+              ) : null}
+            </div>
+          ) : null}
+          {release.assets && release.assets.length > 0 ? (
+            <div>
+              <p className="text-mute">Declarative assets</p>
+              <ul>
+                {release.assets.map((asset) => (
+                  <li key={asset.path}>
+                    <code className="text-body">{asset.path}</code>{" "}
+                    <span className="text-mute">
+                      sha256:{asset.sha256.slice(0, 12)}…
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <UnderlineTabs
         className="mb-4"

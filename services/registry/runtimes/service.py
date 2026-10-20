@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from typing import Any, NamedTuple
 
 from services.registry.auth.tokens import TokenInfo
-from services.registry.dataset import BOUND_RELEASE
+from services.registry.dataset import RANKED_BOUND_KINDS
 from services.registry.inbox.maintainers import (
     COLLECT_MODES,
     COLLECT_OFFICIAL,
@@ -36,7 +36,7 @@ def is_public_complete_release(payload: Mapping[str, Any]) -> bool:
     return (
         payload.get("visibility") == "public"
         and bool(payload.get("complete"))
-        and payload.get("bound_kind") == BOUND_RELEASE
+        and payload.get("bound_kind") in RANKED_BOUND_KINDS
     )
 
 

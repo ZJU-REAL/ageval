@@ -12,7 +12,7 @@ from services.registry.orgs.rows import (
 )
 from services.registry.packages import queries as Q
 from services.registry.packages.protocol import PackageStoreProtocol
-from services.registry.packages.rows import DatasetAclRow, DraftRow, ReleaseRow
+from services.registry.packages.rows import DatasetAclRow, DraftRow, ReleaseRow, SourceRow
 
 
 class PackageStore(PackageStoreProtocol):
@@ -49,6 +49,92 @@ class PackageStore(PackageStoreProtocol):
                 conn.commit()
             except self._adapter.integrity_error as exc:
                 raise ValueError("release already exists") from exc
+
+    def insert_source(self, row: SourceRow) -> None:
+        with self._connect() as conn:
+            try:
+                self._exec(
+                    conn,
+                    Q.INSERT_SOURCE,
+                    (
+                        row.dataset_id,
+                        row.version,
+                        row.git_url,
+                        row.commit,
+                        row.eval_digest,
+                        row.subdir,
+                        row.org_id,
+                        row.visibility,
+                        row.uploaded_by or "",
+                        row.tasks_json,
+                        1 if row.source_available else 0,
+                        row.created_at,
+                        row.prepare,
+                        row.assets_json,
+                    ),
+                )
+                conn.commit()
+            except self._adapter.integrity_error as exc:
+                raise ValueError("source already exists") from exc
+
+    def update_source(self, row: SourceRow) -> None:
+        with self._connect() as conn:
+            self._exec(
+                conn,
+                Q.UPDATE_SOURCE,
+                (
+                    row.git_url,
+                    row.commit,
+                    row.eval_digest,
+                    row.subdir,
+                    row.org_id,
+                    row.visibility,
+                    row.tasks_json,
+                    1 if row.source_available else 0,
+                    row.prepare,
+                    row.assets_json,
+                    row.dataset_id,
+                    row.version,
+                ),
+            )
+            conn.commit()
+
+    def get_source(self, dataset_id: str, version: str) -> SourceRow | None:
+        with self._connect() as conn:
+            cur = self._exec(conn, Q.SELECT_SOURCE, (dataset_id, version))
+            r = cur.fetchone()
+            return self._source_row(r) if r else None
+
+    def list_sources(self) -> list[SourceRow]:
+        with self._connect() as conn:
+            cur = self._exec(conn, Q.LIST_SOURCES)
+            return [self._source_row(r) for r in cur.fetchall()]
+
+    def set_source_available(self, dataset_id: str, version: str, available: bool) -> None:
+        with self._connect() as conn:
+            self._exec(
+                conn, Q.UPDATE_SOURCE_AVAILABILITY, (1 if available else 0, dataset_id, version)
+            )
+            conn.commit()
+
+    @staticmethod
+    def _source_row(r: Any) -> SourceRow:
+        return SourceRow(
+            dataset_id=str(r["dataset_id"]),
+            version=str(r["version"]),
+            git_url=str(r["git_url"]),
+            commit=str(r["commit_sha"]),
+            eval_digest=str(r["eval_digest"]),
+            subdir=str(r["subdir"] or ""),
+            org_id=str(r["org_id"]) if r["org_id"] else None,
+            visibility=str(r["visibility"] or "public"),
+            uploaded_by=str(r["uploaded_by"] or ""),
+            tasks_json=str(r["tasks_json"] or "[]"),
+            source_available=bool(int(r["source_available"] or 0)),
+            created_at=float(r["created_at"]),
+            prepare=str(r["prepare"] or "") if "prepare" in r else "",
+            assets_json=str(r["assets_json"] or "[]") if "assets_json" in r else "[]",
+        )
 
     def get_by_version(self, dataset_id: str, version: str) -> ReleaseRow | None:
         with self._connect() as conn:

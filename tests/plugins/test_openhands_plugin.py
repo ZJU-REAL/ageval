@@ -403,7 +403,7 @@ def test_steps_keep_thought_between_tool_calls() -> None:
             self.reasoning_content = "need the file list"
             self.thought = [Text("inspect the directory")]
             self.thinking_blocks = blocks or []
-            self.responses_reasoning_item = None
+            self.responses_reasoning_item: Reasoning | None = None
             self.action = type(
                 "A",
                 (),

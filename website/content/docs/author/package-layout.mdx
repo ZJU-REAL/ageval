@@ -75,7 +75,15 @@ dataset_id: org/my-suite
 version: "0.1.0"
 tasks:
   root: tasks
+# Optional dataset-level preparation (runs before any Attempt opens):
+# assets:
+#   - path: tasks/clip-01/data/clip.mp4
+#     url: https://cdn.example.com/clip-01.mp4
+#     sha256: <64 hex>
+# prepare: ./prepare.sh   # gated: needs --allow-prepare or a trusted dataset
 ```
+
+Large files that a script can fetch belong in `assets`, not in git. `ageval prepare` (also run automatically by `run` / `lock`) downloads each missing asset, verifies its sha256, and places it at `path`; a mismatch stops the run before any Attempt opens. A `prepare` script is disabled by default and runs only with `--allow-prepare` or for trusted datasets; declared assets are re-verified after it runs.
 
 `dataset_id` has a strict charset; it is **not** part of scoring.  
 Do **not** put `harness` / `provider` / `agent_profiles` / `evaluation` on the root.

@@ -43,16 +43,23 @@ def register(app: typer.Typer) -> None:
     @app.command("publish")
     def publish_command(
         dataset: Annotated[
-            Path,
+            Path | None,
             typer.Argument(help="Local Dataset root to publish (ageval.dataset/1)."),
-        ],
+        ] = None,
+        repo: Annotated[
+            str | None,
+            typer.Option(
+                "--repo",
+                help="Git source ref to register without upload (github:org/repo@<tag|sha>).",
+            ),
+        ] = None,
         org: Annotated[
             str,
             typer.Option(
                 "--org",
-                help="Organization id that owns this package (required).",
+                help="Organization id that owns this package (required for upload).",
             ),
-        ],
+        ] = "",
         public: Annotated[
             bool,
             typer.Option(
@@ -84,19 +91,32 @@ def register(app: typer.Typer) -> None:
     ) -> None:
         """Publish a local Dataset package to the configured Registry (must attach --org)."""
         from ageval.application.composition import build_publish_command
-
-        publish_dataset = build_publish_command().publish_dataset
         from ageval.config.errors import ConfigError
 
-        try:
-            summary = publish_dataset(
-                dataset,
-                public=public,
-                org=org,
-                replace=replace,
-                draft=draft,
-                registry_url=registry_url,
+        if bool(repo) == (dataset is not None):
+            typer.echo(
+                "invalid_request: pass a local Dataset root or --repo <git ref>, not both",
+                err=True,
             )
+            raise typer.Exit(code=2)
+        try:
+            if repo:
+                summary = build_publish_command().publish_from_repo(
+                    repo,
+                    public=public,
+                    org=org or None,
+                    registry_url=registry_url,
+                )
+            else:
+                assert dataset is not None
+                summary = build_publish_command().publish_dataset(
+                    dataset,
+                    public=public,
+                    org=org,
+                    replace=replace,
+                    draft=draft,
+                    registry_url=registry_url,
+                )
         except ConfigError as exc:
             typer.echo(str(exc), err=True)
             raise typer.Exit(code=2) from exc

@@ -128,6 +128,13 @@ def build_publish_command() -> Any:
     return PublishCommand(client_factory=build_registry_client)
 
 
+def build_prepare_command() -> Callable[..., Any]:
+    """Wire ``ageval prepare``: resolve a Dataset and run preparation."""
+    from ageval.application.prepare import prepare_dataset_command
+
+    return prepare_dataset_command
+
+
 def build_dataset_checkout() -> Callable[..., Any]:
     """Hub ref + ``--dir`` → local dataset root (fetch if missing)."""
     from ageval.registry.resolve import checkout_dataset
