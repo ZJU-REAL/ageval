@@ -7,6 +7,9 @@ Drives [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent) as a
 through the injected `environment` service (`host.exec`). This is **not** ACP.
 Name is the mechanism (`miniswe`), not a benchmark.
 
+Placement next to ACP, terminus-2, and openhands:
+[docs/design/05-runtime/agent-service.md](../../docs/design/05-runtime/agent-service.md#executor-placement).
+
 ```python
 from minisweagent.agents.default import DefaultAgent
 from minisweagent.models.litellm_model import LitellmModel

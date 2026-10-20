@@ -63,7 +63,7 @@ ageval.yaml (ageval.dataset/1)
 | 任务执行阶段入口 | **`run.py`**（`async def run(ctx)`） |
 | 独立评分阶段入口 | **`evaluator.py`** |
 | 环境插件槽 | 独占槽 **`environment`**；通过 `ctx.host` 或 `ctx.services.require("environment")` 访问 |
-| Agent 执行器插件槽 | 独占槽 **`executor`**（按角色 profile 独立绑定，如 `acp`、`openai-http`、`miniswe`、`terminus-2`） |
+| Agent 执行器插件槽 | 独占槽 **`executor`**（按角色 profile 独立绑定，如 `acp`、`openai-http`、`miniswe`、`terminus-2`、`openhands`） |
 
 ## 设计目标
 

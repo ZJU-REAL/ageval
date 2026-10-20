@@ -6,7 +6,7 @@
 | --- | --- |
 | [lifecycle.md](lifecycle.md) | Run / Trial / Attempt 身份与固定阶段状态机 |
 | [environment.md](environment.md) | `EnvironmentProvider` 协议、五种环境实现与容器资源参数 |
-| [agent-service.md](agent-service.md) | 父进程 Agent Service、ACP `attach_stdio`、按角色绑定 executor 与并发会话调度 |
+| [agent-service.md](agent-service.md) | 父进程 Agent Service、ACP `attach_stdio`、ACP / miniswe / terminus-2 / openhands 的放置对照、按角色绑定 executor 与并发会话调度 |
 | [evaluation.md](evaluation.md) | 封存 solver、延迟上传参考材料、可选 Agent-as-judge 与 `checks`、绑定 `PASS` |
 | [evidence.md](evidence.md) | `.ageval/runs/` 证据目录、`trajectory.jsonl`、`evaluation/observation.jsonl` 与 `checks.json` |
 | [analysis.md](analysis.md) | 运行结束后的只读分析器（`stats` / `hack` / `review`） |

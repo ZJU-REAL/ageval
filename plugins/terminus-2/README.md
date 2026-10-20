@@ -12,6 +12,9 @@ again. A failed install is `environment_setup_failed` /
 `docker/Dockerfile.bake` can install tmux at image build; that layer is an
 optimization.
 
+Placement next to ACP, miniswe, and openhands:
+[docs/design/05-runtime/agent-service.md](../../docs/design/05-runtime/agent-service.md#executor-placement).
+
 `task_complete` ends the episode. The package evaluator still owns PASS.
 
 ## Capabilities

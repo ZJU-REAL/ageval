@@ -112,7 +112,7 @@ model:
 
 ### terminus-2
 
-宿主循环。模型 HTTP 留在父进程；tmux 在 Attempt 环境里，经 `environment.exec` 收发按键和窗格文本。缺 tmux 时由插件安装，安装失败是 `environment_setup_failed`。
+宿主循环。模型 HTTP 留在父进程；tmux 在 Attempt 环境里，经 `environment.exec` 收发按键和窗格文本。缺 tmux 时由插件安装，安装失败是 `environment_setup_failed`。与 ACP、miniswe、openhands 的放置对照见 [agent-service](05-runtime/agent-service.md#executor-placement)。
 
 <!-- ageval:param-table executor=terminus-2 -->
 | Name | Default | Purpose |
@@ -149,6 +149,8 @@ model:
 <!-- /ageval:param-table -->
 
 ### openhands
+
+SDK 装在 Attempt 环境里，按需 `pip` 安装锁定版本。worker 使用 `LocalWorkspace`，不在该环境里再启动 Docker。放置对照见 [agent-service](05-runtime/agent-service.md#executor-placement)。
 
 <!-- ageval:param-table executor=openhands -->
 | Name | Default | Purpose |

@@ -52,6 +52,46 @@ agent_profiles:
 
 每次 `invoke` 通过一次 `host.exec` 在环境内启动包装器脚本，由包装器在环境内拉起对应 `entry` 的 ACP stdio 服务端并顺序完成 `initialize`、`session/new` 与 `session/prompt`，默认不跨调用复用会话；结束后由 `trajectory_collect` 将事件映射为标准轨迹格式。
 
+<a id="executor-placement"></a>
+
+## 执行器放在哪：ACP、miniswe、terminus-2、openhands
+
+四条路径都实现独占槽 `executor`，由各角色的 `agent_profiles.<role>` 绑定。凭据仍是环境变量名，明文不写入 `lock.json`。`acp-oneshot` 的位置见上一节，不列入下表。
+
+| | `acp` | `miniswe` | `terminus-2` | `openhands` |
+| --- | --- | --- | --- | --- |
+| 模型循环 | Attempt 环境内的 ACP entry。父进程是唯一 JSON-RPC 客户端 | 父进程 | 父进程（宿主循环） | Attempt 环境内的 OpenHands SDK |
+| 工具执行 | entry 进程内的工具 | 父进程经 `environment.exec` 执行 bash | 父进程经 `environment.exec` 向 tmux 窗格写入按键并读回屏幕 | SDK `LocalWorkspace`，工具在 Attempt 环境的当前进程里执行 |
+| 按需装进 Attempt 环境 | 探测失败时执行该 entry 的 `install_command`（见下文） | 不安装 agent。Attempt 镜像使用已有的 bash | 环境里没有 `tmux` 时，用该环境的包管理器安装 | 环境里没有锁定版本的 SDK 时，用该环境的 `pip` 安装同一 pin |
+| `inject` 能力 | `attach_stdio` | `exec` | `exec` | `exec`、`upload`、`download` |
+| 轨迹 | ACP 事件归一后进入 `trajectory_collect` | `trajectory_collect` | `trajectory_collect` 记录 tmux 步骤 | worker 写出 `openhands.trajectory/1`，记录阶段映射为 `ageval.trajectory.event/1` |
+
+terminus-2 与 openhands 的运行都不依赖宿主机上的 Harbor CLI，也不把 Harbor 包当作运行时依赖。
+
+### terminus-2：宿主循环，tmux 装在 Attempt 环境
+
+模型 HTTP 留在父进程。JSON 或 XML 解析出的命令批次经 `environment.exec` 送进 Attempt 环境里的 tmux 会话，再读窗格文本。评测机可以不安装 tmux。
+
+第一次进入 tmux 会话时，若 `tmux -V` 失败，插件在 Attempt 环境内以 root 调用该环境已有的包管理器安装 tmux：`apt-get`、`apk`、`dnf`、`microdnf` 或 `yum`。装完再探测一次。失败时阶段错误是 `environment_setup_failed`，明细为 `terminus2_tmux_unavailable`。`docker/Dockerfile.bake` 可以在构建镜像时预装 tmux；没有这一层时仍走上述安装。
+
+插件说明：[plugins/terminus-2/README.md](../../../plugins/terminus-2/README.md)。参数表见 [16](../16-model.md)。
+
+### openhands：SDK 装在 Attempt 环境里
+
+父进程不导入 SDK。它把 worker 上传到 Attempt 环境，再用 `environment.exec` 启动。模型请求和工具调用都在该环境内完成。任务说明先写成环境内文件，worker 按路径读取，避免把长文本放进 argv。
+
+环境内 `import openhands.sdk, openhands.tools` 失败时，插件用该环境的 `pip` 安装与 `options.version`（缺省为包内 pin）相同的 `openhands-sdk` 与 `openhands-tools`。安装失败时 invoke 返回 `openhands_sdk_install_failed`。`docker/Dockerfile.bake` 写入同一个 pin；镜像里已经能 import 时跳过安装。
+
+worker 创建 `LocalWorkspace`。工具在当前 Attempt 进程里执行。这条路径禁止在 Attempt 环境里再启动 Docker，也禁止再开第二套 sandbox。`base_url` 主机名是 `127.0.0.1`、`localhost` 或 `::1` 时，worker 允许不带 `api_key`。
+
+worker 把步骤写成 `openhands.trajectory/1`。记录阶段把它映射为 `ageval.trajectory.event/1`。标准输出不作为轨迹。action 上的 `thought`、`reasoning_content` 与可见 thinking 映射为 channel `thought`，封存为 assistant turn 的 `part: thought`。
+
+插件说明：[plugins/openhands/README.md](../../../plugins/openhands/README.md)。参数表见 [16](../16-model.md)。
+
+### miniswe
+
+模型 HTTP 留在父进程。每条 bash 经 `environment.exec` 执行。Attempt 镜像不额外安装 agent。插件说明：[plugins/miniswe/README.md](../../../plugins/miniswe/README.md)。ACP 见上文与 [contrib/acp/README.md](../../../src/ageval/plugins/contrib/acp/README.md)。
+
 ## 调用流程与上游重试等待（Upstream Stall）
 
 ```text
@@ -59,7 +99,8 @@ run.py / evaluator.py  Agent.session(profile).invoke
   → Unix socket (AGEVAL_AGENT_SERVICE_SOCK)
   → ParentAgentService
        before_agent_invoke（单次调用仅触发一次）
-       executor.invoke → host.attach_stdio(entry argv) 或 host.exec（环境内 worker）
+       executor.invoke → host.attach_stdio（acp）
+                        或 host.exec（acp-oneshot、miniswe 的 bash、terminus-2 的 tmux、openhands 的 worker）
                         或 openai-http / anthropic-http 请求
        若返回非 ok 且可重试 → 进入 upstream_stall（暂停当前阶段计时器，每 60 秒重试一次）
        after_agent_invoke（最终结果触发一次）

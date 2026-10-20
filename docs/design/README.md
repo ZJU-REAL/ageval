@@ -6,7 +6,7 @@
 ```text
 PRD + 00     产品定位、用户故事与架构红线
 01–03        Core 阶段生命周期、dataset 配置、run.py 与 SDK
-05-runtime   执行环境、ACP、独立评分、证据归档、只读分析器、suite 与 campaign
+05-runtime   执行环境、ACP 与执行器放置、独立评分、证据归档、只读分析器、suite 与 campaign
 06–09        能力标记與参考材料隔离、limits 与失败语义、Benchmark 转换、模块职责矩阵
 11–16        插件系统、Hub 与排行榜、Web UI 令牌、Agent 包、托管评测、ModelSpec
 ```

@@ -25,6 +25,9 @@ A missing SDK at setup is installed at the pinned version. If that install
 fails, invoke returns `openhands_sdk_install_failed` and does not scrape a
 partial log into the trajectory.
 
+Placement next to ACP, miniswe, and terminus-2:
+[docs/design/05-runtime/agent-service.md](../../docs/design/05-runtime/agent-service.md#executor-placement).
+
 ## Capabilities
 
 | | Value |

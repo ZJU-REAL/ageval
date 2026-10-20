@@ -374,7 +374,7 @@ Detailed phase rules: [docs/design/05-runtime/lifecycle.md](docs/design/05-runti
 | `environment: ssh` (A / B) | `plugins/contrib/ssh` | Mode A: remote host; Mode B: remote container |
 | `environment: daytona` | `plugins/contrib/daytona` | Daytona snapshot/sandbox integration; missing `DAYTONA_API_KEY` fails preflight |
 | ACP executor | `plugins/contrib/acp` | Parent JSON-RPC client over `attach_stdio` |
-| Other executors | `openai-http`, `anthropic-http`, external `nooa`, `dsh`, `miniswe`, `terminus-2`, `openhands`, `acp-oneshot` | Uniform session interface via `BaseExecutor`. `terminus-2` keeps model HTTP on the parent and drives tmux with `environment.exec`. `openhands` runs the pinned SDK inside the attempt environment |
+| Other executors | `openai-http`, `anthropic-http`, external `nooa`, `dsh`, `miniswe`, `terminus-2`, `openhands`, `acp-oneshot` | Uniform session interface via `BaseExecutor`. `terminus-2` keeps model HTTP on the parent and drives tmux with `environment.exec`. `openhands` runs the pinned SDK inside the attempt environment. Placement next to ACP and miniswe: [docs/design/05-runtime/agent-service.md](docs/design/05-runtime/agent-service.md#executor-placement) |
 | Official Attempt image | `plugins/contrib/docker/attempt/` | Pulls `ghcr.io/zju-real/ageval-attempt:<cli-ver>` as `ageval-attempt:base` or builds from packaged Dockerfile |
 | Registry HTTP service | `services/registry/` | Six aggregate stores (`packages`, `results`, `shares`, `orgs`, `inbox`, `hosted`) behind service classes; hosted worker runs `e2b` and `daytona` jobs ([docs/design/15](docs/design/15-hosted-jobs.md)) |
 
