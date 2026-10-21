@@ -373,7 +373,8 @@ async def _ensure_entry_present(ctx: Any, descriptor: AcpEntryDescriptor) -> Non
     probe = await _run_probe(ctx, descriptor)
     ctx.record_fact("acp_runtime_probe", {"entry": descriptor.entry_id, **probe})
     if probe.get("reason") == "node_floor":
-        node = probe.get("node") if isinstance(probe.get("node"), dict) else {}
+        raw_node = probe.get("node")
+        node: dict[str, Any] = raw_node if isinstance(raw_node, dict) else {}
         required = str(node.get("required") or descriptor.runtime.node_spec())
         found = str(node.get("found") or "missing")
         raise EnvironmentFailure(
