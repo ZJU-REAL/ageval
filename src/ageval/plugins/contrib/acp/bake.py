@@ -141,7 +141,8 @@ install_node() {
   apt-get update || return 1
   apt-get install -y --no-install-recommends ca-certificates curl gnupg || return 1
   curl -fsSL "https://deb.nodesource.com/setup_${install_major}.x" | bash - || return 1
-  apt-get install -y --no-install-recommends nodejs || return 1
+  conflicts="npm- nodejs-dev- nodejs-doc- nodejs-legacy- libnode-dev-"
+  apt-get install -y --no-install-recommends nodejs $conflicts || return 1
   rm -rf /var/lib/apt/lists/* || return 1
   hash -r 2>/dev/null || true
   return 0

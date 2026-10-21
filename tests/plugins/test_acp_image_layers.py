@@ -161,6 +161,7 @@ def test_render_every_registered_entry() -> None:
         assert "command -v npm" not in body
         assert desc.runtime.node_spec().removeprefix(">=") in body
         assert "setup_${install_major}.x" in body
+        assert "npm- nodejs-dev- nodejs-doc- nodejs-legacy- libnode-dev-" in body
         assert all(
             "npx" not in line.split()
             for line in body.splitlines()

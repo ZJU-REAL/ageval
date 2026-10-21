@@ -34,7 +34,7 @@ Every npm entry declares `runtime` in `acp_entries.json`. `runtime.node` is `>=M
 
 `runtime` is one object. `node` is the required key today. Another runtime is another field on this object, plus a check on the same bake and probe path.
 
-Bake compares `node -v` with the floor before `npm install -g`. Below the floor it installs Node 22.x and checks again. At or above the floor, the task recipe's Node stays, and the layer text does not change between builds. When Node 22.x cannot reach the floor, the image build stops with one line naming the entry id, the required floor, and the version it found. `after_environment_ready` repeats the check and ends the environment phase with `acp_runtime_node` before `install_command` or `session/new`.
+Bake compares `node -v` with the floor before `npm install -g`. Below the floor it installs Node 22.x and checks again. That install removes the distro `npm` and `libnode-dev` packages in the same apt transaction. NodeSource's `nodejs` conflicts with `npm`, and Ubuntu's `nodejs` pulls in `libnode-dev`. At or above the floor, the task recipe's Node stays, and the layer text does not change between builds. When Node 22.x cannot reach the floor, the image build stops with one line naming the entry id, the required floor, and the version it found. `after_environment_ready` repeats the check and ends the environment phase with `acp_runtime_node` before `install_command` or `session/new`.
 
 ## Parameters
 
