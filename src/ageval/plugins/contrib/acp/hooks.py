@@ -199,7 +199,7 @@ def _node_floor_miss(cfg):
     except Exception:
         found = ""
     parts = _node_parts(found)
-    need = (int(floor[0]), int(floor[1]), int(floor[2]))
+    need = (floor[0], floor[1], floor[2])
     if parts is not None and parts >= need:
         return None
     return {
@@ -492,11 +492,8 @@ def _remember_argv0(ctx: Any, entry_id: str, argv0: Any) -> None:
 
 
 def _needs_install(probe: dict[str, Any]) -> bool:
-    """Version or required-bin miss installs once. A failed handshake does not.
-
-    A Node floor miss is not fixed by ``install_command``.
-    """
-    if probe.get("ok") or probe.get("reason") == "node_floor":
+    """Version or required-bin miss installs once. A failed handshake does not."""
+    if probe.get("ok"):
         return False
     versions = probe.get("versions")
     pins_ok = (
