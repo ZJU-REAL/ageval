@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from ageval.runtime.task_worker import _load_entry
+from ageval.runtime.task_worker import load_entry
 
 SHARED_TOKEN = "from-shared"
 TASK_TOKEN = "from-task-lib"
@@ -56,23 +56,23 @@ def _dataset(root: Path, *, with_task_lib: bool) -> tuple[Path, Path]:
 
 def test_dataset_shared_modules_are_importable(tmp_path: Path) -> None:
     dataset, task = _dataset(tmp_path / "db", with_task_lib=False)
-    entry = _load_entry(task, "run:run", dataset)
+    entry = load_entry(task, "run:run", dataset)
     assert entry(None) == {"shared": SHARED_TOKEN}
 
 
 def test_task_local_lib_shadows_the_dataset_one(tmp_path: Path) -> None:
     dataset, task = _dataset(tmp_path / "db", with_task_lib=True)
-    entry = _load_entry(task, "run:run", dataset)
+    entry = load_entry(task, "run:run", dataset)
     assert entry(None) == {"shared": SHARED_TOKEN, "task": TASK_TOKEN}
 
 
 def test_a_missing_entry_module_is_one_clear_error(tmp_path: Path) -> None:
     dataset, task = _dataset(tmp_path / "db", with_task_lib=False)
     with pytest.raises(FileNotFoundError, match="solve.py"):
-        _load_entry(task, "solve:main", dataset)
+        load_entry(task, "solve:main", dataset)
 
 
 def test_an_entrypoint_without_a_function_is_rejected(tmp_path: Path) -> None:
     dataset, task = _dataset(tmp_path / "db", with_task_lib=False)
     with pytest.raises(ValueError, match="invalid entrypoint"):
-        _load_entry(task, "run", dataset)
+        load_entry(task, "run", dataset)

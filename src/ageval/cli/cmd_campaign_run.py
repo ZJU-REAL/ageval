@@ -369,7 +369,6 @@ def register(app: typer.Typer) -> None:
 
             k = n_attempts if n_attempts is not None else 1
             resume_id = resume_suite.strip() if resume_suite and str(resume_suite).strip() else None
-            task_id = task_values[0] if len(task_values) == 1 else None
             replace_keys: set[tuple[str, int]] | None = None
             if replace_slot:
                 if resume_id is None:
@@ -391,7 +390,7 @@ def register(app: typer.Typer) -> None:
                         "attempt-index must be an integer ≥ 0",
                         location="--attempt-index",
                     )
-                replace_keys = {(task_id, idx)}
+                replace_keys = {(task_values[0], idx)}
             elif attempt_index is not None:
                 raise ConfigError(
                     "invalid_override",

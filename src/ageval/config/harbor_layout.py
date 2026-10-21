@@ -511,19 +511,11 @@ def _spec_from_toml(raw: dict[str, Any], *, task_id: str, root: Path) -> HarborS
         "harbor_scoring_env": SCORING_ENV,
     }
     limits: dict[str, Any] = {}
-    env = raw.get("environment") if isinstance(raw.get("environment"), dict) else {}
-    if raw.get("environment") is not None and not isinstance(raw.get("environment"), dict):
-        raise ConfigError(
-            ERROR_INVALID_SCHEMA, "environment must be a table", location="environment"
-        )
+    env = _table(raw.get("environment"), "environment")
     _map_environment(env, parameters=parameters, limits=limits, gaps=gaps)
-    agent = raw.get("agent") if isinstance(raw.get("agent"), dict) else {}
-    if raw.get("agent") is not None and not isinstance(raw.get("agent"), dict):
-        raise ConfigError(ERROR_INVALID_SCHEMA, "agent must be a table", location="agent")
+    agent = _table(raw.get("agent"), "agent")
     _map_agent(agent, limits=limits, parameters=parameters)
-    verifier = raw.get("verifier") if isinstance(raw.get("verifier"), dict) else {}
-    if raw.get("verifier") is not None and not isinstance(raw.get("verifier"), dict):
-        raise ConfigError(ERROR_INVALID_SCHEMA, "verifier must be a table", location="verifier")
+    verifier = _table(raw.get("verifier"), "verifier")
     evaluation, uploads, verifier_image = _map_verifier(
         verifier, root=root, parameters=parameters, limits=limits, gaps=gaps
     )
@@ -556,6 +548,14 @@ def _spec_from_toml(raw: dict[str, Any], *, task_id: str, root: Path) -> HarborS
         verifier_image=verifier_image,
     )
     return HarborSpec(document=document, refs=refs)
+
+
+def _table(value: object, location: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ConfigError(ERROR_INVALID_SCHEMA, f"{location} must be a table", location=location)
+    return value
 
 
 def _check_task_name(task: object, task_id: str) -> None:
@@ -892,7 +892,7 @@ def attach_collect(
     gaps: list[str],
 ) -> None:
     """Fill ``evaluation.collect``: commands first, then artifact paths."""
-    verifier = raw.get("verifier") if isinstance(raw.get("verifier"), dict) else {}
+    verifier = _table(raw.get("verifier"), "verifier")
     rows = _collect_rows(verifier.get("collect"), raw.get("artifacts"), gaps=gaps)
     if rows:
         evaluation["collect"] = rows

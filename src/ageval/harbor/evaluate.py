@@ -17,7 +17,8 @@ async def evaluate(inputs: dict[str, Any]) -> dict[str, Any]:
     scoring = inputs.get("scoring")
     if scoring is None:
         raise ScriptError("harbor_reward_missing", "scoring host is not available")
-    params = inputs.get("parameters") if isinstance(inputs.get("parameters"), dict) else {}
+    raw_params = inputs.get("parameters")
+    params: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
     env_name = str(params.get("harbor_scoring_env") or "verifier")
     script = str(params.get("harbor_test_script") or "/tests/test.sh")
     await scoring.exec(env_name, ["sh", script])
