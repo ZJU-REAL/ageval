@@ -236,8 +236,7 @@ def register(app: typer.Typer) -> None:
             typer.Option(
                 "--oracle",
                 help=(
-                    "With --layout harbor, run solution/solve.sh instead of the agent. "
-                    "Default off."
+                    "With --layout harbor, run solution/solve.sh instead of the agent. Default off."
                 ),
             ),
         ] = False,

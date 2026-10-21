@@ -152,7 +152,7 @@ class PackageCache:
     def lookup_git(self, git_url: str, commit: str, subdir: str | None) -> Path | None:
         entry = self.git_entry_dir(git_url, commit, subdir)
         marker = entry / GIT_SOURCE_MARKER
-        if not marker.is_file() or not (entry / "ageval.yaml").is_file():
+        if not marker.is_file() or not _git_cache_root_ok(entry):
             return None
         try:
             meta = json.loads(marker.read_text(encoding="utf-8"))
@@ -204,3 +204,12 @@ class PackageCache:
         except Exception:
             shutil.rmtree(tmp, ignore_errors=True)
             raise
+
+
+def _git_cache_root_ok(entry: Path) -> bool:
+    """A git cache hit is an ageval package or a Harbor task / task-set."""
+    if (entry / "ageval.yaml").is_file():
+        return True
+    from ageval.config.harbor_layout import is_harbor_tree
+
+    return is_harbor_tree(entry)
