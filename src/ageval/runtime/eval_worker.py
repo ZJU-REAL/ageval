@@ -9,7 +9,6 @@ host's pipe — not a unix socket bind-mounted into the box.
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import json
 import os
 import traceback
@@ -17,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ageval.runtime.task_worker import _claim_stdout, _extend_import_path, _Frames, failure_envelope
+from ageval.runtime.task_worker import _claim_stdout, _Frames, failure_envelope, load_entry
 
 RESULT_NAME = "evaluation.json"
 
@@ -85,25 +84,6 @@ def _box_dir(env_name: str) -> Path:
     return Path(raw)
 
 
-def _load_entry(task_root: Path, entrypoint: str, dataset_root: Path | None) -> Any:
-    module_name, _, func_name = entrypoint.partition(":")
-    if not module_name or not func_name:
-        raise ValueError(f"invalid entrypoint: {entrypoint}")
-    path = task_root / f"{module_name}.py"
-    if not path.is_file():
-        raise FileNotFoundError(f"evaluator module missing: {path.name}")
-    _extend_import_path(task_root, dataset_root)
-    spec = importlib.util.spec_from_file_location("ageval_task_evaluator", path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load {path.name}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    func = getattr(module, func_name, None)
-    if func is None:
-        raise AttributeError(f"evaluator entrypoint missing: {entrypoint}")
-    return func
-
-
 def _published(artifacts_dir: Path) -> dict[str, str]:
     if not artifacts_dir.is_dir():
         return {}
@@ -166,7 +146,7 @@ def _run(frames: _Frames) -> int:
                 "missing_evaluation_input",
                 "run did not publish evaluation input artifact(s): " + ", ".join(missing),
             )
-        func = _load_entry(task_root, str(launch["entrypoint"]), dataset_root)
+        func = load_entry(task_root, str(launch["entrypoint"]), dataset_root)
         inputs: dict[str, Any] = {
             "artifacts": published,
             "artifacts_dir": str(artifacts_dir),
