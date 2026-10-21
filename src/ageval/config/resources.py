@@ -2,7 +2,8 @@
 
 The keys stay on ``parameters`` (and therefore on ``ctx.params``). Lock rejects
 a bad shape. The docker plugin reads the normalized options the application
-copies out of here. Residual task.toml is not a source.
+copies out of here. ``--layout harbor`` maps ``task.toml`` resource fields onto
+these keys before lock; the plugin does not read ``task.toml`` itself.
 """
 
 from __future__ import annotations

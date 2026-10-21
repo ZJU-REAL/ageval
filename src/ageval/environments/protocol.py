@@ -84,6 +84,8 @@ class BoxSpec:
     # Task-relative recipes, present only when the task actually ships them.
     dockerfile: str | None = None
     compose_file: str | None = None
+    # Directory inside task_root used as the docker build context. None keeps task_root.
+    build_context: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

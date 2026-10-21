@@ -52,6 +52,8 @@ ALLOWLISTED_OVERRIDE_POINTERS = frozenset(
     {
         "/parameters/seed",
         "/parameters/active_profile",
+        # Explicit oracle switch for `--layout harbor`. Omitted means solution/ stays off.
+        "/parameters/harbor_oracle",
     }
 )
 

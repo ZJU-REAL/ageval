@@ -94,14 +94,28 @@ def register(app: typer.Typer) -> None:
             Path,
             typer.Argument(help="Path to the Dataset root directory (ageval.dataset/1)."),
         ],
+        layout: Annotated[
+            str,
+            typer.Option(
+                "--layout",
+                help="Package layout. ageval (default) or harbor (task.toml task or task-set).",
+            ),
+        ] = "ageval",
     ) -> None:
         """List member task ids under a Dataset (fail closed on empty or id mismatch)."""
         from ageval.config.dataset import list_tasks, load_dataset_manifest
         from ageval.config.errors import ConfigError
+        from ageval.config.harbor_layout import LAYOUT_HARBOR, open_harbor_root, require_layout
 
         try:
-            manifest = load_dataset_manifest(dataset)
-            ids = list_tasks(dataset, manifest=manifest)
+            chosen = require_layout(layout)
+            if chosen == LAYOUT_HARBOR:
+                opened = open_harbor_root(dataset)
+                manifest = opened.manifest
+                ids = list(opened.task_ids)
+            else:
+                manifest = load_dataset_manifest(dataset)
+                ids = list_tasks(dataset, manifest=manifest)
         except ConfigError as exc:
             typer.echo(str(exc), err=True)
             raise typer.Exit(code=2) from exc
@@ -209,9 +223,26 @@ def register(app: typer.Typer) -> None:
                 help="Allow running the dataset's declared prepare script before locking.",
             ),
         ] = False,
+        layout: Annotated[
+            str,
+            typer.Option(
+                "--layout",
+                help=(
+                    "Package layout. ageval (default) or harbor "
+                    "(unmodified Harbor task or task-set)."
+                ),
+            ),
+        ] = "ageval",
     ) -> None:
-        """Resolve a Dataset member, lock its task.yaml; print a deterministic JSON summary."""
-        if task is None or not str(task).strip():
+        """Resolve a Dataset member and print a deterministic JSON summary."""
+        from ageval.config.harbor_layout import LAYOUT_AGEVAL, require_layout
+
+        try:
+            chosen = require_layout(layout)
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        if chosen == LAYOUT_AGEVAL and (task is None or not str(task).strip()):
             typer.echo(
                 "invalid_override: --task is required "
                 "(suite-wide lock without --task is not supported)",
@@ -233,12 +264,13 @@ def register(app: typer.Typer) -> None:
         try:
             summary = build_lock_command().run(
                 dataset_root=package,
-                task_id=task,
+                task_id=task or "",
                 set_overrides=set_overrides or (),
                 profiles_path=profiles,
                 profile=profile,
                 allow_prepare=allow_prepare,
                 on_prepare_script=_notice,
+                layout=chosen,
             )
         except (ConfigError, ModelConfigError, PluginContractError) as exc:
             # Stable operator-facing failure: exit 2, message on stderr, empty stdout.

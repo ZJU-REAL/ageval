@@ -112,12 +112,12 @@ def register(app: typer.Typer) -> None:
             ),
         ],
         task: Annotated[
-            str | None,
+            list[str] | None,
             typer.Option(
                 "--task",
                 help=(
-                    "Member task id (optional). Omit to run the full suite. "
-                    "When set, only that member runs."
+                    "Member task id (optional, repeatable with --layout harbor). "
+                    "Omit to run the full suite. A single Harbor task directory rejects --task."
                 ),
             ),
         ] = None,
@@ -221,6 +221,26 @@ def register(app: typer.Typer) -> None:
                 help="Allow running the dataset's declared prepare script before the run.",
             ),
         ] = False,
+        layout: Annotated[
+            str,
+            typer.Option(
+                "--layout",
+                help=(
+                    "Package layout. ageval (default) or harbor "
+                    "(unmodified Harbor task or task-set)."
+                ),
+            ),
+        ] = "ageval",
+        oracle: Annotated[
+            bool,
+            typer.Option(
+                "--oracle",
+                help=(
+                    "With --layout harbor, run solution/solve.sh instead of the agent. "
+                    "Default off."
+                ),
+            ),
+        ] = False,
         probe: Annotated[
             bool,
             typer.Option(
@@ -304,11 +324,24 @@ def register(app: typer.Typer) -> None:
             except DirConfigError as exc:
                 typer.echo(str(exc), err=True)
                 raise typer.Exit(code=2) from exc
+        task_values = [item.strip() for item in (task or []) if str(item).strip()]
         if probe:
-            if not task:
-                typer.echo("probe requires --task", err=True)
-                raise typer.Exit(code=2)
-            _probe_one(build_probe_attempt(), package, task.strip(), profiles, set_overrides)
+            from ageval.config.errors import ConfigError
+            from ageval.config.harbor_layout import task_for_probe
+
+            try:
+                probe_task = task_for_probe(package, layout, task_values)
+            except ConfigError as exc:
+                typer.echo(str(exc), err=True)
+                raise typer.Exit(code=2) from exc
+            _probe_one(
+                build_probe_attempt(),
+                package,
+                probe_task,
+                profiles,
+                set_overrides,
+                layout=layout,
+            )
         _suite = build_suite_runner()
         execute_suite_run = _suite.execute_suite_run
         plan_suite_run = _suite.plan_suite_run
@@ -323,9 +356,21 @@ def register(app: typer.Typer) -> None:
                 pointer, value = parse_set_override(raw)
                 overrides[pointer] = value
 
+            from ageval.config.harbor_layout import LAYOUT_HARBOR, require_layout
+
+            chosen_layout = require_layout(layout)
+            if oracle and chosen_layout != LAYOUT_HARBOR:
+                raise ConfigError(
+                    "invalid_override",
+                    "--oracle is only valid with --layout harbor",
+                    location="--oracle",
+                )
+            if oracle:
+                overrides["/parameters/harbor_oracle"] = True
+
             k = n_attempts if n_attempts is not None else 1
             resume_id = resume_suite.strip() if resume_suite and str(resume_suite).strip() else None
-            task_id = task.strip() if task and str(task).strip() else None
+            task_id = task_values[0] if len(task_values) == 1 else None
             replace_keys: set[tuple[str, int]] | None = None
             if replace_slot:
                 if resume_id is None:
@@ -334,10 +379,10 @@ def register(app: typer.Typer) -> None:
                         "replace-slot requires --resume-suite",
                         location="--replace-slot",
                     )
-                if not task_id:
+                if len(task_values) != 1:
                     raise ConfigError(
                         "suite_replace_requires_task",
-                        "replace-slot requires --task",
+                        "replace-slot requires one --task",
                         location="--replace-slot",
                     )
                 idx = 0 if attempt_index is None else attempt_index
@@ -364,17 +409,17 @@ def register(app: typer.Typer) -> None:
             # Full suite when --task omitted; single task when provided.
             plan = plan_suite_run(
                 package,
-                task_id=task.strip() if task and str(task).strip() else None,
+                task_ids=task_values,
                 max_concurrent_tasks=max_concurrent_tasks,
                 n_attempts=k,
                 suite_run_id=resume_id,
+                layout=chosen_layout,
             )
             machine = use_json_stdout(force_json=json_out)
             # Historical single-task JSON only when k==1 and not resuming.
             if (
                 len(plan.task_ids) == 1
-                and task
-                and str(task).strip()
+                and len(task_values) == 1
                 and plan.n_attempts == 1
                 and resume_id is None
             ):
@@ -392,6 +437,7 @@ def register(app: typer.Typer) -> None:
                             keep_workspace=keep_workspace,
                             keep_vendor_raw=keep_vendor_raw,
                             allow_prepare=allow_prepare,
+                            layout=chosen_layout,
                             on_phase=spinner.phase,
                             on_progress=spinner.stall,
                         )
@@ -508,6 +554,8 @@ def _probe_one(
     task: str,
     profiles: Path | None,
     set_overrides: list[str] | None,
+    *,
+    layout: str = "ageval",
 ) -> None:
     """Print the probe answer and exit: 0 when this task could run here."""
     import asyncio
@@ -520,7 +568,13 @@ def _probe_one(
     try:
         overrides = dict(parse_set_override(raw) for raw in set_overrides or ())
         answer = asyncio.run(
-            probe_attempt(package, task, overrides=overrides or None, profiles_path=profiles)
+            probe_attempt(
+                package,
+                task,
+                overrides=overrides or None,
+                profiles_path=profiles,
+                layout=layout,
+            )
         )
     except (ConfigError, ModelConfigError, PluginContractError) as exc:
         typer.echo(str(exc), err=True)

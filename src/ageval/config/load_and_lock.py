@@ -96,6 +96,7 @@ class ConfigCore:
         capabilities: CapabilityCatalog,
         dataset_provenance: Mapping[str, object] | None = None,
         force_build: bool = False,
+        layout: str = "ageval",
     ) -> LockedTaskConfig:
         """Read, merge, validate, canonicalize, digest, and freeze one task.
 
@@ -114,14 +115,25 @@ class ConfigCore:
             JSON Pointer → value. ``/agent_profiles/<role>/…`` pointers apply to
             the job document before the slot merge; the rest are parameter leaves.
         """
-        root = self._resolve_root(task_root)
-        validate_top_level_layout(self._reader, root)
-        self._validate_dataset_shared(root)
+        from ageval.config.harbor_layout import LAYOUT_HARBOR, load_harbor_spec, require_layout
 
-        raw = self._read_task_document(root)
-        resolution: list[ResolutionEntry] = [
-            ResolutionEntry(source="task.yaml", pointer="/", note="task document"),
-        ]
+        layout = require_layout(layout)
+        root = self._resolve_root(task_root)
+        harbor_refs: dict[str, Any] | None = None
+        if layout == LAYOUT_HARBOR:
+            spec = load_harbor_spec(root, task_id)
+            raw = spec.document
+            harbor_refs = spec.refs
+            resolution = [
+                ResolutionEntry(source="task.toml", pointer="/", note="harbor task document"),
+            ]
+        else:
+            validate_top_level_layout(self._reader, root)
+            self._validate_dataset_shared(root)
+            raw = self._read_task_document(root)
+            resolution = [
+                ResolutionEntry(source="task.yaml", pointer="/", note="task document"),
+            ]
         merged = self._apply_defaults(raw, resolution)
 
         job_doc = copy.deepcopy(job)
@@ -161,8 +173,21 @@ class ConfigCore:
             task_id=task_id,
             root=root,
             capabilities=capabilities,
+            require_task_scripts=layout != LAYOUT_HARBOR,
         )
         resolved_refs = collect_resolved_references(self._reader, merged, root)
+        if harbor_refs is not None:
+            resolved_refs.update(harbor_refs)
+            if (merged.get("parameters") or {}).get("docker_image"):
+                resolved_refs.pop("environment_dockerfile", None)
+            if resolved_refs.get("evaluation_environments"):
+                if job_doc.environment != "docker":
+                    raise ConfigError(
+                        ERROR_INVALID_SCHEMA,
+                        "a separate Harbor verifier requires environment: docker",
+                        location="/environment",
+                    )
+                job_doc.evaluate_host["isolated"] = True
         _apply_evaluate_job(job_doc, resolved_refs)
         resolution.append(
             ResolutionEntry(

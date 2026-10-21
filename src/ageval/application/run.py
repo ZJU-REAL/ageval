@@ -52,6 +52,7 @@ async def probe_attempt(
     profile: str | None = None,
     profiles_path: Path | str | None = None,
     overrides: dict[str, Any] | None = None,
+    layout: str = "ageval",
 ) -> dict[str, Any]:
     """Lock and preflight without opening a box or invoking an Agent.
 
@@ -66,6 +67,7 @@ async def probe_attempt(
         profile=profile,
         profiles_path=profiles_path,
         overrides=overrides,
+        layout=layout,
     )
     lock = locked.lock
     registry = ensure_bootstrapped()
@@ -126,6 +128,7 @@ async def run_attempt(
     on_progress: Any = None,
     attempt_index: int = 0,
     allow_prepare: bool = False,
+    layout: str = "ageval",
 ) -> tuple[int, AttemptResult]:
     """Run one foreground Attempt and return its exit code and result."""
     from ageval.application.composition import build_lock_command
@@ -142,6 +145,7 @@ async def run_attempt(
         overrides=overrides,
         force_build=force_build,
         allow_prepare=allow_prepare,
+        layout=layout,
     )
     if on_phase is not None:
         on_phase("finished", "lock")
@@ -371,6 +375,39 @@ def _merge_attempt_declarations(
         options["main_environment"] = dict(env)
     elif "main_environment" not in options and isinstance(env, list | tuple) and env:
         options["main_environment"] = list(env)
+    if parameters.get("package_layout") == "harbor":
+        _apply_harbor_box_options(options, parameters)
+
+
+def _apply_harbor_box_options(
+    options: MutableMapping[str, Any], parameters: Mapping[str, Any]
+) -> None:
+    """Harbor policy knobs the docker kind already understands. Job options win."""
+    if parameters.get("harbor_network") == "no-network" and "network" not in options:
+        options["network"] = "none"
+    user = parameters.get("harbor_user")
+    if "user" not in options and isinstance(user, str) and user.strip():
+        options["user"] = user.strip()
+    image = parameters.get("docker_image")
+    if "docker_image" not in options and isinstance(image, str) and image.strip():
+        options["docker_image"] = image.strip()
+    if parameters.get("align_app") is True:
+        options["align_app"] = True
+    if parameters.get("drop_compose_main") is True:
+        options["drop_compose_main"] = True
+    workdir = parameters.get("harbor_workdir")
+    if (
+        "workdir" not in options
+        and isinstance(workdir, str)
+        and workdir.strip()
+        and workdir.strip() != "/app"
+    ):
+        options["workdir"] = workdir.strip()
+    env = options.get("main_environment")
+    if isinstance(env, dict) and env:
+        from ageval.config.harbor_layout import expand_harbor_env
+
+        options["main_environment"] = expand_harbor_env({str(k): str(v) for k, v in env.items()})
 
 
 def _egress_allowlist(lock: LockedTaskConfig) -> list[str]:
@@ -404,12 +441,14 @@ def _box_spec(
 ) -> BoxSpec:
     """Engine context for the box: the work root plus whatever recipe shipped."""
     references = thaw(lock.resolved_references)
+    context = references.get("environment_build_context")
     return BoxSpec(
         attempt_root=attempt_root,
         task_root=task_root,
         repo_root=Path.cwd(),
         dockerfile=references.get("environment_dockerfile"),
         compose_file=references.get("environment_compose"),
+        build_context=context if isinstance(context, str) and context.strip() else None,
     )
 
 

@@ -86,7 +86,9 @@ def assert_self_contained(root: Path) -> None:
                 )
 
 
-def _fetch_git_dataset(ref: PackageRef, commit: str, pkg_cache: PackageCache) -> Path:
+def _fetch_git_dataset(
+    ref: PackageRef, commit: str, pkg_cache: PackageCache, *, layout: str = "ageval"
+) -> Path:
     import tempfile
 
     assert ref.git_url is not None
@@ -114,11 +116,16 @@ def _fetch_git_dataset(ref: PackageRef, commit: str, pkg_cache: PackageCache) ->
             _git(["sparse-checkout", "set", ref.subdir], cwd=clone)
         _git(["checkout", "-q", "--detach", "FETCH_HEAD"], cwd=clone)
         dataset_root = clone / ref.subdir if ref.subdir else clone
-        if not (dataset_root / "ageval.yaml").is_file():
+        if not _source_root_ok(dataset_root, layout):
             where = f"#{ref.subdir}" if ref.subdir else ""
+            missing = (
+                "Harbor task.toml not found at git source root"
+                if layout == "harbor"
+                else "ageval.yaml not found at git source root"
+            )
             raise ConfigError(
                 "invalid_package",
-                f"ageval.yaml not found at git source root{where}",
+                f"{missing}{where}",
                 location=ref.display(),
             )
         assert_self_contained(dataset_root)
@@ -156,12 +163,21 @@ def _source_from_marker(root: Path) -> dict[str, str] | None:
     return source
 
 
+def _source_root_ok(root: Path, layout: str) -> bool:
+    if layout == "harbor":
+        from ageval.config.harbor_layout import is_harbor_tree
+
+        return is_harbor_tree(root)
+    return (root / "ageval.yaml").is_file()
+
+
 def resolve_dataset_root_with_source(
     raw: str | Path,
     *,
     cwd: Path | None = None,
     cache: PackageCache | None = None,
     client: RegistryClient | None = None,
+    layout: str = "ageval",
 ) -> tuple[Path, dict[str, str] | None]:
     """Resolve *raw* and also return lock ``source`` fields for git refs."""
     ref = parse_package_ref(raw, cwd=cwd)
@@ -170,7 +186,7 @@ def resolve_dataset_root_with_source(
         assert ref.git_url is not None
         commit = resolve_git_commit(ref)
         hit = pkg_cache.lookup_git(ref.git_url, commit, ref.subdir)
-        root = hit if hit is not None else _fetch_git_dataset(ref, commit, pkg_cache)
+        root = hit if hit is not None else _fetch_git_dataset(ref, commit, pkg_cache, layout=layout)
         assert_self_contained(root)
         source: dict[str, str] = {"git_url": ref.git_url, "commit": commit}
         if ref.subdir:
@@ -186,6 +202,7 @@ def resolve_dataset_root(
     cwd: Path | None = None,
     cache: PackageCache | None = None,
     client: RegistryClient | None = None,
+    layout: str = "ageval",
 ) -> Path:
     """Return a local filesystem Dataset root for *raw* path or registry ref."""
     ref = parse_package_ref(raw, cwd=cwd)
@@ -193,7 +210,9 @@ def resolve_dataset_root(
         assert ref.path is not None
         return ref.path
     if ref.kind == "git":
-        root, _source = resolve_dataset_root_with_source(raw, cwd=cwd, cache=cache, client=client)
+        root, _source = resolve_dataset_root_with_source(
+            raw, cwd=cwd, cache=cache, client=client, layout=layout
+        )
         return root
 
     pkg_cache = cache or PackageCache()
