@@ -374,9 +374,12 @@ async def _ensure_entry_present(ctx: Any, descriptor: AcpEntryDescriptor) -> Non
     ctx.record_fact("acp_runtime_probe", {"entry": descriptor.entry_id, **probe})
     if probe.get("reason") == "node_floor":
         raw_node = probe.get("node")
-        node: dict[str, Any] = raw_node if isinstance(raw_node, dict) else {}
-        required = str(node.get("required") or descriptor.runtime.node_spec())
-        found = str(node.get("found") or "missing")
+        if isinstance(raw_node, dict):
+            required = str(raw_node.get("required") or descriptor.runtime.node_spec())
+            found = str(raw_node.get("found") or "missing")
+        else:
+            required = descriptor.runtime.node_spec()
+            found = "missing"
         raise EnvironmentFailure(
             "acp_runtime_node",
             f"acp entry {descriptor.entry_id!r} requires node {required}; found {found}",
