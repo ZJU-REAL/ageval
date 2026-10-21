@@ -23,10 +23,18 @@ scrape in this repo.
 | --- | --- |
 | export | exclusive `executor` |
 | inject | `environment`: `attach_stdio` |
-| chain | `after_environment_ready` (probe the environment; skip `install_command` when the bake already matches pin + stdio `initialize`), `trajectory_collect` |
-| bake | `docker/Dockerfile.bake` — bound `options.entry` only. Pins come from packaged `acp_entries.json`, or from `$AGEVAL_HOME/acp-entries.json` when that file defines the id. A packaged id cannot be overridden. Official Attempt images bake shipped entries only. Invoke does not `npm i`. |
+| chain | `after_environment_ready` (probe the environment; fail with `acp_runtime_node` when Node is below `runtime.node`; skip `install_command` when the bake already matches pin + stdio `initialize`), `trajectory_collect` |
+| bake | `docker/Dockerfile.bake` — bound `options.entry` only. Pins and `runtime.node` come from packaged `acp_entries.json`, or from `$AGEVAL_HOME/acp-entries.json` when that file defines the id. A packaged id cannot be overridden. Bake installs Node 22.x when `node` is missing or older than the floor, and leaves a Node that already meets it in place. Official Attempt images bake shipped entries only. Invoke does not `npm i`. |
 
 Missing `attach_stdio` fails at **lock**, not mid-invoke.
+
+## Runtime floor
+
+Every npm entry declares `runtime` in `acp_entries.json`. `runtime.node` is `>=MAJOR.MINOR.PATCH`. Maintainers store the highest published `engines.node` among the pinned packages. A pin with no `engines.node` does not raise the floor. When none of the pins publish one, the floor is `>=18.0.0`. A home-file entry includes the same field. A missing value or any other shape fails to load with `invalid_schema`.
+
+`runtime` is one object. `node` is the required key today. Another runtime is another field on this object, plus a check on the same bake and probe path.
+
+Bake compares `node -v` with the floor before `npm install -g`. Below the floor it installs Node 22.x and checks again. At or above the floor, the task recipe's Node stays, and the layer text does not change between builds. When Node 22.x cannot reach the floor, the image build stops with one line naming the entry id, the required floor, and the version it found. `after_environment_ready` repeats the check and ends the environment phase with `acp_runtime_node` before `install_command` or `session/new`.
 
 ## Parameters
 

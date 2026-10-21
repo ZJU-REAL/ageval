@@ -144,4 +144,4 @@ run.py / evaluator.py  Agent.session(profile).invoke
 
 运行时 ACP entry 表由包内 `acp_entries.json` 与可选的 `$AGEVAL_HOME/acp-entries.json` 合并而成（包内内置 ID 不可被覆盖）。在环境启动后、`attach_stdio` 之前：
 1. **生成运行时配置覆盖文件：** 在 Attempt `$HOME` 下按 `entry` 生成对应的配置文件（如 Pi 的 `.pi/agent/models.json`、OpenCode 的 `.config/opencode/opencode.json`、Codex 的 `.codex/config.toml`、Claude Code 的 `.claude/settings.json`），其中仅写入环境变量引用或已解析的 `base_url`，不写入明文密钥，也不拷贝宿主机个人目录配置。
-2. **版本与路径探测：** 通过 `host.exec` 核对全局 npm 包版本（`npm ls -g --depth=0`）与必需命令的 `realpath`，随后执行一次 stdio JSON-RPC `initialize` 握手。若三项均通过（如已在构建期写入镜像），则跳过安装；若版本或路径不匹配，则执行一次该 entry 的 `install_command` 并再次探测，仍不满足则以 `acp_runtime_install_failed` 或 `acp_runtime_missing` 终止 `environment` 阶段。
+2. **版本与路径探测：** 先执行 `node -v`。结果低于该 entry 的 `runtime.node` 时，`environment` 阶段以 `acp_runtime_node` 结束，错误写明 entry、要求的下限和实际版本，并且不执行 `install_command`。达到下限后，通过 `host.exec` 核对全局 npm 包版本（`npm ls -g --depth=0`）与必需命令的 `realpath`，随后执行一次 stdio JSON-RPC `initialize` 握手。若三项均通过（如已在构建期写入镜像），则跳过安装；若版本或路径不匹配，则执行一次该 entry 的 `install_command` 并再次探测，仍不满足则以 `acp_runtime_install_failed` 或 `acp_runtime_missing` 终止 `environment` 阶段。

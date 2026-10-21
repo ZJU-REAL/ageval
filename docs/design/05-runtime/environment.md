@@ -44,6 +44,7 @@ environment: e2b    # local | docker | e2b | ssh | daytona
 
 - `ARG PYTHON_VERSION` 指定基础镜像的 CPython 版本（默认 `3.12`）。当 `environment_options.python_version` 指定非默认版本（如 `"3.13"`）时，插件将任务配方中的 `FROM ageval-attempt:base` 解析为版本化标签（如 `ageval-attempt:py3.13`），不同 Python 版本的基础镜像可在本地并存。
 - 任务 Dockerfile 也可直接基于其他发行版镜像（如 `FROM ubuntu:24.04`）：`docker` 插件在构建完任务配方后，按顺序叠加已绑定插件声明的 `config.image_layers`。ACP 插件仅在镜像中写入当前锁定的 `options.entry` 对应包版本（来自包内 `acp_entries.json` 与 `$AGEVAL_HOME/acp-entries.json` 的并集，且包内内置 ID 不可被覆盖），不在运行调用期间执行 `npm i` 或浮动 `npx`。Python 侧的 ACP SDK 仅驻留在宿主父进程中。
+- ACP entry 在同一份表里声明 `runtime.node`（`>=主版本.次版本.补丁`）。插件层发现镜像里的 `node` 缺失或低于该下限时安装 Node 22.x，安装后仍低于下限则镜像构建失败；已经达到下限时保留任务配方中的 Node。任务 Dockerfile 里的业务软件包保持原样。下限写在 entry 上，由维护者随 pin 一起提交。
 
 ### Docker `environment_options` 参数
 
