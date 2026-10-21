@@ -1,7 +1,8 @@
 """Render the ACP plugin bake Dockerfile for one bound ``options.entry``.
 
-Pins and detect names stay in ``acp_entries.json``. The template is a
-Dockerfile; this module only substitutes the bound entry. No floating ``npx``.
+Pins, detect names, and ``runtime.node`` stay in ``acp_entries.json``. The
+template is a Dockerfile; this module only substitutes the bound entry.
+No floating ``npx``.
 """
 
 from __future__ import annotations
@@ -15,6 +16,9 @@ from ageval.plugins.errors import ExtensionMaterializeError
 
 PACKAGES_MARKER = "__ACP_ENTRY_PACKAGES__"
 DETECT_MARKER = "__ACP_DETECT_BINARIES__"
+NODE_GATE_MARKER = "__ACP_NODE_GATE__"
+# NodeSource major this bake knows how to install. A higher floor fails closed.
+NODE_INSTALL_MAJOR = 22
 
 # Required-name realpath against the package bin. Not a bare PATH existence check.
 _PIN_CHECK_JS = r"""
@@ -60,6 +64,110 @@ def _js_one_line(source: str) -> str:
     return " ".join(part.strip() for part in source.splitlines() if part.strip())
 
 
+def _shell_one_line(source: str) -> str:
+    """Join a POSIX script so a Dockerfile RUN does not start a new instruction.
+
+    Newlines are command separators here. ``{``, ``then``, and ``do`` stay
+    open, so the next line is a space rather than ``;``.
+    """
+    parts = [part.strip() for part in source.splitlines() if part.strip()]
+    if not parts:
+        return ""
+    chunks = [parts[0]]
+    for part in parts[1:]:
+        sep = " " if chunks[-1].endswith(("{", "then", "do", "else")) else "; "
+        chunks.append(sep + part)
+    return "".join(chunks)
+
+
+# POSIX sh. npm on PATH is not a version. Collapsed onto one RUN line.
+_NODE_GATE_SH = r"""
+set -eu
+entry_id=__ENTRY_ID__
+floor=__NODE_FLOOR__
+install_major=__NODE_INSTALL_MAJOR__
+node_meets() {
+  bare="$1"
+  need="$2"
+  bare="${bare#v}"
+  bare="${bare#V}"
+  bare="${bare%%-*}"
+  case "$bare" in ""|missing) return 1 ;; esac
+  oldifs=$IFS
+  IFS=.
+  set -- $bare
+  a1=${1:-0}
+  a2=${2:-0}
+  a3=${3:-0}
+  set -- $need
+  b1=${1:-0}
+  b2=${2:-0}
+  b3=${3:-0}
+  IFS=$oldifs
+  for part in "$a1" "$a2" "$a3" "$b1" "$b2" "$b3"; do
+    case "$part" in ""|*[!0-9]*) return 1 ;; esac
+  done
+  if [ "$a1" -gt "$b1" ]; then return 0; fi
+  if [ "$a1" -lt "$b1" ]; then return 1; fi
+  if [ "$a2" -gt "$b2" ]; then return 0; fi
+  if [ "$a2" -lt "$b2" ]; then return 1; fi
+  [ "$a3" -ge "$b3" ]
+}
+read_node() {
+  if ! command -v node >/dev/null 2>&1; then
+    printf '%s' missing
+    return 0
+  fi
+  found="$(node -v 2>/dev/null || true)"
+  printf '%s' "${found:-missing}"
+}
+fail_floor() {
+  echo "acp entry ${entry_id} requires node >=${floor}; found ${found}$1" >&2
+  exit 1
+}
+found="$(read_node)"
+if node_meets "$found" "$floor"; then
+  exit 0
+fi
+floor_major="${floor%%.*}"
+if [ "$floor_major" -gt "$install_major" ]; then
+  fail_floor "; bake installs node ${install_major}.x only"
+fi
+install_node() {
+  export DEBIAN_FRONTEND=noninteractive
+  if ! command -v apt-get >/dev/null 2>&1; then
+    return 1
+  fi
+  apt-get update || return 1
+  apt-get install -y --no-install-recommends ca-certificates curl gnupg || return 1
+  curl -fsSL "https://deb.nodesource.com/setup_${install_major}.x" | bash - || return 1
+  apt-get install -y --no-install-recommends nodejs || return 1
+  rm -rf /var/lib/apt/lists/* || return 1
+  hash -r 2>/dev/null || true
+  return 0
+}
+if ! install_node; then
+  fail_floor ""
+fi
+found="$(read_node)"
+if node_meets "$found" "$floor"; then
+  exit 0
+fi
+fail_floor ""
+"""
+
+
+def node_gate_script(entry_id: str, floor: tuple[int, int, int]) -> str:
+    """One-line POSIX script: install Node 22.x or fail when *floor* is unmet."""
+    spec = ".".join(str(part) for part in floor)
+    script = (
+        _NODE_GATE_SH.replace("__ENTRY_ID__", shlex.quote(entry_id), 1)
+        .replace("__NODE_FLOOR__", shlex.quote(spec), 1)
+        .replace("__NODE_INSTALL_MAJOR__", shlex.quote(str(NODE_INSTALL_MAJOR)), 1)
+    )
+    return _shell_one_line(script)
+
+
 def _realpath_check(required: list[tuple[str, str]]) -> str:
     payload = json.dumps(
         [{"name": name, "package": package} for name, package in required],
@@ -103,9 +211,13 @@ def render_bake_body(template: str, entry_id: str) -> str:
             f"unknown acp entry: {entry_id!r}",
             kind="extension_materialize_failed",
         )
-    if PACKAGES_MARKER not in template or DETECT_MARKER not in template:
+    if (
+        PACKAGES_MARKER not in template
+        or DETECT_MARKER not in template
+        or NODE_GATE_MARKER not in template
+    ):
         raise ExtensionMaterializeError(
-            "acp bake template missing package or detect marker",
+            "acp bake template missing package, detect, or node gate marker",
             kind="extension_materialize_failed",
         )
     try:
@@ -122,7 +234,12 @@ def render_bake_body(template: str, entry_id: str) -> str:
             kind="extension_materialize_failed",
         )
     detect = _realpath_check(required)
-    body = template.replace(PACKAGES_MARKER, packages).replace(DETECT_MARKER, detect)
+    gate = node_gate_script(descriptor.entry_id, descriptor.runtime.node)
+    body = (
+        template.replace(NODE_GATE_MARKER, gate)
+        .replace(PACKAGES_MARKER, packages)
+        .replace(DETECT_MARKER, detect)
+    )
     if descriptor.entry_id == "codex":
         body = body.rstrip() + "\n" + _CODEX_NATIVE_RUN.lstrip("\n")
     return body

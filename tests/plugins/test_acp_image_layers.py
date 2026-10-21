@@ -7,10 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from ageval.plugins.contrib.acp.bake import render_bake_body
+from ageval.plugins.contrib.acp.bake import NODE_GATE_MARKER, node_gate_script, render_bake_body
 from ageval.plugins.contrib.acp.hooks import _needed_commands
 from ageval.plugins.contrib.acp.registry import get_entry, list_entry_ids
 from ageval.plugins.contrib.docker import images
+from ageval.plugins.contrib.docker.images import content_digest
 from ageval.plugins.errors import ExtensionMaterializeError
 from ageval.plugins.image_layers import (
     layers_for_graph,
@@ -96,6 +97,8 @@ def test_bake_template_uses_base_image_arg() -> None:
         if line and not line.lstrip().startswith("#")
     )
     assert "__ACP_ENTRY_PACKAGES__" in text
+    assert NODE_GATE_MARKER in text
+    assert "command -v npm" not in text
 
 
 def test_render_opencode_bakes_pinned_detect_commands() -> None:
@@ -154,6 +157,10 @@ def test_render_every_registered_entry() -> None:
             assert f"command -v {name}" not in body
         assert "__ACP_ENTRY_PACKAGES__" not in body
         assert "__ACP_DETECT_BINARIES__" not in body
+        assert NODE_GATE_MARKER not in body
+        assert "command -v npm" not in body
+        assert desc.runtime.node_spec().removeprefix(">=") in body
+        assert "setup_${install_major}.x" in body
         assert all(
             "npx" not in line.split()
             for line in body.splitlines()
@@ -261,3 +268,161 @@ def test_same_recipe_different_entry_two_content_keys(
     plugin_bodies = [text for tag, text in fake.builds if tag.endswith("-acp")]
     assert any("opencode-ai@1.18.12" in text for text in plugin_bodies)
     assert any("pi-acp@0.0.33" in text for text in plugin_bodies)
+
+
+def _write_exec(path: Path, body: str) -> None:
+    path.write_text(body, encoding="utf-8")
+    path.chmod(0o755)
+
+
+_NODE_STUB = """#!/bin/sh
+IFS= read -r line < "$NODE_VERSION_FILE"
+printf '%s\\n' "$line"
+"""
+
+_APT_STUB = """#!/bin/sh
+printf '%s\\n' "apt-get $*" >> "$GATE_LOG"
+if [ "$1" = "install" ]; then
+  shift
+  for arg in "$@"; do
+    if [ "$arg" = "nodejs" ] && [ -n "${NODE_AFTER:-}" ]; then
+      printf '%s\\n' "$NODE_AFTER" > "$NODE_VERSION_FILE"
+      if [ ! -e "$NODE_BIN" ]; then
+        /bin/cp "$NODE_STUB_SRC" "$NODE_BIN"
+        /bin/chmod +x "$NODE_BIN"
+      fi
+    fi
+  done
+fi
+exit 0
+"""
+
+
+def _run_node_gate(
+    tmp_path: Path,
+    *,
+    entry_id: str,
+    floor: tuple[int, int, int],
+    node: str | None,
+    apt: bool = False,
+    after: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run the bake gate with PATH limited to stubs.
+
+    ``rm`` is always a stub. The production script's apt-list cleanup must not
+    reach the host ``rm``.
+    """
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    version = tmp_path / "node-version"
+    node_bin = bindir / "node"
+    stub_src = tmp_path / "node-stub.sh"
+    _write_exec(stub_src, _NODE_STUB)
+    _write_exec(bindir / "rm", "#!/bin/sh\nprintf 'rm\\n' >> \"$GATE_LOG\"\nexit 0\n")
+    _write_exec(bindir / "curl", "#!/bin/sh\nprintf 'curl\\n' >> \"$GATE_LOG\"\nexit 0\n")
+    _write_exec(bindir / "bash", "#!/bin/sh\nprintf 'bash\\n' >> \"$GATE_LOG\"\nexit 0\n")
+    if node is not None:
+        version.write_text(node + "\n", encoding="utf-8")
+        _write_exec(node_bin, _NODE_STUB)
+    if apt:
+        _write_exec(bindir / "apt-get", _APT_STUB)
+    env = {
+        "PATH": str(bindir),
+        "GATE_LOG": str(tmp_path / "gate.log"),
+        "NODE_VERSION_FILE": str(version),
+        "NODE_BIN": str(node_bin),
+        "NODE_STUB_SRC": str(stub_src),
+    }
+    if after is not None:
+        env["NODE_AFTER"] = after
+    return subprocess.run(
+        ["/bin/sh", "-c", node_gate_script(entry_id, floor)],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+
+def _gate_log(tmp_path: Path) -> str:
+    log = tmp_path / "gate.log"
+    if not log.is_file():
+        return ""
+    return log.read_text(encoding="utf-8")
+
+
+def test_pi_bake_embeds_the_node_gate_and_a_stable_content_key(tmp_path: Path) -> None:
+    first = render_bake_body(_template(), "pi")
+    second = render_bake_body(_template(), "pi")
+    assert first == second
+    gate = node_gate_script("pi", (22, 19, 0))
+    assert gate in first
+    digest_kwargs = {
+        "context_root": tmp_path,
+        "platform": "linux/arm64",
+        "base_digest": "sha256:base",
+    }
+    assert content_digest(recipe=first, **digest_kwargs) == content_digest(
+        recipe=second, **digest_kwargs
+    )
+    proc = _run_node_gate(tmp_path, entry_id="pi", floor=(22, 19, 0), node="v22.19.0")
+    assert proc.returncode == 0, proc.stderr
+    assert "apt-get" not in _gate_log(tmp_path)
+    assert "rm" not in _gate_log(tmp_path)
+
+
+def test_node_already_above_floor_is_left_alone(tmp_path: Path) -> None:
+    proc = _run_node_gate(tmp_path, entry_id="opencode", floor=(18, 0, 0), node="v18.19.1")
+    assert proc.returncode == 0, proc.stderr
+    assert _gate_log(tmp_path) == ""
+
+
+@pytest.mark.parametrize(
+    ("node", "apt", "after", "code", "apt_called", "stderr_has"),
+    [
+        ("v22.23.4", False, None, 0, False, ""),
+        ("v18.19.1", False, None, 1, False, "acp entry pi requires node >=22.19.0; found v18.19.1"),
+        ("v18.19.1", True, "v22.23.4", 0, True, ""),
+        ("v18.19.1", True, None, 1, True, "found v18.19.1"),
+        (None, True, "v22.23.4", 0, True, ""),
+    ],
+)
+def test_pi_node_gate_installs_or_fails_closed(
+    tmp_path: Path,
+    node: str | None,
+    apt: bool,
+    after: str | None,
+    code: int,
+    apt_called: bool,
+    stderr_has: str,
+) -> None:
+    proc = _run_node_gate(
+        tmp_path,
+        entry_id="pi",
+        floor=(22, 19, 0),
+        node=node,
+        apt=apt,
+        after=after,
+    )
+    assert proc.returncode == code, proc.stderr
+    assert ("apt-get" in _gate_log(tmp_path)) is apt_called
+    if stderr_has:
+        assert stderr_has in proc.stderr
+        assert proc.stderr.count("\n") == 1
+
+
+def test_floor_above_the_installer_fails_before_apt(tmp_path: Path) -> None:
+    proc = _run_node_gate(
+        tmp_path,
+        entry_id="pi",
+        floor=(24, 0, 0),
+        node="v18.19.1",
+        apt=True,
+        after="v22.23.4",
+    )
+    assert proc.returncode == 1
+    assert (
+        proc.stderr.strip()
+        == "acp entry pi requires node >=24.0.0; found v18.19.1; bake installs node 22.x only"
+    )
+    assert "apt-get" not in _gate_log(tmp_path)
