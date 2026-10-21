@@ -109,7 +109,6 @@ _VERIFIER_KEYS = frozenset(
 _TASK_KEYS = frozenset({"name", "authors"})
 _COMPOSE_NAMES = ("compose.yaml", "docker-compose.yaml")
 _SIZE_RE = re.compile(r"^([0-9]*\.?[0-9]+)\s*([KMG])$", re.IGNORECASE)
-_ENV_TEMPLATE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 
 HarborKind = Literal["task", "task-set"]
 
@@ -342,18 +341,13 @@ def compute_harbor_eval_digest(root: Path, opened: HarborRoot) -> str:
 
 
 def expand_harbor_env(env: dict[str, str]) -> dict[str, str]:
-    """Resolve ``${VAR}`` and ``${VAR:-default}`` from the host process.
+    """Resolve ``${VAR}`` templates in memory. The lock keeps the authored text."""
+    from ageval.config.env_refs import expand_embedded_env
 
-    The lock keeps the authored templates. Expansion happens in memory when the
-    box starts, so a secret value is not written into ``lock.json``.
-    """
-    out: dict[str, str] = {}
-    for key, value in env.items():
-        out[key] = _ENV_TEMPLATE.sub(
-            lambda match, name=key: _env_replacement(match, name),
-            value,
-        )
-    return out
+    return {
+        key: expand_embedded_env(value, location=f"environment.env.{key}")
+        for key, value in env.items()
+    }
 
 
 # --- classification ----------------------------------------------------------
@@ -1149,19 +1143,3 @@ def _string_map(value: object, *, location: str) -> dict[str, str]:
             )
         out[key] = item
     return out
-
-
-def _env_replacement(match: re.Match[str], key: str) -> str:
-    import os
-
-    name = match.group(1)
-    found = os.environ.get(name)
-    if found is not None and found != "":
-        return found
-    if match.group(2) is not None:
-        return match.group(2)
-    raise ConfigError(
-        ERROR_MISSING_REFERENCE,
-        f"environment variable {name} is unset (required by env.{key})",
-        location=f"environment.env.{key}",
-    )
