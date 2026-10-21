@@ -188,6 +188,7 @@ def describe_acp_entry(
         "acp_command": list(desc.acp_command),
         "acp_version": desc.acp_version,
         "engine_version": desc.engine_version,
+        "runtime": {"node": desc.runtime.node_spec()},
         "engine_ready": ready["engine_ready"],
         "acp_entry_ready": ready["acp_entry_ready"],
         "readiness": ready["readiness"],

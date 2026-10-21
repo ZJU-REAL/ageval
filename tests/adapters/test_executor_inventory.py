@@ -59,6 +59,7 @@ def test_describe_acp_entry_adapter_missing() -> None:
     assert row["engine_ready"] is True
     assert row["acp_entry_ready"] is False
     assert "install_command" in row
+    assert row["runtime"] == {"node": ">=16.0.0"}
 
 
 def test_plugin_without_describe_is_not_host_ready(

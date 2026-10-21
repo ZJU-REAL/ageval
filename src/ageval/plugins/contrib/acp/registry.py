@@ -63,6 +63,7 @@ _ENTRY_KEYS: Final[frozenset[str]] = frozenset(
         "acp_package",
         "acp_version",
         "install_command",
+        "runtime",
         "credential_env_names",
         "keyless_auth",
         "model_binding",
@@ -82,6 +83,7 @@ _REQUIRED_ENTRY_KEYS: Final[tuple[str, ...]] = (
     "acp_detect_commands",
     "acp_version",
     "install_command",
+    "runtime",
     "credential_env_names",
     "model_binding",
     "platforms",
@@ -121,6 +123,9 @@ _USER_AUTH_ROOTS: Final[frozenset[str]] = frozenset(
     }
 )
 _VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[.-][0-9A-Za-z][0-9A-Za-z.-]*)?$")
+# `>=MAJOR[.MINOR[.PATCH]]`. Stored floors are this minimum, not a range.
+_NODE_FLOOR_RE = re.compile(r"^>=(0|[1-9][0-9]*)(?:\.(0|[1-9][0-9]*))?(?:\.(0|[1-9][0-9]*))?$")
+_RUNTIME_KEYS: Final[frozenset[str]] = frozenset({"node"})
 _PKG_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _SCOPED_PKG_RE = re.compile(r"^@[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$")
 _CMD_WORD_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
@@ -155,6 +160,20 @@ def _fail(error_code: str, message: str, location: str) -> AcpRegistryError:
 
 
 @dataclass(frozen=True, slots=True)
+class RuntimeFloor:
+    """Minimum runtimes declared on an entry.
+
+    ``node`` is required for every npm entry. Another runtime is a field here
+    plus a checker on the same bake and probe path, not a second dialect.
+    """
+
+    node: tuple[int, int, int]
+
+    def node_spec(self) -> str:
+        return ">=" + ".".join(str(part) for part in self.node)
+
+
+@dataclass(frozen=True, slots=True)
 class AcpEntryDescriptor:
     entry_id: str
     integration_mode: IntegrationMode
@@ -168,6 +187,7 @@ class AcpEntryDescriptor:
     acp_package: str | None
     acp_version: str
     install_command: str
+    runtime: RuntimeFloor
     credential_env_names: tuple[str, ...]
     keyless_auth: bool
     # Directories this entry expects under the attempt HOME (engines hard-fail
@@ -196,6 +216,7 @@ class AcpEntryDescriptor:
             "acp_command": list(self.acp_command),
             "acp_package": self.acp_package,
             "acp_version": self.acp_version,
+            "runtime": {"node": self.runtime.node_spec()},
             "model_binding": self.model_binding,
             "credential_env_names": list(self.credential_env_names),
             "keyless_auth": self.keyless_auth,
@@ -214,6 +235,7 @@ class AcpEntryDescriptor:
         d["keyless_auth_paths"] = list(self.keyless_auth_paths)
         d["platforms"] = list(self.platforms)
         d["fixed_env"] = dict(self.fixed_env)
+        d["runtime"] = {"node": self.runtime.node_spec()}
         return d
 
 
@@ -526,6 +548,30 @@ def pinned_npm_packages(install_command: str) -> str:
     return " ".join(f"{package}@{version}" for package, version in pairs)
 
 
+def _parse_node_floor(raw: Any, *, location: str) -> tuple[int, int, int]:
+    text = raw.strip() if isinstance(raw, str) else ""
+    match = _NODE_FLOOR_RE.fullmatch(text)
+    if match is None:
+        raise _fail("invalid_schema", "runtime.node must be a >= minimum", location)
+    return (
+        int(match.group(1)),
+        int(match.group(2) or 0),
+        int(match.group(3) or 0),
+    )
+
+
+def _parse_runtime(raw: Any, *, location: str) -> RuntimeFloor:
+    if not isinstance(raw, dict):
+        raise _fail("invalid_schema", "runtime must be an object", location)
+    unknown = sorted(set(raw) - _RUNTIME_KEYS)
+    if unknown:
+        key = unknown[0]
+        raise _fail("invalid_schema", f"unknown runtime key {key!r}", f"{location}/{key}")
+    if "node" not in raw:
+        raise _fail("invalid_schema", "missing required field 'node'", f"{location}/node")
+    return RuntimeFloor(node=_parse_node_floor(raw["node"], location=f"{location}/node"))
+
+
 def _parse_entry(
     raw: Mapping[str, Any],
     *,
@@ -632,6 +678,7 @@ def _parse_entry(
             f"{loc}/install_command",
         )
     install_command = canonical_install_command(pins)
+    runtime = _parse_runtime(raw["runtime"], location=f"{loc}/runtime")
     digest_payload = {
         "entry_id": entry_id,
         "integration_mode": mode,
@@ -644,6 +691,7 @@ def _parse_entry(
         "acp_detect_commands": list(acp_detect),
         "acp_package": raw.get("acp_package"),
         "acp_version": raw["acp_version"],
+        "runtime": {"node": runtime.node_spec()},
         "model_binding": raw["model_binding"],
         "credential_env_names": list(credential_env_names),
         "keyless_auth": keyless_raw,
@@ -667,6 +715,7 @@ def _parse_entry(
         acp_package=acp_pin[0] if acp_pin else None,
         acp_version=str(raw["acp_version"]),
         install_command=install_command,
+        runtime=runtime,
         credential_env_names=credential_env_names,
         keyless_auth=keyless_raw,
         home_dirs=home_dirs,

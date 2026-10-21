@@ -383,6 +383,7 @@ def test_oneshot_resolves_a_home_file_entry() -> None:
                         "acp_package": "@moonshot-ai/kimi-code",
                         "acp_version": "1.2.3",
                         "install_command": "npm install -g @moonshot-ai/kimi-code@1.2.3",
+                        "runtime": {"node": ">=18.0.0"},
                         "credential_env_names": ["KIMI_API_KEY"],
                         "model_binding": "config-option",
                         "platforms": ["darwin", "linux"],
