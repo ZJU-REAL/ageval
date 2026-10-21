@@ -116,6 +116,33 @@ tasks/<id>/
 
 `evaluation.collect` 省略或为空列表 `[]` 时不执行。每条声明至少包含 `path`（不含 `..` 的绝对路径）或 `command`，可选指定 `service`（省略或 `main` 表示 attempt 容器，其余值表示 compose 服务名）。命令或路径拷贝失败时，在 `evaluate` 阶段记为 `ERROR`（`environment_collect_failed` / `environment_collect_missing`）。详见 [05-runtime/evaluation.md](05-runtime/evaluation.md)。
 
+## Harbor 布局（`--layout harbor`）
+
+省略 `--layout` 时只接受上面的 `ageval.dataset/1` 包。`--layout harbor` 是显式开关，不会根据目录内容自动判断。它接受两种本地路径：
+
+1. **单个任务**：目录含 `task.toml`、`instruction.md`、`tests/test.sh`，以及 `environment/` 或 `environment.docker_image`。此时 `--task` 非法。
+2. **隐式任务集**：父目录的直接子目录都是 Harbor 任务。省略 `--task` 跑整份 suite；可重复 `--task` 做过滤。任务 id 是目录名。`[task].name` 若出现且不等于目录名，锁定失败。
+
+根上的 Harbor `registry.json` 索引在 v1 直接拒绝（`harbor_registry_rejected`）。已经转换成 ageval 成员的树（`ageval.yaml`，或 `task.yaml` + `data/` + `evaluation/`）再加 `--layout harbor` 时失败（`harbor_layout_mix`），不猜测该用哪一种。
+
+没有 `ageval.yaml` 时，dataset id 取路径目录名（小写，下划线改为连字符），version 固定为 `1`。`.ageval/` 与可选的 `profiles.yaml` 放在 CLI 传入的那个路径根上，不放进任务集里的每个任务。git 源的 `#subdir` 在该布局下不要求 `ageval.yaml`，只要子目录是 Harbor 任务或任务集。`prepare` / `assets` 不在 Harbor 树上执行。
+
+`task.toml` 映射：
+
+| Harbor | ageval |
+| --- | --- |
+| `agent.timeout_sec`（仅当键存在） | `limits.wall_time_seconds`。缺省不继承 verifier 的超时 |
+| `verifier.timeout_sec` | `limits.evaluate_seconds` |
+| `environment.build_timeout_sec` | `limits.environment_seconds`。这是整个 environment 阶段预算，docker build 的截止时间在 v1 只是近似 |
+| `cpus` / `memory_mb` / `gpus` / `gpu_types` | `parameters`，由 docker 插件施加到 Attempt 容器 |
+| `network_mode` `public` \| `no-network`（省略为 public）；旧字段 `allow_internet` | 与 compose 的 `network_mode: service:…` 分开。`allowlist` 和按阶段覆盖直接失败（`harbor_network_unsupported`），不会当成 public |
+| `user` | 只接受数字 UID；用户名拒绝 |
+| `[[verifier.collect]]` 然后顶层 `artifacts` | `evaluation.collect`：先跑命令，再拷贝绝对路径 |
+
+`storage_mb`、verifier 容器的 CPU/内存、`skills_dir`、`solution.env` 记入 `parameters.harbor_known_gaps`，不假装已经生效。`steps`、Windows、MCP、healthcheck、TPU 直接拒绝。
+
+Agent 绑定仍来自 `--agent` / `--profiles`（角色 id 为 `solver`）。`--oracle` 才运行 `solution/solve.sh`；省略时 `solution/` 不进入评分路径。
+
 当多个任务共享相同的交互逻辑时，可将公共模块置于 dataset 根目录的 `shared/lib` 下，由各任务的 `run.py` 导入（Runtime 注入的 `sys.path` 前缀为 `[task_dir, dataset_root]`）。参考材料（`gold`）严禁放入 `shared/`。Docker 构建不会隐式拷贝 `shared/`；若容器内脚本需导入 `shared.lib.*`，需在 Dockerfile 中显式 `COPY` 并将 dataset 根目录加入 `PYTHONPATH`。
 
 ## 运行配置文件 `profiles.yaml`

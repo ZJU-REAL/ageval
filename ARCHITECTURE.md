@@ -121,6 +121,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   │       ├── record.py
 │   │       └── cleanup.py
 │   ├── config/                      # dataset root + task.yaml + profiles resolution
+│   ├── harbor/                      # built-in run/score for --layout harbor
 │   ├── model/                       # ModelSpec · resolve_model
 │   ├── environments/
 │   │   ├── protocol.py              # EnvironmentProvider · StdioTransport · capabilities
@@ -210,7 +211,8 @@ During a production Attempt, `application/run.py` mints run identity once and in
 | `application/` | Use-case orchestration (`lock`, `run`, `campaign`, `suite`, `registry`, `plugin`, `agent`, `jobs`, `analysis`) | Global mutable singletons outside bootstrap |
 | `application/analysis/` | Post-run read-only `stats` / `hack` / `review` over sealed evidence | `PASS` verdicts, `checks.json`, Hub uploads |
 | `application/composition.py` | Sole production `build_*` wiring | Task or scoring algorithms |
-| `config/` | Dataset resolution, `task.yaml` / `profiles.yaml` validation, lock digest | Executing `run.py` or `evaluator.py` |
+| `config/` | Dataset resolution, `task.yaml` / `profiles.yaml` validation, lock digest, Harbor `task.toml` intake | Executing `run.py` or `evaluator.py` |
+| `harbor/` | Built-in Harbor instruction handoff and reward verdict | Environment lifecycle, docker CLI |
 | `attempt/` | Fixed phase sequence, `emit` chain dispatch, `AttemptCtx` | Vendor SDKs, `container_id` |
 | `environments/` | `EnvironmentProvider` protocol, capability flags, stdio stream types | Importing `e2b`, `docker`, or `paramiko` |
 | `plugins/contrib/docker/` | `docker exec`, compose, UID/GID, image build; `attempt/` official base recipe | ACP protocol handling |

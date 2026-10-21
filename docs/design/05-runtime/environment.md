@@ -4,6 +4,10 @@
 
 环境内标准路径约定为：`/attempt/workspace`、`/attempt/home`、`/attempt/artifacts`、`/attempt/evaluation`。
 
+`--layout harbor` 的 docker 构建上下文是任务的 `environment/`（不是任务根）。`tests/Dockerfile` 作为独立 verifier 镜像时，上下文是 `tests/`。上下文缺失或逃出任务目录时，环境阶段以 `harbor_build_context` 失败。镜像启动后把 Harbor 的 `/app` 对齐到 `/attempt/workspace`（先把镜像里的 `/app` 内容拷进工作区，再做成指向工作区的符号链接）；对不齐则 `harbor_app_alignment`，Attempt 为 `ERROR`。
+
+`environment/compose.yaml` 与 `environment/docker-compose.yaml` 都能作为 compose 文件；两者都在时以前者为启动文件。`services.main` 不会被 `compose up` 启动。`docker-compose.yaml` 里的 `services.main` 仍提供 `network_mode: service:…`、环境变量和 `cap_add`。只剩 `main` 一个服务时不启动 compose 项目。
+
 ```yaml
 # profiles.yaml — 选择 environment 独占槽实现
 format: ageval.profiles/1

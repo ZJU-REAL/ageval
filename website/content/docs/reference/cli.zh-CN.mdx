@@ -55,7 +55,9 @@ ageval results revoke-snapshot <token-or-url>
 
 | 选项 | 含义 |
 | --- | --- |
-| `--task <id>` | 只跑该成员；省略 = 整份 dataset 跑完 |
+| `--task <id>` | 只跑该成员；省略 = 整份 dataset 跑完。`--layout harbor` 下可重复 |
+| `--layout harbor` | 直接读未改过的 Harbor 任务目录，或一叠任务目录的父目录。省略则仍是 ageval 包。单个 Harbor 任务不能再写 `--task`。`registry.json` 索引会被拒绝 |
+| `--oracle` | 仅配合 `--layout harbor`：跑 `solution/solve.sh`，不再调用 Agent。省略时不使用 `solution/` |
 | `--max-concurrent-tasks N` | 并行上限；**只加速**，不改 k / PASS |
 | `--n-attempts` / `-k N` | Always-k：每题 N 次独立运行（默认 1）；只写在 CLI / job 上 |
 | `--resume-suite <suite_run_id>` | 并进已有 job：跳过已完成的（PASS / FAIL / ERROR），追加一次运行，重算 pass@k / pass^k |
@@ -85,6 +87,7 @@ ageval results revoke-snapshot <token-or-url>
 | 指针 | 含义 |
 | --- | --- |
 | `/parameters/seed` | 业务 seed 等 |
+| `/parameters/harbor_oracle` | 仅 `--layout harbor`：与 `--oracle` 相同 |
 | `/parameters/active_profile` | 切换 profile |
 | `/agent_profiles/<role>/model` | 嵌套 model 对象 |
 | `/agent_profiles/<role>/model/id` | 模型 id |

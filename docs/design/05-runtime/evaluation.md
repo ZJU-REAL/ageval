@@ -27,6 +27,12 @@ cleanup (finally)
 
 `PASS` 与 `FAIL` 仅能通过 `bind_evaluation` 写入 `Result`。`RunTerminal.completed`、轨迹文件存在、ACP 正常结束、`judge` 文本输出、或单条 `checks` 的退出码均不直接决定 `Result.status`。
 
+### Harbor 奖励
+
+`--layout harbor` 不读取任务目录里的 `evaluator.py`。内置评分在 solver 封存后执行 `tests/test.sh`（共享模式先把 `tests/` 上传到评分环境的 `/tests`；`tests/Dockerfile` 已经带有 `/tests/test.sh` 时不再上传）。然后优先读 `/logs/verifier/reward.json`，否则读 `reward.txt`。主键是 `reward`，没有该键时只接受唯一的一个键。主值是 `1`、`1.0` 或 `true` 才是 `PASS`；`0` 或 `false` 是 `FAIL`。两个奖励文件都不存在是 `ERROR`（`harbor_reward_missing`），不会当成 `FAIL`。
+
+`verifier.environment_mode = separate` 不会退回共享容器。未写 mode 时：有 `[verifier.environment]` 或 `tests/Dockerfile` 则用独立镜像，否则与 Attempt 容器共享。独立 verifier 需要 `environment: docker`，锁定会把 `evaluate_host.isolated` 打开。
+
 ## 可选评分策略一：Agent-as-judge / LLM-as-judge
 
 在同一份 `profiles.yaml` 的 `agent_profiles` 中声明独立的评分角色（如 `judge`），并在 `task.yaml` 的 `agent_profiles` 中列出该角色 ID。在参考材料上传完成后，`evaluator.py` 可调用 `Agent.session("judge").invoke(...)` 进行单步或多步验证：

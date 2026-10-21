@@ -788,10 +788,6 @@ def _environment_recipe(
         gaps.append("verifier_cpu_memory")
     if "storage_mb" in env or "storage" in env:
         gaps.append("verifier_storage_mb")
-    gpus = env.get("gpus")
-    if isinstance(gpus, int) and not isinstance(gpus, bool) and gpus > 0:
-        # Caller stores verifier_gpus from the top-level mapper via parameters.
-        pass
     image = env.get("docker_image")
     if isinstance(image, str) and image.strip():
         return {"docker_image": image.strip()}
