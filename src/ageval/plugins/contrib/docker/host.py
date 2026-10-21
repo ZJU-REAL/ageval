@@ -38,6 +38,7 @@ from ageval.evidence.redaction import redact_text
 from ageval.plugins.base import BaseEnvironment
 from ageval.plugins.contrib.docker.compose_parity import (
     AttemptParity,
+    compose_declares_services,
     is_runtime_compose,
     prepare_runtime_compose,
     resolve_attempt_parity,
@@ -133,6 +134,10 @@ class DockerHost(BaseEnvironment):
         self._repo_root = spec.repo_root.resolve(strict=False)
         self._dockerfile = spec.dockerfile
         self._compose_file = spec.compose_file
+        self._build_context = spec.build_context
+        self._align_app = bool(opts.get("align_app"))
+        self._drop_compose_main = bool(opts.get("drop_compose_main"))
+        self._workdir = _text(opts.get("workdir")) or WORKSPACE_PATH
         self._declared_image = _text(opts.get("image") or opts.get("docker_image"))
         self._platform = _text(opts.get("platform")) or host_platform()
         # The Agent runs inside the box and has to reach its provider.
@@ -191,6 +196,7 @@ class DockerHost(BaseEnvironment):
             force_build=force_build,
             plugin_layers=self._plugin_layers,
             python_version=self._python_version,
+            context_rel=self._build_context,
         )
         self._image = tag
         # Resolve CPU / memory / GPU before any container exists. A missing GPU
@@ -200,8 +206,7 @@ class DockerHost(BaseEnvironment):
         # service is reachable by name. service:<name> instead shares that
         # sidecar's network namespace: localhost is the sidecar's localhost.
         network = self._network
-        if self._compose_file is not None:
-            self._compose_up()
+        if self._compose_file is not None and self._compose_up():
             network = f"{self._compose_project}_default"
         if parity.service is not None:
             network = f"container:{self._sidecar_container_id(parity.service)}"
@@ -223,7 +228,7 @@ class DockerHost(BaseEnvironment):
             *extra_run,
             *self._volume_flags(),
             "-w",
-            WORKSPACE_PATH,
+            self._workdir,
             "--entrypoint",
             "sh",
             tag,
@@ -238,6 +243,8 @@ class DockerHost(BaseEnvironment):
             )
         self._container = (started.stdout or "").strip() or name
         self._started = True
+        if self._align_app:
+            self._align_workspace_app()
 
     async def stop(self, *, delete: bool) -> None:
         if self._stopped:
@@ -560,16 +567,26 @@ class DockerHost(BaseEnvironment):
             )
         return lines[0]
 
-    def _compose_up(self) -> None:
+    def _compose_up(self) -> bool:
+        """Start sidecars. False when Harbor removed every service, including main."""
         assert self._compose_file is not None
         overlay = write_sidecar_overlay(self._task_root / self._compose_file)
         if overlay is not None:
             self._compose_overlay = overlay
         project = f"ageval-{uuid.uuid4().hex[:10]}"
         self._compose_project = project
-        runtime = prepare_runtime_compose(self._task_root / self._compose_file, project)
+        runtime = prepare_runtime_compose(
+            self._task_root / self._compose_file,
+            project,
+            drop_main=self._drop_compose_main,
+        )
         if is_runtime_compose(runtime):
             self._compose_runtime = runtime
+        if not compose_declares_services(runtime):
+            self._discard_compose_runtime()
+            self._compose_project = None
+            self._drop_compose_overlay()
+            return False
         result = self._compose("up", "-d")
         if result.returncode != 0:
             self._compose("down", "-v")
@@ -579,6 +596,41 @@ class DockerHost(BaseEnvironment):
             raise EnvironmentFailure(
                 "environment_compose_failed",
                 f"docker compose up failed: {(result.stderr or result.stdout).strip()[-500:]}",
+            )
+        return True
+
+    def _align_workspace_app(self) -> None:
+        """Make ``/app`` the same directory as ``/attempt/workspace``.
+
+        Failure removes the container. The Attempt records ``harbor_app_alignment``.
+        """
+        script = """
+set -eu
+ws=/attempt/workspace
+if [ -d /app ] && [ ! -L /app ]; then
+  tar -C /app -cf - . | tar -C "$ws" -xf -
+  rm -rf /app
+  ln -s "$ws" /app
+elif [ ! -e /app ]; then
+  ln -s "$ws" /app
+elif [ ! -L /app ]; then
+  echo "app is not a directory or symlink" >&2
+  exit 1
+fi
+a=$(cd /app && pwd -P)
+b=$(cd "$ws" && pwd -P)
+[ "$a" = "$b" ]
+"""
+        assert self._container is not None
+        result = docker("exec", "-u", "0", self._container, "sh", "-c", script)
+        if result.returncode != 0:
+            docker("rm", "-f", self._container, timeout=120.0)
+            self._container = None
+            self._started = False
+            detail = (result.stderr or result.stdout or "").strip()[-300:]
+            raise EnvironmentFailure(
+                "harbor_app_alignment",
+                f"/app is not aligned with /attempt/workspace: {detail}",
             )
 
     def _drop_compose_overlay(self) -> None:

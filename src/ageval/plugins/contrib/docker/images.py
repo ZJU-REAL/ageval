@@ -179,6 +179,7 @@ def resolve_image(
     force_build: bool,
     plugin_layers: Sequence[tuple[str, str, str, str]] = (),
     python_version: str | None = None,
+    context_rel: str | None = None,
 ) -> tuple[str, str]:
     """Return ``(tag, digest)`` for this Attempt's image.
 
@@ -213,6 +214,7 @@ def resolve_image(
         base_tag=base_tag,
         force_build=force_build,
         plugin_layers=plugin_layers,
+        context_rel=context_rel,
     )
 
 
@@ -230,6 +232,26 @@ def plugin_layer_build_args(base_image: str) -> tuple[str, ...]:
     return tuple(args)
 
 
+def _build_context(task_root: Path, context_rel: str | None) -> Path:
+    """Directory docker build uses. Omitted means the task root, as before."""
+    if not context_rel or not str(context_rel).strip():
+        return task_root
+    context = (task_root / context_rel).resolve()
+    try:
+        context.relative_to(task_root.resolve())
+    except ValueError as exc:
+        raise EnvironmentFailure(
+            "harbor_build_context",
+            f"build context escapes the task: {context_rel}",
+        ) from exc
+    if not context.is_dir():
+        raise EnvironmentFailure(
+            "harbor_build_context",
+            f"build context is not a directory: {context_rel}",
+        )
+    return context
+
+
 def build_task_image(
     *,
     task_root: Path,
@@ -239,6 +261,7 @@ def build_task_image(
     base_tag: str = BASE_TAG,
     force_build: bool,
     plugin_layers: Sequence[tuple[str, str, str, str]] = (),
+    context_rel: str | None = None,
 ) -> tuple[str, str]:
     """Build the task recipe, then each plugin bake with its own context.
 
@@ -246,13 +269,14 @@ def build_task_image(
     non-default CPython base is the one under the task image.
     """
     recipe = _recipe_text(task_root, dockerfile_rel, base_tag)
+    context_root = _build_context(task_root, context_rel)
     layer_key = "\n".join(f"{plugin_id}\n{body}" for plugin_id, _, _, body in plugin_layers)
     pip_index = plugin_bake_pip_index()
     if plugin_layers and pip_index:
         layer_key = f"{layer_key}\npip_index={pip_index}"
     content = content_digest(
         recipe=recipe + "\n" + layer_key,
-        context_root=task_root,
+        context_root=context_root,
         platform=platform,
         base_digest=base_digest,
         base_tag=base_tag,
@@ -265,7 +289,7 @@ def build_task_image(
 
     current, _ = _build_named(
         recipe=recipe,
-        context_root=task_root,
+        context_root=context_root,
         tag=f"{PACKAGE_TAG_PREFIX}:{content[:12]}-base",
         platform=platform,
         build_args=(),
