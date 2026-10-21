@@ -3,6 +3,7 @@
 A hit is ``npm ls -g --depth=0`` version equality, the required command's
 realpath equal to that package's bin, and one stdio ``initialize`` whose
 argv[0] is that absolute path. A version or realpath miss installs once.
+A Node below the entry ``runtime.node`` floor fails before that install.
 """
 
 from __future__ import annotations
@@ -166,7 +167,59 @@ def _package_bin(root, package, name):
     except Exception:
         return ""
 
+def _node_parts(text):
+    raw = (text or "").strip()
+    if raw[:1] in ("v", "V"):
+        raw = raw[1:]
+    raw = raw.split("-", 1)[0].strip()
+    bits = raw.split(".")
+    if not bits or not bits[0].isdigit():
+        return None
+    nums = []
+    for i in range(3):
+        if i >= len(bits):
+            nums.append(0)
+            continue
+        part = bits[i]
+        if not part.isdigit():
+            return None
+        nums.append(int(part))
+    return (nums[0], nums[1], nums[2])
+
+def _node_floor_miss(cfg):
+    floor = cfg.get("node_floor")
+    if not isinstance(floor, list) or len(floor) != 3:
+        return None
+    if not all(isinstance(part, int) and not isinstance(part, bool) for part in floor):
+        return {"required": str(cfg.get("node_floor_spec") or ""), "found": "missing"}
+    found = ""
+    try:
+        proc = subprocess.run(["node", "-v"], capture_output=True, text=True, timeout=10)
+        found = (proc.stdout or "").strip()
+    except Exception:
+        found = ""
+    parts = _node_parts(found)
+    need = (int(floor[0]), int(floor[1]), int(floor[2]))
+    if parts is not None and parts >= need:
+        return None
+    return {
+        "required": str(cfg.get("node_floor_spec") or ""),
+        "found": found or "missing",
+    }
+
 cfg = json.loads(sys.argv[1])
+floor_miss = _node_floor_miss(cfg)
+if floor_miss is not None:
+    sys.stdout.write(json.dumps({
+        "ok": False,
+        "reason": "node_floor",
+        "node": floor_miss,
+        "missing": [],
+        "versions": [],
+        "initialize": {"ok": False, "reason": "skipped"},
+        "argv0": None,
+    }))
+    raise SystemExit(0)
 root = _npm_root()
 versions = _pins(cfg)
 declared_pins = list(cfg.get("pins") or [])
@@ -319,6 +372,14 @@ async def _ensure_entry_present(ctx: Any, descriptor: AcpEntryDescriptor) -> Non
         raise EnvironmentFailure(token, token)
     probe = await _run_probe(ctx, descriptor)
     ctx.record_fact("acp_runtime_probe", {"entry": descriptor.entry_id, **probe})
+    if probe.get("reason") == "node_floor":
+        node = probe.get("node") if isinstance(probe.get("node"), dict) else {}
+        required = str(node.get("required") or descriptor.runtime.node_spec())
+        found = str(node.get("found") or "missing")
+        raise EnvironmentFailure(
+            "acp_runtime_node",
+            f"acp entry {descriptor.entry_id!r} requires node {required}; found {found}",
+        )
     if probe.get("ok"):
         _remember_argv0(ctx, descriptor.entry_id, probe.get("argv0"))
         return
@@ -431,8 +492,11 @@ def _remember_argv0(ctx: Any, entry_id: str, argv0: Any) -> None:
 
 
 def _needs_install(probe: dict[str, Any]) -> bool:
-    """Version or required-bin miss installs once. A failed handshake does not."""
-    if probe.get("ok"):
+    """Version or required-bin miss installs once. A failed handshake does not.
+
+    A Node floor miss is not fixed by ``install_command``.
+    """
+    if probe.get("ok") or probe.get("reason") == "node_floor":
         return False
     versions = probe.get("versions")
     pins_ok = (
@@ -479,6 +543,8 @@ def _probe_config(
             {"name": name, "package": package} for name, package in required_bins(descriptor)
         ],
         "pins": [list(item) for item in _pinned_packages(descriptor)],
+        "node_floor": list(descriptor.runtime.node),
+        "node_floor_spec": descriptor.runtime.node_spec(),
         "acp_command": list(descriptor.acp_command),
         "handshake_timeout_sec": _HANDSHAKE_TIMEOUT_SEC,
         "payload": {
