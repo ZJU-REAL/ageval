@@ -143,7 +143,7 @@ tasks/<id>/
 
 `storage_mb`、verifier 容器的 CPU/内存、`skills_dir`、`solution.env` 记入 `parameters.harbor_known_gaps`，不假装已经生效。`steps`、Windows、MCP、healthcheck、TPU 直接拒绝。
 
-Agent 绑定仍来自 `--agent` / `--profiles`（角色 id 为 `solver`）。`--oracle` 才运行 `solution/solve.sh`；省略时 `solution/` 不进入评分路径。
+省略 `--oracle` 时，内置 run 把 `instruction.md` 的全文交给角色 `solver`，只调用一次。这个角色 id 固定为 `solver`，不从 `instruction.md` 或 `task.toml` 读取。绑定写在 CLI 路径根上的 `profiles.yaml`，或由 `--profiles` / `--agent` 提供。`agent_profiles.solver` 与通配 `*` 都能填上这个槽。三处都没有该绑定时，锁定失败（`missing_binding`），环境不启动。`--oracle` 改为在 environment 阶段执行 `solution/solve.sh`，不再把 `instruction.md` 交给 Agent。省略 `--oracle` 时 `solution/` 不进入评分路径。
 
 当多个任务共享相同的交互逻辑时，可将公共模块置于 dataset 根目录的 `shared/lib` 下，由各任务的 `run.py` 导入（Runtime 注入的 `sys.path` 前缀为 `[task_dir, dataset_root]`）。参考材料（`gold`）严禁放入 `shared/`。Docker 构建不会隐式拷贝 `shared/`；若容器内脚本需导入 `shared.lib.*`，需在 Dockerfile 中显式 `COPY` 并将 dataset 根目录加入 `PYTHONPATH`。
 

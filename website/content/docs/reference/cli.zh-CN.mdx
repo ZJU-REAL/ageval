@@ -53,6 +53,8 @@ ageval results revoke-snapshot <token-or-url>
 
 `share-snapshot` 打印 `{hub}/s/{token}`，不改这份 suite 的公开或私有，也不会把它放上榜。`sync-snapshot` 用来更新 live 链接。详见 [Hub](../share/hub.mdx)。
 
+`--layout harbor` 下，内置 run 把 `instruction.md` 全文交给角色 `solver`，只调用一次。角色 id 固定为 `solver`。绑定来自路径根上的 `profiles.yaml`、`--profiles` 或 `--agent`（`solver` 或 `*`）。三处都没有这份绑定时，锁定失败（`missing_binding`）。`--oracle` 在 environment 阶段执行 `solution/solve.sh`，不再把 `instruction.md` 交给 Agent。
+
 ## `ageval run` 常用选项
 
 | 选项 | 含义 |
