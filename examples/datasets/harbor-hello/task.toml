@@ -1,0 +1,9 @@
+[agent]
+timeout_sec = 60
+
+[verifier]
+timeout_sec = 60
+
+[environment]
+user = 0
+build_timeout_sec = 180

@@ -1,0 +1,12 @@
+format: ageval.profiles/1
+environment: docker
+agent_profiles:
+  solver:
+    executor: openai-http
+    model:
+      id: demo
+      api: chat
+    api_key: ${OPENAI_API_KEY}
+    extensions:
+      - plugin: openai-http
+      - plugin: docker

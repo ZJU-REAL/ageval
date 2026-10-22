@@ -158,10 +158,13 @@ def test_converted_ageval_member_is_rejected(tmp_path: Path) -> None:
     assert exc.value.error_code == "harbor_layout_mix"
 
 
-def test_single_task_rejects_task_flag(tmp_path: Path) -> None:
+def test_single_task_lock_uses_the_directory_name(tmp_path: Path) -> None:
     task = _task(tmp_path, "")
+    (task / "profiles.yaml").write_text(PROFILES, encoding="utf-8")
+    locked = build_lock_command().lock(task, "demo-task", layout="harbor")
+    assert locked.lock.task_id == "demo-task"
     with pytest.raises(ConfigError) as exc:
-        build_lock_command().lock(task, "demo-task", layout="harbor")
+        build_lock_command().lock(task, "other", layout="harbor")
     assert exc.value.error_code == "invalid_override"
 
 

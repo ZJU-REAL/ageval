@@ -249,6 +249,22 @@ def register(app: typer.Typer) -> None:
                 err=True,
             )
             raise typer.Exit(code=2)
+        if chosen != LAYOUT_AGEVAL and task and str(task).strip():
+            from ageval.config.harbor_layout import open_harbor_root
+            from ageval.registry.resolve import resolve_dataset_root
+
+            try:
+                opened = open_harbor_root(resolve_dataset_root(package, layout=chosen))
+            except ConfigError as exc:
+                typer.echo(str(exc), err=True)
+                raise typer.Exit(code=2) from exc
+            if opened.kind == "task":
+                typer.echo(
+                    "invalid_override: --task is not valid for a single Harbor task directory "
+                    "(--task)",
+                    err=True,
+                )
+                raise typer.Exit(code=2)
         from ageval.cli.cmd_agent import resolve_agent_option
         from ageval.model.errors import ModelConfigError
         from ageval.plugins.errors import PluginContractError

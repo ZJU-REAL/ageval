@@ -199,15 +199,21 @@ def open_harbor_root(dataset_root: Path) -> HarborRoot:
 
 
 def resolve_harbor_member(opened: HarborRoot, task_id: str | None) -> ResolvedTask:
-    """One member. A single task rejects ``--task``; a task-set requires it."""
+    """One member.
+
+    A single-task directory has one id, its directory name. The CLI rejects
+    ``--task`` there. The suite still locks that id, so the matching name is
+    accepted and any other name is not.
+    """
     if opened.kind == "task":
-        if task_id and str(task_id).strip():
+        tid = opened.root.name
+        supplied = str(task_id or "").strip()
+        if supplied and supplied != tid:
             raise ConfigError(
                 ERROR_INVALID_OVERRIDE,
                 "--task is not valid for a single Harbor task directory",
                 location="--task",
             )
-        tid = opened.root.name
         task_dir = opened.root
     else:
         if not task_id or not str(task_id).strip():
@@ -503,6 +509,7 @@ def _spec_from_toml(raw: dict[str, Any], *, task_id: str, root: Path) -> HarborS
         "harbor_reward_json": REWARD_JSON,
         "harbor_reward_text": REWARD_TEXT,
         "harbor_scoring_env": SCORING_ENV,
+        "harbor_oracle": False,
     }
     limits: dict[str, Any] = {}
     env = _table(raw.get("environment"), "environment")
