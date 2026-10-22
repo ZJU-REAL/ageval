@@ -61,6 +61,7 @@ class LockCommand:
         allow_prepare: bool = False,
         on_prepare_script: Callable[[str, str], None] | None = None,
         layout: str = "ageval",
+        cli_task: bool = False,
     ) -> LockResult:
         """Lock one member and return the config plus its dataset context."""
         from ageval.application.host_env import load_host_env_files
@@ -84,6 +85,12 @@ class LockCommand:
                     location="--allow-prepare",
                 )
             opened = open_harbor_root(root)
+            if cli_task and opened.kind == "task":
+                raise ConfigError(
+                    ERROR_INVALID_OVERRIDE,
+                    "--task is not valid for a single Harbor task directory",
+                    location="--task",
+                )
             eval_digest = compute_harbor_eval_digest(root, opened)
             manifest = opened.manifest
             resolved = resolve_harbor_member(opened, task_id)
@@ -143,6 +150,7 @@ class LockCommand:
         allow_prepare: bool = False,
         on_prepare_script: Callable[[str, str], None] | None = None,
         layout: str = "ageval",
+        cli_task: bool = False,
     ) -> dict[str, Any]:
         """CLI-facing form: return the deterministic lock summary document."""
         return self.lock(
@@ -154,6 +162,7 @@ class LockCommand:
             allow_prepare=allow_prepare,
             on_prepare_script=on_prepare_script,
             layout=layout,
+            cli_task=cli_task,
         ).summary()
 
     def tasks(self, dataset_root: Path | str, *, layout: str = "ageval") -> list[str]:

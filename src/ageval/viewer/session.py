@@ -1,8 +1,10 @@
 """Opened datasets for one `ageval view` process.
 
-A dataset root or registry ref binds that one package. Any other directory is a
-parent: immediate children whose ``ageval.yaml`` is ``ageval.dataset/1`` are
-kept, and the rest are skipped. The directory name is the switch key.
+A dataset root or registry ref binds that one package. A Harbor task directory
+or implicit task-set binds the same way, with no ``--layout`` flag: ``ageval view``
+recognizes the tree, while ``run`` / ``lock`` stay explicit. Any other directory
+is a parent. Immediate children that are ``ageval.dataset/1`` or a Harbor task
+or task-set are kept; the rest are skipped. The directory name is the switch key.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ import yaml
 
 from ageval.config.dataset import DATASET_FORMAT, list_tasks, load_dataset_manifest
 from ageval.config.errors import ConfigError
+from ageval.config.harbor_layout import HarborRoot, open_harbor_root
 from ageval.registry.ref import parse_package_ref
 from ageval.registry.resolve import resolve_dataset_root
 
@@ -110,6 +113,13 @@ def open_view(raw: str | Path) -> ViewSession:
             parent=None,
             mode="dataset",
         )
+    harbor = _try_harbor(path)
+    if harbor is not None:
+        return ViewSession(
+            datasets=(_bind_harbor(harbor),),
+            parent=None,
+            mode="dataset",
+        )
     found: list[OpenedDataset] = []
     try:
         children = sorted(path.iterdir(), key=lambda item: item.name)
@@ -120,10 +130,15 @@ def open_view(raw: str | Path) -> ViewSession:
             location=str(path),
         ) from exc
     for child in children:
-        if not child.is_dir() or not _is_dataset_root(child):
+        if not child.is_dir():
             continue
         try:
-            found.append(_bind(child, strict_tasks=False))
+            if _is_dataset_root(child):
+                found.append(_bind(child, strict_tasks=False))
+                continue
+            opened = _try_harbor(child)
+            if opened is not None:
+                found.append(_bind_harbor(opened))
         except ConfigError:
             continue
     return ViewSession(datasets=tuple(found), parent=path, mode="parent")
@@ -131,6 +146,38 @@ def open_view(raw: str | Path) -> ViewSession:
 
 def _is_dataset_root(root: Path) -> bool:
     return _format_of(root) == DATASET_FORMAT
+
+
+def _try_harbor(path: Path) -> HarborRoot | None:
+    """Harbor task or task-set, or None.
+
+    ``ageval.yaml`` wins before this is called. A ``registry.json`` index and a
+    converted ageval member raise inside ``open_harbor_root`` and stay unbound.
+    """
+    try:
+        return open_harbor_root(path)
+    except ConfigError:
+        return None
+
+
+def _bind_harbor(opened: HarborRoot) -> OpenedDataset:
+    root = opened.root
+    key = root.name
+    if not key or key in {".", ".."} or "/" in key or "\\" in key:
+        raise ConfigError(
+            "invalid_package",
+            f"dataset directory name cannot be a switch key: {key!r}",
+            location=str(root),
+        )
+    manifest = opened.manifest
+    return OpenedDataset(
+        key=key,
+        root=root.resolve(strict=False),
+        dataset_id=manifest.dataset_id,
+        version=manifest.version,
+        description=manifest.description,
+        task_count=len(opened.task_ids),
+    )
 
 
 def _format_of(root: Path) -> str | None:

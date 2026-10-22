@@ -125,6 +125,8 @@ tasks/<id>/
 
 根上的 Harbor `registry.json` 索引在 v1 直接拒绝（`harbor_registry_rejected`）。已经转换成 ageval 成员的树（`ageval.yaml`，或 `task.yaml` + `data/` + `evaluation/`）再加 `--layout harbor` 时失败（`harbor_layout_mix`），不猜测该用哪一种。
 
+`ageval view` 打开上述任务目录或任务集时直接绑定该 dataset，并列出该路径下 `.ageval/suite-runs` 里的 job。这一步不需要 `--layout`。`ageval run` 和 `ageval lock` 仍只在显式 `--layout harbor` 时读取 Harbor 树。`registry.json` 索引本身不是一份可打开的 dataset。同一路径上若已有 `ageval.yaml`，view 按 ageval 包打开。
+
 没有 `ageval.yaml` 时，dataset id 取路径目录名（小写，下划线改为连字符），version 固定为 `1`。`.ageval/` 与可选的 `profiles.yaml` 放在 CLI 传入的那个路径根上，不放进任务集里的每个任务。git 源的 `#subdir` 在该布局下不要求 `ageval.yaml`，只要子目录是 Harbor 任务或任务集。`prepare` / `assets` 不在 Harbor 树上执行。
 
 `task.toml` 映射：

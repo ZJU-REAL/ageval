@@ -39,15 +39,35 @@ def commands_for(root: Path, *, task_id: str | None = None) -> dict[str, str]:
     except ValueError:
         display = str(root)
 
+    harbor_kind = _harbor_kind(root)
+    layout = " --layout harbor" if harbor_kind else ""
+    if harbor_kind == "task":
+        # A single Harbor directory rejects --task. The suite still locks by name.
+        return {
+            "tasks": f"ageval tasks {display}{layout}",
+            "run_suite": f"ageval run {display}{layout}",
+            "lock_suite_hint": f"ageval lock {display}{layout}",
+        }
+
     cmds: dict[str, str] = {
-        "tasks": f"ageval tasks {display}",
-        "run_suite": f"ageval run {display}",
-        "lock_suite_hint": f"ageval lock {display} --task <task_id>",
+        "tasks": f"ageval tasks {display}{layout}",
+        "run_suite": f"ageval run {display}{layout}",
+        "lock_suite_hint": f"ageval lock {display}{layout} --task <task_id>",
     }
     if task_id:
-        cmds["run_task"] = f"ageval run {display} --task {task_id}"
-        cmds["lock_task"] = f"ageval lock {display} --task {task_id}"
+        cmds["run_task"] = f"ageval run {display}{layout} --task {task_id}"
+        cmds["lock_task"] = f"ageval lock {display}{layout} --task {task_id}"
     return cmds
+
+
+def _harbor_kind(root: Path) -> str | None:
+    """``task`` or ``task-set`` when view can open this directory as Harbor."""
+    from ageval.config.harbor_layout import open_harbor_root
+
+    try:
+        return open_harbor_root(root).kind
+    except ConfigError:
+        return None
 
 
 def _suite_root(dataset_root: Path) -> Path:
@@ -823,6 +843,13 @@ def list_jobs(dataset_root: Path | str) -> dict[str, Any]:
 
     dataset_id = man.dataset_id if man is not None else None
     version = man.version if man is not None else None
+    if dataset_id is None:
+        from ageval.config.harbor_layout import open_harbor_root
+
+        with contextlib.suppress(ConfigError):
+            opened = open_harbor_root(root)
+            dataset_id = opened.manifest.dataset_id
+            version = opened.manifest.version
 
     return {
         "ok": True,

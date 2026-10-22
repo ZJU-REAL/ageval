@@ -12,6 +12,8 @@ from typing import Any
 
 from ageval.application.local_jobs.listing import commands_for as commands_for
 from ageval.config.dataset import list_tasks, load_dataset_manifest
+from ageval.config.errors import ConfigError
+from ageval.config.harbor_layout import open_harbor_root
 from ageval.registry.resolve import resolve_dataset_root
 
 
@@ -21,8 +23,14 @@ def open_dataset(dataset_ref: str | Path) -> Path:
 
 
 def dataset_overview(root: Path) -> dict[str, Any]:
-    man = load_dataset_manifest(root)
-    task_ids = list_tasks(root, manifest=man)
+    try:
+        man = load_dataset_manifest(root)
+    except ConfigError:
+        opened = open_harbor_root(root)
+        man = opened.manifest
+        task_ids = list(opened.task_ids)
+    else:
+        task_ids = list_tasks(root, manifest=man)
     return {
         "dataset_id": man.dataset_id,
         "version": man.version,

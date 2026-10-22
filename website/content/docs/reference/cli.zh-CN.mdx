@@ -31,6 +31,8 @@ ageval agent list
 ageval agent uninstall <agent_id>
 ageval evidence --help
 ageval view <dataset|directory|id@version> [--dev] [--open /jobs/<id>]
+# Harbor 任务目录或任务集：view 直接打开它和其中的 .ageval/suite-runs。
+# run / lock 读取这棵树时仍要写 --layout harbor。
 ageval jobs delete --local <dataset> --job <id> --yes
 # Registry / 结果（需 login）
 ageval publish <dataset> --org <org> [--draft] [--public] [--replace]

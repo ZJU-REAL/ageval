@@ -151,7 +151,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   ├── evidence/                    # Sole owner of .ageval/runs layout paths and trajectory sealing
 │   ├── capabilities/
 │   ├── registry/                    # Hub HTTP client
-│   ├── viewer/                      # Local Viewer HTTP server
+│   ├── viewer/                      # Local Viewer HTTP server (ageval packages and Harbor trees)
 │   ├── control/
 │   └── agents/                      # ageval.agent/1 cache + builtin catalog
 │       ├── builtin/                 # catalog.json + shipped agent package trees

@@ -35,6 +35,21 @@ def _task(parent: Path, name: str) -> None:
     (task / "tests" / "test.sh").write_text("exit 0\n", encoding="utf-8")
 
 
+def _assert_local_evaluate_error(row: dict[str, object]) -> None:
+    """Local Harbor scoring uploads ``/tests``, which the local host rejects.
+
+    A lock failure (``invalid_override`` / ``ConfigError``, null ``run_id``) must
+    not satisfy this check.
+    """
+    assert row["status"] == "ERROR"
+    error = row["error"]
+    assert isinstance(error, dict)
+    assert error.get("title") == "environment_path_invalid"
+    assert error.get("phase") == "evaluate"
+    assert "invalid_override" not in str(error.get("message") or "")
+    assert row.get("run_id")
+
+
 def _run(*args: str) -> subprocess.CompletedProcess[str]:
     env = {**os.environ, "AGEVAL_OFFLINE_AGENT": "1"}
     env.setdefault("ZHIPU_API_KEY", "ci-offline-placeholder")
@@ -58,7 +73,7 @@ def test_single_harbor_task_runs_without_task_scripts(tmp_path: Path) -> None:
     assert document["dataset_id"] == "demo-task"
     assert document["dataset_version"] == "1"
     assert document["tasks"][0]["task_id"] == "demo-task"
-    assert document["tasks"][0]["status"] == "ERROR"
+    _assert_local_evaluate_error(document["tasks"][0])
     assert not (root / "run.py").exists()
     summary = root / ".ageval" / "suite-runs"
     assert summary.is_dir()
@@ -79,7 +94,8 @@ def test_harbor_task_set_runs_as_a_suite(tmp_path: Path) -> None:
     document = json.loads(result.stdout)
     assert document["dataset_id"] == "terminal-bench"
     assert sorted(row["task_id"] for row in document["tasks"]) == ["alpha", "beta"]
-    assert {row["status"] for row in document["tasks"]} == {"ERROR"}
+    for row in document["tasks"]:
+        _assert_local_evaluate_error(row)
 
 
 def test_git_cache_hits_a_harbor_tree_without_ageval_yaml(tmp_path: Path) -> None:
