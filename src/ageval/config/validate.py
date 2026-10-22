@@ -69,7 +69,7 @@ PUBLISHABLE_KINDS = frozenset({"file", "tree"})
 EVALUATION_KEYS = frozenset({"entrypoint", "inputs", "docker_image", "environments", "collect"})
 _COLLECT_KEYS = frozenset({"path", "service", "command", "timeout_sec", "exclude"})
 _COLLECT_SERVICE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$")
-EVALUATION_ENVIRONMENT_KEYS = frozenset({"dockerfile", "docker_image"})
+EVALUATION_ENVIRONMENT_KEYS = frozenset({"dockerfile", "docker_image", "context"})
 _EVALUATE_ENVIRONMENT_NAME = re.compile(EVALUATE_ENVIRONMENT_NAME_PATTERN)
 
 
@@ -109,6 +109,7 @@ def validate_document(
     task_id: str,
     root: Path,
     capabilities: CapabilityCatalog,
+    require_task_scripts: bool = True,
 ) -> None:
     """Validate a merged ``ageval.task/1`` document against the package on disk."""
     _reject_retired_keys(doc)
@@ -141,13 +142,13 @@ def validate_document(
             location="/task_id",
         )
 
-    if not reader.exists(root, RUN_MODULE_FILE):
+    if require_task_scripts and not reader.exists(root, RUN_MODULE_FILE):
         raise ConfigError(
             ERROR_MISSING_REFERENCE,
             f"{RUN_MODULE_FILE} not found (a task must ship its run phase entry)",
             location=RUN_MODULE_FILE,
         )
-    if not reader.exists(root, EVALUATOR_MODULE_FILE):
+    if require_task_scripts and not reader.exists(root, EVALUATOR_MODULE_FILE):
         raise ConfigError(
             ERROR_MISSING_REFERENCE,
             f"{EVALUATOR_MODULE_FILE} not found (PASS may only come from an evaluator)",
@@ -717,6 +718,22 @@ def _validate_evaluation_environments(
                 "evaluation environment docker_image must be a non-empty image tag",
                 location=f"{loc}/docker_image",
             )
+        context = recipe.get("context")
+        context_rel = ""
+        if context is not None:
+            if not isinstance(context, str) or not context.strip():
+                raise ConfigError(
+                    ERROR_INVALID_SCHEMA,
+                    "evaluation environment context must be a relative directory",
+                    location=f"{loc}/context",
+                )
+            context_rel = normalize_package_relpath(context)
+            if ".." in Path(context_rel).parts or context_rel.startswith("/"):
+                raise ConfigError(
+                    ERROR_INVALID_SCHEMA,
+                    "evaluation environment context must stay inside the task",
+                    location=f"{loc}/context",
+                )
         if dockerfile is None:
             continue
         if not isinstance(dockerfile, str) or not dockerfile.strip():
@@ -738,6 +755,14 @@ def _validate_evaluation_environments(
                 f"evaluation environment dockerfile missing: {rel}",
                 location=f"{loc}/dockerfile",
             )
+        if context is not None:
+            prefix = Path(context_rel).parts
+            if Path(rel).parts[: len(prefix)] != prefix:
+                raise ConfigError(
+                    ERROR_INVALID_SCHEMA,
+                    "evaluation environment dockerfile must live inside context",
+                    location=f"{loc}/context",
+                )
 
 
 def collect_resolved_references(
@@ -816,6 +841,9 @@ def _collect_evaluation_environments(named: dict[str, Any]) -> dict[str, dict[st
         docker_image = recipe.get("docker_image")
         if isinstance(docker_image, str) and docker_image.strip():
             entry["docker_image"] = docker_image.strip()
+        context = recipe.get("context")
+        if isinstance(context, str) and context.strip():
+            entry["context"] = normalize_package_relpath(context)
         if entry:
             out[name] = entry
     return out

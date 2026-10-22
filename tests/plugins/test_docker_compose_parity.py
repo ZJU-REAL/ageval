@@ -184,6 +184,54 @@ services:
     assert "depends_on" not in loaded["services"]["alone"]
 
 
+def test_drop_main_removes_the_agent_service(tmp_path: Path) -> None:
+    source = tmp_path / "docker-compose.yaml"
+    source.write_text(
+        "\n".join(
+            [
+                "services:",
+                "  main:",
+                "    image: agent",
+                "  db:",
+                "    image: demo",
+                "    depends_on:",
+                "      - main",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    runtime = prepare_runtime_compose(source, "ageval-abc", drop_main=True)
+    loaded = yaml.safe_load(runtime.read_text(encoding="utf-8"))
+    assert list(loaded["services"]) == ["db"]
+    assert "depends_on" not in loaded["services"]["db"]
+    assert "main:" in source.read_text(encoding="utf-8")
+
+
+def test_main_in_the_up_file_still_supplies_parity(tmp_path: Path) -> None:
+    env = tmp_path / "environment"
+    env.mkdir()
+    (env / "docker-compose.yaml").write_text(
+        """
+services:
+  main:
+    network_mode: "service:db"
+    environment:
+      API_URL: http://db:9
+  db:
+    image: demo
+""",
+        encoding="utf-8",
+    )
+    parity = resolve_attempt_parity(
+        task_root=tmp_path,
+        compose_file="environment/docker-compose.yaml",
+        options={},
+    )
+    assert parity.service == "db"
+    assert ("API_URL", "http://db:9") in parity.environment
+
+
 def test_runtime_compose_keeps_the_authored_file(tmp_path: Path) -> None:
     source = tmp_path / "compose.yaml"
     source.write_text("services:\n  db:\n    image: demo\n", encoding="utf-8")

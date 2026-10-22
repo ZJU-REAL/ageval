@@ -70,13 +70,13 @@ def resolve_attempt_parity(
     )
 
 
-def prepare_runtime_compose(source: Path, project: str) -> Path:
+def prepare_runtime_compose(source: Path, project: str, *, drop_main: bool = False) -> Path:
     """Compose file for ``up``.
 
     A sidecar ``depends_on`` that names ``main`` is removed in a sibling file.
-    ``main`` is not a service in this up. Other ``depends_on`` entries stay.
-    The authored file is left as it is. When nothing names ``main``, ``source``
-    itself is returned.
+    When ``drop_main`` is set, ``services.main`` itself is removed so Harbor's
+    agent service is not started. The authored file is left as it is. When
+    nothing names ``main``, ``source`` itself is returned.
     """
     if not source.is_file():
         return source
@@ -94,6 +94,9 @@ def prepare_runtime_compose(source: Path, project: str) -> Path:
     for spec in services.values():
         if isinstance(spec, dict) and _drop_depends_on_main(spec):
             changed = True
+    if drop_main and "main" in services:
+        del services["main"]
+        changed = True
     if not changed:
         return source
     dest = source.with_name(f"{RUNTIME_COMPOSE_PREFIX}{project}.yaml")
@@ -108,6 +111,23 @@ def is_runtime_compose(path: Path) -> bool:
     return path.name.startswith(RUNTIME_COMPOSE_PREFIX)
 
 
+def compose_declares_services(path: Path) -> bool:
+    """False only when the file parses and its service map is empty.
+
+    An unreadable file stays True so ``compose up`` can report the real error.
+    """
+    try:
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return True
+    if not isinstance(loaded, dict):
+        return True
+    services = loaded.get("services")
+    if not isinstance(services, dict):
+        return False
+    return bool(services)
+
+
 @dataclass(frozen=True, slots=True)
 class _Main:
     network_mode: str | None = None
@@ -116,10 +136,14 @@ class _Main:
 
 
 def _harbor_main(task_root: Path, compose_file: str) -> _Main:
-    """``services.main`` from the harbor compose file, when that file is not up'd."""
+    """``services.main`` from ``environment/docker-compose.yaml``.
+
+    Read it even when that file is the one ``compose up`` uses. ``compose_file``
+    stays in the signature because the caller always has the up path.
+    """
+    del compose_file
     candidate = (task_root / HARBOR_COMPOSE_REL).resolve()
-    active = (task_root / compose_file).resolve()
-    if candidate == active or not candidate.is_file():
+    if not candidate.is_file():
         return _Main()
     try:
         loaded = yaml.safe_load(candidate.read_text(encoding="utf-8"))

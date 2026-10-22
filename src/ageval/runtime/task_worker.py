@@ -81,11 +81,20 @@ def _box_dir(env_name: str) -> Path:
     return Path(raw)
 
 
-def _load_entry(task_root: Path, entrypoint: str, dataset_root: Path | None) -> Any:
-    """Import ``<module>.py`` from the task directory and return its function."""
+_BUILTIN_PREFIX = "ageval.harbor."
+
+
+def load_entry(task_root: Path, entrypoint: str, dataset_root: Path | None) -> Any:
+    """Import the task module, or a built-in ``ageval.harbor`` entrypoint."""
     module_name, _, func_name = entrypoint.partition(":")
     if not module_name or not func_name:
         raise ValueError(f"invalid entrypoint: {entrypoint}")
+    if module_name.startswith(_BUILTIN_PREFIX):
+        module = importlib.import_module(module_name)
+        func = getattr(module, func_name, None)
+        if func is None:
+            raise AttributeError(f"entrypoint missing: {entrypoint}")
+        return func
     path = task_root / f"{module_name}.py"
     if not path.is_file():
         raise FileNotFoundError(f"task entry module missing: {path.name}")
@@ -133,10 +142,11 @@ async def _run(frames: _Frames) -> int:
         workspace_root=_box_dir("AGEVAL_WORKSPACE"),
         artifact_dir=artifact_dir,
         dataset_root=dataset_root,
+        task_root=task_root,
         agent=Agent(attempt_id=attempt_id),
     )
     try:
-        entry = _load_entry(task_root, str(launch["entrypoint"]), dataset_root)
+        entry = load_entry(task_root, str(launch["entrypoint"]), dataset_root)
         outcome = entry(ctx)
         if asyncio.iscoroutine(outcome):
             outcome = await outcome

@@ -47,3 +47,8 @@ ERROR_INVALID_SCHEMA = "invalid_schema"
 ERROR_MISSING_REFERENCE = "missing_reference"
 # Role slot declared in task.yaml but no job binding from profiles.yaml / CLI (#59).
 ERROR_MISSING_BINDING = "missing_binding"
+# Harbor intake (`--layout harbor`). Distinct from a missing ageval.yaml.
+ERROR_HARBOR_REGISTRY = "harbor_registry_rejected"
+ERROR_HARBOR_LAYOUT_MIX = "harbor_layout_mix"
+ERROR_HARBOR_NETWORK = "harbor_network_unsupported"
+ERROR_HARBOR_UNSUPPORTED = "harbor_unsupported"

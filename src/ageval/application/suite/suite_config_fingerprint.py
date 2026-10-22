@@ -537,6 +537,7 @@ def load_actors_from_task_lock(
     *,
     overrides: dict[str, Any] | None = None,
     profiles_path: Path | str | None = None,
+    layout: str = "ageval",
 ) -> list[dict[str, str]]:
     """Lock a task (same overrides as suite) and project agent_profiles."""
     from ageval.application.composition import build_lock_command
@@ -549,6 +550,7 @@ def load_actors_from_task_lock(
             task_id,
             overrides=overrides,
             profiles_path=profiles_path,
+            layout=layout,
         )
         .lock
     )
@@ -564,6 +566,7 @@ def load_job_overlay_from_task_lock(
     *,
     overrides: dict[str, Any] | None = None,
     profiles_path: Path | str | None = None,
+    layout: str = "ageval",
 ) -> dict[str, Any] | None:
     """Live-lock a task and project secret-free job_overlay (#59)."""
     from ageval.application.composition import build_lock_command
@@ -576,6 +579,7 @@ def load_job_overlay_from_task_lock(
             task_id,
             overrides=overrides,
             profiles_path=profiles_path,
+            layout=layout,
         )
         .lock
     )
@@ -619,6 +623,7 @@ def collect_suite_config(
     overrides: dict[str, Any] | None = None,
     task_ids: Sequence[str] | None = None,
     profiles_path: Path | str | None = None,
+    layout: str = "ageval",
 ) -> dict[str, Any]:
     """Build suite config fingerprint fields from task result rows + package.
 
@@ -660,6 +665,7 @@ def collect_suite_config(
                     task_id,
                     overrides=overrides,
                     profiles_path=profiles_path,
+                    layout=layout,
                 )
             except Exception:  # noqa: BLE001
                 live_locks[task_id] = ([], None)

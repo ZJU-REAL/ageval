@@ -75,6 +75,8 @@ class RunContext:
     artifact_dir: Path
     # Dataset root when known: code-path access to shared assets (not an Agent mount).
     dataset_root: Path | None = None
+    # Member directory. Set for every run; Harbor's built-in runner reads instruction.md here.
+    task_root: Path | None = None
     agent: Any = None
     _closed: bool = False
     _published: dict[str, Path] = field(default_factory=dict)

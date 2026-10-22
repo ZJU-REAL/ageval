@@ -65,15 +65,18 @@ class SuitePlan:
     n_attempts: int = 1
     # System id: 8 hex (local job locator only; not package identity). No suite_ prefix.
     suite_run_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
+    layout: str = "ageval"
 
 
 def plan_suite_run(
     dataset_ref: str | Path,
     *,
     task_id: str | None = None,
+    task_ids: list[str] | None = None,
     max_concurrent_tasks: int | None = None,
     n_attempts: int | None = None,
     suite_run_id: str | None = None,
+    layout: str = "ageval",
 ) -> SuitePlan:
     """Build a suite plan from Dataset root/ref and optional single-task filter.
 
@@ -85,16 +88,39 @@ def plan_suite_run(
     suite_run_id:
         When resuming, reuse an existing suite run id.
     """
-    root = resolve_dataset_root(dataset_ref)
-    man = load_dataset_manifest(root)
-    if task_id:
-        # Validate membership via resolve path
-        from ageval.config.dataset import resolve_task
+    from ageval.config.harbor_layout import (
+        LAYOUT_HARBOR,
+        filter_harbor_tasks,
+        open_harbor_root,
+        require_layout,
+    )
 
-        resolve_task(root, task_id, manifest=man)
-        ids = [task_id]
+    layout = require_layout(layout)
+    selected = [item.strip() for item in (task_ids or []) if item and str(item).strip()]
+    if task_id and str(task_id).strip():
+        one = str(task_id).strip()
+        if one not in selected:
+            selected.append(one)
+    if layout != LAYOUT_HARBOR and len(selected) > 1:
+        raise ConfigError(
+            "invalid_override",
+            "repeatable --task is only valid with --layout harbor",
+            location="--task",
+        )
+    root = resolve_dataset_root(dataset_ref, layout=layout)
+    if layout == LAYOUT_HARBOR:
+        opened = open_harbor_root(root)
+        man = opened.manifest
+        ids = filter_harbor_tasks(opened, selected)
     else:
-        ids = list_tasks(root, manifest=man)
+        man = load_dataset_manifest(root)
+        if selected:
+            from ageval.config.dataset import resolve_task
+
+            resolve_task(root, selected[0], manifest=man)
+            ids = [selected[0]]
+        else:
+            ids = list_tasks(root, manifest=man)
 
     k = 1 if n_attempts is None else n_attempts
     if not isinstance(k, int) or isinstance(k, bool) or k < 1:
@@ -128,6 +154,7 @@ def plan_suite_run(
         task_ids=ids,
         max_concurrent_tasks=n,
         n_attempts=k,
+        layout=layout,
     )
     if suite_run_id is not None and str(suite_run_id).strip():
         plan.suite_run_id = str(suite_run_id).strip()
@@ -306,6 +333,7 @@ async def _run_one(
             on_phase=on_phase,
             on_progress=on_progress,
             attempt_index=attempt_index,
+            layout=plan.layout,
             **({"allow_prepare": True} if allow_prepare else {}),
         )
         status = getattr(result, "status", None) or "ERROR"
@@ -596,6 +624,7 @@ def _build_summary(
         overrides=overrides,
         task_ids=plan.task_ids,
         profiles_path=profiles_path,
+        layout=plan.layout,
     )
     usage_probe = {
         "attempts": attempts,
@@ -756,6 +785,7 @@ def _assert_replace_slots(
         overrides=overrides,
         task_ids=list(plan.task_ids),
         profiles_path=profiles_path,
+        layout=plan.layout,
     )
     new_fp = new_cfg.get("config_fingerprint")
     if str(new_fp or "") != old_fp:

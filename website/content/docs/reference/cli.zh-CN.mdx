@@ -31,6 +31,8 @@ ageval agent list
 ageval agent uninstall <agent_id>
 ageval evidence --help
 ageval view <dataset|directory|id@version> [--dev] [--open /jobs/<id>]
+# Harbor 任务目录或任务集：view 直接打开它和其中的 .ageval/suite-runs。
+# run / lock 读取这棵树时仍要写 --layout harbor。
 ageval jobs delete --local <dataset> --job <id> --yes
 # Registry / 结果（需 login）
 ageval publish <dataset> --org <org> [--draft] [--public] [--replace]
@@ -51,11 +53,15 @@ ageval results revoke-snapshot <token-or-url>
 
 `share-snapshot` 打印 `{hub}/s/{token}`，不改这份 suite 的公开或私有，也不会把它放上榜。`sync-snapshot` 用来更新 live 链接。详见 [Hub](../share/hub.mdx)。
 
+`--layout harbor` 下，内置 run 把 `instruction.md` 全文交给角色 `solver`，只调用一次。角色 id 固定为 `solver`。绑定来自路径根上的 `profiles.yaml`、`--profiles` 或 `--agent`（`solver` 或 `*`）。三处都没有这份绑定时，锁定失败（`missing_binding`）。`--oracle` 在 environment 阶段执行 `solution/solve.sh`，不再把 `instruction.md` 交给 Agent。
+
 ## `ageval run` 常用选项
 
 | 选项 | 含义 |
 | --- | --- |
-| `--task <id>` | 只跑该成员；省略 = 整份 dataset 跑完 |
+| `--task <id>` | 只跑该成员；省略 = 整份 dataset 跑完。`--layout harbor` 下可重复 |
+| `--layout harbor` | 直接读未改过的 Harbor 任务目录，或一叠任务目录的父目录。省略则仍是 ageval 包。单个 Harbor 任务不能再写 `--task`。`registry.json` 索引会被拒绝 |
+| `--oracle` | 仅配合 `--layout harbor`：跑 `solution/solve.sh`，不再调用 Agent。省略时不使用 `solution/` |
 | `--max-concurrent-tasks N` | 并行上限；**只加速**，不改 k / PASS |
 | `--n-attempts` / `-k N` | Always-k：每题 N 次独立运行（默认 1）；只写在 CLI / job 上 |
 | `--resume-suite <suite_run_id>` | 并进已有 job：跳过已完成的（PASS / FAIL / ERROR），追加一次运行，重算 pass@k / pass^k |
@@ -85,6 +91,7 @@ ageval results revoke-snapshot <token-or-url>
 | 指针 | 含义 |
 | --- | --- |
 | `/parameters/seed` | 业务 seed 等 |
+| `/parameters/harbor_oracle` | 仅 `--layout harbor`：与 `--oracle` 相同 |
 | `/parameters/active_profile` | 切换 profile |
 | `/agent_profiles/<role>/model` | 嵌套 model 对象 |
 | `/agent_profiles/<role>/model/id` | 模型 id |

@@ -31,6 +31,8 @@ ageval agent list
 ageval agent uninstall <agent_id>
 ageval evidence --help
 ageval view <dataset|directory|id@version> [--dev] [--open /jobs/<id>]
+# Harbor task directory or task-set: view opens it and its .ageval/suite-runs.
+# run and lock read that tree only with --layout harbor.
 ageval jobs delete --local <dataset> --job <id> --yes
 # Registry / results (login required)
 ageval publish <dataset> --org <org> [--draft] [--public] [--replace]
@@ -51,11 +53,15 @@ Path = dataset root. `run` / `lock` / `view` / `upload-suite` also accept a Hub 
 
 `share-snapshot` prints `{hub}/s/{token}`. It does not change visibility or leaderboard listing. `sync-snapshot` updates a live link. See [Hub](../share/hub.mdx).
 
+With `--layout harbor`, the built-in run sends `instruction.md` once to role `solver`. That role id is fixed. Bind it from the root `profiles.yaml`, `--profiles`, or `--agent` (`solver` or `*`). Lock fails with `missing_binding` when none of those supply it. `--oracle` runs `solution/solve.sh` in the environment phase and does not send `instruction.md` to the agent.
+
 ## Common `ageval run` flags
 
 | Flag | Meaning |
 | --- | --- |
-| `--task <id>` | One member; omit = run the whole dataset |
+| `--task <id>` | One member; omit = run the whole dataset. Repeatable with `--layout harbor` |
+| `--layout harbor` | Read an unmodified Harbor task directory or a parent of task directories. Omit keeps the ageval package layout. A single Harbor task rejects `--task`. `registry.json` indexes are rejected |
+| `--oracle` | With `--layout harbor`, run `solution/solve.sh` and skip the agent. Omit leaves `solution/` unused |
 | `--max-concurrent-tasks N` | Max concurrent units; **speeds wall time only** |
 | `--n-attempts` / `-k N` | Always-k: N independent Attempts per task (default 1); **CLI/job only** |
 | `--resume-suite <suite_run_id>` | Resume job: skip finished units (PASS / FAIL / ERROR), append Attempts, recompute pass@k / pass^k |
@@ -83,6 +89,7 @@ Path = dataset root. `run` / `lock` / `view` / `upload-suite` also accept a Hub 
 | Pointer | Meaning |
 | --- | --- |
 | `/parameters/seed` | Seed etc. |
+| `/parameters/harbor_oracle` | With `--layout harbor`, same switch as `--oracle` |
 | `/parameters/active_profile` | Profile id |
 | `/agent_profiles/<role>/model` | Nested model object |
 | `/agent_profiles/<role>/model/id` | Model id |

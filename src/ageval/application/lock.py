@@ -15,6 +15,7 @@ from ageval.config.dataset import (
     load_dataset_manifest,
     resolve_task,
 )
+from ageval.config.errors import ERROR_INVALID_OVERRIDE, ConfigError
 from ageval.config.load_and_lock import ConfigCore
 from ageval.config.model import LockedTaskConfig, locked_to_summary
 from ageval.config.profiles import JobDocument, resolve_job_document
@@ -59,31 +60,57 @@ class LockCommand:
         force_build: bool = False,
         allow_prepare: bool = False,
         on_prepare_script: Callable[[str, str], None] | None = None,
+        layout: str = "ageval",
+        cli_task: bool = False,
     ) -> LockResult:
         """Lock one member and return the config plus its dataset context."""
         from ageval.application.host_env import load_host_env_files
+        from ageval.config.harbor_layout import (
+            LAYOUT_HARBOR,
+            compute_harbor_eval_digest,
+            open_harbor_root,
+            require_layout,
+            resolve_harbor_member,
+        )
         from ageval.registry.digest import compute_eval_digest
         from ageval.registry.resolve import resolve_dataset_root_with_source
 
-        root, source = resolve_dataset_root_with_source(dataset_root)
-        # eval_digest is computed over the resolved tree before preparation:
-        # prepare output is pinned transitively via the script content and
-        # the assets manifest, so publish-time and run-time digests agree.
-        # On later locks the marker replays the recorded digest, because
-        # prepare output left on disk would otherwise drift the value.
-        from ageval.config.prepare import prepare_dataset, stored_eval_digest
+        layout = require_layout(layout)
+        root, source = resolve_dataset_root_with_source(dataset_root, layout=layout)
+        if layout == LAYOUT_HARBOR:
+            if allow_prepare:
+                raise ConfigError(
+                    ERROR_INVALID_OVERRIDE,
+                    "dataset prepare does not run for --layout harbor",
+                    location="--allow-prepare",
+                )
+            opened = open_harbor_root(root)
+            if cli_task and opened.kind == "task":
+                raise ConfigError(
+                    ERROR_INVALID_OVERRIDE,
+                    "--task is not valid for a single Harbor task directory",
+                    location="--task",
+                )
+            eval_digest = compute_harbor_eval_digest(root, opened)
+            manifest = opened.manifest
+            resolved = resolve_harbor_member(opened, task_id)
+        else:
+            # eval_digest is computed over the resolved tree before preparation:
+            # prepare output is pinned transitively via the script content and
+            # the assets manifest, so publish-time and run-time digests agree.
+            # On later locks the marker replays the recorded digest, because
+            # prepare output left on disk would otherwise drift the value.
+            from ageval.config.prepare import prepare_dataset, stored_eval_digest
 
-        eval_digest = stored_eval_digest(root) or compute_eval_digest(root)
-        # Dataset preparation (assets + gated prepare script) completes
-        # before any Attempt can open.
-        prepare_dataset(
-            root,
-            allow_prepare=allow_prepare,
-            on_prepare_script=on_prepare_script,
-            eval_digest=eval_digest,
-        )
-        manifest = load_dataset_manifest(root)
-        resolved = resolve_task(root, task_id, manifest=manifest)
+            eval_digest = stored_eval_digest(root) or compute_eval_digest(root)
+            prepare_dataset(
+                root,
+                allow_prepare=allow_prepare,
+                on_prepare_script=on_prepare_script,
+                eval_digest=eval_digest,
+            )
+            manifest = load_dataset_manifest(root)
+            resolved = resolve_task(root, task_id, manifest=manifest)
         # Host credential locators from the dataset-root .env (values never
         # enter the lock or evidence).
         load_host_env_files(package_root=root)
@@ -101,6 +128,7 @@ class LockCommand:
             capabilities=self._capabilities,
             dataset_provenance=manifest.provenance,
             force_build=force_build,
+            layout=layout,
         )
         return LockResult(
             lock=lock,
@@ -121,6 +149,8 @@ class LockCommand:
         profile: str | None = None,
         allow_prepare: bool = False,
         on_prepare_script: Callable[[str, str], None] | None = None,
+        layout: str = "ageval",
+        cli_task: bool = False,
     ) -> dict[str, Any]:
         """CLI-facing form: return the deterministic lock summary document."""
         return self.lock(
@@ -131,10 +161,17 @@ class LockCommand:
             set_overrides=set_overrides,
             allow_prepare=allow_prepare,
             on_prepare_script=on_prepare_script,
+            layout=layout,
+            cli_task=cli_task,
         ).summary()
 
-    def tasks(self, dataset_root: Path | str) -> list[str]:
+    def tasks(self, dataset_root: Path | str, *, layout: str = "ageval") -> list[str]:
+        from ageval.config.harbor_layout import LAYOUT_HARBOR, open_harbor_root, require_layout
+
+        layout = require_layout(layout)
         root = Path(dataset_root).expanduser().resolve(strict=False)
+        if layout == LAYOUT_HARBOR:
+            return list(open_harbor_root(root).task_ids)
         return list_tasks(root)
 
 

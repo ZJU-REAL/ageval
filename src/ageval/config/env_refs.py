@@ -11,9 +11,10 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from ageval.config.errors import ERROR_INVALID_SCHEMA, ConfigError
+from ageval.config.errors import ERROR_INVALID_SCHEMA, ERROR_MISSING_REFERENCE, ConfigError
 
 _ENV_REF = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
+_EMBEDDED_ENV = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 _LOCATOR_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -35,6 +36,30 @@ def prepare_script_env(dataset_root: str) -> dict[str, str]:
     env = dict(os.environ)
     env["AGEVAL_DATASET_ROOT"] = dataset_root
     return env
+
+
+def expand_embedded_env(value: str, *, location: str) -> str:
+    """Resolve ``${VAR}`` and ``${VAR:-default}`` from the host process.
+
+    An empty or unset name without a default fails. The authored template stays
+    in the lock; callers expand only in memory when a box starts.
+    """
+    import os
+
+    def replace(match: re.Match[str]) -> str:
+        name = match.group(1)
+        found = os.environ.get(name)
+        if found is not None and found != "":
+            return found
+        if match.group(2) is not None:
+            return match.group(2)
+        raise ConfigError(
+            ERROR_MISSING_REFERENCE,
+            f"environment variable {name} is unset",
+            location=location,
+        )
+
+    return _EMBEDDED_ENV.sub(replace, value)
 
 
 def parse_env_ref(raw: str) -> str | None:

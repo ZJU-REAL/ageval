@@ -226,6 +226,9 @@ def _scoring_environment_options(
         options["egress_allowlist"] = _scoring_egress_allowlist(ctx, options)
     if str(getattr(ctx.lock, "environment", "")) == "docker":
         options.update(resource_options(thaw(ctx.lock.parameters), scoring=True))
+    verifier_user = thaw(getattr(ctx.lock, "parameters", None) or {}).get("harbor_verifier_user")
+    if "user" not in options and isinstance(verifier_user, str) and verifier_user.strip():
+        options["user"] = verifier_user.strip()
     return options
 
 
@@ -257,6 +260,7 @@ def _bind_named_scoring_host(ctx: AttemptCtx, name: str) -> EnvironmentProvider 
     """One named scoring box from its member recipe, with evaluate-phase layers."""
     recipe = named_evaluate_environments(ctx)[name]
     dockerfile = recipe.get("dockerfile")
+    context = recipe.get("context")
     return bind_winner(
         ctx.registry,
         ctx.bindings,
@@ -267,6 +271,7 @@ def _bind_named_scoring_host(ctx: AttemptCtx, name: str) -> EnvironmentProvider 
             repo_root=Path.cwd(),
             dockerfile=dockerfile if isinstance(dockerfile, str) and dockerfile.strip() else None,
             compose_file=None,
+            build_context=context if isinstance(context, str) and context.strip() else None,
         ),
         plugin_layers=_scoring_plugin_layers(ctx),
         options=_scoring_environment_options(ctx, recipe),
@@ -344,7 +349,31 @@ async def _materialize_on_host(
     if ctx.evaluation_src is not None and ctx.evaluation_src.is_dir():
         await host.upload(ctx.evaluation_src, EVALUATION_PATH)
         ctx.record_fact("gold_materialized", {"at": PHASE, **extra})
+    await _upload_package_paths(ctx, host)
     await place_collected_artifacts(ctx, host, name=name)
+
+
+async def _upload_package_paths(ctx: AttemptCtx, host: EnvironmentProvider) -> None:
+    """Copy task directories the lock named (Harbor ``tests/`` onto ``/tests``)."""
+    from ageval.environments.protocol import EnvironmentFailure
+
+    refs = thaw(getattr(ctx.lock, "resolved_references", None) or {})
+    rows = refs.get("package_uploads") or []
+    if not isinstance(rows, list):
+        return
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        source_rel = str(row.get("source") or "").strip()
+        dest = str(row.get("dest") or "").strip()
+        source = ctx.task_root / source_rel
+        if not source_rel or not source.is_dir() or not dest.startswith("/"):
+            raise EnvironmentFailure(
+                "environment_collect_missing",
+                f"package upload {source_rel!r} -> {dest!r} is not a task directory",
+            )
+        await host.upload(source, dest)
+        ctx.record_fact("package_uploaded", {"source": source_rel, "dest": dest})
 
 
 def _workspace_tree_snapshots(ctx: AttemptCtx, staged: Path) -> list[Path]:
