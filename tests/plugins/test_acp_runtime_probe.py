@@ -124,6 +124,33 @@ def _realpath_miss() -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
+async def test_node_floor_miss_does_not_install() -> None:
+    desc = get_entry("pi")
+    assert desc is not None
+    host = _ScriptedHost(
+        [
+            {
+                "ok": False,
+                "reason": "node_floor",
+                "node": {"required": ">=22.19.0", "found": "v18.19.1"},
+                "missing": [],
+                "versions": [],
+                "initialize": {"ok": False, "reason": "skipped"},
+                "argv0": None,
+            }
+        ]
+    )
+    ctx = _Ctx(host, [])
+    with pytest.raises(EnvironmentFailure) as raised:
+        await _ensure_entry_present(ctx, desc)
+    assert raised.value.kind == "acp_runtime_node"
+    assert "pi" in raised.value.message
+    assert ">=22.19.0" in raised.value.message
+    assert "v18.19.1" in raised.value.message
+    assert all(cmd[:2] != ["bash", "-lc"] for cmd in host.commands)
+
+
+@pytest.mark.asyncio
 async def test_probe_hit_skips_install() -> None:
     desc = get_entry("opencode")
     assert desc is not None
@@ -238,6 +265,10 @@ async def test_realpath_mismatch_installs_once_and_does_not_initialize() -> None
     assert ctx.facts[-1][1]["initialize"]["reason"] == "skipped"
 
 
+def _fake_node(bindir: Path, version: str = "v22.23.4") -> None:
+    _write_exec(bindir / "node", f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(version)}\n")
+
+
 def _write_exec(path: Path, body: str) -> None:
     path.write_text(body, encoding="utf-8")
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
@@ -314,6 +345,7 @@ def _run_probe_source(
     root = tmp_path / "node_modules"
     bindir = tmp_path / "bin"
     bindir.mkdir()
+    _fake_node(bindir)
     body = f'#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(agent)} "$@"\n'
     package_bin = _package_bin(
         root,
@@ -333,6 +365,31 @@ def _run_probe_source(
     if handshake_timeout_sec is not None:
         config["handshake_timeout_sec"] = handshake_timeout_sec
     return _run_probe_config(tmp_path, config, path_dirs=[bindir])
+
+
+def test_probe_source_rejects_node_below_floor(tmp_path: Path) -> None:
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    _fake_node(bindir, "v18.19.1")
+    desc = get_entry("pi")
+    assert desc is not None
+    result = _run_probe_config(tmp_path, _probe_config(desc), path_dirs=[bindir])
+    assert result["ok"] is False
+    assert result["reason"] == "node_floor"
+    assert result["node"] == {"required": ">=22.19.0", "found": "v18.19.1"}
+    assert result["initialize"]["reason"] == "skipped"
+
+
+def test_probe_source_at_floor_continues_past_the_node_check(tmp_path: Path) -> None:
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    _fake_node(bindir, "v22.19.0")
+    desc = get_entry("pi")
+    assert desc is not None
+    result = _run_probe_config(tmp_path, _probe_config(desc), path_dirs=[bindir])
+    assert result.get("reason") != "node_floor"
+    assert result["ok"] is False
+    assert result["initialize"]["reason"] == "skipped"
 
 
 def test_probe_source_accepts_echo_stdio_agent(tmp_path: Path) -> None:
@@ -417,6 +474,7 @@ def test_claude_code_ignores_a_missing_alias(tmp_path: Path) -> None:
     root = tmp_path / "node_modules"
     bindir = tmp_path / "bin"
     bindir.mkdir()
+    _fake_node(bindir)
     engine = _package_bin(
         root,
         "@anthropic-ai/claude-code",

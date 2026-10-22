@@ -13,7 +13,7 @@ from tests.helpers.lock import CONFIG_MIN, job_document, lock_task
 from ageval.config.capabilities import DeclarationCapabilityCatalog
 from ageval.config.errors import ConfigError
 from ageval.config.load_and_lock import referenced_acp_user_entries
-from ageval.config.model import locked_to_summary
+from ageval.config.model import locked_to_summary, thaw
 from ageval.config.profiles import JobDocument
 from ageval.environments.protocol import EnvironmentFailure
 from ageval.plugins.contrib.acp.home import _copy_keyless_auth
@@ -28,11 +28,11 @@ from ageval.plugins.contrib.acp.registry import (
 )
 
 _PACKAGED_DIGESTS = {
-    "claude-code": "sha256:5ccb5fd4ab06f58d15a6bd1c9cc903545edf45716d30fa4298d113cb82f69085",
-    "codex": "sha256:b783adb06eef41e6afa8bbd012069581e5cac87c3f99d22e7ac87a3695e71cbe",
-    "grok-build": "sha256:427d622f1fd36141e81fbdd9b9cdfe15fe14478884247285d7fb5dfc3d57a57f",
-    "opencode": "sha256:2d1bc6f0d4c39824f43412b06c4957070b36f832ace1b894d8e3775e0c22835a",
-    "pi": "sha256:92229be82f1da0909de08d5511b13f50a5f72b2f681a3eb797566ccc0845cb23",
+    "claude-code": "sha256:8565d14d5e0b69397a7f818b9b151be73d17c22bfda19a51cdf55ab668c4b784",
+    "codex": "sha256:36e5ad2d6071b68806cbecd57a4a0993e497bb308813a28ff4954cafd65f86a9",
+    "grok-build": "sha256:bb01b57b43c8e9866bdc56c6656fee4da5e787004020f4becf51dcdc9a6fe7dd",
+    "opencode": "sha256:515cc3a7a21dcc9d0e426d20b669025ba0e6af265a4e6714be01219edef47c98",
+    "pi": "sha256:69f120be48644f1efde0266b64e189a45fe41e3283833eba9774f282bccef148",
 }
 _PACKAGED = Path(__file__).resolve().parents[2] / "src/ageval/plugins/contrib/acp/acp_entries.json"
 _EVAL_JUDGE = Path(__file__).resolve().parents[1] / "fixtures/datasets/eval-judge-min"
@@ -55,6 +55,7 @@ def _kimi_doc(**overrides: object) -> dict[str, object]:
         "acp_package": "@moonshot-ai/kimi-code",
         "acp_version": "1.2.3",
         "install_command": "npm install -g @moonshot-ai/kimi-code@1.2.3",
+        "runtime": {"node": ">=18.0.0"},
         "credential_env_names": ["KIMI_API_KEY"],
         "model_binding": "config-option",
         "platforms": ["darwin", "linux"],
@@ -94,6 +95,60 @@ def test_registry_loads_five_entries() -> None:
         for rel in (*desc.home_dirs, *desc.keyless_auth_paths):
             assert not rel.startswith("/")
             assert ".." not in rel
+
+
+# Max published engines.node at the current pin. A pin with no engines.node
+# does not raise the floor. opencode publishes none, so the floor is >=18.0.0.
+_NODE_FLOORS = {
+    "claude-code": ">=22.0.0",
+    "codex": ">=16.0.0",
+    "grok-build": ">=20.0.0",
+    "opencode": ">=18.0.0",
+    "pi": ">=22.19.0",
+}
+
+
+def test_packaged_entries_store_resolved_node_floors() -> None:
+    entries = load_acp_entries()
+    assert {eid: desc.runtime.node_spec() for eid, desc in entries.items()} == _NODE_FLOORS
+    pi = entries["pi"]
+    assert pi.runtime.node == (22, 19, 0)
+    assert pi.as_dict()["runtime"] == {"node": ">=22.19.0"}
+
+
+def test_runtime_node_canonicalizes_and_rejects_other_shapes(tmp_path: Path) -> None:
+    short = _kimi_doc(runtime={"node": ">=22"})
+    path = tmp_path / "short.json"
+    path.write_text(json.dumps(short), encoding="utf-8")
+    clear_registry_cache()
+    desc = load_acp_entries(str(path))["kimi"]
+    assert desc.runtime.node_spec() == ">=22.0.0"
+    full = _kimi_doc(runtime={"node": ">=22.0.0"})
+    full_path = tmp_path / "full.json"
+    full_path.write_text(json.dumps(full), encoding="utf-8")
+    clear_registry_cache()
+    assert load_acp_entries(str(full_path))["kimi"].descriptor_digest == desc.descriptor_digest
+
+    missing = _kimi_doc()
+    rows = missing["entries"]
+    assert isinstance(rows, list)
+    row = rows[0]
+    assert isinstance(row, dict)
+    row.pop("runtime")
+    bad_docs: list[tuple[dict[str, object], str]] = [
+        (missing, "/entries/0/runtime"),
+        (_kimi_doc(runtime={"python": ">=3.12"}), "/entries/0/runtime/python"),
+        (_kimi_doc(runtime={"node": "^22"}), "/entries/0/runtime/node"),
+        (_kimi_doc(runtime=[]), "/entries/0/runtime"),
+    ]
+    for index, (doc, location) in enumerate(bad_docs):
+        target = tmp_path / f"bad-{index}.json"
+        target.write_text(json.dumps(doc), encoding="utf-8")
+        clear_registry_cache()
+        with pytest.raises(AcpRegistryError) as raised:
+            load_acp_entries(str(target))
+        assert raised.value.error_code == "invalid_schema"
+        assert raised.value.location == location
 
 
 def test_unknown_entry() -> None:
@@ -150,6 +205,7 @@ def test_lock_snapshot_has_no_paths_or_secrets() -> None:
     assert "sk-" not in blob
     assert snap["entry_id"] == "pi"
     assert snap["acp_version"] == "0.0.33"
+    assert snap["runtime"] == {"node": ">=22.19.0"}
     assert "source" not in snap
 
 
@@ -277,7 +333,8 @@ def test_user_entry_lock_stores_snapshot_and_changes_digest() -> None:
     assert first.acp_user_entries is not None
     snap = dict(first.acp_user_entries["kimi"])
     assert snap["entry_id"] == "kimi"
-    blob = json.dumps(snap)
+    assert snap["runtime"]["node"] == ">=18.0.0"
+    blob = json.dumps(thaw(snap))
     for banned in ("install_command", "fixed_env", "source", "/Users", "/opt", "/home"):
         assert banned not in blob
     assert list(locked_to_summary(first).as_dict()["acp_user_entries"]) == ["kimi"]

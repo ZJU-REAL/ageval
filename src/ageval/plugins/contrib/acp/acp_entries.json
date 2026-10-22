@@ -25,6 +25,7 @@
       "acp_package": "@agentclientprotocol/codex-acp",
       "acp_version": "1.1.9",
       "install_command": "npm install -g @agentclientprotocol/codex-acp@1.1.9 @openai/codex@0.146.0",
+      "runtime": {"node": ">=16.0.0"},
       "credential_env_names": [],
       "keyless_auth": true,
       "model_binding": "config-option",
@@ -63,6 +64,7 @@
       "acp_package": "@agentclientprotocol/claude-agent-acp",
       "acp_version": "0.64.2",
       "install_command": "npm install -g @agentclientprotocol/claude-agent-acp@0.64.2 @anthropic-ai/claude-code@2.1.221",
+      "runtime": {"node": ">=22.0.0"},
       "credential_env_names": [
         "ANTHROPIC_API_KEY",
         "ANTHROPIC_AUTH_TOKEN"
@@ -103,6 +105,7 @@
       "acp_package": "pi-acp",
       "acp_version": "0.0.33",
       "install_command": "npm install -g pi-acp@0.0.33 @earendil-works/pi-coding-agent@0.83.0",
+      "runtime": {"node": ">=22.19.0"},
       "credential_env_names": [
         "ZAI_API_KEY",
         "ZAI_CODING_CN_API_KEY",
@@ -174,6 +177,7 @@
       "acp_package": "opencode-ai",
       "acp_version": "1.18.12",
       "install_command": "npm install -g opencode-ai@1.18.12",
+      "runtime": {"node": ">=18.0.0"},
       "credential_env_names": [
         "ZHIPU_API_KEY",
         "OPENAI_API_KEY",
@@ -223,6 +227,7 @@
       "acp_package": "@xai-official/grok",
       "acp_version": "0.2.120",
       "install_command": "npm install -g @xai-official/grok@0.2.120",
+      "runtime": {"node": ">=20.0.0"},
       "credential_env_names": [
         "XAI_API_KEY"
       ],
