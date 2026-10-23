@@ -61,6 +61,9 @@ from ageval.plugins.decorators import environment_plugin
 BOX_ROOT = "/attempt"
 ATTEMPT_UID = 10001
 ATTEMPT_GID = 10001
+# Harbor sidecars dial the agent container by this DNS name. It is registered
+# only when the Attempt joins the compose project network.
+_COMPOSE_ATTEMPT_ALIAS = "main"
 _MAX_STREAM_BYTES = 256 * 1024
 _CP_TIMEOUT_SEC = 600.0
 _PYTHON_VERSION_RE = re.compile(r"^\d+\.\d+$")
@@ -203,13 +206,20 @@ class DockerHost(BaseEnvironment):
         # fails here, with no compose project and no Attempt container.
         resource_args = self._resource_run_args()
         # Sidecars come up first. The Attempt joins their project network, so a
-        # service is reachable by name. service:<name> instead shares that
-        # sidecar's network namespace: localhost is the sidecar's localhost.
+        # service is reachable by name, and the Attempt is reachable as `main`.
+        # service:<name> instead shares that sidecar's network namespace:
+        # localhost is the sidecar's localhost, and `main` is not registered.
         network = self._network
+        on_compose_network = False
         if self._compose_file is not None and self._compose_up():
             network = f"{self._compose_project}_default"
+            on_compose_network = True
         if parity.service is not None:
             network = f"container:{self._sidecar_container_id(parity.service)}"
+            on_compose_network = False
+        network_flags = ["--network", network]
+        if on_compose_network:
+            network_flags.extend(["--network-alias", _COMPOSE_ATTEMPT_ALIAS])
         name = f"ageval-{uuid.uuid4().hex[:12]}"
         extra_run = self._start_egress_proxy()
         started = docker(
@@ -221,8 +231,7 @@ class DockerHost(BaseEnvironment):
             self._user,
             "--security-opt",
             "no-new-privileges",
-            "--network",
-            network,
+            *network_flags,
             *resource_args,
             *self._parity_run_flags(parity),
             *extra_run,

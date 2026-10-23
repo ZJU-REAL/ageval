@@ -1,8 +1,9 @@
-"""Attempt compose parity: service network namespace, main env, cap_add."""
+"""Attempt compose parity: service network namespace, main env, cap_add, main alias."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -295,6 +296,12 @@ def _run_call(calls: list[tuple[str, ...]]) -> tuple[str, ...]:
     return next(call for call in calls if call[:1] == ("run",))
 
 
+def _network_alias(run: tuple[str, ...]) -> str | None:
+    if "--network-alias" not in run:
+        return None
+    return run[run.index("--network-alias") + 1]
+
+
 @pytest.mark.asyncio
 async def test_start_uses_container_network_env_and_cap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -325,6 +332,7 @@ services:
         run = _run_call(calls)
         network = run[run.index("--network") + 1]
         assert network == "container:sidecar-1"
+        assert _network_alias(run) is None
         assert "--cap-add" in run
         assert "SYS_PTRACE" in run
         assert "WAREHOUSE_API_URL=http://127.0.0.1:4100" in run
@@ -350,8 +358,40 @@ async def test_start_without_service_mode_joins_project_network(
     run = _run_call(calls)
     network = run[run.index("--network") + 1]
     assert network.endswith("_default")
+    assert _network_alias(run) == "main"
     assert "--cap-add" not in run
     assert not any(call[:1] == ("compose",) and "ps" in call for call in calls)
+
+
+@pytest.mark.asyncio
+async def test_start_without_compose_has_no_network_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _patch_docker(monkeypatch)
+    host = DockerHost(
+        spec=BoxSpec(attempt_root=tmp_path / "box", task_root=tmp_path, repo_root=tmp_path),
+        options={},
+    )
+    await host.start()
+    await host.stop(delete=True)
+    run = _run_call(calls)
+    assert run[run.index("--network") + 1] == "bridge"
+    assert _network_alias(run) is None
+
+
+@pytest.mark.asyncio
+async def test_dropped_only_main_does_not_join_or_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _task(tmp_path, harbor=None, compose="services:\n  main:\n    image: demo\n")
+    calls = _patch_docker(monkeypatch)
+    host = DockerHost(spec=_spec(tmp_path), options={"drop_compose_main": True})
+    await host.start()
+    await host.stop(delete=True)
+    run = _run_call(calls)
+    assert not run[run.index("--network") + 1].endswith("_default")
+    assert _network_alias(run) is None
+    assert not any(call[:1] == ("compose",) and "up" in call for call in calls)
 
 
 @pytest.mark.asyncio
@@ -436,5 +476,53 @@ services:
                 break
             await asyncio.sleep(0.25)
         assert reached, last
+    finally:
+        await host.stop(delete=True)
+
+
+@pytest.mark.asyncio
+async def test_real_sidecar_resolves_attempt_as_main(tmp_path: Path) -> None:
+    """A sidecar on the project network resolves hostname main to the Attempt."""
+    _skip_without_docker()
+    _task(
+        tmp_path,
+        harbor=None,
+        compose="""
+services:
+  probe:
+    image: python:3.12-slim
+    command: ["python", "-c", "import time; time.sleep(3600)"]
+""",
+    )
+    host = DockerHost(
+        spec=_spec(tmp_path),
+        options={"image": "python:3.12-slim"},
+    )
+    try:
+        await host.preflight()
+        await host.start()
+        assert host._container is not None
+        inspected = docker(
+            "inspect",
+            host._container,
+            "--format",
+            "{{json .NetworkSettings.Networks}}",
+        )
+        assert inspected.returncode == 0, inspected.stderr
+        networks = json.loads(inspected.stdout or "{}")
+        aliases = [
+            alias
+            for net in networks.values()
+            if isinstance(net, dict)
+            for alias in (net.get("Aliases") or [])
+        ]
+        assert "main" in aliases
+        resolved = await host.exec(
+            ["python", "-c", "import socket; print(socket.gethostbyname('main'))"],
+            timeout_sec=30,
+            service="probe",
+        )
+        assert resolved.ok, resolved.stderr or resolved.stdout
+        assert resolved.stdout.strip()
     finally:
         await host.stop(delete=True)

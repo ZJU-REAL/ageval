@@ -22,7 +22,7 @@ ACP / `run.py` / Core never see `container_id`.
 | capabilities | `exec`, `upload`, `download`, `attach_stdio`, `uid_gid`, `path_views`, `compose`: yes |
 | inject | — |
 
-`attach_stdio` is `docker exec -i`. With `environment/compose.yaml`, the services in that file come up first and the Attempt joins `{project}_default`, so a service is reachable by name. `network_mode: service:<name>` starts the Attempt with `docker run --network container:<that service's container>`, so `127.0.0.1` is that service's `127.0.0.1`. The Attempt stays a separate `docker run`.
+`attach_stdio` is `docker exec -i`. With `environment/compose.yaml`, the services in that file come up first and the Attempt joins `{project}_default`, so a service is reachable by name. On that network the Attempt is also registered as hostname `main` (`docker run --network-alias main`). Harbor sidecars dial the agent by that name (for example `KV_HOST=main`); ageval does not start a compose service called `main`, so the alias is what makes the name resolve. `network_mode: service:<name>` starts the Attempt with `docker run --network container:<that service's container>`, so `127.0.0.1` is that service's `127.0.0.1`, and the `main` alias is not added. A run with no compose file does not add it either. The Attempt stays a separate `docker run`.
 
 ## Parameters
 
@@ -32,7 +32,7 @@ Job knobs are `environment_options` (not `extensions[].options`).
 | --- | --- | --- |
 | `environment_options.image` | unset | Existing image tag; skip local build. Alias: `docker_image`. |
 | `environment_options.platform` | this host | `docker` platform (e.g. `linux/arm64`). |
-| `environment_options.network` | `bridge` | Attempt container network when there is no compose file. A task compose file joins `{project}_default` unless `network_mode` is `service:<name>`. |
+| `environment_options.network` | `bridge` | Attempt container network when there is no compose file. A task compose file joins `{project}_default` unless `network_mode` is `service:<name>`. Joining that project network also sets `--network-alias main`. |
 | `environment_options.network_mode` | omitted | `service:<name>` starts the Attempt with `--network container:<that service's container id>`. Other values leave the network unchanged. Same key on task `parameters.network_mode`, or `services.main.network_mode` in `environment/docker-compose.yaml` when that file is not the compose-up file. Job value wins, then parameters, then the file. Scoring containers do not read it. |
 | `environment_options.cap_add` | omitted | Capability names passed to `docker run --cap-add` (for example `SYS_PTRACE`). `no-new-privileges` stays. Same key on `parameters.cap_add`, or `services.main.cap_add` in `environment/docker-compose.yaml`. |
 | `environment_options.main_environment` | omitted | `KEY=VALUE` entries on `docker run -e`. Overrides the same names already baked as image ENV. A bare name with no value fails once and is not taken from the parent environment. Names that point at the Docker daemon, such as `DOCKER_HOST`, are not passed in. Same key on `parameters.main_environment`, or `services.main.environment` in `environment/docker-compose.yaml`. Not written to the lock or to evidence. |

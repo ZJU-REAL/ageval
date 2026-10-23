@@ -54,7 +54,7 @@ environment: e2b    # local | docker | e2b | ssh | daytona
 
 - `image` / `docker_image`：使用已有镜像标签，跳过本地 Dockerfile 构建。
 - `platform`：目标架构平台（默认跟随宿主机）。
-- `network`：Docker 网络名（默认 `bridge`；设为 `none` 时完全禁用容器网络）。若任务包含 `environment/compose.yaml`，Attempt 容器默认接入 `{project}_default` 网络（除非指定了 `network_mode: service:<name>`）。
+- `network`：Docker 网络名（默认 `bridge`；设为 `none` 时完全禁用容器网络）。若任务包含 `environment/compose.yaml`，Attempt 容器默认接入 `{project}_default` 网络（除非指定了 `network_mode: service:<name>`）。接入这条项目网络时，`docker run` 同时带 `--network-alias main`，侧车可以用主机名 `main` 访问待测 Agent。没有 compose 文件，或走 `network_mode: service:<name>` 时，不注册这个别名。
 - `egress`：省略时保持默认 `bridge` 网络。设为 `egress: llm`（仅支持 `docker`）时，容器内出站 HTTP(S) 流量经父进程白名单代理（`HTTP_PROXY` / `HTTPS_PROXY`）过滤，仅放行允许的目标域名。
 - `egress_allow`：必须与同一字典下的 `egress: llm` 配合使用，为小写主机名列表（不含协议头、路径或端口）。有效放行域名为当前环境对应阶段绑定角色的 `base_url` 主机名与 `egress_allow` 的并集。
 - `user`：容器内运行身份（`docker run --user` 及 `exec` / `attach_stdio` 共用），默认为 `10001:10001`；设为 `root`、`0` 或 `0:0` 时以 root 身份运行；容器始终附带 `no-new-privileges`。
@@ -117,7 +117,7 @@ contrib/local    → 本机目录
 
 ## Docker Compose 辅助服务与 Attempt 容器参数
 
-当任务包含 `environment/compose.yaml` 时，`docker compose up -d` 先启动辅助服务（自动剔除 `depends_on` 中指向 `main` 的依赖项），待测 Agent 仍运行在独立的 `docker run` 容器中。
+当任务包含 `environment/compose.yaml` 时，`docker compose up -d` 先启动辅助服务（自动剔除 `depends_on` 中指向 `main` 的依赖项），待测 Agent 仍运行在独立的 `docker run` 容器中。该容器接入 `{project}_default` 时带 `--network-alias main`，侧车沿用 Harbor 的主机名 `main` 即可访问待测 Agent。`network_mode: service:<name>` 与无 compose 的启动不带这个别名。
 
 针对待测 Agent 容器，`network_mode`、`cap_add` 与 `main_environment` 按以下优先级合并（后置覆盖前置，评分容器不读取这三项）：
 1. `environment/docker-compose.yaml` 中 `services.main` 的对应字段（当该文件不作为 compose-up 主文件时）；
