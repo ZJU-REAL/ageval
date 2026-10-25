@@ -82,6 +82,7 @@ class _AgevalAcpClient:
     permission_decisions: list[dict[str, Any]] = field(default_factory=list)
     last_activity_monotonic: float = field(default_factory=time.monotonic)
     _conn: Any = None
+    activity: Any = None
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def mark_activity(self) -> None:
@@ -182,6 +183,10 @@ class _AgevalAcpClient:
                 event["usage"] = raw_update
             event["has_usage_update"] = True
         self.record(event)
+        if self.activity is not None:
+            from ageval.plugins.contrib.acp.activity_stream import apply_update
+
+            apply_update(self.activity, self, update, event)
 
     async def write_text_file(
         self, session_id: str, path: str, content: str, **kwargs: Any

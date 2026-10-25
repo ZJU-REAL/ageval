@@ -236,6 +236,48 @@ def _failed(model: str, error: str) -> dict[str, Any]:
     return _document(model=model, ok=False, text="", error=error, steps=[], usage=None)
 
 
+def _emit_step(row: dict[str, Any]) -> None:
+    path = Path("/attempt/.ageval-state/steps.jsonl")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError:
+        return
+
+
+def _emit_openhands(event: Any) -> None:
+    name = type(event).__name__
+    if name == "MessageEvent" and str(getattr(event, "source", "") or "") == "agent":
+        text = _message_text(event).strip()
+        if text:
+            _emit_step({"type": "assistant", "content": text})
+        return
+    if name == "ActionEvent":
+        _emit_step(
+            {
+                "type": "tool_call",
+                "tool_call_id": str(getattr(event, "tool_call_id", "") or ""),
+                "name": str(getattr(event, "tool_name", "") or "tool"),
+                "tool_kind": "other",
+                "arguments": _action_args(event),
+            }
+        )
+        return
+    if name == "ObservationEvent":
+        _emit_step(
+            {
+                "type": "tool_result",
+                "tool_call_id": str(getattr(event, "tool_call_id", "") or ""),
+                "name": str(getattr(event, "tool_name", "") or "tool"),
+                "outcome": "ok",
+                "content": _observation_text(event),
+            }
+        )
+
+
 def run_agent(instruction: str, *, workdir: str) -> dict[str, Any]:
     """One headless SDK conversation on a local workspace."""
     from openhands.sdk import LLM, Agent, Conversation, LocalWorkspace
@@ -277,8 +319,31 @@ def run_agent(instruction: str, *, workdir: str) -> dict[str, Any]:
         max_iteration_per_run=max_iterations,
         visualizer=None,
     )
-    conversation.send_message(instruction)
-    conversation.run()
+    import threading
+    import time
+
+    stop = threading.Event()
+    seen = {"n": 0}
+
+    def _pump() -> None:
+        while not stop.is_set():
+            current = list(getattr(conversation.state, "events", ()) or ())
+            for event in current[seen["n"] :]:
+                _emit_openhands(event)
+            seen["n"] = len(current)
+            time.sleep(0.05)
+
+    pump = threading.Thread(target=_pump, daemon=True)
+    pump.start()
+    try:
+        conversation.send_message(instruction)
+        conversation.run()
+    finally:
+        stop.set()
+        pump.join(timeout=1)
+        current = list(getattr(conversation.state, "events", ()) or ())
+        for event in current[seen["n"] :]:
+            _emit_openhands(event)
     events = list(getattr(conversation.state, "events", ()) or ())
     text = str(get_agent_final_response(events) or "")
     return _document(

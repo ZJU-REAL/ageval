@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import time
 from collections.abc import Callable
 from contextlib import suppress
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 _TAP_ERRORS = (TypeError, ValueError, AttributeError, KeyError, RuntimeError)
@@ -217,10 +219,12 @@ class EventTap:
                     if isinstance(first, str) and first.strip():
                         row.setdefault("started_at", first.strip())
                     self._rows[i] = row
+                    _emit_nooa_step(row)
                     return
             return
         self._seen.add(key)
         self._rows.append(row)
+        _emit_nooa_step(row)
 
     def finish(self, agent: Any | None = None) -> list[dict[str, Any]]:
         if agent is not None:
@@ -245,6 +249,42 @@ class EventTap:
             EventTap._orig_add = None
         self.stats["native_count"] = len(self._rows)
         return list(self._rows)
+
+
+def _emit_nooa_step(row: dict[str, Any]) -> None:
+    kind = str(row.get("event_type") or "")
+    if kind == "ToolCallEvent":
+        step = {
+            "type": "tool_call",
+            "tool_call_id": str(row.get("tool_call_id") or row.get("id") or ""),
+            "name": str(row.get("name") or "tool"),
+            "tool_kind": "other",
+            "arguments": row.get("arguments") if isinstance(row.get("arguments"), dict) else {},
+        }
+    elif kind == "PythonOutput":
+        step = {
+            "type": "tool_result",
+            "tool_call_id": str(row.get("tool_call_id") or ""),
+            "name": "execute_python",
+            "outcome": "ok" if row.get("execution_status") == "complete" else "error",
+            "content": str(row.get("stdout") or ""),
+        }
+    elif kind in {"Message", "TextOnlyReply"}:
+        text = row.get("content")
+        if not isinstance(text, str) or not text.strip():
+            return
+        step = {"type": "assistant", "content": text}
+    else:
+        return
+    path = Path("/attempt/.ageval-state/steps.jsonl")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(step, ensure_ascii=False, default=str) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError:
+        return
 
 
 def attach_event_tap(agent: Any) -> EventTap:

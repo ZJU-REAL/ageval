@@ -240,7 +240,16 @@ def main() -> int:
             DeepSeekHarness(**harness_kwargs) as harness,
         ):
             session = harness.start_session(session_id_s)
-            result = session.run(prompt)
+
+            def _on_notification(notification: Any) -> None:
+                if getattr(notification, "method", None) != "session.event":
+                    return
+                payload = getattr(notification, "payload", None)
+                event = payload.get("event") if isinstance(payload, dict) else None
+                if isinstance(event, dict):
+                    _emit_dsh(event)
+
+            result = session.run(prompt, on_notification=_on_notification)
         native = [e for e in (result.events or []) if isinstance(e, dict)]
         mapped: list[dict[str, Any]] = []
         usage = None
@@ -289,6 +298,49 @@ def main() -> int:
             },
             code=1,
         )
+
+
+def _emit_step(row: dict[str, Any]) -> None:
+    path = Path("/attempt/.ageval-state/steps.jsonl")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError:
+        return
+
+
+def _emit_dsh(event: dict[str, Any]) -> None:
+    kind = str(event.get("type") or "")
+    data = event.get("data") if isinstance(event.get("data"), dict) else {}
+    if kind == "tool/call":
+        _emit_step(
+            {
+                "type": "tool_call",
+                "tool_call_id": str(data.get("callId") or data.get("id") or ""),
+                "name": str(data.get("name") or "tool"),
+                "tool_kind": "other",
+                "arguments": (
+                    data.get("arguments") if isinstance(data.get("arguments"), dict) else {}
+                ),
+            }
+        )
+    elif kind == "tool/result":
+        _emit_step(
+            {
+                "type": "tool_result",
+                "tool_call_id": str(data.get("callId") or data.get("toolCallId") or ""),
+                "name": str(data.get("name") or "tool"),
+                "outcome": "error" if data.get("isError") else "ok",
+                "content": str(data.get("output") or data.get("content") or ""),
+            }
+        )
+    elif kind == "assistant/message":
+        text = data.get("text") or data.get("content") or ""
+        if isinstance(text, str) and text.strip():
+            _emit_step({"type": "assistant", "content": text})
 
 
 if __name__ == "__main__":

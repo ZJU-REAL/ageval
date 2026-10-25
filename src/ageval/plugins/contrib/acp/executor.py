@@ -240,6 +240,7 @@ class AcpExecutor(BaseExecutor):
         self._pipe: StdioTransport | None = None
         self._client: _AgevalAcpClient | None = None
         self._acp_session_id: str | None = None
+        self._resumed_native = False
         self._agent_info: dict[str, Any] | None = None
         self._protocol_version: int | None = None
         self._actual_model: str | None = None
@@ -327,6 +328,7 @@ class AcpExecutor(BaseExecutor):
             )
         argv = self.stdio_argv()
         client = _AgevalAcpClient()
+        client.activity = getattr(self, "activity", None)
         self._client = client
         pipe = await self._host.attach_stdio(
             argv,
@@ -358,15 +360,18 @@ class AcpExecutor(BaseExecutor):
                 }
 
         # The entry reads this path itself, so it must be its own view of the box.
-        new = await self._conn.new_session(
-            cwd=self._host.visible_path(self._placement.workdir),
-            mcp_servers=[],
-        )
-        self._acp_session_id = getattr(new, "session_id", None)
+        cwd = self._host.visible_path(self._placement.workdir)
+        opened, resumed = await self._open_acp_session(cwd)
+        self._resumed_native = resumed
+        self._acp_session_id = getattr(opened, "session_id", None)
         if not self._acp_session_id:
             raise RuntimeError("acp_protocol_error")
+        if not resumed:
+            from ageval.plugins.contrib.acp.activity_stream import note_native_session
 
-        await self._bind_entry(init, new)
+            note_native_session(getattr(self, "activity", None), str(self._acp_session_id))
+
+        await self._bind_entry(init, opened)
 
     def stdio_argv(self) -> list[str]:
         """ACP stdio argv. argv[0] is the pinned absolute path, never a PATH name."""
@@ -385,6 +390,23 @@ class AcpExecutor(BaseExecutor):
             model=self.model,
             reasoning_effort=self.reasoning_effort,
         )
+
+    async def _open_acp_session(self, cwd: str) -> tuple[Any, bool]:
+        """Resume the native ACP session, or open a new one."""
+        from ageval.plugins.contrib.acp.activity_stream import native_session_id
+
+        native = native_session_id(getattr(self, "activity", None))
+        load = getattr(self._conn, "load_session", None)
+        if native and callable(load):
+            try:
+                loaded = await load(cwd=cwd, session_id=native, mcp_servers=[])
+            except Exception:  # noqa: BLE001 — fall back to a new session and the transcript
+                loaded = None
+            if loaded is not None and getattr(loaded, "session_id", None):
+                return loaded, True
+        assert self._conn is not None
+        opened = await self._conn.new_session(cwd=cwd, mcp_servers=[])
+        return opened, False
 
     async def _bind_entry(self, initialize: Any, new_session_resp: Any) -> None:
         if uses_entry_local_bind(self.entry_id):
@@ -451,6 +473,13 @@ class AcpExecutor(BaseExecutor):
     async def _prompt_once(self, prompt: str) -> AgentResult:
         assert self._conn is not None and self._client is not None
         assert self._acp_session_id is not None
+        from ageval.plugins.contrib.acp.activity_stream import prompt_for_resume, seal_open_turn
+
+        prompt = prompt_for_resume(
+            getattr(self, "activity", None),
+            prompt,
+            resumed_native=self._resumed_native,
+        )
         # Per-prompt isolation: chunks + event buffer reset each invoke so
         # turn-level trajectory merge does not pull prior turns' stream.
         self._client.text_chunks.clear()
@@ -508,6 +537,7 @@ class AcpExecutor(BaseExecutor):
             )
 
         stop = getattr(resp, "stop_reason", None) or getattr(resp, "stopReason", None)
+        seal_open_turn(getattr(self, "activity", None), self._client)
         text = "".join(self._client.text_chunks)
         ok, err = _map_stop_reason(str(stop) if stop is not None else "end_turn")
         # Elicitation decline may have been recorded

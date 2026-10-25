@@ -115,14 +115,20 @@ class OpenHandsBoxExecutor:
         collect_dir: str | os.PathLike[str] | None,
         redaction_sentinels: tuple[str, ...] | list[str] | None,
     ) -> AgentResult:
+        from ageval.plugins.step_stream import resume_prefix
+
         await self._prepare()
-        await self._upload_instruction(prompt)
+        await self._upload_instruction(resume_prefix(getattr(self, "activity", None)) + prompt)
         sentinels = tuple(redaction_sentinels or ())
         key = self._api_key_value()
         if key:
             sentinels = (*sentinels, key)
-        result = await self._host.exec(
+        from ageval.plugins.step_stream import exec_with_steps
+
+        result = await exec_with_steps(
+            self._host,
             self._worker_argv(),
+            getattr(self, "activity", None),
             cwd=self._placement.workdir or WORKSPACE_PATH,
             env=self._exec_env(key),
             timeout_sec=timeout,

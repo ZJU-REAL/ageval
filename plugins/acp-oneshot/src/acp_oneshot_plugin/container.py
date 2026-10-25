@@ -159,8 +159,15 @@ class AcpOneshotBoxExecutor:
                 "acp_runtime_missing",
                 f"acp entry {self.entry_id!r} has no pinned binary",
             )
+        from ageval.plugins.contrib.acp.activity_stream import (
+            native_session_id,
+            prompt_for_resume,
+        )
+
+        scope = getattr(self, "activity", None)
+        native = native_session_id(scope)
         request = {
-            "prompt": prompt,
+            "prompt": prompt_for_resume(scope, prompt, resumed_native=bool(native)),
             "cwd": cwd,
             "acp_command": argv,
             "model": self.model,
@@ -170,10 +177,17 @@ class AcpOneshotBoxExecutor:
             "protocol_version": 1,
             "result_path": self._host.visible_path(box_result),
         }
-        result = await self._host.exec(
+        from ageval.plugins.step_stream import exec_with_steps
+
+        env = self._exec_env()
+        if native:
+            env["AGEVAL_NATIVE_SESSION"] = native
+        result = await exec_with_steps(
+            self._host,
             [*self._host.python_command, "-c", _BOOTSTRAP, json.dumps(request, sort_keys=True)],
+            scope,
             cwd=workdir,
-            env=self._exec_env(),
+            env=env,
             timeout_sec=timeout,
         )
         payload = _payload_from_stdout(str(getattr(result, "stdout", "") or ""))

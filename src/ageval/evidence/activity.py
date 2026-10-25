@@ -320,6 +320,27 @@ class ActivityLog:
             self._rewrite_all()
             return updated
 
+    def update_session_native_id(self, session_id: str, native_session_id: str) -> None:
+        """Fill ``native_session_id`` once the engine has opened its session."""
+        with self._lock:
+            for index, record in enumerate(self.records):
+                if record.kind != "session" or record.payload.get("session_id") != session_id:
+                    continue
+                payload = dict(record.payload)
+                payload["native_session_id"] = native_session_id
+                cleaned = self._clean_payload("session", record.status, payload)
+                self.records[index] = ActivityRecord(
+                    format=record.format,
+                    seq=record.seq,
+                    at=record.at,
+                    request_id=record.request_id,
+                    kind=record.kind,
+                    status=record.status,
+                    payload=cleaned,
+                )
+                self._rewrite_all()
+                return
+
     def has_completed_phase(self, phase: str) -> bool:
         return any(
             record.kind == "phase"

@@ -102,9 +102,11 @@ class NooaBoxExecutor:
         timeout: float,
         collect_dir: str | os.PathLike[str] | None,
     ) -> AgentResult:
+        from ageval.plugins.step_stream import resume_prefix
+
         await self._prepare()
         request = {
-            "prompt": prompt,
+            "prompt": resume_prefix(getattr(self, "activity", None)) + prompt,
             "agent": self.agent_ref,
             "method": self.method,
             "model": self.model,
@@ -114,12 +116,16 @@ class NooaBoxExecutor:
         base = self._resolve_base_url()
         if base:
             request["api_base"] = base
-        result = await self._host.exec(
+        from ageval.plugins.step_stream import exec_with_steps
+
+        result = await exec_with_steps(
+            self._host,
             [
                 *self._host.python_command,
                 self._host.visible_path(BOX_WORKER),
                 json.dumps(request, sort_keys=True),
             ],
+            getattr(self, "activity", None),
             cwd=self._placement.workdir or WORKSPACE_PATH,
             env=self._exec_env(),
             timeout_sec=timeout,
