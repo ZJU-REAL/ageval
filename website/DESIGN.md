@@ -1,6 +1,6 @@
 # ageval Website Design System
 
-**令牌与跨面不变量**以 [`docs/design/13-web-ui-tokens.md`](../docs/design/13-web-ui-tokens.md) 为准。本文件只写 website 的 landing / docs 例外（Anton 字标、hero stagger、像素标、ThreeUI），不另开一套色板，也不写 Hub / Viewer 页面清单。
+**令牌与跨面不变量**以 [`docs/design/09-web-ui-design-system.md`](../docs/design/09-web-ui-design-system.md) 为准。本文件只写 website 的 landing / docs 例外（Anton 字标、hero stagger、像素标、ThreeUI），不另开一套色板，也不写 Hub / Viewer 页面清单。
 
 本文档是 `website/` 的视觉与交互规范。
 
@@ -115,7 +115,7 @@
 ## 动效
 
 缓动默认 `cubic-bezier(0.22, 1, 0.36, 1)`（`--ease`）。文档站 chrome 默认 `200ms`（`--t`）。
-SPA 第二档曲线见 `docs/design/13`（`--ease-spring` / `--ease-glide`）。Landing 不引入 spring 过冲。
+SPA 第二档曲线见 `docs/design/09`（`--ease-spring` / `--ease-glide`）。Landing 不引入 spring 过冲。
 
 ### 允许
 

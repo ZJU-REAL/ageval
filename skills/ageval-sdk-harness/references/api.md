@@ -53,4 +53,4 @@ return {
 
 Omit `checks` → no `evaluation/checks.json`. A FAIL row with a PASS return is legal. `script` is a dataset locator (member-relative or `tasks/<id>/…`); parent does not copy the script into the archive.
 
-Design: `docs/design/03-task-run-and-sdk.md`.
+Design: `docs/design/03-task-sdk-and-evaluation.md`.

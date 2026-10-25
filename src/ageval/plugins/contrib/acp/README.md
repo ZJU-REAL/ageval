@@ -4,7 +4,7 @@ First-party exclusive-slot implementation for `executor: acp`.
 
 Parent is the **only** ACP JSON-RPC client. Placement next to miniswe,
 terminus-2, and openhands:
-[docs/design/05-runtime/agent-service.md](../../../../../docs/design/05-runtime/agent-service.md#executor-placement).
+[docs/design/05-executors-and-acp.md](../../../../../docs/design/05-executors-and-acp.md#executor-placement).
 The coding-agent Target inlet is:
 
 ```yaml

@@ -4,7 +4,7 @@
 #   python-registry — offline pytest tests/registry only
 #   viewer-app / hub-app — pnpm lint + build
 #   website         — pnpm build
-#   design-tokens   — web UI token machine-check (docs/design/13)
+#   design-tokens   — web UI token machine-check (docs/design/09)
 #
 # Jobs always start (required-check friendly) and no-op when their path filter
 # is false. Workflow edits re-run every job. No Docker L1 / real Agent e2e.
@@ -68,7 +68,7 @@ jobs:
             design_tokens:
               - 'website/**'
               - 'apps/**'
-              - 'docs/design/13-web-ui-tokens.md'
+              - 'docs/design/09-web-ui-design-system.md'
               - 'scripts/check_design_tokens.py'
             workflow:
               - '.github/workflows/ci.yml'

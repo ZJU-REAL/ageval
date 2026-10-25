@@ -1,6 +1,6 @@
 """Regenerate executor option tables from frozen ``Options`` classes.
 
-The tables in plugin READMEs and ``docs/design/16-model.md`` are generated.
+The tables in plugin READMEs and ``docs/design/05-executors-and-acp.md`` are generated.
 ``--check`` fails when a marker is missing or the body drifted.
 
     python scripts/gen_param_tables.py --write
@@ -46,39 +46,39 @@ CLASSES: dict[str, type] = {
 SURFACES: dict[str, tuple[str, ...]] = {
     "openai-http": (
         "src/ageval/plugins/contrib/openai_http/README.md",
-        "docs/design/16-model.md",
+        "docs/design/05-executors-and-acp.md",
     ),
     "anthropic-http": (
         "src/ageval/plugins/contrib/anthropic_http/README.md",
-        "docs/design/16-model.md",
+        "docs/design/05-executors-and-acp.md",
     ),
     "acp": (
         "src/ageval/plugins/contrib/acp/README.md",
-        "docs/design/16-model.md",
+        "docs/design/05-executors-and-acp.md",
     ),
     "miniswe": (
         "plugins/miniswe/README.md",
-        "docs/design/16-model.md",
+        "docs/design/05-executors-and-acp.md",
     ),
     "terminus-2": (
         "plugins/terminus-2/README.md",
-        "docs/design/16-model.md",
+        "docs/design/05-executors-and-acp.md",
     ),
     "nooa": (
         "plugins/nooa/README.md",
-        "docs/design/16-model.md",
+        "docs/design/05-executors-and-acp.md",
     ),
     "dsh": (
         "plugins/dsh/README.md",
-        "docs/design/16-model.md",
+        "docs/design/05-executors-and-acp.md",
     ),
     "acp-oneshot": (
         "plugins/acp-oneshot/README.md",
-        "docs/design/16-model.md",
+        "docs/design/05-executors-and-acp.md",
     ),
     "openhands": (
         "plugins/openhands/README.md",
-        "docs/design/16-model.md",
+        "docs/design/05-executors-and-acp.md",
     ),
 }
 

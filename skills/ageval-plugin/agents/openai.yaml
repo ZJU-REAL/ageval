@@ -1,4 +1,4 @@
 interface:
   display_name: "ageval plugins"
   short_description: "Write ageval mechanism plugins (slots, bake)"
-  default_prompt: "Use $ageval-plugin to author a ageval.plugin/1 against slots.py and docs/design/11-extension-plugins.md. Do not invent slots or dual-path factories."
+  default_prompt: "Use $ageval-plugin to author a ageval.plugin/1 against slots.py and docs/design/06-plugins-and-extensions.md. Do not invent slots or dual-path factories."

@@ -20,7 +20,7 @@ artifacts were uploaded.
 ## Stack
 
 Vite + React + TypeScript · Tailwind + shadcn/ui · pnpm only  
-Visual tokens: [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md).
+Visual tokens: [`docs/design/09-web-ui-design-system.md`](../../docs/design/09-web-ui-design-system.md).
 SPA constants listing: YAML in [`apps/shared/DESIGN.md`](../shared/DESIGN.md).
 Overlap chrome (trial, labels, tokens) lives in [`apps/shared`](../shared). Build from a repo-root checkout that contains `apps/shared`. The Hub image copies `apps/shared` next to `apps/hub` (`apps/hub/Dockerfile`; compose context is the repository root).
 Reuse map: [DESIGN.md](./DESIGN.md).

@@ -1,5 +1,5 @@
 ---
-# Shared Hub / Viewer theme constants. Must match docs/design/13-web-ui-tokens.md
+# Shared Hub / Viewer theme constants. Must match docs/design/09-web-ui-design-system.md
 # (machine-checked). Hub / Viewer inherit this listing — do not fork a second palette.
 # Do not put page layout here (search height, route chrome, which tab sits where).
 colors:
@@ -94,7 +94,7 @@ motion:
 
 # SPA token listing
 
-Constitution: [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md).
+Constitution: [`docs/design/09-web-ui-design-system.md`](../../docs/design/09-web-ui-design-system.md).
 This YAML is the Hub / Viewer token listing (machine-checked). Do not fork a second palette.
 
 Product Taste stays in [`apps/hub/DESIGN.md`](../hub/DESIGN.md) (catalog) and [`apps/viewer/DESIGN.md`](../viewer/DESIGN.md) (local Jobs). This file does not inventory routes or chrome.

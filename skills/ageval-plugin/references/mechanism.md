@@ -1,6 +1,6 @@
 # Plugin mechanism
 
-Design authority: `docs/design/11-extension-plugins.md`. This note is for
+Design authority: `docs/design/06-plugins-and-extensions.md`. This note is for
 authoring agents only; it does not own new contract.
 
 ## Registry

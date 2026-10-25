@@ -1,6 +1,6 @@
 # ageval Viewer design
 
-**Visual constitution:** [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md).
+**Visual constitution:** [`docs/design/09-web-ui-design-system.md`](../../docs/design/09-web-ui-design-system.md).
 **SPA token listing:** YAML frontmatter in [`apps/shared/DESIGN.md`](../shared/DESIGN.md) (Hub and Viewer share it; machine-checked against docs/13). Do not fork a second palette here.
 
 This file does **not** inventory routes or page chrome. Product scope lives in [AGENTS.md](./AGENTS.md).

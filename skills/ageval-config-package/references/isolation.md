@@ -1,6 +1,6 @@
 # Isolation notes for package authors
 
-Authority: `docs/design/06-capability-adapter-visibility.md`, `docs/design/05-runtime/environment.md`.
+Authority: `docs/design/03-task-sdk-and-evaluation.md`, `docs/design/04-environments.md`.
 
 ## Gold / evaluation material
 

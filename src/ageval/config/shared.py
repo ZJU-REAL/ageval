@@ -1,6 +1,6 @@
 """Dataset-level ``shared/`` layout helpers (#65 layout, #68 import namespaces).
 
-Design authority: ``docs/design/02-task-package-and-config.md`` (Dataset 级 shared/).
+Design authority: ``docs/design/02-schemas-and-config.md`` (Dataset 级 shared/).
 """
 
 from __future__ import annotations

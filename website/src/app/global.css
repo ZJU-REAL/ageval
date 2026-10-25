@@ -120,7 +120,7 @@ html > body[data-scroll-locked] {
   --removed-body-scroll-bar-size: 0px !important;
 }
 
-/* Prose alignment with the web UI system (docs/design/13-web-ui-tokens.md). */
+/* Prose alignment with the web UI system (docs/design/09-web-ui-design-system.md). */
 ::selection {
   background: color-mix(in srgb, var(--color-fd-primary) 28%, transparent);
 }

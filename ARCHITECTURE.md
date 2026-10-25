@@ -17,7 +17,7 @@ GitHub: [`ZJU-REAL/ageval`](https://github.com/ZJU-REAL/ageval). The product nam
 | Evidence grade | **`runnable-mvp`**: local ACP, docker ACP, and named `minimal-demo` tasks have verified public runs; `e2b`/`ssh`/`daytona` implementations exist and fail `--probe` when credentials are absent |
 | Design authority | [docs/README.md](docs/README.md) |
 | Structure authority | **This document** |
-| Related design docs | [docs/design/00](docs/design/00-overview-and-product.md), [docs/design/01](docs/design/01-ageval-core.md), [docs/design/09](docs/design/09-owner-matrix-and-structure.md) |
+| Related design docs | [docs/PRD.md](docs/PRD.md), [docs/design/01](docs/design/01-core-lifecycle.md), [docs/design/04](docs/design/04-environments.md), [docs/design/05](docs/design/05-executors-and-acp.md) |
 | Sync policy | See [Change Ownership](#change-ownership) |
 
 Read **Current** and **Target** sections separately; do not treat unverified target items as shipped.
@@ -83,7 +83,7 @@ dataset root (ageval.yaml / ageval.dataset/1)
 | --- | --- |
 | Live ACP on `e2b` / `ssh` | Public `ageval run` with `environment: e2b` and `ssh` A/B using live credentials |
 | External plugins live run | Verified `ageval run` for `nooa`, `dsh`, and `miniswe` |
-| Named-example matrix | Full verification matrix in [docs/design/10](docs/design/10-examples-database-52.md) |
+| Named-example matrix | Full verification matrix in [docs/PRD.md](docs/PRD.md#6-in-repository-reference-examples-examples) |
 
 ## Source Layout
 
@@ -349,7 +349,7 @@ created
 4. Every retry or regrade mints a **new Attempt** (`IdentityFactory.new_run` is called once per Attempt) without mutating previous Attempt directories.
 5. `ageval campaign` expands parameter grid points across Trials without coupling to the internal control flow of `run.py`.
 
-Detailed phase rules: [docs/design/05-runtime/lifecycle.md](docs/design/05-runtime/lifecycle.md).
+Detailed phase rules: [docs/design/01-core-lifecycle.md](docs/design/01-core-lifecycle.md).
 
 ## Data Flow
 
@@ -376,9 +376,9 @@ Detailed phase rules: [docs/design/05-runtime/lifecycle.md](docs/design/05-runti
 | `environment: ssh` (A / B) | `plugins/contrib/ssh` | Mode A: remote host; Mode B: remote container |
 | `environment: daytona` | `plugins/contrib/daytona` | Daytona snapshot/sandbox integration; missing `DAYTONA_API_KEY` fails preflight |
 | ACP executor | `plugins/contrib/acp` | Parent JSON-RPC client over `attach_stdio` |
-| Other executors | `openai-http`, `anthropic-http`, external `nooa`, `dsh`, `miniswe`, `terminus-2`, `openhands`, `acp-oneshot` | Uniform session interface via `BaseExecutor`. `terminus-2` keeps model HTTP on the parent and drives tmux with `environment.exec`. `openhands` runs the pinned SDK inside the attempt environment. Placement next to ACP and miniswe: [docs/design/05-runtime/agent-service.md](docs/design/05-runtime/agent-service.md#executor-placement) |
+| Other executors | `openai-http`, `anthropic-http`, external `nooa`, `dsh`, `miniswe`, `terminus-2`, `openhands`, `acp-oneshot` | Uniform session interface via `BaseExecutor`. `terminus-2` keeps model HTTP on the parent and drives tmux with `environment.exec`. `openhands` runs the pinned SDK inside the attempt environment. Placement next to ACP and miniswe: [docs/design/05-executors-and-acp.md](docs/design/05-executors-and-acp.md#executor-placement) |
 | Official Attempt image | `plugins/contrib/docker/attempt/` | Pulls `ghcr.io/zju-real/ageval-attempt:<cli-ver>` as `ageval-attempt:base` or builds from packaged Dockerfile |
-| Registry HTTP service | `services/registry/` | Six aggregate stores (`packages`, `results`, `shares`, `orgs`, `inbox`, `hosted`) behind service classes; hosted worker runs `e2b` and `daytona` jobs ([docs/design/15](docs/design/15-hosted-jobs.md)) |
+| Registry HTTP service | `services/registry/` | Six aggregate stores (`packages`, `results`, `shares`, `orgs`, `inbox`, `hosted`) behind service classes; hosted worker runs `e2b` and `daytona` jobs ([docs/design/08](docs/design/08-hub-registry-and-agents.md#5-cloud-hosted-evaluation-jobs-servicesregistryhosted)) |
 
 ## Failure and Privacy Boundaries
 
@@ -414,17 +414,13 @@ Documentation does not need to be committed in a standalone initial commit befor
 
 | Topic | Document |
 | --- | --- |
-| Product overview, user stories, and red lines | [docs/design/00](docs/design/00-overview-and-product.md) |
-| Core locking, phase lifecycle, and environment protocol | [docs/design/01](docs/design/01-ageval-core.md) |
-| Dataset, `task.yaml`, and `profiles.yaml` fields | [docs/design/02](docs/design/02-task-package-and-config.md) |
-| Task `run.py` and `ageval_sdk` API | [docs/design/03](docs/design/03-task-run-and-sdk.md) |
-| Environments, ACP, evaluation, evidence, analyzers, and suites | [docs/design/05-runtime/](docs/design/05-runtime/) |
-| Capabilities and reference-material isolation | [docs/design/06](docs/design/06-capability-adapter-visibility.md) |
-| Resource limits, upstream stall, and failure semantics | [docs/design/07](docs/design/07-budget-evaluation-failure.md) |
-| Module ownership matrix and structural invariants | [docs/design/09](docs/design/09-owner-matrix-and-structure.md) |
-| Declarative plugin slots and dependency injection | [docs/design/11](docs/design/11-extension-plugins.md) |
-| Hub, Registry, and Leaderboard | [docs/design/12](docs/design/12-hub-dataset-and-leaderboard.md) |
-| Web UI design tokens | [docs/design/13](docs/design/13-web-ui-tokens.md) |
-| Agent packages (`ageval.agent/1`) and model catalog | [docs/design/14](docs/design/14-agent-hub.md) |
-| Hosted evaluation jobs | [docs/design/15](docs/design/15-hosted-jobs.md) |
-| `ModelSpec`, `BaseEnvironment`, and `BaseExecutor` contracts | [docs/design/16](docs/design/16-model.md) |
+| Product overview, user stories US1-US12, and red lines | [docs/PRD.md](docs/PRD.md) |
+| Core locking, phase lifecycle, `limits`, `upstream_stall`, and failure semantics | [docs/design/01](docs/design/01-core-lifecycle.md) |
+| Dataset, `task.yaml`, `profiles.yaml`, `ModelSpec`, and `--layout harbor` | [docs/design/02](docs/design/02-schemas-and-config.md) |
+| Task `run.py`, `ageval_sdk`, isolated evaluation (`evaluator.py`), and `gold` isolation | [docs/design/03](docs/design/03-task-sdk-and-evaluation.md) |
+| `EnvironmentProvider`, `BaseEnvironment`, capabilities, and `local`/`docker`/`e2b`/`ssh`/`daytona` | [docs/design/04](docs/design/04-environments.md) |
+| `BaseExecutor`, `ParentAgentService`, ACP, executor placement, and option tables | [docs/design/05](docs/design/05-executors-and-acp.md) |
+| Declarative plugin slots, `ExtensionGraph`, and `export` / `inject` | [docs/design/06](docs/design/06-plugins-and-extensions.md) |
+| Evidence archive, `trajectory.jsonl`, Suites, Campaigns, and read-only analyzers | [docs/design/07](docs/design/07-evidence-and-analysis.md) |
+| Hub, Registry, Leaderboard Plaza, `ageval.agent/1` packages, and cloud-hosted jobs | [docs/design/08](docs/design/08-hub-registry-and-agents.md) |
+| Web UI design system tokens and component invariants | [docs/design/09](docs/design/09-web-ui-design-system.md) |

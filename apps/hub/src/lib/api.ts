@@ -179,7 +179,7 @@ export type FileContent = {
   truncated?: boolean;
 };
 
-/** Nested profile `model:`. Field table: docs/design/16-model.md. */
+/** Nested profile `model:`. Field table: docs/design/02-schemas-and-config.md. */
 export type HubModelSpec = {
   id: string;
   api?: string;

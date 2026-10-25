@@ -27,7 +27,7 @@ SPA lives under `src/`; Python serves the built `dist/` only.
 
 ## Design
 
-- [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md) — visual constitution
+- [`docs/design/09-web-ui-design-system.md`](../../docs/design/09-web-ui-design-system.md) — visual constitution
 - [`apps/shared/DESIGN.md`](../shared/DESIGN.md) — SPA token YAML
 - [DESIGN.md](./DESIGN.md) — Taste, reuse map
 - [AGENTS.md](./AGENTS.md) — scope, stack, API

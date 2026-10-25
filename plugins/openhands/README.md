@@ -26,7 +26,7 @@ fails, invoke returns `openhands_sdk_install_failed` and does not scrape a
 partial log into the trajectory.
 
 Placement next to ACP, miniswe, and terminus-2:
-[docs/design/05-runtime/agent-service.md](../../docs/design/05-runtime/agent-service.md#executor-placement).
+[docs/design/05-executors-and-acp.md](../../docs/design/05-executors-and-acp.md#executor-placement).
 
 ## Capabilities
 

@@ -1,7 +1,7 @@
 # Conversion & multi-task package authoring
 
 Author-facing patterns for porting upstream benchmarks into an ageval **dataset**.
-Authority: `docs/design/08-conversion-security-testing.md`, `docs/design/02-task-package-and-config.md`.
+Authority: `docs/design/03-task-sdk-and-evaluation.md`, `docs/design/02-schemas-and-config.md`.
 
 ## When to use a generator
 

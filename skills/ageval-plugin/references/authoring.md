@@ -2,7 +2,7 @@
 
 Reference implementations: `plugins/nooa` (executor), `plugins/dsh`
 (DeepSeek JSON-RPC, not ACP), `plugins/home-files` (chain). Design:
-`docs/design/11-extension-plugins.md`.
+`docs/design/06-plugins-and-extensions.md`.
 
 Slots are **exclusive** and **chain** only. Do not invent extra slot kinds.
 
@@ -58,7 +58,7 @@ docker kind does **not** consume `host_requires` (image bake does).
 An environment plugin fills exclusive slot `environment`, subclasses
 `ageval.plugins.base.BaseEnvironment`, and implements
 `src/ageval/environments/protocol.py`. An executor subclasses `BaseExecutor`
-(`supports_model` / `bind_model`). Field table: `docs/design/16-model.md`.
+(`supports_model` / `bind_model`). Field table: `docs/design/02-schemas-and-config.md`.
 Do not import docker/e2b/ssh from ACP.
 
 ## Executor
@@ -205,7 +205,7 @@ Template (executor):
 | --- | --- | --- |
 | `options.agent` | *(required)* | Package-local `module:Class`. Missing → lock `extension_materialize_failed`. |
 | `options.method` | `run` | Method invoked on that class. |
-| `model` | nested `model.id` | Nested model object. Field table: `docs/design/16-model.md`. |
+| `model` | nested `model.id` | Nested model object. Field table: `docs/design/02-schemas-and-config.md`. |
 | `api_key` | `OPENAI_API_KEY` | Env **locator name**. Value never enters the lock. |
 | `base_url` | `OPENAI_BASE_URL` / `litellm_base_url` | OpenAI-compatible base. |
 ```

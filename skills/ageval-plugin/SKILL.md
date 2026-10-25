@@ -26,4 +26,4 @@ Recognition ≠ host runnable ≠ image baked. Missing extras or credentials ski
 
 Every plugin ships a Hub-visible `README.md` with two required tables: **Capabilities** (export / inject) and **Parameters** (name, default, purpose). Capability names must belong to `src/ageval/environments/protocol.py` `CAPABILITY_NAMES`.
 
-Authoring: [references/authoring.md](references/authoring.md). Mechanism: [references/mechanism.md](references/mechanism.md). Design: `docs/design/11-extension-plugins.md`.
+Authoring: [references/authoring.md](references/authoring.md). Mechanism: [references/mechanism.md](references/mechanism.md). Design: `docs/design/06-plugins-and-extensions.md`.

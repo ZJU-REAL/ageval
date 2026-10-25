@@ -1,79 +1,122 @@
-# ageval Product Requirements
+# ageval Product Requirements Specification (PRD)
 
-| 字段 | 值 |
+| Field | Value |
 | --- | --- |
-| 产品名 | **ageval**（agent eval） |
-| 设计规范 | 本仓 [README.md](README.md) 与 [design/](design/)（自包含） |
-| 结构规范 | [ARCHITECTURE.md](../ARCHITECTURE.md) |
-| 状态 | 机制以本目录为准；增量交付与验收跟踪见代码与 GitHub Issues |
+| Product Name | **ageval** (agent eval) |
+| Delivery Unit | **dataset** (`ageval.dataset/1`) |
+| CLI / Package | `ageval` (short alias: `ae`) / PyPI `ageval-cli` (`ageval` and `ageval_sdk`) |
+| Home & Env Prefix | `~/.ageval` (`$AGEVAL_HOME`), `AGEVAL_*` |
+| Normative Design Specs | [README.md](README.md) and [design/](design/README.md) (`01`-`09`) |
+| Implementation Structure | [ARCHITECTURE.md](../ARCHITECTURE.md) |
 
-## 1. 核心定位
+---
 
-为解耦任务逻辑与执行后端，ageval 锁定一份 **dataset** 与角色配置（`profiles.yaml`），在选定的执行环境（本机、Docker、E2B、SSH 或 Daytona）中运行单次 **Attempt**，并由独立的 `evaluator.py` 给出评分结果。编排统一由本机 `ageval run` 驱动。
+## 1. Product Positioning and Problem Statement
 
-Core 负责配置锁定（`lock`）、环境生命周期、角色会话调用分发、独立评分绑定、执行证据归档与 `finally` 资源清理；任务内部的交互循环与工具调用逻辑由任务脚本 `run.py` 定义。
+### 1.1 Problem statement
 
-## 2. 解决的问题
+Evaluating autonomous coding and tool-using agents across benchmarks typically suffers from three structural coupling problems:
+1. **Harness and environment lock-in**: When task scripts directly invoke a specific vendor SDK or container CLI (`docker exec`), switching the evaluated agent runtime (harness) or moving execution from local containers to cloud sandboxes requires rewriting task code.
+2. **Reference material (`gold`) leakage**: Mounting reference solutions or grading scripts into the workspace during agent execution allows capable coding agents to inspect test files or write directly to reward outputs.
+3. **Unreproducible evaluation runs**: Without pre-execution configuration locking, explicit model parameter contracts (`ModelSpec`), and pre-effect resource quotas (`limits`), evaluation scores cannot be audited or compared reliably across teams.
 
-当任务逻辑直接耦合特定 Agent 执行器的调用接口或底层环境管理 API 时，更换 harness 或执行环境就需要修改任务代码；同时，若评分参考材料（`gold`）在执行阶段暴露，或缺乏统一的资源预算与配置锁定记录，跨配置的评测分数便无法复现和对比。
+### 1.2 Product solution
 
-ageval **统一管理** 配置锁定、环境启停、会话调用预算、执行与评分的阶段边界、结构化证据归档与环境清理；**保持开放** 任务内部的交互控制流与领域工具实现。
+**ageval** decouples benchmark task logic from agent harnesses and execution environments by organizing every single-task execution as a strictly phased **Attempt**:
+1. **Configuration Locking (`ageval lock`)**: Validates dataset manifests (`ageval.dataset/1`), task specifications (`ageval.task/1`), role bindings (`ageval.profiles/1` or `ageval.agent/1`), environment capabilities, and `ModelSpec` contracts before starting any environment, producing an immutable lock digest.
+2. **Fixed Phase Pipeline (`ageval run`)**: Orchestrates `environment → run → evaluate → record` with `cleanup` guaranteed in `finally`.
+3. **Isolated Grading (`evaluator.py`)**: Seals all solver sessions before uploading reference materials (`evaluation/`) into the scoring environment (or an isolated scoring container) and binds `PASS` or `FAIL` exclusively from `evaluator.py`.
+4. **Secret-Redacted Evidence Archive**: Seals normalized trajectories (`trajectory.jsonl`), phase timings (`summary.json`), harvested workspace artifacts (`task-artifacts/`), and grading results (`result.json`) under `.ageval/runs/<attempt_id>/`.
 
-## 3. 目标用户与典型场景
+---
 
-| 角色 | 核心任务 |
+## 2. Target Personas and Core Workflows
+
+| Persona | Primary Responsibility | Key Entrypoints and Surfaces |
+| --- | --- | --- |
+| **Benchmark Author / Converter** | Package tasks with `task.yaml`, `run.py`, `evaluator.py`, `data/`, `evaluation/`, and optional `environment/Dockerfile` without managing container lifecycles or host credentials. | `ageval lock`, `ageval prepare`, `ageval publish` |
+| **Plugin Author** | Extend `environment` or `executor` exclusive slots and lifecycle chain slots by protocol or execution mechanism (`acp`, `docker`, `e2b`, `daytona`, `ssh`, `openai-http`, `miniswe`, `terminus-2`, `openhands`). | `BaseEnvironment`, `BaseExecutor`, `ageval plugin` |
+| **Evaluation Operator** | Run single tasks, full dataset suites, or parameter campaigns across different agents, models, and environments using CLI flags or hosted jobs. | `ageval run`, `ageval campaign`, `--agent`, `--model`, `--resume-suite` |
+| **Result Analyzer / Reviewer** | Inspect sealed trajectories, run read-only post-run analyzers (`stats`, `hack`, `review`), regrade archived artifacts (`regrade`), and curate public Leaderboards on Hub. | `ageval view`, `ageval results analyze`, `ageval results regrade`, Hub SPA |
+
+---
+
+## 3. Architectural Layer Responsibilities
+
+| Layer | Owns | Must Never Own |
+| --- | --- | --- |
+| **Core (`config`, `attempt`, `runtime`, `evaluation`, `evidence`)** | `load_and_lock` resolution; Attempt identity and phase pipeline; `EnvironmentProvider` protocol; `limits` enforcement; solver sealing; `gold` upload and `bind_evaluation`; evidence redaction and sealing. | Vendor-specific SDKs in Core protocols; task interaction loops; task-specific grading formulas. |
+| **Plugins (`plugins/contrib/*`, external `plugins/*`)** | Concrete `environment` and `executor` exclusive-slot implementations and chain-slot hooks, registered via `@environment_plugin` / `@executor_plugin`. | Branching on benchmark names or task IDs; bypassing `ExtensionRegistry`; issuing `PASS` verdicts. |
+| **Python SDK (`ageval_sdk`)** | Task-script helper types (`RunContext`, `Agent`, `AgentSession`, `ToolSet`, `bounded_gather`, `first_success`, `evaluation_check`). | Minting Attempt identity; reading host credentials; starting/stopping containers; deciding `PASS`. |
+| **Dataset Tasks (`tasks/<id>/*`)** | Task interaction loop (`run.py`), domain tools, artifact publication, environment recipe (`environment/`), and grading logic (`evaluator.py`). | Duplicating Attempt phase orchestration; reading `evaluation/` during `run`. |
+| **Application & Services (`application/`, `cli/`, `services/registry/`)** | Composition root (`build_*`), CLI argument parsing, Suite and Campaign orchestration, local Viewer server, and Hub Registry/Leaderboard service. | Executing task modules in-process; exposing storage or org secrets in API responses. |
+
+---
+
+## 4. Normative User Stories (US1-US12)
+
+### US1 — Switch environments via configuration only
+`ageval run` selects the execution backend (`local`, `docker`, `e2b`, `ssh`, `daytona`) solely from `environment:` in `profiles.yaml` without modifying `run_attempt`, `run.py`, or `evaluator.py`. Missing cloud sandbox or SSH credentials fail fast during `preflight` (or `--probe`).
+
+### US2 — Reuse a single `Dockerfile` across local and cloud environments
+A task's `environment/Dockerfile` (or `docker_image`) builds a local image under `environment: docker`, an E2B template under `environment: e2b`, and a Daytona snapshot under `environment: daytona`. If a task requires a capability (such as `compose`) that the selected environment does not provide, `ageval lock` rejects the configuration before execution.
+
+### US3 — Run `setup.sh` at the end of the `environment` phase
+When `tasks/<id>/environment/setup.sh` exists, Core executes it via `host.exec` in the `environment_setup` chain slot at the end of the `environment` phase. Non-zero exit codes fail the Attempt with `ERROR` (`phase: "environment"`, `title: "environment_setup_failed"`) without polluting the agent trajectory. Heavy system packages belong in `environment/Dockerfile`.
+
+### US4 — Connect ACP coding agents uniformly across environments
+`executor: acp` declares `inject: [service: environment, capabilities: [attach_stdio]]` and communicates over the bidirectional stream returned by `host.attach_stdio(argv, placement=placement, env=child_env)`. `Placement` never exposes `container_id` or vendor handles, and the ACP plugin never imports `docker`, `e2b`, `daytona`, or `ssh` modules.
+
+### US5 — Enforce environment capabilities statically during `lock`
+`task.yaml` `requires.environment` defaults to empty; when non-empty, `ageval lock` verifies `requires.environment ⊆ host.capabilities` and fails fast with `capability_missing` if any required capability is unsupported.
+
+### US6 — Manage multi-container sidecars via Compose and `service=`
+Auxiliary services (such as PostgreSQL or Redis) are declared in `environment/compose.yaml` (or `docker-compose.yaml`) and accessed via `host.exec(..., service=<name>)` or over the Compose project network (where the Attempt container joins as hostname `main`).
+
+### US7 — Add new environment or executor plugins without touching Core
+A new environment backend or agent executor is added by subclassing `BaseEnvironment` or `BaseExecutor`, registering with `@environment_plugin` or `@executor_plugin`, and shipping `plugin.yaml`, requiring zero changes to `attempt/`, ACP, or task scripts.
+
+### US8 — Encapsulate image and template caching inside environment plugins
+Recipe hashing, Docker image tag caching, E2B template caching, and Daytona snapshot caching are encapsulated entirely inside their respective environment plugins; Core invokes only `await ctx.host.start(force_build=ctx.lock.force_build)`.
+
+### US9 — Keep the top-level phase pipeline directly inspectable
+Opening `src/ageval/attempt/__init__.py` and `src/ageval/attempt/phases/*.py` reveals the entire Attempt phase sequence and emitted chain slots in one place.
+
+### US10 — Auto-detect conventional task files
+Task authors provide `run.py`, `evaluator.py`, `data/`, `evaluation/`, and optional `environment/Dockerfile` or `environment/setup.sh` without repeating default filenames in `task.yaml` ([design/02-schemas-and-config.md](design/02-schemas-and-config.md)).
+
+### US11 — Delay reference material (`gold`) upload until `evaluate`
+`tasks/<id>/evaluation/` is never mounted or uploaded during `environment` or `run`. Only after `seal_run` stops solver writers does `evaluate` upload `evaluation/` to the scoring host (or to an isolated scoring container when `evaluate_host.isolated: true`).
+
+### US12 — Support SSH remote environments and pre-run ACP runtime probing
+`environment: ssh` supports Mode A (remote host directory via `ssh -T`) and Mode B (remote container via `ssh -- docker exec -i`). During `after_environment_ready`, the ACP hook verifies the Node.js version floor (`runtime.node`), global npm package versions (`npm ls -g --depth=0`), binary `realpath`, and an ACP stdio `initialize` handshake; on a version miss it runs the pinned `install_command` once and re-probes, failing the `environment` phase if still unsatisfied.
+
+---
+
+## 5. Architectural Red Lines and Non-Goals
+
+1. **Verdict exclusivity**: `PASS` and `FAIL` come solely from `evaluator.py` bound via `bind_evaluation` in `evaluate`. `RunTerminal.completed`, trajectory presence, or ACP `end_turn` never imply `PASS`.
+2. **Credential locator safety**: Plaintext API keys, OAuth tokens, and SSH private keys MUST NEVER enter `lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, or default logs. Configs store only environment variable names (locators).
+3. **Mechanism-based naming**: Plugins and adapters are named after protocols or execution mechanisms (`acp`, `docker`, `e2b`, `daytona`, `ssh`, `openai-http`, `anthropic-http`, `miniswe`, `terminus-2`, `openhands`, `dsh`, `nooa`), never after benchmarks.
+4. **Strict locality**: `docker exec` stays inside `plugins/contrib/docker/`. ACP, `attempt/`, and `run.py` never reference `container_id` or branch on `if kind == "e2b"`.
+5. **Gold isolation**: `/attempt/evaluation` does not exist in the solver environment during `environment` or `run`.
+6. **No legacy format shims**: Unknown `format` values fail immediately with `invalid_format` at `/format`.
+7. **No mock executors**: There is no product `executor: mock`, and mocked environments or stubbed agents do not count as acceptance evidence.
+8. **Unconditional cleanup**: `cleanup` always runs inside `try/finally`. Plugins cannot bypass `cleanup` or issue `PASS`.
+9. **Single composition root**: Production wiring lives exclusively in `build_*` functions in `src/ageval/application/composition.py`; `cli/` imports only `composition`.
+10. **Single identity mint per Attempt**: `IdentityFactory.new_run` is called once per Attempt; settled Attempt directories are never overwritten in place.
+11. **Static dependency verification**: Plugin `inject` service and capability requirements are verified during `ageval lock` before any environment starts.
+
+---
+
+## 6. In-Repository Reference Examples (`examples/`)
+
+The repository maintains lightweight reference datasets and agent packages under `examples/` for smoke verification and regression checks (full-scale upstream benchmark conversions are distributed via Hub):
+
+| Path | Contents and Verification Target |
 | --- | --- |
-| Benchmark 转换者 / 研究员 | 将上游 benchmark 转换为 ageval dataset，在固定任务逻辑下跨模型与 harness 开展受控评测 |
-| Dataset 作者 | 编写 `run.py`、`evaluator.py` 与可选 `environment/` 配方，无需处理容器生命周期或宿主凭据 |
-| 插件作者 | 实现 `environment` 或 `executor` 独占槽及生命周期链槽，按协议或机制扩展后端 |
-| 实验操作者 | 使用 `ageval lock` / `run` / `campaign` 运行评测，通过 `profiles.yaml` 或 `--agent` 切换环境与 harness |
-| 结果分析者 | 基于归档的 Attempt 证据查阅轨迹、运行只读分析器或执行 `regrade` 重新评分 |
-
-## 4. 成功标准
-
-1. `src/ageval/attempt/__init__.py` 直接体现 `environment → run → evaluate → record` 与 `finally cleanup` 的固定阶段顺序。
-2. 切换运行环境仅需修改 `profiles.yaml` 中的 `environment:`，ACP 与 `run.py` 不感知 `container_id` 等底层句柄。
-3. 同一份 `environment/Dockerfile` 可供 `docker`、`e2b` 与 `daytona` 复用。
-4. `PASS` 与 `FAIL` 仅来自独立的 `evaluator.py`；`RunTerminal.completed` 或轨迹完成不代表 `PASS`。
-5. 未知 schema format 在 `lock` 阶段直接报错 `invalid_format`（位于 `/format`）并终止。
-6. 单次 Trial 的任务参数、环境配置、角色 executor 与 `ModelSpec` 均写入 lock 摘要，支持跨团队核验一致性。
-7. 每次 Agent 调用均归档为标准化轨迹（`trajectory.jsonl`），并由 `Result.logs` 指向对应的证据目录。
-
-详细架构红线、用户故事 US1–US12 与命名约定见 [design/00](design/00-overview-and-product.md)；轨迹格式见 [design/05-runtime/evidence.md](design/05-runtime/evidence.md)；生命周期与模块依赖见 [ARCHITECTURE.md](../ARCHITECTURE.md)。
-
-## 5. 职责划分
-
-| 层级 | 核心职责 |
-| --- | --- |
-| **Core** | `load_and_lock` 配置锁定；Attempt 固定阶段调度；`EnvironmentProvider` 协议；`limits` 资源与配额控制；封存 solver 后上传参考材料并绑定评分结果；归档 Attempt 证据与轨迹 |
-| **SDK (`ageval_sdk`)** | 可选任务辅助库：`RunContext`、`AgentSession`、`ToolSet` 与并发收集原语 |
-| **Dataset 任务** | 任务交互循环（`run.py`）、领域工具、上游桥接代码、评分准则（`evaluator.py`） |
-| **Application** | CLI 入口、Campaign 矩阵与 Suite 调度、组合根对象装配 |
-
-## 6. 非目标（Out of Scope）
-
-- 不在 Core 中直接耦合特定云厂商 SDK 或镜像模板缓存（缓存逻辑封装在各环境插件内部，Core 仅调用 `host.start()`）。
-- 不在任务目录中重复编写 Attempt 阶段编排逻辑。
-- 不将环境初始化（`setup.sh`）拆分为独立于 `environment` 的顶层阶段。
-- 不允许插件跳过 `cleanup`、自行签发 `PASS` 或调换 `run` 与 `evaluate` 的先后顺序。
-- 不为旧版 schema format 提供兼容映射层。
-- 不在 Core 或插件中按具体 benchmark 或任务名称编写条件分支。
-
-## 7. 用户故事索引
-
-完整定义见 [design/00](design/00-overview-and-product.md)：
-
-| ID | 概要 |
-| --- | --- |
-| US1 | 切换环境仅修改 `profiles.yaml` 的 `environment:` |
-| US2 | 同一份 `Dockerfile` 同时支持本地容器与云沙箱构建 |
-| US3 | `setup.sh` 作为 `environment` 阶段的末尾链槽执行 |
-| US4 | ACP 通过环境提供的 `attach_stdio` 双向流接入任意兼容环境 |
-| US5 | `lock` 阶段静态校验 `requires ⊆ capabilities` |
-| US6 | 辅助服务通过 Docker Compose 或 `host.exec(service=)` 管理 |
-| US7 | 新增环境插件无需修改 `attempt/`、ACP 或 `run.py` |
-| US8 | 镜像与云沙箱模板缓存封装在环境插件内部，对 Core 透明 |
-| US9 | `attempt/__init__.py` 清晰呈现完整阶段控制流 |
-| US10 | 任务目录保持精简，默认入口文件自动识别 |
-| US11 | 参考材料（`gold`）延迟至 `evaluate` 阶段上传 |
-| US12 | `ssh` 支持远程主机（模式 A）与远程容器（模式 B）及 ACP 运行时探测 |
+| `examples/datasets/minimal-demo` | `terminal-jsonl-agg`, `tau2-dialog-min`, `multiagent-env-min` (default `environment: docker` with ACP `entry: pi`, plus alternate profiles for `nooa`, `dsh`, `openhands`, and `e2b`). |
+| `examples/datasets/concurrent-research` | `fanout` (multi-session concurrency within a single Attempt via `bounded_gather`). |
+| `examples/datasets/tau3-airline-5` | `airline-00` ... `airline-04` (5-task converted subset of the $\tau^3$-bench airline domain). |
+| `examples/datasets/terminus-2-min` | `hello` (parent-loop `terminus-2` driving an in-container `tmux` session on `docker`). |
+| `examples/agents` | `dsh-default`, `nooa-default`, `miniswe-default`, `terminus-2-default`, `openhands-default` (`ageval.agent/1` packages for external executors). |

@@ -23,4 +23,4 @@
 | Evaluate clock | ERROR, phase `evaluate`, token `evaluate_timeout` |
 | Evaluator status other than PASS / FAIL | ERROR, phase `evaluate`, token `evaluator_invalid_status` |
 
-Design: `docs/design/05-runtime/evidence.md`, `docs/design/07-budget-evaluation-failure.md`.
+Design: `docs/design/07-evidence-and-analysis.md`, `docs/design/01-core-lifecycle.md`.

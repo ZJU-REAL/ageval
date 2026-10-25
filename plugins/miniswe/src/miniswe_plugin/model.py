@@ -1,6 +1,6 @@
 """Miniswe HTTP mapping for the core ``ModelSpec``.
 
-The field table lives in ``docs/design/16-model.md``. This module does not
+The field table lives in ``docs/design/02-schemas-and-config.md``. This module does not
 parse profiles. ``wire_body`` and ``transport_clocks`` turn one spec into the
 request this plugin sends.
 """

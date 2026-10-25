@@ -48,7 +48,7 @@ apps/* / services/* README  ← SPA / service development detail
 
 | Item | Status |
 | --- | --- |
-| Design | `docs/` (PRD + design 00–16 + glossary) is self-contained |
+| Design | `docs/` (PRD + design 01–09 + glossary) is self-contained |
 | Production pipeline | Config locking → four Attempt execution phases (`environment → run → evaluate → record`, with `cleanup` in `finally`) → environment plugin → ACP `attach_stdio` or worker/HTTP executor → isolated evaluation → evidence archive |
 | Public entrypoints | `ageval lock` / `run` / `campaign` / `view` / `evidence` / `plugin` / `jobs` / `results` and the rest of `ageval --help` |
 | Environments | `local` and `docker` have verified public runs; `e2b`, `ssh`, and `daytona` implementations exist and fail preflight (`--probe`) when credentials are absent |
@@ -56,7 +56,7 @@ apps/* / services/* README  ← SPA / service development detail
 | Delivery tracking | **GitHub Issues** (do not create in-repo `specs/` or `ROADMAP.md` trackers) |
 | Docs site | [`website/`](website/) (Fumadocs, bilingual `en` / `zh-CN`) |
 | ACP | `executor: acp` + `options.entry`; the parent process is the sole JSON-RPC client |
-| Agent packages | [docs/design/14](docs/design/14-agent-hub.md): `ageval.agent/1` package; `--agent` and `--profiles` are mutually exclusive; `--model` overrides the run model |
+| Agent packages | [docs/design/08](docs/design/08-hub-registry-and-agents.md): `ageval.agent/1` package; `--agent` and `--profiles` are mutually exclusive; `--model` overrides the run model |
 
 Do not infer `runnable-mvp`, `isolated`, or `real-benchmark-verified` from documentation, an open Issue, or `ageval lock` alone.
 
@@ -138,7 +138,7 @@ Write direct control flow and surface failures explicitly rather than swallowing
 
 ### Model configuration (`ModelSpec`)
 
-Each role profile binds a nested `model:` block resolved into `ModelSpec` (`id`, `api`, `reasoning.effort`, `timeout`, `watchdog`, `extra`). Omitted fields are not sent; `reasoning.effort: none` is sent explicitly. Chat Completions encodes top-level `reasoning_effort`, while Responses encodes nested `reasoning.effort`. `extra` keys cannot override standard fields and must belong to the executor's `extra_allowlist` (an empty allowlist rejects all `extra` keys). Full details: [docs/design/16-model.md](docs/design/16-model.md).
+Each role profile binds a nested `model:` block resolved into `ModelSpec` (`id`, `api`, `reasoning.effort`, `timeout`, `watchdog`, `extra`). Omitted fields are not sent; `reasoning.effort: none` is sent explicitly. Chat Completions encodes top-level `reasoning_effort`, while Responses encodes nested `reasoning.effort`. `extra` keys cannot override standard fields and must belong to the executor's `extra_allowlist` (an empty allowlist rejects all `extra` keys). Full details: [docs/design/02-schemas-and-config.md](docs/design/02-schemas-and-config.md) and [docs/design/05-executors-and-acp.md](docs/design/05-executors-and-acp.md).
 
 ## Delivery and workflow rules
 
@@ -195,7 +195,7 @@ Reader-facing documentation (`README.md`, `README.zh-CN.md`, `website/`, `exampl
 | `viewer-app` | `apps/viewer/**` `apps/shared/**` | `pnpm --dir apps/viewer install --frozen-lockfile && pnpm --dir apps/viewer lint && pnpm --dir apps/viewer build` |
 | `hub-app` | `apps/hub/**` `apps/shared/**` | `pnpm --dir apps/hub install --frozen-lockfile && pnpm --dir apps/hub lint && pnpm --dir apps/hub build` |
 | `website` | `website/**` | `pnpm --dir website install --frozen-lockfile && pnpm --dir website build` |
-| `design-tokens` | `docs/design/13*` / token script / CSS on the three web surfaces | `python3 scripts/check_design_tokens.py` |
+| `design-tokens` | `docs/design/09*` / token script / CSS on the three web surfaces | `python3 scripts/check_design_tokens.py` |
 
 ## Related entry points
 
@@ -204,8 +204,7 @@ Reader-facing documentation (`README.md`, `README.zh-CN.md`, `website/`, `exampl
 | [`.agents/skills/`](.agents/skills/) → [`skills/`](skills/) | Repository skills (`ageval-platform`, `ageval-cli`, `ageval-config-package`, `ageval-sdk-harness`, `ageval-plugin`, `ageval-design-system`, `verify-ageval`) |
 | [README.md](README.md) | Project overview and quick start |
 | [website/](website/) | Reader-facing bilingual documentation |
-| [docs/design/00-overview-and-product.md](docs/design/00-overview-and-product.md) | Product overview, user stories US1–US12, and red lines |
-| [docs/design/01-ageval-core.md](docs/design/01-ageval-core.md) | Core locking, phase lifecycle, and environment protocol |
-| [docs/design/09-owner-matrix-and-structure.md](docs/design/09-owner-matrix-and-structure.md) | Module ownership matrix and structural invariants |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Source tree, dependency graph, and lifecycle flow |
+| [docs/PRD.md](docs/PRD.md) | Product overview, user stories US1–US12, and architectural red lines |
+| [docs/design/01-core-lifecycle.md](docs/design/01-core-lifecycle.md) | Core locking, phase lifecycle, `limits`, and failure taxonomy |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Source tree, module ownership matrix, dependency graph, and lifecycle flow |
 | [GitHub Issues](https://github.com/ZJU-REAL/ageval/issues) | Incremental delivery and acceptance tracking |

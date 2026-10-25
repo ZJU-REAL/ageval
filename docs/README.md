@@ -1,50 +1,63 @@
-# ageval 文档（设计规范）
+# ageval System Specifications
 
-## 文档定位
+## Purpose and Authority Hierarchy
 
-本目录是 **ageval** 产品与机制设计的规范来源（自包含）。实现、Issues、代码与读者向文档均以本目录定义的机制为准。
+This directory (`docs/`) is the **self-contained normative specification** for **ageval** product semantics, execution mechanisms, schemas, protocols, and safety boundaries. All implementation modules, GitHub Issues, tests, and reader-facing guides derive from the contracts defined here.
 
-交付单位为 **dataset**（区分于 SQL 数据库）。术语规范见 [glossary.md](glossary.md)。
+The unit of benchmark delivery is a **dataset** (`ageval.dataset/1`), distinct from a relational database. Canonical terminology is defined in [glossary.md](glossary.md).
 
-| 问题 | 归属文档 |
+```text
+docs/ (PRD + design/* + glossary)  ← Normative product & mechanism specifications (Living Truth)
+  → ARCHITECTURE.md                ← Implementation source layout, module ownership & import graph
+  → docs/RFCs/                     ← Point-in-time mechanism proposals (merged into design/ on acceptance)
+  → GitHub Issues                  ← Incremental delivery & acceptance tracking
+  → Code / Tests / Public Smoke    ← Verified runtime implementation
+```
+
+| Concern | Authoritative Document |
 | --- | --- |
-| 产品定位、成功标准、非目标、用户故事 | [PRD.md](PRD.md)、[design/00](design/00-overview-and-product.md) |
-| 核心机制与模块边界设计 | [`design/`](design/) |
-| 术语与用词规范 | [glossary.md](glossary.md) |
-| 当前与目标代码结构 | [../ARCHITECTURE.md](../ARCHITECTURE.md) |
-| Agent 开发规范、边界与 CI 校验 | [../AGENTS.md](../AGENTS.md) |
-| 增量交付与验收跟踪 | GitHub Issues |
-| 读者向使用指南 | [../website/](../website/) |
+| Product positioning, success criteria, non-goals, user stories US1-US12, and red lines | [PRD.md](PRD.md) |
+| Normative mechanism, schema, and protocol specifications (`01`-`09`) | [`design/`](design/README.md) |
+| Canonical terminology and forbidden terms | [glossary.md](glossary.md) |
+| Architectural proposals prior to specification merge | [`RFCs/`](RFCs/AGENTS.md) |
+| Current source tree, composition root, and dependency direction | [../ARCHITECTURE.md](../ARCHITECTURE.md) |
+| Contributor workflow, construction rules, and CI gates | [../AGENTS.md](../AGENTS.md) |
+| Reader-facing bilingual documentation | [../website/](../website/) |
 
-`docs/reference/` 为历史归档长文，不作为日常开发规范。
+`docs/reference/` contains archived historical background notes and is not an active specification.
 
-## 设计文档目录
+---
 
-阅读顺序见 [design/README.md](design/README.md)。
+## Specification Index (`docs/design/`)
 
-| 文档 | 内容 |
+Recommended reading order is summarized in [design/README.md](design/README.md).
+
+| Specification | Normative Scope |
 | --- | --- |
-| [design/00-overview-and-product.md](design/00-overview-and-product.md) | 产品总览、更名、dataset、目标与非目标、US1–US12、命名与架构红线 |
-| [design/01-ageval-core.md](design/01-ageval-core.md) | Core：配置锁定（lock）、Attempt 阶段生命周期、插件槽（slot）与环境接口 |
-| [design/02-task-package-and-config.md](design/02-task-package-and-config.md) | dataset、`task.yaml` 与 `profiles.yaml` 配置规则及默认文件识别 |
-| [design/03-task-run-and-sdk.md](design/03-task-run-and-sdk.md) | 任务脚本 `run.py` 与 `ageval_sdk` 接口 |
-| [design/05-runtime/](design/05-runtime/) | 环境插件、ACP、独立评分、执行证据、分析器与并发调度 |
-| [design/06-capability-adapter-visibility.md](design/06-capability-adapter-visibility.md) | 环境能力标记、工作区可见性与参考材料（gold）隔离 |
-| [design/07-budget-evaluation-failure.md](design/07-budget-evaluation-failure.md) | `limits` 资源上限、上游重试等待（stall）与失败语义 |
-| [design/08-conversion-security-testing.md](design/08-conversion-security-testing.md) | Benchmark 转换、凭据安全与测试规范 |
-| [design/09-owner-matrix-and-structure.md](design/09-owner-matrix-and-structure.md) | 模块职责矩阵、目标源码树与结构约束 |
-| [design/10-examples-database-52.md](design/10-examples-database-52.md) | 仓库内置示例范围 |
-| [design/11-extension-plugins.md](design/11-extension-plugins.md) | 独占槽与链槽、服务导出与依赖注入（export / inject）、`ageval.plugin/1` |
-| [design/12-hub-dataset-and-leaderboard.md](design/12-hub-dataset-and-leaderboard.md) | Hub、Registry 与 Leaderboard 规则 |
-| [design/13-web-ui-tokens.md](design/13-web-ui-tokens.md) | Web UI 视觉设计令牌与组件规范 |
-| [design/14-agent-hub.md](design/14-agent-hub.md) | Agent 包（`ageval.agent/1`）与模型目录 |
-| [design/15-hosted-jobs.md](design/15-hosted-jobs.md) | 云端托管评测作业（Hosted jobs） |
-| [design/16-model.md](design/16-model.md) | `ModelSpec`、嵌套 `model:` 配置、环境与执行器抽象基类 |
+| [design/01-core-lifecycle.md](design/01-core-lifecycle.md) | Core locking (`load_and_lock`), Attempt identity and phase state machine, `limits` enforcement, `upstream_stall`, suite resumption, `regrade`, and `Result.error` failure taxonomy |
+| [design/02-schemas-and-config.md](design/02-schemas-and-config.md) | `ageval.dataset/1`, `ageval.task/1`, `ageval.profiles/1`, `ModelSpec`, asset/prepare hooks, git sources, `--set` allowlist, and `--layout harbor` |
+| [design/03-task-sdk-and-evaluation.md](design/03-task-sdk-and-evaluation.md) | Task script `run.py`, `ageval_sdk` API, multi-session concurrency (`bounded_gather`, `first_success`), isolated evaluation (`evaluator.py`), `gold` isolation, and conversion rules |
+| [design/04-environments.md](design/04-environments.md) | `EnvironmentProvider` protocol, `BaseEnvironment`, capability enforcement (`requires ⊆ capabilities`), `local` / `docker` / `e2b` / `ssh` / `daytona`, image baking, and Compose sidecars |
+| [design/05-executors-and-acp.md](design/05-executors-and-acp.md) | `BaseExecutor`, `ParentAgentService`, `executor: acp` (`attach_stdio`) vs. `acp-oneshot`, executor placement (`miniswe`, `terminus-2`, `openhands`), BYOK/BYOA, and generated option tables |
+| [design/06-plugins-and-extensions.md](design/06-plugins-and-extensions.md) | `ageval.plugin/1`, exclusive slots, chain slots, declarative `export` / `inject`, `ExtensionGraph` resolution, and two-stage static contract validation |
+| [design/07-evidence-and-analysis.md](design/07-evidence-and-analysis.md) | `.ageval/runs/<attempt_id>/` layout, `trajectory.jsonl` sealing, `terminal.usage` and `summary.extra`, Suites and Campaigns, and read-only analyzers (`stats`, `hack`, `review`) |
+| [design/08-hub-registry-and-agents.md](design/08-hub-registry-and-agents.md) | Hub, Registry HTTP service, git-backed datasets (`eval_digest`), Leaderboard Plaza (`/leaderboard`), `ageval.agent/1` packages, models catalog, snapshot shares, and cloud-hosted jobs |
+| [design/09-web-ui-design-system.md](design/09-web-ui-design-system.md) | Web UI design system tokens, typography, motion curves, component vocabulary, and ten visual invariants |
 
-文件名前缀仅表示推荐阅读顺序。
+---
 
-## 同步规则
+## Architectural Proposals (`docs/RFCs/`)
 
-1. **阶段收尾同步：** 涉及产品语义、机制或架构变更时，无需在开发开头单独提交纯文档 commit；在完成阶段性任务或提交 PR 收尾时，完成对应 `docs/design/`（及必要时 `PRD.md` / `glossary.md`）、`ARCHITECTURE.md`、`website/` 与 `skills/` 的同步更新即可。
-2. `website/` 面向使用者提炼用法，不整页照搬 `docs/design/`。
-3. 对外文档（`README*`、`website/`、示例与插件说明）不得包含 GitHub Issue 编号。
+[`RFCs/`](RFCs/AGENTS.md) holds mechanism proposals prior to acceptance into `design/`. A `Draft` RFC does not describe shipped behavior. Authoring rules live in [`RFCs/AGENTS.md`](RFCs/AGENTS.md).
+
+| RFC | Status | Summary |
+| --- | --- | --- |
+| [RFCs/0001-attempt-activity-recovery.md](RFCs/0001-attempt-activity-recovery.md) | Draft | Unified `activity.jsonl` (`ageval.activity/1`) and incremental `/attempt/{workspace,home}` checkpoints (`ageval.checkpoint/1`) for recovering unsealed Attempts across all executors (including `acp`) and environment kinds. |
+
+---
+
+## Synchronization Policy
+
+1. **Phase-completion sync**: When a change modifies product semantics, schemas, or module boundaries, update the corresponding `docs/design/*` pages (plus `PRD.md`, `glossary.md`, `ARCHITECTURE.md`, `website/`, and `skills/` when affected) when wrapping up the implementation phase or pull request.
+2. **Reader-facing separation**: `website/` summarizes usage for operators and dataset authors; normative mechanism specifications remain in `docs/design/`.
+3. **No Issue numbers in outward docs**: Outward-facing documentation (`README.md`, `README.zh-CN.md`, `website/`, `examples/**/README*`, and plugin READMEs) MUST NOT contain GitHub Issue numbers.

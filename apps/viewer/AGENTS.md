@@ -7,7 +7,7 @@ Python serves the built SPA; React app lives here.
 
 | Doc | Role |
 | --- | --- |
-| [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md) | Visual constitution (tokens, focus, motion) |
+| [`docs/design/09-web-ui-design-system.md`](../../docs/design/09-web-ui-design-system.md) | Visual constitution (tokens, focus, motion) |
 | [`apps/shared/DESIGN.md`](../shared/DESIGN.md) | SPA token YAML (Hub/Viewer share it) |
 | [DESIGN.md](./DESIGN.md) | Taste (anti-slop) + which component to reuse |
 | This file | Product scope + stack + API |
@@ -116,7 +116,7 @@ Landing: more than one dataset → Datasets. Exactly one (including
 
 ## Design discipline
 
-1. Read [`docs/design/13-web-ui-tokens.md`](../../docs/design/13-web-ui-tokens.md)
+1. Read [`docs/design/09-web-ui-design-system.md`](../../docs/design/09-web-ui-design-system.md)
    and [DESIGN.md](./DESIGN.md) (**Taste** + role table) before changing
    colors, type, or density.
 2. Do not describe or invent page layout in this file. Copy a shipped control.

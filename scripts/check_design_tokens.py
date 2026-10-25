@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Machine-check web UI tokens against docs/design/13-web-ui-tokens.md.
+"""Machine-check web UI tokens against docs/design/09-web-ui-design-system.md.
 
 Checks:
   1. Doc table and the CANONICAL dict in this script agree (both directions).
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-DOC = REPO / "docs/design/13-web-ui-tokens.md"
+DOC = REPO / "docs/design/09-web-ui-design-system.md"
 SPA_DESIGN = REPO / "apps/shared/DESIGN.md"
 SPA_SKIP = {"accent"}  # landing-only; not in Hub/Viewer YAML
 
@@ -124,16 +124,20 @@ def norm(hexes: list[str]) -> set[str]:
 
 def check_doc(errors: list[str]) -> None:
     text = DOC.read_text(encoding="utf-8")
-    section = re.search(r"## 色彩令牌\n(.*?)\n## ", text, re.S)
+    section = re.search(r"## (?:Color Tokens|色彩令牌)\n(.*?)\n## ", text, re.S)
     if not section:
-        errors.append("doc: '## 色彩令牌' section not found")
+        errors.append("doc: '## Color Tokens' section not found")
         return
     doc_tokens: dict[str, set[str]] = {}
     for line in section.group(1).splitlines():
         if not line.strip().startswith("|"):
             continue
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) < 3 or cells[0] in ("令牌", "---", ":---") or set(cells[0]) <= {"-", ":"}:
+        if (
+            len(cells) < 3
+            or cells[0] in ("Token", "令牌", "---", ":---")
+            or set(cells[0]) <= {"-", ":"}
+        ):
             continue
         name = re.sub(r"（.*?）|\(.*?\)", "", cells[0]).replace("`", "").strip()
         doc_tokens[name] = norm(HEX_RE.findall(line))

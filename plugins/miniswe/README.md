@@ -8,7 +8,7 @@ through the injected `environment` service (`host.exec`). This is **not** ACP.
 Name is the mechanism (`miniswe`), not a benchmark.
 
 Placement next to ACP, terminus-2, and openhands:
-[docs/design/05-runtime/agent-service.md](../../docs/design/05-runtime/agent-service.md#executor-placement).
+[docs/design/05-executors-and-acp.md](../../docs/design/05-executors-and-acp.md#executor-placement).
 
 ```python
 from minisweagent.agents.default import DefaultAgent
@@ -50,7 +50,7 @@ These limits are agent knobs, not Model fields.
 
 ## Model
 
-One profile binds one nested `model:`. The field table is [docs/design/16-model.md](../../docs/design/16-model.md). This plugin does not parse a second shape. A string `model` or a flat model key (`api`, `reasoning_effort`, `timeout`, `request_timeout`, `watchdog`, `extra_body`) fails lock as `model_config`.
+One profile binds one nested `model:`. The field table is [docs/design/02-schemas-and-config.md](../../docs/design/02-schemas-and-config.md). This plugin does not parse a second shape. A string `model` or a flat model key (`api`, `reasoning_effort`, `timeout`, `request_timeout`, `watchdog`, `extra_body`) fails lock as `model_config`.
 
 `api_key` and `base_url` stay profile-level credential locators. They are not Model fields.
 

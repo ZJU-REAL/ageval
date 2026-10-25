@@ -24,4 +24,4 @@ uv run ageval --help
 uv run ageval executors -v
 ```
 
-Design: `docs/design/00-overview-and-product.md`, `docs/design/01-ageval-core.md`, `ARCHITECTURE.md`.
+Design: `docs/PRD.md`, `docs/design/01-core-lifecycle.md`, `ARCHITECTURE.md`.

@@ -27,7 +27,7 @@ environment is required; this executor does not inject `environment`.
 
 | Name | Default | Purpose |
 | --- | --- | --- |
-| `model` | `{id: gpt-4.1-mini}` | Nested spec. Field table: `docs/design/16-model.md`. `supported_apis`: `chat`, `responses`. `supported_model_fields`: `id`, `api`, `reasoning_effort`, `timeout`, `watchdog`, `extra`. `extra_allowlist`: `provider` (empty would reject every extra key). |
+| `model` | `{id: gpt-4.1-mini}` | Nested spec. Field table: `docs/design/02-schemas-and-config.md`. `supported_apis`: `chat`, `responses`. `supported_model_fields`: `id`, `api`, `reasoning_effort`, `timeout`, `watchdog`, `extra`. `extra_allowlist`: `provider` (empty would reject every extra key). |
 | `model.api` | `chat` | `chat` posts `/chat/completions` and sends effort as top-level `reasoning_effort`. `responses` posts `/responses` and sends effort only as `reasoning.effort`. A gateway without `/responses` fails that call; this executor does not fall back to chat. Acceptance id for Responses is `dashscope/glm-5.2`. |
 | `model.reasoning.effort` | omit | Omit does not send an effort field. `none` is sent. |
 | `model.timeout` | `180` | Per-request HTTP timeout. Omit uses the clock table. `0` is rejected. |

@@ -1,6 +1,6 @@
 """Dataset draft slot, task-set fingerprint, and suite completeness.
 
-Authority: docs/design/12-hub-dataset-and-leaderboard.md.
+Authority: docs/design/08-hub-registry-and-agents.md.
 Complete ≠ suite PASS. FAIL/ERROR still count as a result.
 """
 

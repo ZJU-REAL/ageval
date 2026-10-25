@@ -9,7 +9,7 @@ description: >
   scripts/check_design_tokens.py. Use when adding or restyling UI in any of the
   three web surfaces, picking colors or fonts, adding icons, or when a change
   touches raw hex, focus rings, buttons, search fields, or the owl brand assets.
-  Authority is docs/design/13-web-ui-tokens.md; apps/shared/DESIGN.md YAML is
+  Authority is docs/design/09-web-ui-design-system.md; apps/shared/DESIGN.md YAML is
   the SPA token listing (Hub/Viewer inherit it); SPA DESIGN.md Taste is anti-slop
   (product chrome, not landing) plus the reuse map.
   This skill only routes and summarizes — it is not a page inventory.
@@ -18,7 +18,7 @@ description: >
 # ageval web UI design system
 
 Three surfaces, one language: website landing, website docs (fumadocs),
-hub SPA, viewer SPA. Authority: `docs/design/13-web-ui-tokens.md`
+hub SPA, viewer SPA. Authority: `docs/design/09-web-ui-design-system.md`
 (constitution: tokens, focus roles, motion — **not** a page inventory).
 
 On Hub / Viewer, also read `apps/shared/DESIGN.md` YAML (shared theme constants),
@@ -35,15 +35,15 @@ magnetic / "invent a new identity"). Identity is already locked: cool paper
 
 | Surface      | Token file                                                              |
 | ------------ | ----------------------------------------------------------------------- |
-| constitution | `docs/design/13-web-ui-tokens.md`                                       |
+| constitution | `docs/design/09-web-ui-design-system.md`                                  |
 | SPA listing  | `apps/shared/DESIGN.md` YAML (Hub/Viewer inherit; do not fork)          |
 | hub / viewer | `apps/shared/css/tokens.css` (`--viewer-*` + `@theme`; each `index.css` `@import`s it) |
 | docs         | `website/src/app/global.css` (`--color-fd-*`, `--ageval-link*`)           |
 | landing      | Token block at the top of `website/src/components/landing/landing.css`  |
 
-Sync order when modifying tokens: keep the table in `docs/design/13`, script `CANONICAL`, `apps/shared/DESIGN.md` YAML, and `apps/shared/css/tokens.css` aligned, then run `python3 scripts/check_design_tokens.py`.
+Sync order when modifying tokens: keep the table in `docs/design/09`, script `CANONICAL`, `apps/shared/DESIGN.md` YAML, and `apps/shared/css/tokens.css` aligned, then run `python3 scripts/check_design_tokens.py`.
 
-## Quick rules (full list in docs/design/13)
+## Quick rules (full list in docs/design/09)
 
 - Hex values live only in token files and owl brand assets. App code uses semantic
   names (`text-ink`, `border-hairline`, …).
