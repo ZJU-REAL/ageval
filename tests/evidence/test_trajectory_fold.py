@@ -949,7 +949,7 @@ def test_terminal_omits_elapsed_ms_when_invoke_latency_missing(tmp_path: Path) -
     path = _write(tmp_path, events=(), prompt="p", final_text="ok", usage=None)
     terminal = next(x for x in _read_lines(path) if x["type"] == "terminal")
     assert "elapsed_ms" not in terminal
-    assert terminal["usage"] is None
+    assert terminal["usage"]["unavailable"] == "not_reported"
 
 
 def test_terminal_prefers_metadata_elapsed_ms_over_latency_ms(tmp_path: Path) -> None:

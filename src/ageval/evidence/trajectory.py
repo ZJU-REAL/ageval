@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from ageval.evidence.schema import EVENT_SCHEMA_VERSION
+from ageval.model.usage import to_sealed_document
 
 TRAJECTORY_FILENAME = "trajectory.jsonl"
 OBSERVATION_FILENAME = "observation.jsonl"
@@ -260,7 +261,7 @@ def turn_rows(
         "turn_index": turn_index,
         "session_id": session_id,
         "structured": structured,
-        "usage": usage,
+        "usage": to_sealed_document(usage),
         "stop_reason": (metadata or {}).get("stop_reason") if metadata else None,
         "metadata": meta_out,
         "source": "ageval",
