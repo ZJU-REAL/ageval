@@ -12,6 +12,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+from ageval.environments.box_state import host_pid_alive, probe_box
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
     EVALUATION_PATH,
@@ -22,6 +23,7 @@ from ageval.environments.protocol import (
     EnvironmentFailure,
     ExecResult,
     Placement,
+    ProbeStatus,
     reject_foreign_service,
 )
 from ageval.plugins.base import BaseEnvironment
@@ -89,6 +91,7 @@ class LocalHost(BaseEnvironment):
         self._root = spec.attempt_root.expanduser().resolve(strict=False)
         self._started = False
         self._stopped = False
+        self.reattached = False
         self._attached: list[LocalStdio] = []
 
     # --- lifecycle -----------------------------------------------------------
@@ -109,6 +112,7 @@ class LocalHost(BaseEnvironment):
         for rel in ("workspace", "home", "artifacts"):
             (self._root / rel).mkdir(parents=True, exist_ok=True)
         self._started = True
+        self.reattached = False
 
     async def stop(self, *, delete: bool) -> None:
         if self._stopped:
@@ -241,6 +245,26 @@ class LocalHost(BaseEnvironment):
     @property
     def root(self) -> Path:
         return self._root
+
+    def runtime_handle(self) -> dict[str, object]:
+        return {"kind": "local"}
+
+    async def probe(self, handle: Mapping[str, object]) -> ProbeStatus:
+        del handle
+        if not self._root.is_dir():
+            return ProbeStatus(status="absent")
+        return probe_box(self._root, pid_alive=host_pid_alive)
+
+    async def attach(self, handle: Mapping[str, object]) -> None:
+        del handle
+        if not self._root.is_dir():
+            msg = "local box directory is absent"
+            raise EnvironmentFailure("environment_absent", msg)
+        for rel in ("workspace", "home", "artifacts"):
+            (self._root / rel).mkdir(parents=True, exist_ok=True)
+        self._started = True
+        self._stopped = False
+        self.reattached = True
 
     def placement(self) -> Placement:
         """Attach facts for this box. ``target_id`` is opaque above the kind."""

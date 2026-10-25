@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 # Capability names a kind may claim. ``requires.environment`` must be a subset.
 CAPABILITY_NAMES: frozenset[str] = frozenset(
@@ -89,6 +89,18 @@ class BoxSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class ProbeStatus:
+    """Whether a previously started box can be reused."""
+
+    status: Literal["absent", "idle", "busy"]
+    nonce: str | None = None
+    cursor_seq: int | None = None
+    cursor_request_id: str | None = None
+    inflight_request_id: str | None = None
+    last_exit: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ExecResult:
     """Result of a completed in-box command."""
 
@@ -129,6 +141,18 @@ class EnvironmentProvider(Protocol):
         ...
 
     async def start(self, *, force_build: bool = False) -> None: ...
+
+    def runtime_handle(self) -> dict[str, Any]:
+        """JSON handle for a started box. Opaque above the kind."""
+        ...
+
+    async def probe(self, handle: Mapping[str, Any]) -> ProbeStatus:
+        """Inspect a previous handle without mutating the workspace."""
+        ...
+
+    async def attach(self, handle: Mapping[str, Any]) -> None:
+        """Bind this instance to a live box identified by ``handle``."""
+        ...
 
     def placement(self) -> Placement:
         """Engine-issued attach facts for the open box (no vendor handle)."""

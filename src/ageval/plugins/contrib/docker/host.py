@@ -23,6 +23,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 
+from ageval.environments.box_state import probe_box
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
     EVALUATION_PATH,
@@ -33,6 +34,7 @@ from ageval.environments.protocol import (
     EnvironmentFailure,
     ExecResult,
     Placement,
+    ProbeStatus,
 )
 from ageval.evidence.redaction import redact_text
 from ageval.plugins.base import BaseEnvironment
@@ -173,6 +175,7 @@ class DockerHost(BaseEnvironment):
         self._image: str | None = None
         self._started = False
         self._stopped = False
+        self.reattached = False
         self._attached: list[DockerStdio] = []
 
     # --- lifecycle -----------------------------------------------------------
@@ -252,6 +255,7 @@ class DockerHost(BaseEnvironment):
             )
         self._container = (started.stdout or "").strip() or name
         self._started = True
+        self.reattached = False
         if self._align_app:
             self._align_workspace_app()
 
@@ -271,6 +275,34 @@ class DockerHost(BaseEnvironment):
             docker("rm", "-f", self._container, timeout=120.0)
         if delete and self._root.is_dir():
             shutil.rmtree(self._root, ignore_errors=True)
+
+    def runtime_handle(self) -> dict[str, object]:
+        return {
+            "container_id": self._container,
+            "compose_project": self._compose_project,
+        }
+
+    async def probe(self, handle: Mapping[str, object]) -> ProbeStatus:
+        cid = str(handle.get("container_id") or "").strip()
+        if not cid or not _container_running(cid):
+            return ProbeStatus(status="absent")
+        return probe_box(self._root, pid_alive=lambda pid: _pid_in_container(cid, pid))
+
+    async def attach(self, handle: Mapping[str, object]) -> None:
+        cid = str(handle.get("container_id") or "").strip()
+        if not cid or not _container_running(cid):
+            msg = "docker container is absent"
+            raise EnvironmentFailure("environment_absent", msg)
+        self._container = cid
+        compose = handle.get("compose_project")
+        if isinstance(compose, str) and compose.strip():
+            self._compose_project = compose.strip()
+        self._root.mkdir(parents=True, exist_ok=True)
+        for rel in ("workspace", "home", "artifacts"):
+            (self._root / rel).mkdir(parents=True, exist_ok=True)
+        self._started = True
+        self._stopped = False
+        self.reattached = True
 
     # --- transport -----------------------------------------------------------
 
@@ -828,6 +860,18 @@ def copy_bind_tree(src: Path, dest: Path) -> None:
     """
     dest.mkdir(parents=True, exist_ok=True)
     shutil.copytree(src, dest, dirs_exist_ok=True, symlinks=True)
+
+
+def _container_running(container_id: str) -> bool:
+    found = docker("inspect", "-f", "{{.State.Running}}", container_id, timeout=30.0)
+    return found.returncode == 0 and (found.stdout or "").strip() == "true"
+
+
+def _pid_in_container(container_id: str, pid: int) -> bool:
+    if pid <= 0:
+        return False
+    found = docker("exec", container_id, "sh", "-c", f"kill -0 {pid}", timeout=15.0)
+    return found.returncode == 0
 
 
 def _box_python_version(raw: object) -> str | None:
