@@ -150,12 +150,16 @@ class AgentServiceServer:
             tools = req.get("tools")
             messages = req.get("messages")
             request_id = req.get("request_id")
+            turn_index = req.get("turn_index")
             return self.service.invoke(
                 session_id=str(req.get("session_id") or ""),
                 prompt=str(req.get("prompt") or ""),
                 tools=tools if isinstance(tools, list) else None,
                 messages=messages if isinstance(messages, list) else None,
                 request_id=request_id if isinstance(request_id, str) else None,
+                turn_index=turn_index
+                if isinstance(turn_index, int) and not isinstance(turn_index, bool)
+                else None,
             )
         if op == "cancel":
             return self.service.cancel_request(

@@ -441,13 +441,20 @@ class ActivityLog:
         return chosen
 
     def completed_system_effect_tools(self) -> list[ActivityRecord]:
-        out: list[ActivityRecord] = []
-        for record in self.records:
-            if record.kind != "tool_call" or record.status != "completed":
-                continue
-            if record.payload.get("system_effect") is True:
-                out.append(record)
-        return out
+        flagged = {
+            record.request_id
+            for record in self.records
+            if record.kind == "tool_call"
+            and record.status == "in_flight"
+            and record.payload.get("system_effect") is True
+        }
+        return [
+            record
+            for record in self.records
+            if record.kind == "tool_call"
+            and record.status == "completed"
+            and record.request_id in flagged
+        ]
 
     def session_record(self, session_id: str) -> ActivityRecord | None:
         for record in self.records:

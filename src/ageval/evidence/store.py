@@ -61,6 +61,30 @@ def _atomic_write_json(path: Path, data: Any) -> None:
     os.replace(tmp, path)
 
 
+def _max_invocation_seq(inv_root: Path) -> int:
+    if not inv_root.is_dir():
+        return 0
+    best = 0
+    for child in inv_root.iterdir():
+        if not child.is_dir():
+            continue
+        head = child.name.split("-", 1)[0]
+        if head.isdigit():
+            best = max(best, int(head))
+    return best
+
+
+def _find_invocation_dir(root: Path, invocation_id: str) -> tuple[Path, str] | None:
+    for rel in (AGENT_INVOCATIONS_REL, EVALUATION_INVOCATIONS_REL):
+        base = root / rel
+        if not base.is_dir():
+            continue
+        for child in base.iterdir():
+            if child.is_dir() and child.name.endswith(invocation_id):
+                return child, rel
+    return None
+
+
 def _safe_relpath(root: Path, relative: str) -> Path:
     """Resolve a relative path under root; reject traversal and symlink escape."""
     if not relative or relative.startswith(("/", "\\")):
@@ -373,6 +397,46 @@ class AttemptEvidenceStore:
         cleaned = redact_and_assert(doc, extra_sentinels=self.sentinels)
         _atomic_write_json(self.root / "summary.json", cleaned)
         self._sealed_summary = True
+
+    def sync_invocation_counters(self) -> None:
+        """Continue seq numbers after a recovered process reopens the store."""
+        self._seq = _max_invocation_seq(self.root / AGENT_INVOCATIONS_REL)
+        self._eval_seq = _max_invocation_seq(self.root / EVALUATION_INVOCATIONS_REL)
+
+    def reopen_invocation(self, invocation_id: str) -> InvocationHandle | None:
+        """Bind an invocation directory written by the previous process."""
+        found = _find_invocation_dir(self.root, invocation_id)
+        if found is None:
+            return None
+        directory, rel_prefix = found
+        meta_path = directory / "metadata.json"
+        meta: dict[str, Any] = {}
+        if meta_path.is_file():
+            try:
+                loaded = json.loads(meta_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                loaded = None
+            if isinstance(loaded, dict):
+                meta = loaded
+        seq_raw = meta.get("seq")
+        seq = seq_raw if isinstance(seq_raw, int) and not isinstance(seq_raw, bool) else 0
+        status = str(meta.get("status") or "running")
+        handle = InvocationHandle(
+            store=self,
+            invocation_id=invocation_id,
+            seq=seq,
+            directory=directory,
+            profile_id=str(meta.get("profile_id") or ""),
+            executor_kind=str(meta.get("executor_kind") or ""),
+            model=str(meta.get("model") or ""),
+            attempt_id=self.attempt_id,
+            started_at=str(meta.get("started_at") or ""),
+            status=status,
+            sealed=status not in {"running", ""},
+            rel_prefix=rel_prefix,
+        )
+        self._invocations[invocation_id] = handle
+        return handle
 
     def begin_invocation(
         self,

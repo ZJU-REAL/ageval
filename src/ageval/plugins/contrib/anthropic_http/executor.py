@@ -28,6 +28,12 @@ from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.anthropic_http.options import AnthropicHTTPOptions
 from ageval.plugins.contrib.anthropic_http.usage import normalize_anthropic_http_usage
 from ageval.plugins.decorators import executor_plugin
+from ageval.plugins.http_activity import (
+    abort_model_turn,
+    begin_model_turn,
+    finish_model_turn,
+    messages_for_turn,
+)
 from ageval.plugins.http_loopback import is_http_loopback
 from ageval.plugins.options import coerce_options, mapping_for_model
 from ageval.runtime.clocks import clock_seconds
@@ -301,6 +307,12 @@ class AnthropicHTTPExecutor(BaseExecutor):
     def close(self) -> None:
         return None
 
+    def _seal_turn(self, **kwargs: Any) -> AgentResult:
+        result = AgentResult(**kwargs)
+        step = getattr(self, "_activity_step", None)
+        self._activity_step = None
+        return finish_model_turn(self, step if isinstance(step, int) else None, result)
+
     def invoke(
         self,
         prompt: str,
@@ -312,12 +324,13 @@ class AnthropicHTTPExecutor(BaseExecutor):
         messages: Sequence[Mapping[str, Any]] | None = None,
     ) -> AgentResult:
         del redaction_sentinels
+        messages = messages_for_turn(self, prompt, messages)
         key_env = self.api_key_env or _DEFAULT_KEY_ENV
         key = os.environ.get(key_env, "")
         base = self.base_url or os.environ.get("AGEVAL_ANTHROPIC_BASE_URL") or _DEFAULT_BASE
         loopback = is_http_loopback(base)
         if not key and not loopback:
-            return AgentResult(
+            return self._seal_turn(
                 model=self.model,
                 text="",
                 structured=None,
@@ -327,7 +340,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
         from ageval.runtime.offline import is_offline_agent
 
         if is_offline_agent() and not loopback:
-            return AgentResult(
+            return self._seal_turn(
                 model=self.model,
                 text="",
                 structured=None,
@@ -357,15 +370,21 @@ class AnthropicHTTPExecutor(BaseExecutor):
         if key:
             headers["x-api-key"] = key
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-        kind, found = _exchange(
-            req,
-            http_timeout=self.http_timeout,
-            watchdog=self.watchdog,
-            invoke_timeout=timeout,
-        )
+        self._activity_step = begin_model_turn(self, prompt, messages)
+        try:
+            kind, found = _exchange(
+                req,
+                http_timeout=self.http_timeout,
+                watchdog=self.watchdog,
+                invoke_timeout=timeout,
+            )
+        except Exception:  # noqa: BLE001 — a transport crash still closes the model turn
+            abort_model_turn(self, self._activity_step, reason="process_interrupted")
+            self._activity_step = None
+            raise
         if kind == "watchdog":
             message = f"TimeoutError:anthropic_http_watchdog:{self.watchdog:g}"
-            return AgentResult(
+            return self._seal_turn(
                 model=self.model,
                 text="",
                 structured=None,
@@ -377,7 +396,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
             )
         if kind == "protocol":
             message = f"ProtocolError:{found}"
-            return AgentResult(
+            return self._seal_turn(
                 model=self.model,
                 text="",
                 structured=None,
@@ -392,7 +411,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
             code = int(found["http_code"])
             if http_status_is_config_error(code):
                 message = f"ModelConfigError:HTTPError:{code}"
-                return AgentResult(
+                return self._seal_turn(
                     model=self.model,
                     text="",
                     structured=None,
@@ -407,7 +426,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
                     failure=ModelConfigError(message),
                 )
             message = f"HTTPError:{code}"
-            return AgentResult(
+            return self._seal_turn(
                 model=self.model,
                 text="",
                 structured=None,
@@ -422,7 +441,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
             )
         if kind == "transport":
             message = str(found)
-            return AgentResult(
+            return self._seal_turn(
                 model=self.model,
                 text="",
                 structured=None,
@@ -486,7 +505,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
             raw.get("usage") if isinstance(raw, dict) else None,
             response_id=raw.get("id") if isinstance(raw, dict) else None,
         )
-        return AgentResult(
+        return self._seal_turn(
             model=self.model,
             text=(text or "")[-8000:],
             structured=structured,

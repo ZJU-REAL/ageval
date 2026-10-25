@@ -8,12 +8,22 @@ from __future__ import annotations
 
 import tempfile
 from collections.abc import Mapping, MutableMapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from ageval.application.phase_timing import timing_from_facts
 from ageval.attempt import run_attempt as run_attempt_pipeline
 from ageval.attempt.ctx import AttemptCtx, PhaseObserver
+from ageval.attempt.recover import (
+    capture_box,
+    classify_environment,
+    find_unsealed_attempt,
+    load_activity,
+    new_nonce,
+    partial_output,
+    write_attempt_header,
+)
 from ageval.config.constants import (
     ENVIRONMENT_DIR,
     EVALUATION_DIR,
@@ -23,11 +33,14 @@ from ageval.config.model import LockedTaskConfig, thaw
 from ageval.config.resources import resource_options
 from ageval.environments.protocol import BoxSpec
 from ageval.evaluation.bind import AttemptResult, bind_result
+from ageval.evidence.checkpoints import prune_checkpoints
 from ageval.evidence.locators import default_runs_root
 from ageval.evidence.store import (
+    ACTIVITY_LOG_REL,
     AGENT_BOX_REL,
     AttemptEvidenceStore,
 )
+from ageval.evidence.trajectory import TRAJECTORY_FILENAME
 from ageval.plugins.binding import bind_winner
 from ageval.plugins.bootstrap import ensure_bootstrapped
 from ageval.plugins.image_layers import layers_for_graph
@@ -129,6 +142,9 @@ async def run_attempt(
     attempt_index: int = 0,
     allow_prepare: bool = False,
     layout: str = "ageval",
+    resume_attempt_id: str | None = None,
+    suite_run_id: str | None = None,
+    recover_unsealed: bool = False,
 ) -> tuple[int, AttemptResult]:
     """Run one foreground Attempt and return its exit code and result."""
     from ageval.application.composition import build_lock_command
@@ -154,17 +170,61 @@ async def run_attempt(
     task_root = locked.resolved.task_dir
 
     factory = identity_factory or IdentityFactory()
-    run_ident = factory.new_run()
-    trial_ident = factory.new_trial(run_ident, lock.digest)
-    attempt_ident = factory.new_attempt(trial_ident)
+    resumed = _locate_resume(
+        dataset_root,
+        lock_digest=lock.digest,
+        task_id=lock.task_id,
+        attempt_index=attempt_index,
+        resume_attempt_id=resume_attempt_id,
+        suite_run_id=suite_run_id,
+        recover_unsealed=recover_unsealed,
+    )
+    if resumed.refused is not None:
+        return resumed.refused
+    if resumed.header is not None:
+        payload = resumed.header.payload
+        run_id = str(payload["run_id"])
+        trial_id = str(payload["trial_id"])
+        attempt_id = str(payload["attempt_id"])
+    elif resumed.attempt_id:
+        run_id = resumed.attempt_id
+        trial_id = resumed.attempt_id
+        attempt_id = resumed.attempt_id
+    else:
+        run_ident = factory.new_run()
+        trial_ident = factory.new_trial(run_ident, lock.digest)
+        attempt_ident = factory.new_attempt(trial_ident)
+        run_id = run_ident.value
+        trial_id = trial_ident.value
+        attempt_id = attempt_ident.value
 
     evidence = _open_evidence(
         dataset_root=dataset_root,
         lock=lock,
-        run_id=run_ident.value,
-        attempt_id=attempt_ident.value,
+        run_id=run_id,
+        attempt_id=attempt_id,
     )
-    evidence.write_lock_summary(locked.summary())
+    if resumed.activity is not None:
+        evidence.sync_invocation_counters()
+    if not (evidence.root / "lock.json").is_file():
+        evidence.write_lock_summary(locked.summary())
+    activity = resumed.activity or _open_fresh_activity(
+        evidence,
+        lock=lock,
+        run_id=run_id,
+        trial_id=trial_id,
+        attempt_id=attempt_id,
+        attempt_index=attempt_index,
+        suite_run_id=suite_run_id,
+    )
+    if activity.corrupt:
+        return _seal_recovery_error(
+            evidence,
+            kind=str(lock.environment),
+            phase="run",
+            title="activity_log_corrupt",
+            message=activity.corrupt,
+        )
 
     registry = ensure_bootstrapped()
     profile_id = _selected_profile_id(lock)
@@ -182,7 +242,7 @@ async def run_attempt(
     # The service comes up first so the box can carry its socket in.
     # Each phase arms its own clock; nothing is charged before environment.
     agent_service = _agent_service(
-        attempt_id=attempt_ident.value,
+        attempt_id=attempt_id,
         binder=binder,
         lock=lock,
         evidence=evidence,
@@ -207,9 +267,9 @@ async def run_attempt(
         on_phase("finished", "preflight")
 
     ctx = AttemptCtx(
-        run_id=run_ident.value,
-        trial_id=trial_ident.value,
-        attempt_id=attempt_ident.value,
+        run_id=run_id,
+        trial_id=trial_id,
+        attempt_id=attempt_id,
         lock=lock,
         profile_id=profile_id,
         bindings=graph,
@@ -227,9 +287,27 @@ async def run_attempt(
         keep_workspace=keep_workspace,
         keep_vendor_raw=keep_vendor_raw,
         on_phase=on_phase,
+        activity=activity,
     )
     _bind_evaluate_session_target(ctx, agent_service)
     parent = agent_service.service
+    parent.activity = activity
+    parent.elapsed_ms_provider = ctx.active_elapsed_ms
+    parent.checkpoint_capture = lambda seq: capture_box(ctx, seq)
+    parent.read_partial = lambda: partial_output(ctx)
+    if parent.invoke_quota is not None and resumed.activity is not None:
+        parent.invoke_quota.restore_used(activity.admitted_run_invoke_count())
+    if resumed.activity is not None:
+        decision = await classify_environment(ctx)
+        parent.environment_reattached = bool(ctx.recovery_attached)
+        if decision == "busy":
+            agent_service.stop()
+            return _refused_result(
+                evidence,
+                kind=str(lock.environment),
+                title="attempt_still_busy",
+                message="the environment is still running this Attempt",
+            )
     parent.on_limit_reached = ctx.note_limit_reached
     parent.on_phase_clock = lambda frozen: (
         ctx.freeze_phase_clock() if frozen else ctx.thaw_phase_clock()
@@ -269,7 +347,179 @@ async def run_attempt(
         summary["extra"] = extra
     evidence.write_summary(summary)
     _write_result(evidence, result)
+    if (
+        not keep_workspace
+        and (evidence.root / TRAJECTORY_FILENAME).is_file()
+        and (evidence.root / "result.json").is_file()
+    ):
+        prune_checkpoints(evidence.root)
     return _exit_code(result), result
+
+
+@dataclass
+class _ResumePlan:
+    activity: Any = None
+    header: Any = None
+    attempt_id: str | None = None
+    refused: tuple[int, AttemptResult] | None = None
+
+
+def _locate_resume(
+    dataset_root: Path,
+    *,
+    lock_digest: str,
+    task_id: str,
+    attempt_index: int,
+    resume_attempt_id: str | None,
+    suite_run_id: str | None,
+    recover_unsealed: bool,
+) -> _ResumePlan:
+    if resume_attempt_id:
+        attempt_dir = default_runs_root(dataset_root) / resume_attempt_id
+        if not attempt_dir.is_dir():
+            return _ResumePlan(
+                refused=_refused_plain(
+                    kind="local",
+                    evidence_path=f".ageval/runs/{resume_attempt_id}",
+                    title="activity_log_missing",
+                    message=f"no Attempt directory {resume_attempt_id}",
+                )
+            )
+        if (attempt_dir / "result.json").is_file():
+            return _ResumePlan(
+                refused=_refused_plain(
+                    kind="local",
+                    evidence_path=f".ageval/runs/{resume_attempt_id}",
+                    title="attempt_already_settled",
+                    message="result.json already exists",
+                )
+            )
+        activity = load_activity(attempt_dir)
+        header = activity.header()
+        if header is None and not activity.corrupt:
+            return _ResumePlan(
+                refused=_refused_plain(
+                    kind="local",
+                    evidence_path=f".ageval/runs/{resume_attempt_id}",
+                    title="activity_log_missing",
+                    message="activity.jsonl has no attempt header",
+                )
+            )
+        if header is not None and header.payload.get("locked_config_digest") != lock_digest:
+            return _ResumePlan(
+                refused=_refused_plain(
+                    kind=str(header.payload.get("environment_kind") or "local"),
+                    evidence_path=f".ageval/runs/{resume_attempt_id}",
+                    title="locked_config_mismatch",
+                    message="locked_config_digest does not match this resume",
+                )
+            )
+        if header is not None and header.payload.get("task_id") not in {None, task_id}:
+            return _ResumePlan(
+                refused=_refused_plain(
+                    kind=str(header.payload.get("environment_kind") or "local"),
+                    evidence_path=f".ageval/runs/{resume_attempt_id}",
+                    title="activity_log_missing",
+                    message="Attempt task_id does not match --task",
+                )
+            )
+        return _ResumePlan(activity=activity, header=header, attempt_id=resume_attempt_id)
+    if recover_unsealed and suite_run_id:
+        found = find_unsealed_attempt(
+            dataset_root,
+            suite_run_id=suite_run_id,
+            task_id=task_id,
+            attempt_index=attempt_index,
+            digest=lock_digest,
+        )
+        if found is None:
+            return _ResumePlan()
+        activity = load_activity(found)
+        return _ResumePlan(activity=activity, header=activity.header(), attempt_id=found.name)
+    return _ResumePlan()
+
+
+def _open_fresh_activity(
+    evidence: AttemptEvidenceStore,
+    *,
+    lock: LockedTaskConfig,
+    run_id: str,
+    trial_id: str,
+    attempt_id: str,
+    attempt_index: int,
+    suite_run_id: str | None,
+) -> Any:
+    from ageval.evidence.activity import ActivityLog
+
+    log = ActivityLog.open(evidence.root / ACTIVITY_LOG_REL, sentinels=tuple(evidence.sentinels))
+    if log.header() is None and not log.corrupt:
+        write_attempt_header(
+            log,
+            run_id=run_id,
+            trial_id=trial_id,
+            attempt_id=attempt_id,
+            task_id=lock.task_id,
+            attempt_index=attempt_index,
+            suite_run_id=suite_run_id,
+            digest=lock.digest,
+            environment_kind=str(lock.environment),
+            nonce=new_nonce(),
+        )
+    return log
+
+
+def _refused_plain(
+    *,
+    kind: str,
+    evidence_path: str,
+    title: str,
+    message: str,
+) -> tuple[int, AttemptResult]:
+    from ageval.evaluation.error_record import error_record
+
+    result = bind_result(
+        evaluator_raw=None,
+        kind=kind,
+        evidence_path=evidence_path,
+        error=error_record(phase="run", title=title, message=message),
+    )
+    return EXIT_ERROR, result
+
+
+def _refused_result(
+    evidence: AttemptEvidenceStore,
+    *,
+    kind: str,
+    title: str,
+    message: str,
+) -> tuple[int, AttemptResult]:
+    return _refused_plain(
+        kind=kind,
+        evidence_path=evidence.locator,
+        title=title,
+        message=message,
+    )
+
+
+def _seal_recovery_error(
+    evidence: AttemptEvidenceStore,
+    *,
+    kind: str,
+    phase: str,
+    title: str,
+    message: str,
+) -> tuple[int, AttemptResult]:
+    from ageval.evaluation.error_record import error_record
+
+    result = bind_result(
+        evaluator_raw=None,
+        kind=kind,
+        evidence_path=evidence.locator,
+        error=error_record(phase=phase, title=title, message=message),
+    )
+    evidence.write_summary({"result": result.as_dict(), "facts": []})
+    _write_result(evidence, result)
+    return EXIT_ERROR, result
 
 
 def _open_evidence(

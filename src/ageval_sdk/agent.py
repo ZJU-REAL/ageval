@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
-import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -83,6 +82,7 @@ class AgentSession:
     async def invoke(self, prompt: str, **kwargs: Any) -> Mapping[str, Any]:
         tools = kwargs.pop("tools", None)
         messages = kwargs.pop("messages", None)
+        explicit_request = kwargs.pop("request_id", None)
         if kwargs:
             # Disallow profile/workspace/executor overrides mid-session.
             raise ValueError("session invoke does not accept profile overrides")
@@ -114,13 +114,17 @@ class AgentSession:
                     "error": opened.get("error") or "agent_session_unbound",
                     "tool_calls": [],
                 }
-            request_id = f"req_{uuid.uuid4().hex[:16]}"
+            if isinstance(explicit_request, str) and explicit_request.strip():
+                request_id = explicit_request.strip()
+            else:
+                request_id = f"req_{self._session_id}_turn_{turn}"
             payload: dict[str, Any] = {
                 "op": "invoke",
                 "session_id": self._session_id,
                 "attempt_id": self.attempt_id,
                 "prompt": prompt,
                 "request_id": request_id,
+                "turn_index": turn,
             }
             if tools is not None:
                 payload["tools"] = tools

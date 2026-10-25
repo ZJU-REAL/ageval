@@ -144,6 +144,17 @@ def register(app: typer.Typer) -> None:
                 ),
             ),
         ] = None,
+        resume_attempt: Annotated[
+            str | None,
+            typer.Option(
+                "--resume",
+                help=(
+                    "Recover one unsealed Attempt in place. Requires a single --task. "
+                    "Exit 2 when result.json already exists or the lock digest does not match. "
+                    "A live busy environment exits 2 without writing result.json."
+                ),
+            ),
+        ] = None,
         resume_suite: Annotated[
             str | None,
             typer.Option(
@@ -369,6 +380,27 @@ def register(app: typer.Typer) -> None:
 
             k = n_attempts if n_attempts is not None else 1
             resume_id = resume_suite.strip() if resume_suite and str(resume_suite).strip() else None
+            resume_one = (
+                resume_attempt.strip() if resume_attempt and str(resume_attempt).strip() else None
+            )
+            if resume_one and resume_id:
+                raise ConfigError(
+                    "invalid_override",
+                    "--resume cannot be combined with --resume-suite",
+                    location="--resume",
+                )
+            if resume_one and len(task_values) != 1:
+                raise ConfigError(
+                    "invalid_override",
+                    "--resume requires one --task",
+                    location="--resume",
+                )
+            if resume_one and k != 1:
+                raise ConfigError(
+                    "invalid_override",
+                    "--resume runs one Attempt",
+                    location="--resume",
+                )
             replace_keys: set[tuple[str, int]] | None = None
             if replace_slot:
                 if resume_id is None:
@@ -436,6 +468,7 @@ def register(app: typer.Typer) -> None:
                             keep_vendor_raw=keep_vendor_raw,
                             allow_prepare=allow_prepare,
                             layout=chosen_layout,
+                            resume_attempt_id=resume_one,
                             on_phase=spinner.phase,
                             on_progress=spinner.stall,
                         )

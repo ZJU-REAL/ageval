@@ -11,6 +11,7 @@ phase clocks, ``cleanup`` always running, and PASS entering only through
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -53,11 +54,19 @@ async def run_attempt(ctx: AttemptCtx) -> None:
     """
     should_record = False
     try:
-        await _timed(ctx, environment.PHASE, environment.run)
+        if not (ctx.recovery_attached and _phase_done(ctx, environment.PHASE)):
+            await _timed(ctx, environment.PHASE, environment.run)
         should_record = True
-        await _timed(ctx, run.PHASE, run.run)
+        if _phase_done(ctx, "seal_run"):
+            ctx.mark_writers_stopped()
+            _seal_solver_profile(ctx)
+        else:
+            await _timed(ctx, run.PHASE, run.run)
         try:
-            await _timed(ctx, evaluate.PHASE, evaluate.run)
+            if _phase_done(ctx, evaluate.PHASE):
+                _restore_verdict(ctx)
+            else:
+                await _timed(ctx, evaluate.PHASE, evaluate.run)
         except Exception as exc:  # noqa: BLE001 — evaluate ERROR still seals
             _note_phase_failed(ctx, exc)
     except Exception as exc:  # noqa: BLE001 — the phase name is the operator's answer
@@ -147,12 +156,67 @@ def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _phase_done(ctx: AttemptCtx, name: str) -> bool:
+    log = ctx.activity
+    if log is None:
+        return False
+    return bool(log.has_completed_phase(name))
+
+
+def _restore_verdict(ctx: AttemptCtx) -> None:
+    path = ctx.evidence.root / "evaluation" / "evaluator_raw.json"
+    if not path.is_file():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return
+    if isinstance(data, dict):
+        ctx.evaluation_result = data
+
+
+def _log_phase(ctx: AttemptCtx, name: str, status: str) -> None:
+    log = ctx.activity
+    if log is None or name not in _ATTEMPT_PHASES:
+        return
+    if status == "in_flight":
+        if log.has_phase_status(name, "in_flight") or log.has_completed_phase(name):
+            return
+        log.append(
+            request_id=f"phase_{name}",
+            kind="phase",
+            status="in_flight",
+            payload={"phase": name},
+        )
+        return
+    if log.has_completed_phase(name):
+        return
+    from ageval.attempt.recover import capture_box
+
+    def prepare(seq: int) -> dict[str, int | None]:
+        return {"checkpoint_seq": capture_box(ctx, seq)}
+
+    log.append(
+        request_id=f"phase_{name}",
+        kind="phase",
+        status="completed",
+        payload={
+            "phase": name,
+            "elapsed_ms": ctx.active_elapsed_ms(),
+            "limit_reached": ctx.limit_name(),
+            "checkpoint_seq": None,
+        },
+        prepare=prepare,
+    )
+
+
 async def _timed(ctx: AttemptCtx, name: str, phase: Phase) -> None:
     """Run one phase, notify the live observer, and record how long it took."""
     if ctx.on_phase is not None:
         ctx.on_phase("started", name)
     started_mono = time.monotonic()
     started_at = _utc_now()
+    _log_phase(ctx, name, "in_flight")
     try:
         await phase(ctx)
     finally:
@@ -167,6 +231,7 @@ async def _timed(ctx: AttemptCtx, name: str, phase: Phase) -> None:
                 "finished_at": _utc_now(),
             },
         )
+        _log_phase(ctx, name, "completed")
 
 
 __all__ = ["AttemptCtx", "run_attempt", "run_regrade"]

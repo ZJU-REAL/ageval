@@ -30,6 +30,12 @@ from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.openai_http.options import OpenAIHTTPOptions
 from ageval.plugins.contrib.openai_http.usage import normalize_openai_http_usage
 from ageval.plugins.decorators import executor_plugin
+from ageval.plugins.http_activity import (
+    abort_model_turn,
+    begin_model_turn,
+    finish_model_turn,
+    messages_for_turn,
+)
 from ageval.plugins.http_loopback import is_http_loopback
 from ageval.plugins.options import coerce_options, mapping_for_model
 from ageval.runtime.clocks import clock_seconds
@@ -328,6 +334,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
         messages: Sequence[Mapping[str, Any]] | None = None,
     ) -> AgentResult:
         del redaction_sentinels
+        messages = messages_for_turn(self, prompt, messages)
         if self._invoke_cancel.is_set():
             return self._result(ok=False, error="invoke_cancelled", effort=self.reasoning_effort)
         key_env = self.api_key_env or _DEFAULT_KEY_ENV
@@ -350,7 +357,13 @@ class OpenAIHTTPExecutor(BaseExecutor):
         if key:
             headers["Authorization"] = f"Bearer {key}"
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-        kind, found = self._exchange(req, timeout=timeout)
+        self._activity_step = begin_model_turn(self, prompt, messages)
+        try:
+            kind, found = self._exchange(req, timeout=timeout)
+        except Exception:  # noqa: BLE001 — a transport crash still closes the model turn
+            abort_model_turn(self, self._activity_step, reason="process_interrupted")
+            self._activity_step = None
+            raise
         if kind == "cancelled":
             return self._result(
                 ok=False,
@@ -420,17 +433,19 @@ class OpenAIHTTPExecutor(BaseExecutor):
             raw.get("usage") if isinstance(raw, dict) else None,
             response_id=raw.get("id") if isinstance(raw, dict) else None,
         )
-        return AgentResult(
-            model=self.model,
-            text=(text or "")[-8000:],
-            structured=structured,
-            ok=True,
-            error=None,
-            events=tuple(events),
-            tool_calls=tool_calls,
-            usage=adopt_usage(usage),
-            extra=usage_extra,
-            metadata=self._meta(effort, actual=effort),
+        return self._seal_activity(
+            AgentResult(
+                model=self.model,
+                text=(text or "")[-8000:],
+                structured=structured,
+                ok=True,
+                error=None,
+                events=tuple(events),
+                tool_calls=tool_calls,
+                usage=adopt_usage(usage),
+                extra=usage_extra,
+                metadata=self._meta(effort, actual=effort),
+            )
         )
 
     def _payload(
@@ -528,17 +543,24 @@ class OpenAIHTTPExecutor(BaseExecutor):
         repeatable: bool = True,
         failure: BaseException | None = None,
     ) -> AgentResult:
-        return AgentResult(
-            model=self.model,
-            text="",
-            structured=None,
-            ok=ok,
-            error=error,
-            metadata=self._meta(effort, actual=None, extra=metadata),
-            repeatable=repeatable,
-            failure=failure,
-            usage=LOST_ON_TIMEOUT if isinstance(failure, TransportStall) else NOT_REPORTED,
+        return self._seal_activity(
+            AgentResult(
+                model=self.model,
+                text="",
+                structured=None,
+                ok=ok,
+                error=error,
+                metadata=self._meta(effort, actual=None, extra=metadata),
+                repeatable=repeatable,
+                failure=failure,
+                usage=LOST_ON_TIMEOUT if isinstance(failure, TransportStall) else NOT_REPORTED,
+            )
         )
+
+    def _seal_activity(self, result: AgentResult) -> AgentResult:
+        step = getattr(self, "_activity_step", None)
+        self._activity_step = None
+        return finish_model_turn(self, step if isinstance(step, int) else None, result)
 
     def _meta(
         self,
