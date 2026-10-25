@@ -7,6 +7,8 @@ import json
 import os
 import subprocess
 import sys
+import tarfile
+from io import BytesIO
 from pathlib import Path
 
 from ageval.environments.protocol import BoxSpec, ExecResult
@@ -151,6 +153,43 @@ def test_ssh_probe_and_attach_cover_directory_and_container(tmp_path: Path) -> N
     assert handle["remote_root"] == "/tmp/ageval-a"
     assert handle["container_id"] == "cid-1"
     assert host._started is True
+
+
+def test_ssh_mirror_checkpoint_from_a_running_loop(tmp_path: Path) -> None:
+    blob = BytesIO()
+    payload = b"kept\n"
+    with tarfile.open(fileobj=blob, mode="w") as archive:
+        info = tarfile.TarInfo(name="workspace/note.txt")
+        info.size = len(payload)
+        archive.addfile(info, BytesIO(payload))
+    packed = blob.getvalue()
+    host = SSHHost(spec=_spec(tmp_path), options={"host": "example.invalid"})
+    host._started = True
+    host._host = "remote.example"
+    host._remote_root = "/tmp/ageval-a"
+
+    async def fake_ssh(argv, *, timeout_sec):
+        del timeout_sec
+        assert argv[-2:] == ["pack", "/tmp/ageval-a/.ageval-state/delta.tar"]
+        return ExecResult(exit_code=0, stdout="")
+
+    async def fake_scp(source, dest, *, recursive):
+        del recursive
+        assert source == "remote.example:/tmp/ageval-a/.ageval-state/delta.tar"
+        Path(dest).write_bytes(packed)
+        return ExecResult(exit_code=0, stdout="")
+
+    host._ssh = fake_ssh  # type: ignore[method-assign]
+    host._scp = fake_scp  # type: ignore[method-assign]
+    box = tmp_path / "box"
+    box.mkdir()
+
+    async def on_loop() -> None:
+        host.mirror_checkpoint(box)
+
+    asyncio.run(on_loop())
+    assert (box / "workspace" / "note.txt").read_text(encoding="utf-8") == "kept\n"
+    assert not (box / ".ageval-state" / "delta.tar").exists()
 
 
 def test_e2b_attach_reuses_the_connected_sandbox(tmp_path: Path, monkeypatch) -> None:

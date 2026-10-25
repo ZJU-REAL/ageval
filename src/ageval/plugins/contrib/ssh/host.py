@@ -15,6 +15,7 @@ long-lived connection object to leak.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import contextlib
 import os
 import shlex
@@ -23,6 +24,7 @@ import threading
 import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
@@ -383,18 +385,17 @@ class SSHHost(BaseEnvironment):
     def mirror_checkpoint(self, dest: Path) -> None:
         if not self._started:
             return
+        _drive(self._pull_checkpoint(dest))
+
+    async def _pull_checkpoint(self, dest: Path) -> None:
         script = f"{self._remote_root}/.ageval-state/{CHECKPOINT_SYNC_NAME}"
         out = f"{self._remote_root}/.ageval-state/delta.tar"
-        packed = asyncio.run(
-            self._ssh(["python3", script, "pack", out], timeout_sec=120.0),
-        )
+        packed = await self._ssh(["python3", script, "pack", out], timeout_sec=120.0)
         if packed.exit_code != 0:
             return
         local = dest / ".ageval-state" / "delta.tar"
         local.parent.mkdir(parents=True, exist_ok=True)
-        fetched = asyncio.run(
-            self._scp(f"{self._target()}:{out}", str(local), recursive=False),
-        )
+        fetched = await self._scp(f"{self._target()}:{out}", str(local), recursive=False)
         if fetched.exit_code != 0 or not local.is_file():
             return
         apply_checkpoint_tar(dest, local.read_bytes())
@@ -588,6 +589,20 @@ class SSHHost(BaseEnvironment):
             raise EnvironmentFailure("environment_not_started", "ssh box is not started")
         if self._stopped:
             raise EnvironmentFailure("environment_stopped", "ssh box is already stopped")
+
+
+def _drive(coro: Any) -> Any:
+    """Run SSH I/O from ``capture_box``, which already sits on the Attempt loop.
+
+    ``asyncio.run`` on that loop raises ``RuntimeError``. A live loop therefore
+    gets a worker thread and its own loop; a sync caller still uses ``asyncio.run``.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 def _expand_option(raw: str | None, *, field: str) -> str | None:
