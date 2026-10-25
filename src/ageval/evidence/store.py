@@ -38,6 +38,8 @@ AGENT_BOX_REL = "box"
 EVALUATE_BOX_REL = "eval-box"
 TASK_ARTIFACTS_REL = "task-artifacts"
 VERIFIER_COLLECT_REL = "verifier-collect"
+ACTIVITY_LOG_REL = "activity.jsonl"
+CHECKPOINTS_DIR_REL = "checkpoints"
 
 
 def evaluate_box_rel(name: str | None = None) -> str:
