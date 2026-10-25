@@ -177,6 +177,58 @@ def test_terminus_compaction_drops_replaced_turns(tmp_path: Path) -> None:
     assert "old reply" not in seen
 
 
+def test_terminus_format_error_survives_resume(tmp_path: Path) -> None:
+    log = ActivityLog.open(tmp_path / "activity.jsonl")
+    scope = ActivityScope(log, session_id="sess", invoke_request_id="req")
+
+    def bad(messages):
+        del messages
+        return type("Reply", (), {"text": "not-json", "usage": {}})()
+
+    first = run_episode(
+        instruction="do it",
+        session=_session(_Host()),
+        model=bad,
+        parser="json",
+        step_limit=1,
+        max_format_errors=3,
+        timeout=10,
+        session_id="sess",
+        activity=scope,
+        reuse_session=False,
+    )
+    assert first.error == "terminus2_step_limit"
+    reasons = [
+        record.payload.get("stop_reason")
+        for record in scope.log.records
+        if record.kind == "model_turn" and record.status == "completed"
+    ]
+    assert reasons == ["format_error"]
+
+    calls = {"n": 0}
+
+    def again(messages):
+        calls["n"] += 1
+        assert "Could not parse" in str(messages[-1]["content"])
+        return type("Reply", (), {"text": "still-bad", "usage": {}})()
+
+    second = run_episode(
+        instruction="do it",
+        session=_session(_Host()),
+        model=again,
+        parser="json",
+        step_limit=4,
+        max_format_errors=2,
+        timeout=10,
+        session_id="sess",
+        activity=scope,
+        reuse_session=False,
+    )
+    assert calls["n"] == 1
+    assert second.error is not None
+    assert second.error.startswith("terminus2_format:")
+
+
 def test_terminus_reuses_live_tmux_session() -> None:
     host = _Host()
     session = _session(host)

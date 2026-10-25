@@ -28,9 +28,7 @@ _HELLO = json.dumps(
         "task_complete": False,
     }
 )
-_DONE = json.dumps(
-    {"analysis": "done", "plan": "stop", "commands": [], "task_complete": True}
-)
+_DONE = json.dumps({"analysis": "done", "plan": "stop", "commands": [], "task_complete": True})
 
 
 class _Gateway:
@@ -210,14 +208,30 @@ def _header_handle(attempt: Path) -> dict[str, Any]:
     return handle if isinstance(handle, dict) else {}
 
 
-def test_miniswe_resume_does_not_requery_finished_steps(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("AGEVAL_HOME", str(home))
-    _install(home, "miniswe")
-    dataset = tmp_path / "ds"
+def _miniswe_profiles(path: Path, *, environment: str, base_url: str) -> None:
+    path.write_text(
+        "\n".join(
+            [
+                "format: ageval.profiles/1",
+                f"environment: {environment}",
+                "agent_profiles:",
+                "  solver:",
+                "    executor: miniswe",
+                "    model: {id: mock, api: chat}",
+                f"    base_url: {base_url}",
+                "    api_key: ${OPENAI_API_KEY}",
+                "    extensions:",
+                "      - plugin: miniswe",
+                "        options: {stream: false, step_limit: 4}",
+                f"      - plugin: {environment}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_miniswe_dataset(dataset: Path) -> None:
     task = dataset / "tasks" / "write"
     task.mkdir(parents=True)
     (dataset / "ageval.yaml").write_text(
@@ -265,6 +279,20 @@ def test_miniswe_resume_does_not_requery_finished_steps(
         "    return {'status': 'PASS', 'score': 1.0, 'metrics': {}}\n",
         encoding="utf-8",
     )
+
+
+@pytest.mark.parametrize("environment", ["local", "docker"])
+def test_miniswe_resume_does_not_requery_finished_steps(
+    environment: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if environment == "docker" and not daemon_available():
+        pytest.skip("docker daemon is not reachable")
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("AGEVAL_HOME", str(home))
+    _install(home, "miniswe")
+    dataset = tmp_path / "ds"
+    _write_miniswe_dataset(dataset)
     gateway = _Gateway(
         [
             _bash("printf 'step-one\\n' > marker.txt", "call_1"),
@@ -274,31 +302,13 @@ def test_miniswe_resume_does_not_requery_finished_steps(
         block_after=2,
     )
     profiles = dataset / "profiles.yaml"
-    profiles.write_text(
-        "\n".join(
-            [
-                "format: ageval.profiles/1",
-                "environment: local",
-                "agent_profiles:",
-                "  solver:",
-                "    executor: miniswe",
-                "    model: {id: mock, api: chat}",
-                f"    base_url: {gateway.base}",
-                "    api_key: ${OPENAI_API_KEY}",
-                "    extensions:",
-                "      - plugin: miniswe",
-                "        options: {stream: false, step_limit: 4}",
-                "      - plugin: local",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
+    _miniswe_profiles(profiles, environment=environment, base_url=gateway.base)
     env = _env(home)
     try:
         attempt = _kill_when_holding(
             gateway, dataset, profiles, env, "write", tmp_path / "miniswe.err"
         )
+        before = _header_handle(attempt).get("container_id")
         gateway._release.set()
         assert len(gateway.prompts) == 2
         resumed = _ageval(
@@ -317,6 +327,68 @@ def test_miniswe_resume_does_not_requery_finished_steps(
         assert len(gateway.prompts) == 3
         assert "call_2" not in gateway.prompts[0]
         assert "call_2" in gateway.prompts[2]
+        if environment == "docker":
+            after = _header_handle(attempt).get("container_id")
+            assert before and before == after
+        result = json.loads((attempt / "result.json").read_text(encoding="utf-8"))
+        assert result["status"] == "PASS"
+        assert (attempt / "trajectory.jsonl").is_file()
+    finally:
+        gateway.close()
+
+
+@pytest.mark.skipif(not daemon_available(), reason="docker daemon is not available")
+def test_miniswe_resume_restores_checkpoint_after_container_removal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("AGEVAL_HOME", str(home))
+    _install(home, "miniswe")
+    dataset = tmp_path / "ds"
+    _write_miniswe_dataset(dataset)
+    submit = "grep step-two marker.txt >/dev/null && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
+    gateway = _Gateway(
+        [
+            _bash("printf 'step-one\\n' > marker.txt", "call_1"),
+            _bash("printf 'step-two\\n' >> marker.txt", "call_2"),
+            _bash(submit, "call_3"),
+        ],
+        block_after=2,
+    )
+    profiles = dataset / "profiles.yaml"
+    _miniswe_profiles(profiles, environment="docker", base_url=gateway.base)
+    env = _env(home)
+    try:
+        attempt = _kill_when_holding(
+            gateway, dataset, profiles, env, "write", tmp_path / "miniswe-rebuild.err"
+        )
+        container_id = str(_header_handle(attempt).get("container_id") or "")
+        gateway._release.set()
+        removed = subprocess.run(
+            ["docker", "rm", "-f", container_id],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert removed.returncode == 0, removed.stderr
+        resumed = _ageval(
+            env,
+            "run",
+            str(dataset),
+            "--task",
+            "write",
+            "--profiles",
+            str(profiles),
+            "--resume",
+            attempt.name,
+            cwd=dataset,
+        )
+        assert resumed.returncode == 0, (resumed.stdout, resumed.stderr)
+        assert len(gateway.prompts) == 3
+        assert "call_2" in gateway.prompts[2]
+        after = str(_header_handle(attempt).get("container_id") or "")
+        assert container_id and after and after != container_id
         result = json.loads((attempt / "result.json").read_text(encoding="utf-8"))
         assert result["status"] == "PASS"
         assert (attempt / "trajectory.jsonl").is_file()

@@ -43,7 +43,7 @@ def run_episode(
     """Drive one task. ``step_limit`` of 0 does not cap turns; ``timeout`` still does."""
     session.start(reuse=reuse_session)
     screen = session.capture()
-    restored = _restore_episode(activity)
+    restored = _restore_episode(activity, parser=parser)
     if restored is None:
         messages = [
             {"role": "system", "content": system_prompt(parser)},
@@ -96,11 +96,13 @@ def run_episode(
                 session_id=session_id,
                 turns=turns,
             )
-        text, reply_usage = _model_turn(activity, messages, model)
+        text, reply_usage, step = _model_turn(activity, messages, model)
         turns += 1
         replies.append(text)
         _merge_usage(usage, reply_usage)
         parsed = parse_response(text, parser=parser)
+        reason = "format_error" if parsed.error else "stop"
+        _seal_model_turn(activity, step, text, reply_usage, reason)
         if parsed.error:
             format_errors += 1
             messages.append({"role": "assistant", "content": text})
@@ -154,7 +156,7 @@ def _model_turn(
     activity: Any,
     messages: list[dict[str, Any]],
     model: ModelCall,
-) -> tuple[str, object]:
+) -> tuple[str, object, int | None]:
     scope = (
         activity
         if activity is not None and hasattr(activity, "record_model_turn_in_flight")
@@ -162,7 +164,8 @@ def _model_turn(
     )
     if scope is None:
         reply = model(messages)
-        return str(getattr(reply, "text", "") or ""), getattr(reply, "usage", None)
+        text = str(getattr(reply, "text", "") or "")
+        return text, getattr(reply, "usage", None), None
     from ageval.plugins.step_activity import next_step
 
     step = next_step(scope)
@@ -175,18 +178,30 @@ def _model_turn(
         scope.record_model_turn_aborted(step, reason="process_interrupted")
         raise
     text = str(getattr(reply, "text", "") or "")
-    usage = getattr(reply, "usage", None)
-    scope.record_model_turn_completed(
+    return text, getattr(reply, "usage", None), step
+
+
+def _seal_model_turn(
+    activity: Any,
+    step: int | None,
+    text: str,
+    usage: object,
+    stop_reason: str,
+) -> None:
+    if step is None or activity is None or not hasattr(activity, "record_model_turn_completed"):
+        return
+    activity.record_model_turn_completed(
         step,
         assistant_text=text,
         usage=usage if isinstance(usage, dict) else None,
-        stop_reason="stop",
+        stop_reason=stop_reason,
     )
-    return text, usage
 
 
 def _restore_episode(
     activity: Any,
+    *,
+    parser: str,
 ) -> tuple[list[dict[str, Any]], int, int, dict[str, int]] | None:
     if activity is None or not hasattr(activity, "log"):
         return None
@@ -217,6 +232,10 @@ def _restore_episode(
             _merge_usage(usage, raw_usage)
             if record.payload.get("stop_reason") == "format_error":
                 format_errors += 1
+                assistant = str(record.payload.get("assistant_text") or "")
+                repair = _format_repair_for(assistant, parser)
+                if repair:
+                    messages.append({"role": "user", "content": repair})
             else:
                 format_errors = 0
         elif record.kind == "tool_call" and messages is not None:
@@ -226,6 +245,13 @@ def _restore_episode(
     if messages is None or (not turns and not summary):
         return None
     return messages, turns, format_errors, usage
+
+
+def _format_repair_for(text: str, parser: str) -> str:
+    parsed = parse_response(text, parser=parser)
+    if not parsed.error:
+        return ""
+    return format_repair(parsed.error, parser=parser)
 
 
 def _compaction_floor(records: list[Any], invoke_id: str) -> tuple[int, list[dict[str, Any]]]:
