@@ -151,7 +151,8 @@ All settled Attempt directories (`.ageval/runs/<attempt_id>/` containing `result
 
 | Operation | CLI Invocation | Identity Behavior | Execution Semantics |
 | --- | --- | --- | --- |
-| **Resume suite** | `ageval run <dataset> --resume-suite <suite_run_id>` | Keeps `suite_run_id` | Skips slots that already have a settled `result.json` (`PASS`, `FAIL`, or `ERROR`). Runs only missing slots or `suite_cancelled` placeholders. |
+| **Resume suite** | `ageval run <dataset> --resume-suite <suite_run_id>` | Keeps `suite_run_id`. Reuses an unsealed Attempt whose `activity.jsonl` header matches `(suite_run_id, task_id, attempt_index)` and `locked_config_digest`. | Skips slots that already have a settled `result.json` (`PASS`, `FAIL`, or `ERROR`). Recovers a matching unsealed Attempt in place. A slot with no activity header, or a digest mismatch, mints a new Attempt. `suite_cancelled` placeholders still run. |
+| **Resume Attempt** | `ageval run <dataset> --task <id> --resume <attempt_id>` | Keeps that `attempt_id` | Recovers one unsealed directory in place. Exit `2` with no new `result.json` when `result.json` already exists, the lock digest does not match, or the environment stays `busy`. |
 | **Retry errors** | `ageval run <dataset> --resume-suite <id> --retry-errors` | Keeps `suite_run_id`; mints **new** Attempt per retried slot | Re-runs slots whose current status is `ERROR` (`PASS` and `FAIL` remain skipped). Moves the old Attempt reference into `previous[]` on the slot. |
 | **Replace slot** | `ageval run <dataset> --resume-suite <id> --task <t> --replace-slot` | Keeps `suite_run_id`; mints **new** Attempt for target slot | Re-runs the targeted `(task_id, attempt_index)` slot regardless of prior status (`PASS`, `FAIL`, or `ERROR`) and moves the prior Attempt into `previous[]`. |
 | **Regrade** | `ageval results regrade <dataset> --run <attempt_id>` | Mints **new** Attempt | Skips `run` (`run.py`, solver sessions, and `evaluation.collect` commands do not run). Copies archived `task-artifacts/` and `verifier-collect/` from the source Attempt into a fresh scoring environment and runs `evaluate → record → cleanup`. |
@@ -197,3 +198,7 @@ During `regrade`, if the source Attempt is missing declared publishable artifact
 | `evaluator.py` returns status other than `PASS` or `FAIL` | `ERROR` | `"evaluate"` | `evaluator_invalid_status` | `evaluation/` |
 | `evaluator.py` raises an unhandled exception | `ERROR` | `"evaluate"` | `ScriptError.title` or exception class name | `evaluation/` |
 | `host.stop` fails during `cleanup` | *(unchanged)* | *(unchanged)* | Recorded as `cleanup_warning` fact in `summary.json`; does not overwrite bound `Result` | `attempt/phases/cleanup.py` |
+| Middle line of `activity.jsonl` is not valid | `ERROR` | `"run"` | `activity_log_corrupt` | `evidence/` |
+| Restarted `run.py` sends a different prompt for a logged `request_id` | `ERROR` | `"run"` | `session_alignment_mismatch` | `runtime/` |
+| Cold rebuild or checkpoint restore fails | `ERROR` | `"environment"` | `recovery_rebuild_failed` | `attempt/` |
+| `--resume` finds a settled Attempt, a digest mismatch, or a still-busy environment | *(unchanged or no Attempt)* | — | Exit `2`; `attempt_already_settled`, `locked_config_mismatch`, or `attempt_still_busy` does not write `result.json` | `application/` |

@@ -102,6 +102,7 @@ All four harnesses implement the `executor` exclusive slot and reference credent
 1. **`openai-http` and `anthropic-http`**:
    - `openai-http` supports `api: chat` (`/chat/completions`, top-level `reasoning_effort`) and `api: responses` (`/responses`, nested `reasoning.effort` and flat function tool declarations), and never falls back from `responses` to `chat` on error.
    - `anthropic-http` implements `POST /messages` (`api: chat` only), converting OpenAI-shaped `tools` and `messages` into Anthropic `input_schema`, `tool_use`, and `tool_result` blocks, and supports `model.extra.thinking`.
+   - Both HTTP executors accept `bind_activity`. Each model call is bracketed in `activity.jsonl` as a `model_turn`. When the caller omits `messages`, the next request is projected from that session's completed turns, skipping history replaced by a `compaction` record.
 2. **BYOK, BYOA (`keyless_auth`), and Loopback rules**:
    - **BYOK**: Projects allowlisted credential environment variables (`credential_env_names` and profile `api_key` locator) into the authorized child environment; missing credentials fail fast during `preflight` or `invoke`.
    - **BYOA (`keyless_auth`)**: Copies allowlisted host subscription files (`keyless_auth_paths` under declared `home_dirs`) into `/attempt/home` without mounting the host `$HOME`.

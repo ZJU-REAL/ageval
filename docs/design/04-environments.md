@@ -58,6 +58,10 @@ All environment plugins subclass `BaseEnvironment` and register via `@environmen
 
 ---
 
+### Probe, attach, and `/attempt/.ageval-state`
+
+`local` and `docker` implement `runtime_handle()`, `probe(handle)`, and `attach(handle)`. `probe` returns `absent`, `idle`, or `busy` from the box directory (and, for docker, from whether that container is still running) plus `/attempt/.ageval-state/{nonce,cursor.json,inflight.pid,last_exit.json}`. Recovery reuses an `idle` box whose nonce and cursor match the activity log. A missing or diverged box is started again and restored from `checkpoints/`. Other environment kinds still answer `probe` as `absent` until they implement the same contract.
+
 ## 2. Environment Kinds and Capability Matrix
 
 Task `requires.environment` defaults to `[]`. When non-empty, `ageval lock` verifies `requires.environment ⊆ capabilities` (and verifies plugin `inject` capability requirements against the same table), failing fast with `capability_missing` if any required capability is absent.

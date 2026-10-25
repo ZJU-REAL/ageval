@@ -52,7 +52,7 @@ from ageval_sdk import (
 
 ### 2.1 Structured tool calling (`tools` and `messages`) and `record_observation`
 
-`AgentSession.invoke(prompt, *, tools=None, messages=None)` supports both plain-text instruction turns and multi-turn structured tool-calling loops:
+`AgentSession.invoke(prompt, *, tools=None, messages=None, request_id=None)` supports both plain-text instruction turns and multi-turn structured tool-calling loops. Session ids are `sess_{profile}_{actor|default}_{environment|main}_{ordinal}` and request ids are `req_{session_id}_turn_{n}` unless the caller passes `request_id`. A restarted `run.py` therefore hits the same ids; a completed invoke returns the logged result, and a conflicting prompt for that id fails the Attempt as `session_alignment_mismatch`.
 
 ```python
 reply = await session.invoke(instruction, tools=OPENAI_TOOLS, messages=history)

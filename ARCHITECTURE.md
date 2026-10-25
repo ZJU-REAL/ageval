@@ -214,7 +214,7 @@ During a production Attempt, `application/run.py` mints run identity once and in
 | `config/` | Dataset resolution, `task.yaml` / `profiles.yaml` validation, lock digest, Harbor `task.toml` intake | Executing `run.py` or `evaluator.py` |
 | `harbor/` | Built-in Harbor instruction handoff and reward verdict | Environment lifecycle, docker CLI |
 | `attempt/` | Fixed phase sequence, `emit` chain dispatch, `AttemptCtx` | Vendor SDKs, `container_id` |
-| `environments/` | `EnvironmentProvider` protocol, capability flags, stdio stream types | Importing `e2b`, `docker`, or `paramiko` |
+| `environments/` | `EnvironmentProvider` protocol, capability flags, stdio stream types, `probe` / `attach` | Importing `e2b`, `docker`, or `paramiko` |
 | `plugins/contrib/docker/` | `docker exec`, compose, UID/GID, image build; `attempt/` official base recipe | ACP protocol handling |
 | `plugins/contrib/e2b/` | E2B SDK integration and template caching | Core-level template caching |
 | `plugins/contrib/ssh/` | SSH Modes A and B (`ssh -T` / remote `docker exec`) | In-process fake agents |
@@ -222,7 +222,7 @@ During a production Attempt, `application/run.py` mints run identity once and in
 | `plugins/defaults/` | `environment_setup` (`setup.sh`), default `evaluation_runtime` and `trajectory_seal` implementations | Issuing `PASS` directly |
 | `runtime/` | Run identity, parent Agent Service, subprocess worker launchers, clocks/quotas | Environment plugin internals, scoring criteria |
 | `evaluation/` | Phase barrier, subprocess evaluator execution, `bind_evaluation` | Task-specific scoring formulas |
-| `evidence/` | Evidence directory layout, secret redaction, `trajectory.jsonl` sealing, document schemas | Vendor protocol parsing, `PASS` verdicts |
+| `evidence/` | Evidence directory layout, secret redaction, `activity.jsonl`, `checkpoints/`, `trajectory.jsonl` sealing, document schemas | Vendor protocol parsing, `PASS` verdicts |
 | `registry/` + `services/registry/` | Package and result HTTP client/server | Issuing `PASS`; exposing storage credentials to clients |
 | `ageval_sdk` | Task-script types and session/tool helpers | Control-plane internals, `PASS` verdicts |
 | `examples/` | Reference datasets and agent packages for smoke/regression checks | Full upstream benchmark distributions |
