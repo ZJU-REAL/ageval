@@ -301,7 +301,7 @@ def main() -> int:
 
 
 def _emit_step(row: dict[str, Any]) -> None:
-    path = Path("/attempt/.ageval-state/steps.jsonl")
+    path = Path("/tmp/.ageval-state/steps.jsonl")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:

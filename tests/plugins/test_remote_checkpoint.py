@@ -56,6 +56,7 @@ def test_checkpoint_script_packs_only_changed_files(tmp_path: Path) -> None:
     script.write_text(CHECKPOINT_SYNC_SCRIPT, encoding="utf-8")
     env = os.environ.copy()
     env["AGEVAL_BOX_ROOT"] = str(root)
+    env["AGEVAL_STATE_DIR"] = str(root / "state")
     out = tmp_path / "delta.tar"
     first = subprocess.run(
         [sys.executable, str(script), "pack", str(out)],
@@ -92,7 +93,7 @@ def test_remote_probe_without_a_handle_is_absent(tmp_path: Path) -> None:
 
 def test_dead_inflight_pid_is_idle_and_keeps_last_exit(tmp_path: Path) -> None:
     root = tmp_path / "attempt"
-    state = root / ".ageval-state"
+    state = root / "state"
     state.mkdir(parents=True)
     (state / "nonce").write_text("nce_9", encoding="utf-8")
     (state / "inflight.pid").write_text("99999999\n", encoding="utf-8")
@@ -105,6 +106,7 @@ def test_dead_inflight_pid_is_idle_and_keeps_last_exit(tmp_path: Path) -> None:
     script.write_text(CHECKPOINT_SYNC_SCRIPT, encoding="utf-8")
     env = os.environ.copy()
     env["AGEVAL_BOX_ROOT"] = str(root)
+    env["AGEVAL_STATE_DIR"] = str(root / "state")
     dumped = subprocess.run(
         [sys.executable, str(script), "dump"],
         check=False,
@@ -174,12 +176,12 @@ def test_ssh_mirror_checkpoint_from_a_running_loop(tmp_path: Path) -> None:
 
     async def fake_ssh(argv, *, timeout_sec):
         del timeout_sec
-        assert argv[-2:] == ["pack", "/tmp/ageval-a/.ageval-state/delta.tar"]
+        assert argv[-2:] == ["pack", "/tmp/.ageval-state/delta.tar"]
         return ExecResult(exit_code=0, stdout="")
 
     async def fake_scp(source, dest, *, recursive):
         del recursive
-        assert source == "remote.example:/tmp/ageval-a/.ageval-state/delta.tar"
+        assert source == "remote.example:/tmp/.ageval-state/delta.tar"
         Path(dest).write_bytes(packed)
         return ExecResult(exit_code=0, stdout="")
 
@@ -193,7 +195,7 @@ def test_ssh_mirror_checkpoint_from_a_running_loop(tmp_path: Path) -> None:
 
     asyncio.run(on_loop())
     assert (box / "workspace" / "note.txt").read_text(encoding="utf-8") == "kept\n"
-    assert not (box / ".ageval-state" / "delta.tar").exists()
+    assert not (box / "delta.tar").exists()
 
 
 def test_e2b_attach_reuses_the_connected_sandbox(tmp_path: Path, monkeypatch) -> None:
@@ -284,8 +286,9 @@ def test_push_restored_tree_uploads_workspace_and_state(tmp_path: Path) -> None:
     box = tmp_path / "box"
     (box / "workspace").mkdir(parents=True)
     (box / "workspace" / "note.txt").write_text("kept\n", encoding="utf-8")
-    (box / ".ageval-state").mkdir()
-    (box / ".ageval-state" / "nonce").write_text("nce\n", encoding="utf-8")
+    state = box.parent / "state"
+    state.mkdir()
+    (state / "nonce").write_text("nce\n", encoding="utf-8")
     seen: list[tuple[Path, str]] = []
 
     class Host:
@@ -295,13 +298,14 @@ def test_push_restored_tree_uploads_workspace_and_state(tmp_path: Path) -> None:
 
     asyncio.run(push_restored_tree(Host(), box))
     assert (box / "workspace", "/attempt/workspace") in seen
-    assert (box / ".ageval-state", "/attempt/.ageval-state") in seen
+    assert (state, "/tmp/.ageval-state") in seen
 
 
 def test_e2b_attempt_tree_is_writable_by_the_sandbox_user() -> None:
     command = attempt_tree_command()
-    assert "chmod -R a+rwx /attempt" in command
-    assert "sudo chmod -R a+rwx /attempt" in command
+    assert "/tmp/.ageval-state" in command
+    assert "chmod -R a+rwx /attempt &&" not in command
+    assert "chmod -R a+rwx /attempt)" not in command
 
 
 def test_activity_usage_seals_reported_counts_and_keeps_absence() -> None:
@@ -344,8 +348,8 @@ def test_capture_box_creates_a_remote_tree_and_syncs_the_cursor(tmp_path: Path) 
         def mirror_checkpoint(self, dest: Path) -> None:
             mirrored.append(dest)
 
-        def sync_box_state(self, box: Path) -> None:
-            synced.append((box / ".ageval-state" / "cursor.json").is_file())
+        def sync_box_state(self, state: Path) -> None:
+            synced.append((state / "cursor.json").is_file())
 
         def runtime_handle(self) -> dict[str, str]:
             return {"sandbox_id": "sbx"}
@@ -355,6 +359,6 @@ def test_capture_box_creates_a_remote_tree_and_syncs_the_cursor(tmp_path: Path) 
     assert mirrored and mirrored[0].is_dir()
     assert synced == [True]
     publish_environment_handle(ctx)
-    nonce = tmp_path / "box" / ".ageval-state" / "nonce"
+    nonce = tmp_path / "state" / "nonce"
     assert nonce.read_text(encoding="utf-8") == "nce_9"
     assert len(synced) == 2

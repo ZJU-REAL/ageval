@@ -58,9 +58,9 @@ All environment plugins subclass `BaseEnvironment` and register via `@environmen
 
 ---
 
-### Probe, attach, and `/attempt/.ageval-state`
+### Probe, attach, and `/tmp/.ageval-state`
 
-Every environment kind implements `runtime_handle()`, `probe(handle)`, and `attach(handle)`. `probe` returns `absent`, `idle`, or `busy`. `local` and `docker` read that from the bind-mounted box and, for docker, from whether the container is still running. `e2b`, `daytona`, and `ssh` reconnect to the handle, then read the same `/attempt/.ageval-state/{nonce,cursor.json,inflight.pid,last_exit.json}` files. Those three kinds also run `/attempt/.ageval-state/checkpoint_sync.py` to download a delta of `/attempt/{workspace,home,artifacts}` into the parent checkpoint. Recovery reuses an `idle` environment whose nonce and cursor match the activity log. A missing or diverged environment is started again and restored from `checkpoints/`. Live cloud probes are skipped when credentials are absent.
+Every environment kind implements `runtime_handle()`, `probe(handle)`, and `attach(handle)`. `probe` returns `absent`, `idle`, or `busy`. Recovery files live at `/tmp/.ageval-state` inside the environment, not under `/attempt`, so the evaluated agent does not see the nonce, cursor, or checkpoint helper. On `local` and `docker` the same files are the host directory `<attempt>/state`, beside the bind-mounted box; docker mounts that directory at `/tmp/.ageval-state`. `e2b`, `daytona`, and `ssh` reconnect to the handle, then read `/tmp/.ageval-state/{nonce,cursor.json,inflight.pid,last_exit.json}`. Those three kinds also run `/tmp/.ageval-state/checkpoint_sync.py` to download a delta of `/attempt/{workspace,home,artifacts}` into the parent checkpoint. Recovery reuses an `idle` environment whose nonce and cursor match the activity log. A missing or diverged environment is started again and restored from `checkpoints/`. Live cloud probes are skipped when credentials are absent.
 
 ## 2. Environment Kinds and Capability Matrix
 

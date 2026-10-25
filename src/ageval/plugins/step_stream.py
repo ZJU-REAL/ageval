@@ -11,16 +11,15 @@ from typing import Any
 
 from ageval.environments.protocol import EnvironmentFailure
 
-STEP_REL = Path(".ageval-state") / "steps.jsonl"
-_REMOTE_STEPS = "/attempt/.ageval-state/steps.jsonl"
+_REMOTE_STEPS = "/tmp/.ageval-state/steps.jsonl"
 _REPLAY_SAFE = frozenset({"read", "search", "think", "fetch"})
 
 
 def step_log(host: Any) -> Path | None:
-    """Local steps file. Bind-mounted hosts use ``root``; others use ``step_mirror``."""
-    root = getattr(host, "root", None)
-    if isinstance(root, Path):
-        return root / STEP_REL
+    """Local steps file. Bind-mounted state lives in ``state_root``."""
+    state = getattr(host, "state_root", None)
+    if isinstance(state, Path):
+        return state / "steps.jsonl"
     mirror = getattr(host, "step_mirror", None)
     if isinstance(mirror, Path):
         return mirror

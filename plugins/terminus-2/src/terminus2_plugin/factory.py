@@ -185,13 +185,17 @@ class Terminus2ExecutorSPI(BaseExecutor):
         usage = adopt_usage(episode.usage or None)
         if usage is NOT_REPORTED and not episode.usage:
             usage = NOT_REPORTED
+        from ageval.plugins.activity_events import prior_activity_events
+
+        fresh = tuple(episode.events)
+        events = tuple(prior_activity_events(getattr(self, "activity", None), fresh))
         return AgentResult(
             model=self.model,
             text=episode.text,
             structured=None,
             ok=episode.ok,
             error=episode.error,
-            events=episode.events,
+            events=events,
             usage=usage,
             repeatable=not episode.keys_sent,
             metadata=self._metadata(turns=episode.raw.get("turns")),

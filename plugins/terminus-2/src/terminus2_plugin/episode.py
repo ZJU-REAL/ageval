@@ -126,7 +126,9 @@ def run_episode(
         _begin_tmux(activity, parsed, call_id)
         session.exec_request_id = _exec_request(activity, call_id)
         try:
-            applied = _apply_commands(parsed, session=session, records=records)
+            applied = _apply_commands(
+                parsed, session=session, records=records, tool_call_id=call_id
+            )
         finally:
             session.exec_request_id = None
         if applied:
@@ -328,6 +330,7 @@ def _apply_commands(
     *,
     session: TmuxSession,
     records: list[dict[str, Any]],
+    tool_call_id: str,
 ) -> bool:
     sent = False
     for index, command in enumerate(parsed.commands):
@@ -337,6 +340,7 @@ def _apply_commands(
             {
                 "analysis": parsed.analysis if index == 0 else "",
                 "plan": parsed.plan if index == 0 else "",
+                "tool_call_id": tool_call_id,
                 "keystrokes": command.keystrokes,
                 "duration": command.duration,
                 "completed": completed,

@@ -171,7 +171,7 @@ def test_worker_steps_are_logged_before_exec_returns(tmp_path: Path) -> None:
 
     async def exec(command: list[str], **kwargs: object) -> ExecResult:
         del command, kwargs
-        path = host.root / ".ageval-state" / "steps.jsonl"
+        path = host.state_root / "steps.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             json.dumps(
@@ -303,6 +303,93 @@ def test_box_executors_forward_activity_to_the_worker() -> None:
         cls.bind_activity(spi, scope)
         assert spi.activity is scope
         assert spi._box.activity is scope
+
+
+def test_prior_activity_events_keep_steps_missing_from_the_fresh_stream(tmp_path: Path) -> None:
+    from ageval.plugins.activity_events import prior_activity_events
+
+    scope = _scope(tmp_path)
+    scope.record_model_turn_in_flight(1, [])
+    scope.record_model_turn_completed(1, assistant_text="first thought about the tree")
+    scope.record_tool_call_in_flight("old_tool", "bash", "execute", {"command": "ls"})
+    scope.record_tool_call_completed("old_tool", outcome="ok", exit_code=0, content="listed")
+    scope.record_model_turn_in_flight(2, [])
+    scope.record_model_turn_completed(2, assistant_text="after resume the agent continues")
+    scope.record_tool_call_in_flight("new_tool", "bash", "execute", {"command": "cat"})
+    scope.record_tool_call_completed("new_tool", outcome="ok", exit_code=0, content="file")
+    fresh = (
+        {
+            "schema": "ageval.trajectory.event/1",
+            "kind": "text",
+            "channel": "assistant",
+            "text": "after resume the agent continues",
+        },
+        {
+            "schema": "ageval.trajectory.event/1",
+            "kind": "tool",
+            "phase": "update",
+            "tool_call_id": "new_tool",
+        },
+    )
+    merged = prior_activity_events(scope, fresh)
+    ids = [event.get("tool_call_id") for event in merged if event.get("kind") == "tool"]
+    assert ids == ["old_tool", "old_tool", "new_tool"]
+    assert any(event.get("text") == "first thought about the tree" for event in merged)
+    assert [event.get("text") for event in merged].count("after resume the agent continues") == 1
+
+
+def test_prior_activity_events_keep_tools_that_follow_their_model_turn(tmp_path: Path) -> None:
+    from ageval.plugins.activity_events import prior_activity_events
+
+    scope = _scope(tmp_path)
+    scope.record_model_turn_in_flight(1, [])
+    scope.record_model_turn_completed(1, assistant_text="plan the first commands")
+    scope.record_tool_call_in_flight("exec-before", "bash", "execute", {"command": "ls"})
+    scope.record_tool_call_completed("exec-before", outcome="ok", exit_code=0, content="listed")
+    scope.record_tool_call_in_flight("exec-after", "bash", "execute", {"command": "cat"})
+    scope.record_tool_call_completed("exec-after", outcome="ok", exit_code=0, content="file")
+    fresh = (
+        {
+            "schema": "ageval.trajectory.event/1",
+            "kind": "tool",
+            "phase": "start",
+            "tool_call_id": "exec-after",
+        },
+    )
+    merged = prior_activity_events(scope, fresh)
+    ids = [event.get("tool_call_id") for event in merged if event.get("kind") == "tool"]
+    assert ids == ["exec-before", "exec-before", "exec-after"]
+    assert any(event.get("text") == "plan the first commands" for event in merged)
+
+
+def test_prior_activity_events_fill_tools_the_fresh_stream_skipped(tmp_path: Path) -> None:
+    from ageval.plugins.activity_events import prior_activity_events
+
+    scope = _scope(tmp_path)
+    for call_id in ("keep", "gap", "again"):
+        scope.record_tool_call_in_flight(call_id, "bash", "execute", {"command": call_id})
+        scope.record_tool_call_completed(call_id, outcome="ok", exit_code=0, content=call_id)
+    fresh = (
+        {
+            "schema": "ageval.trajectory.event/1",
+            "kind": "tool",
+            "phase": "update",
+            "source": "openhands",
+            "tool_call_id": "keep",
+        },
+        {
+            "schema": "ageval.trajectory.event/1",
+            "kind": "tool",
+            "phase": "update",
+            "source": "openhands",
+            "tool_call_id": "again",
+        },
+    )
+    merged = prior_activity_events(scope, fresh)
+    ids = [event.get("tool_call_id") for event in merged if event.get("kind") == "tool"]
+    assert ids == ["keep", "gap", "gap", "again"]
+    gap = [event for event in merged if event.get("tool_call_id") == "gap"]
+    assert gap[0]["source"] == "activity"
 
 
 def test_apply_update_records_compaction(tmp_path: Path) -> None:

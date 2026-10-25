@@ -40,7 +40,9 @@ async def _finish_rebuild(ctx: AttemptCtx) -> None:
         seq = log.last_checkpoint_seq()
         if seq is not None:
             restore_checkpoint(ctx, seq)
-            write_cursor(ctx.evidence.path(AGENT_BOX_REL), seq=seq, request_id=f"seq_{seq}")
+            from ageval.attempt.recover import attempt_state_dir
+
+            write_cursor(attempt_state_dir(ctx), seq=seq, request_id=f"seq_{seq}")
         push = getattr(ctx.host, "push_restored_box", None)
         if callable(push):
             await push(ctx.evidence.path(AGENT_BOX_REL))

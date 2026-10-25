@@ -109,9 +109,21 @@ def load_activity(attempt_dir: Path) -> ActivityLog:
 
 def ensure_local_box(box: Path) -> Path:
     """Create the host-side attempt tree. Remote kinds do not bind-mount it."""
-    for name in ("workspace", "home", "artifacts", ".ageval-state"):
+    for name in ("workspace", "home", "artifacts"):
         (box / name).mkdir(parents=True, exist_ok=True)
     return box
+
+
+def attempt_state_dir(ctx: Any) -> Path:
+    """Recovery files beside the box, not inside the tree the agent lists."""
+    host = getattr(ctx, "host", None)
+    rooted = getattr(host, "state_root", None)
+    if isinstance(rooted, Path):
+        rooted.mkdir(parents=True, exist_ok=True)
+        return rooted
+    path = Path(ctx.evidence.root) / "state"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def capture_box(ctx: Any, seq: int) -> int | None:
@@ -126,8 +138,9 @@ def capture_box(ctx: Any, seq: int) -> int | None:
     if callable(mirror):
         mirror(box)
     store.capture(seq)
-    write_cursor(box, seq=seq, request_id=f"seq_{seq}")
-    _sync_remote_state(ctx.host, box)
+    state = attempt_state_dir(ctx)
+    write_cursor(state, seq=seq, request_id=f"seq_{seq}")
+    _sync_remote_state(ctx.host, state)
     return seq
 
 
@@ -140,10 +153,11 @@ def publish_environment_handle(ctx: Any) -> None:
     if header is None:
         return
     nonce = header.payload.get("environment_nonce")
-    box = ensure_local_box(ctx.evidence.path(AGENT_BOX_REL))
+    ensure_local_box(ctx.evidence.path(AGENT_BOX_REL))
     if isinstance(nonce, str) and nonce:
-        write_nonce(box, nonce)
-        _sync_remote_state(ctx.host, box)
+        state = attempt_state_dir(ctx)
+        write_nonce(state, nonce)
+        _sync_remote_state(ctx.host, state)
     handle_fn = getattr(ctx.host, "runtime_handle", None)
     handle = handle_fn() if callable(handle_fn) else {}
     if not isinstance(handle, dict):
@@ -151,18 +165,13 @@ def publish_environment_handle(ctx: Any) -> None:
     log.update_attempt_header(environment_handle=handle or None)
 
 
-def _sync_remote_state(host: Any, box: Path) -> None:
-    """Push nonce and cursor into a sandbox that does not bind-mount ``box``."""
-    root = getattr(host, "root", None)
-    if isinstance(root, Path):
-        try:
-            if root.resolve() == box.resolve():
-                return
-        except OSError:
-            return
+def _sync_remote_state(host: Any, state: Path) -> None:
+    """Push nonce and cursor into a sandbox that does not mount ``state``."""
+    if isinstance(getattr(host, "state_root", None), Path):
+        return
     sync = getattr(host, "sync_box_state", None)
     if callable(sync):
-        sync(box)
+        sync(state)
 
 
 def restore_checkpoint(ctx: Any, seq: int) -> None:
@@ -271,10 +280,7 @@ async def _stop_old_handle(header: ActivityRecord, handle: dict[str, Any]) -> No
 
 
 def partial_output(ctx: Any) -> str | None:
-    box = ctx.evidence.path(AGENT_BOX_REL)
-    if not box.is_dir():
-        return None
-    return read_partial_output(box)
+    return read_partial_output(attempt_state_dir(ctx))
 
 
 def _set_reattached(host: Any, value: bool) -> None:

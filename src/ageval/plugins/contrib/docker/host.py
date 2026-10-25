@@ -23,7 +23,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 
-from ageval.environments.box_state import probe_box, write_last_exit
+from ageval.environments.box_state import ENV_STATE_DIR, host_state_dir, probe_box, write_last_exit
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
     EVALUATION_PATH,
@@ -286,7 +286,11 @@ class DockerHost(BaseEnvironment):
         cid = str(handle.get("container_id") or "").strip()
         if not cid or not _container_running(cid):
             return ProbeStatus(status="absent")
-        return probe_box(self._root, pid_alive=lambda pid: _pid_in_container(cid, pid))
+        return probe_box(
+            self._root,
+            pid_alive=lambda pid: _pid_in_container(cid, pid),
+            state=self.state_root,
+        )
 
     async def attach(self, handle: Mapping[str, object]) -> None:
         cid = str(handle.get("container_id") or "").strip()
@@ -300,6 +304,7 @@ class DockerHost(BaseEnvironment):
         self._root.mkdir(parents=True, exist_ok=True)
         for rel in ("workspace", "home", "artifacts"):
             (self._root / rel).mkdir(parents=True, exist_ok=True)
+        self.state_root.mkdir(parents=True, exist_ok=True)
         self._started = True
         self._stopped = False
         self.reattached = True
@@ -341,7 +346,7 @@ class DockerHost(BaseEnvironment):
         if request_id:
             from ageval.environments.box_state import INFLIGHT_OUTPUT_NAME, ensure_state_dir
 
-            folder = ensure_state_dir(self._root)
+            folder = ensure_state_dir(self.state_root)
             (folder / INFLIGHT_OUTPUT_NAME).write_text(
                 f"{result.stdout}{result.stderr}",
                 encoding="utf-8",
@@ -458,9 +463,22 @@ class DockerHost(BaseEnvironment):
     def root(self) -> Path:
         return self._root
 
+    @property
+    def state_root(self) -> Path:
+        return host_state_dir(self._root)
+
     def _volume_flags(self) -> list[str]:
-        """Bind mounts. Never the docker daemon socket."""
-        return ["-v", f"{self._root}:{BOX_ROOT}"]
+        """Bind mounts. Never the docker daemon socket.
+
+        Recovery files are mounted at ``/tmp/.ageval-state``, outside ``/attempt``.
+        """
+        self.state_root.mkdir(parents=True, exist_ok=True)
+        return [
+            "-v",
+            f"{self._root}:{BOX_ROOT}",
+            "-v",
+            f"{self.state_root}:{ENV_STATE_DIR}",
+        ]
 
     def _start_egress_proxy(self) -> list[str]:
         if self._egress != "llm":
@@ -887,9 +905,9 @@ def copy_bind_tree(src: Path, dest: Path) -> None:
 
 def _exec_pid_wrapper(argv: list[str]) -> list[str]:
     script = (
-        "mkdir -p /attempt/.ageval-state; "
-        "echo $$ > /attempt/.ageval-state/inflight.pid; "
-        'printf %s "$AGEVAL_EXEC_REQUEST" > /attempt/.ageval-state/inflight.request; '
+        "mkdir -p /tmp/.ageval-state; "
+        "echo $$ > /tmp/.ageval-state/inflight.pid; "
+        'printf %s "$AGEVAL_EXEC_REQUEST" > /tmp/.ageval-state/inflight.request; '
         'exec "$@"'
     )
     return ["sh", "-c", script, "ageval-exec", *argv]

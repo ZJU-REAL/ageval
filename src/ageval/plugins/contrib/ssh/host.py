@@ -351,11 +351,7 @@ class SSHHost(BaseEnvironment):
         raw_container = handle.get("container_id")
         self._container = str(raw_container) if raw_container else None
         try:
-            script = f"{root}/.ageval-state/{CHECKPOINT_SYNC_NAME}"
-            result = await self._ssh(
-                ["python3", script, "dump"],
-                timeout_sec=30.0,
-            )
+            result = await self._ssh(self._state_argv("dump"), timeout_sec=30.0)
         except Exception:  # noqa: BLE001 — an unreachable host is absent
             result = None
         self._host, self._user, self._port, self._remote_root, self._container = previous
@@ -400,12 +396,11 @@ class SSHHost(BaseEnvironment):
         _drive(self._pull_checkpoint(dest))
 
     async def _pull_checkpoint(self, dest: Path) -> None:
-        script = f"{self._remote_root}/.ageval-state/{CHECKPOINT_SYNC_NAME}"
-        out = f"{self._remote_root}/.ageval-state/delta.tar"
-        packed = await self._ssh(["python3", script, "pack", out], timeout_sec=120.0)
+        out = "/tmp/.ageval-state/delta.tar"
+        packed = await self._ssh(self._state_argv("pack", out), timeout_sec=120.0)
         if packed.exit_code != 0:
             return
-        local = dest / ".ageval-state" / "delta.tar"
+        local = dest / "delta.tar"
         local.parent.mkdir(parents=True, exist_ok=True)
         fetched = await self._scp(f"{self._target()}:{out}", str(local), recursive=False)
         if fetched.exit_code != 0 or not local.is_file():
@@ -414,7 +409,7 @@ class SSHHost(BaseEnvironment):
         local.unlink()
 
     async def _ensure_sync_script(self) -> None:
-        remote = f"{self._remote_root}/.ageval-state"
+        remote = "/tmp/.ageval-state"
         made = await self._ssh(["mkdir", "-p", remote], timeout_sec=30.0)
         if made.exit_code != 0:
             raise EnvironmentFailure(
@@ -439,6 +434,37 @@ class SSHHost(BaseEnvironment):
                 "environment_setup_failed",
                 "could not upload checkpoint_sync.py",
             )
+        if not self._container:
+            return
+        made_in = await self._ssh(
+            ["docker", "exec", self._container, "mkdir", "-p", remote],
+            timeout_sec=30.0,
+        )
+        if made_in.exit_code != 0:
+            raise EnvironmentFailure(
+                "environment_setup_failed",
+                "could not create the container state directory",
+            )
+        placed = await self._ssh(
+            [
+                "docker",
+                "cp",
+                f"{remote}/{CHECKPOINT_SYNC_NAME}",
+                f"{self._container}:{remote}/{CHECKPOINT_SYNC_NAME}",
+            ],
+            timeout_sec=30.0,
+        )
+        if placed.exit_code != 0:
+            raise EnvironmentFailure(
+                "environment_setup_failed",
+                "could not copy checkpoint_sync.py into the container",
+            )
+
+    def _state_argv(self, *args: str) -> list[str]:
+        inner = ["python3", f"/tmp/.ageval-state/{CHECKPOINT_SYNC_NAME}", *args]
+        if self._container:
+            return ["docker", "exec", self._container, *inner]
+        return inner
 
     def placement(self) -> Placement:
         if not self._started:

@@ -295,7 +295,10 @@ class OpenHandsBoxExecutor:
         native: tuple[dict[str, Any], ...] = ()
         if isinstance(steps, list):
             native = tuple(step for step in steps if isinstance(step, dict))
-        events = tuple(to_ageval_trajectory_events(native))
+        fresh = tuple(to_ageval_trajectory_events(native))
+        from ageval.plugins.activity_events import prior_activity_events
+
+        events = tuple(prior_activity_events(getattr(self, "activity", None), fresh))
         text = str(document.get("text") or "")
         error = document.get("error")
         ok = bool(document.get("ok")) and exit_code == 0 and not error

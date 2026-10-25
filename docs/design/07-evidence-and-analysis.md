@@ -33,7 +33,7 @@ Document schemas for `summary.json`, `result.json`, and trajectory `terminal` ev
 During an Attempt, interaction events pass through three stages:
 1. **Raw vendor capture (`backend_raw`)**: Executor-native request/response payloads and stream chunks under `agent/invocations/` (or `evaluation/invocations/`).
 2. **Normalized events (`ageval.trajectory.event/1`)**: Mapped by the executor or `trajectory_collect` chain slot into canonical event kinds (`thought`, `assistant`, `tool_call`, `observation`, `permission`, `terminal`), each stamped with top-level `profile_id` and `session_id`.
-3. **Sealed trajectory (`trajectory.jsonl`)**: Merged and ordered by `trajectory_seal` during `record`.
+3. **Sealed trajectory (`trajectory.jsonl`)**: Merged and ordered by `trajectory_seal` during `record`. Completed steps for an invoke are kept when the executor's fresh event buffer starts after a resume or skips a step that `activity.jsonl` already recorded.
 
 | Web UI Surface | Archive File | Source Phase | Viewer / Hub Location |
 | --- | --- | --- | --- |

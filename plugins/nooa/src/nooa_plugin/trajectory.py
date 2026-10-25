@@ -276,7 +276,7 @@ def _emit_nooa_step(row: dict[str, Any]) -> None:
         step = {"type": "assistant", "content": text}
     else:
         return
-    path = Path("/attempt/.ageval-state/steps.jsonl")
+    path = Path("/tmp/.ageval-state/steps.jsonl")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:

@@ -16,13 +16,14 @@ from typing import Any
 from ageval.environments.protocol import ProbeStatus
 
 CHECKPOINT_SYNC_NAME = "checkpoint_sync.py"
-_STATE = "/attempt/.ageval-state"
+_STATE = "/tmp/.ageval-state"
 
 CHECKPOINT_SYNC_SCRIPT = r'''
 import json, os, sys, tarfile
 from pathlib import Path
 
 ROOT = Path(os.environ.get("AGEVAL_BOX_ROOT") or "/attempt")
+STATE = Path(os.environ.get("AGEVAL_STATE_DIR") or "/tmp/.ageval-state")
 ROOTS = ("workspace", "home", "artifacts")
 SKIP = {
     "home/.codex/auth.json",
@@ -49,14 +50,14 @@ def _index(state):
 
 
 def _record(request_id):
-    state = ROOT / ".ageval-state"
+    state = STATE
     state.mkdir(parents=True, exist_ok=True)
     (state / "inflight.request").write_text(request_id, encoding="utf-8")
     (state / "inflight.pid").write_text(str(os.getpid()) + "\n", encoding="utf-8")
 
 
 def _finish(request_id, code):
-    state = ROOT / ".ageval-state"
+    state = STATE
     state.mkdir(parents=True, exist_ok=True)
     payload = {"request_id": request_id, "exit_code": code, "stdout": "", "stderr": ""}
     (state / "last_exit.json").write_text(json.dumps(payload), encoding="utf-8")
@@ -67,7 +68,7 @@ def _finish(request_id, code):
 
 
 def _dump():
-    state = ROOT / ".ageval-state"
+    state = STATE
     def text(name):
         path = state / name
         return path.read_text(encoding="utf-8") if path.is_file() else ""
@@ -108,7 +109,7 @@ def _dump():
 
 def _pack(out_path):
     root = ROOT
-    state = ROOT / ".ageval-state"
+    state = STATE
     state.mkdir(parents=True, exist_ok=True)
     previous = _index(state)
     current = {}
@@ -214,14 +215,13 @@ def apply_checkpoint_tar(box: Path, blob: bytes) -> int:
     return count
 
 
-def local_state_files(box: Path) -> list[tuple[Path, str]]:
+def local_state_files(state: Path) -> list[tuple[Path, str]]:
     """Nonce and cursor on the host, with the path they use inside the sandbox."""
-    state = box / ".ageval-state"
     found: list[tuple[Path, str]] = []
     for name in ("nonce", "cursor.json"):
         path = state / name
         if path.is_file():
-            found.append((path, f"/attempt/.ageval-state/{name}"))
+            found.append((path, f"{_STATE}/{name}"))
     return found
 
 
@@ -234,7 +234,6 @@ _RESTORE_DIRS = (
     ("workspace", "/attempt/workspace"),
     ("home", "/attempt/home"),
     ("artifacts", "/attempt/artifacts"),
-    (".ageval-state", "/attempt/.ageval-state"),
 )
 
 
@@ -250,6 +249,9 @@ async def push_restored_tree(host: Any, box: Path) -> None:
         if not any(local.rglob("*")):
             continue
         await upload(local, remote)
+    state = box.parent / "state"
+    if state.is_dir() and any(state.iterdir()):
+        await upload(state, _STATE)
 
 
 def wrapper_line(request_id: str, inner: str) -> str:

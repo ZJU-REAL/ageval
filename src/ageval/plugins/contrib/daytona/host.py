@@ -192,9 +192,10 @@ class DaytonaHost(BaseEnvironment):
         self._sandbox = await asyncio.to_thread(self._client.create, create_params)
         self._started = True
         paths = f"{WORKSPACE_PATH} {HOME_PATH} {ARTIFACTS_PATH} {EVALUATION_PATH}"
+        state = "/tmp/.ageval-state"
         mkdir = (
-            f"(mkdir -p {paths} && chmod -R a+rwx {BOX_ROOT}) "
-            f"|| (sudo mkdir -p {paths} && sudo chmod -R a+rwx {BOX_ROOT})"
+            f"(mkdir -p {paths} {state} && chmod -R a+rwx {paths} {state}) "
+            f"|| (sudo mkdir -p {paths} {state} && sudo chmod -R a+rwx {paths} {state})"
         )
         try:
             result = await asyncio.to_thread(self._sandbox.process.exec, mkdir)
@@ -453,7 +454,7 @@ class DaytonaHost(BaseEnvironment):
     def _write_sync_script(self) -> None:
         self._sandbox.fs.upload_file(
             CHECKPOINT_SYNC_SCRIPT.encode(),
-            f"/attempt/.ageval-state/{CHECKPOINT_SYNC_NAME}",
+            f"/tmp/.ageval-state/{CHECKPOINT_SYNC_NAME}",
         )
 
     def _connect_client(self) -> Any:

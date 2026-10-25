@@ -407,9 +407,9 @@ class E2BHost(BaseEnvironment):
             self._sandbox.files.write(remote, path.read_bytes())
 
     def _write_script_sync(self) -> None:
-        self._sandbox.files.make_dir("/attempt/.ageval-state")
+        self._sandbox.files.make_dir("/tmp/.ageval-state")
         self._sandbox.files.write(
-            f"/attempt/.ageval-state/{CHECKPOINT_SYNC_NAME}",
+            f"/tmp/.ageval-state/{CHECKPOINT_SYNC_NAME}",
             CHECKPOINT_SYNC_SCRIPT,
         )
 
@@ -508,11 +508,12 @@ def _stdout_from_event(event: Any) -> str | bytes | None:
 
 
 def attempt_tree_command() -> str:
-    """Make ``/attempt`` writable by the sandbox user, with sudo when the image requires it."""
-    paths = f"{WORKSPACE_PATH} {HOME_PATH} {ARTIFACTS_PATH} {BOX_ROOT}/.ageval-state"
+    """Make the agent directories writable. Recovery state stays under ``/tmp``."""
+    paths = f"{WORKSPACE_PATH} {HOME_PATH} {ARTIFACTS_PATH}"
+    state = "/tmp/.ageval-state"
     return (
-        f"(mkdir -p {paths} && chmod -R a+rwx {BOX_ROOT}) "
-        f"|| (sudo mkdir -p {paths} && sudo chmod -R a+rwx {BOX_ROOT})"
+        f"(mkdir -p {paths} {state} && chmod -R a+rwx {paths} {state}) "
+        f"|| (sudo mkdir -p {paths} {state} && sudo chmod -R a+rwx {paths} {state})"
     )
 
 

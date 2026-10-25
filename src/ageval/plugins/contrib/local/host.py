@@ -12,7 +12,13 @@ import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from ageval.environments.box_state import host_pid_alive, probe_box, write_inflight, write_last_exit
+from ageval.environments.box_state import (
+    host_pid_alive,
+    host_state_dir,
+    probe_box,
+    write_inflight,
+    write_last_exit,
+)
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
     EVALUATION_PATH,
@@ -132,6 +138,7 @@ class LocalHost(BaseEnvironment):
             raise EnvironmentFailure("environment_already_started", "local box already started")
         for rel in ("workspace", "home", "artifacts"):
             (self._root / rel).mkdir(parents=True, exist_ok=True)
+        self.state_root.mkdir(parents=True, exist_ok=True)
         self._started = True
         self.reattached = False
 
@@ -182,7 +189,7 @@ class LocalHost(BaseEnvironment):
             start_new_session=True,
         )
         if request_id:
-            write_inflight(self._root, pid=process.pid, request_id=request_id)
+            write_inflight(self.state_root, pid=process.pid, request_id=request_id)
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_sec)
         except TimeoutError:
@@ -190,7 +197,7 @@ class LocalHost(BaseEnvironment):
             with contextlib.suppress(OSError):
                 await process.wait()
             result = ExecResult(exit_code=124, stdout="", stderr="exec timed out", truncated=False)
-            _finish_exec(self._root, request_id, result)
+            _finish_exec(self.state_root, request_id, result)
             return result
         truncated = len(stdout) > _MAX_STREAM_BYTES or len(stderr) > _MAX_STREAM_BYTES
         result = ExecResult(
@@ -199,7 +206,7 @@ class LocalHost(BaseEnvironment):
             stderr=stderr[:_MAX_STREAM_BYTES].decode("utf-8", errors="replace"),
             truncated=truncated,
         )
-        _finish_exec(self._root, request_id, result)
+        _finish_exec(self.state_root, request_id, result)
         return result
 
     async def upload(self, source: Path, dest: str, *, service: str | None = None) -> None:
@@ -274,6 +281,10 @@ class LocalHost(BaseEnvironment):
     def root(self) -> Path:
         return self._root
 
+    @property
+    def state_root(self) -> Path:
+        return host_state_dir(self._root)
+
     def runtime_handle(self) -> dict[str, object]:
         return {"kind": "local"}
 
@@ -281,7 +292,7 @@ class LocalHost(BaseEnvironment):
         del handle
         if not self._root.is_dir():
             return ProbeStatus(status="absent")
-        return probe_box(self._root, pid_alive=host_pid_alive)
+        return probe_box(self._root, pid_alive=host_pid_alive, state=self.state_root)
 
     async def attach(self, handle: Mapping[str, object]) -> None:
         del handle
@@ -290,6 +301,7 @@ class LocalHost(BaseEnvironment):
             raise EnvironmentFailure("environment_absent", msg)
         for rel in ("workspace", "home", "artifacts"):
             (self._root / rel).mkdir(parents=True, exist_ok=True)
+        self.state_root.mkdir(parents=True, exist_ok=True)
         self._started = True
         self._stopped = False
         self.reattached = True

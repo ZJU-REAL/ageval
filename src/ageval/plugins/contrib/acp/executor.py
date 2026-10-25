@@ -632,7 +632,7 @@ class AcpExecutor(BaseExecutor):
         text = ""
         if error == "acp_idle_timeout" and self._client is not None:
             text = "".join(self._client.text_chunks)
-        mapped = self._mapped_events()
+        mapped = self._with_prior(self._mapped_events())
         usage, extra = self._normalized_usage(partial=True)
         return AgentResult(
             model=self.model,
@@ -675,7 +675,7 @@ class AcpExecutor(BaseExecutor):
         }
         if error_detail:
             meta["error_detail"] = error_detail
-        mapped = self._mapped_events()
+        mapped = self._with_prior(self._mapped_events())
         # Dual-source normalize: tokens from PromptResponse.usage; cost/context
         # from latest UsageUpdate. Never maps context.used → prompt_tokens.
         usage, extra = self._normalized_usage(partial=usage_partial)
@@ -735,6 +735,11 @@ class AcpExecutor(BaseExecutor):
         if self._client is None:
             return ()
         return tuple(acp_session_events_to_ageval(self._client.snapshot_events()))
+
+    def _with_prior(self, fresh: tuple[dict[str, Any], ...]) -> tuple[dict[str, Any], ...]:
+        from ageval.plugins.activity_events import prior_activity_events
+
+        return tuple(prior_activity_events(getattr(self, "activity", None), fresh))
 
     def _write_vendor(self, collect_dir: str | None) -> None:
         if not collect_dir or self._client is None:
