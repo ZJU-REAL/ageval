@@ -382,6 +382,18 @@ class SSHHost(BaseEnvironment):
     async def push_restored_box(self, box: Path) -> None:
         await push_restored_tree(self, box)
 
+    def sync_box_state(self, box: Path) -> None:
+        if not self._started:
+            return
+        _drive(self._sync_box_state(box))
+
+    async def _sync_box_state(self, box: Path) -> None:
+        from ageval.environments.remote_state import local_state_files
+
+        await self._ensure_sync_script()
+        for path, remote in local_state_files(box):
+            await self.upload(path, remote)
+
     def mirror_checkpoint(self, dest: Path) -> None:
         if not self._started:
             return

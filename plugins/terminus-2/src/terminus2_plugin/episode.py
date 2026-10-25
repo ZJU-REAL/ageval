@@ -411,7 +411,7 @@ def _finish(
         error=error,
         text=text,
         events=tuple(episode_events(records, session_id=session_id)),
-        usage={key: value for key, value in usage.items() if value},
+        usage=dict(usage),
         raw={"turns": turns, "replies": replies, "steps": records},
         keys_sent=keys_sent,
         replies=replies,

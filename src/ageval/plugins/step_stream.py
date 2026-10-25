@@ -4,18 +4,27 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
+from ageval.environments.protocol import EnvironmentFailure
+
 STEP_REL = Path(".ageval-state") / "steps.jsonl"
+_REMOTE_STEPS = "/attempt/.ageval-state/steps.jsonl"
 _REPLAY_SAFE = frozenset({"read", "search", "think", "fetch"})
 
 
 def step_log(host: Any) -> Path | None:
+    """Local steps file. Bind-mounted hosts use ``root``; others use ``step_mirror``."""
     root = getattr(host, "root", None)
-    if not isinstance(root, Path):
-        return None
-    return root / STEP_REL
+    if isinstance(root, Path):
+        return root / STEP_REL
+    mirror = getattr(host, "step_mirror", None)
+    if isinstance(mirror, Path):
+        return mirror
+    return None
 
 
 def resume_prefix(scope: Any) -> str:
@@ -41,15 +50,38 @@ def resume_prefix(scope: Any) -> str:
 async def exec_with_steps(host: Any, argv: list[str], scope: Any, **kwargs: Any) -> Any:
     """Run ``host.exec`` and fold new step lines into the activity log as they appear."""
     path = step_log(host)
+    remote: Path | None = None
+    if path is None and callable(getattr(host, "download", None)):
+        descriptor, name = tempfile.mkstemp(prefix="ageval-steps-")
+        os.close(descriptor)
+        remote = Path(name)
+        path = remote
     cursor = path.stat().st_size if path is not None and path.is_file() else 0
     task = asyncio.create_task(host.exec(argv, **kwargs))
     try:
         while not task.done():
+            if remote is not None:
+                await _pull_remote_steps(host, remote)
             cursor = drain_steps(path, scope, cursor)
             await asyncio.sleep(0.05)
         return await task
     finally:
+        if remote is not None:
+            await _pull_remote_steps(host, remote)
         drain_steps(path, scope, cursor)
+        if remote is not None:
+            remote.unlink(missing_ok=True)
+
+
+async def _pull_remote_steps(host: Any, dest: Path) -> None:
+    """Copy the in-sandbox step log. A missing file is not a failed exec."""
+    download = getattr(host, "download", None)
+    if not callable(download):
+        return
+    try:
+        await download(_REMOTE_STEPS, dest)
+    except (OSError, EnvironmentFailure):
+        return
 
 
 def drain_steps(path: Path | None, scope: Any, cursor: int) -> int:

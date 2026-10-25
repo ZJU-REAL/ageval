@@ -441,6 +441,15 @@ class DaytonaHost(BaseEnvironment):
         raw = blob if isinstance(blob, bytes) else bytes(blob)
         apply_checkpoint_tar(dest, raw)
 
+    def sync_box_state(self, box: Path) -> None:
+        if self._sandbox is None:
+            return
+        from ageval.environments.remote_state import local_state_files
+
+        self._write_sync_script()
+        for path, remote in local_state_files(box):
+            self._sandbox.fs.upload_file(path.read_bytes(), remote)
+
     def _write_sync_script(self) -> None:
         self._sandbox.fs.upload_file(
             CHECKPOINT_SYNC_SCRIPT.encode(),

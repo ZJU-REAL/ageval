@@ -83,6 +83,7 @@ class _AgevalAcpClient:
     last_activity_monotonic: float = field(default_factory=time.monotonic)
     _conn: Any = None
     activity: Any = None
+    suppress_activity: bool = False
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def mark_activity(self) -> None:
@@ -120,10 +121,13 @@ class _AgevalAcpClient:
     async def session_update(self, session_id: str, update: Any, **kwargs: Any) -> None:
         """Record full ACP stream for trajectory.jsonl (training-grade).
 
+        ``load_session`` replays history through this callback. Those updates
+        are already in the activity log, so ``suppress_activity`` drops them.
         Intermediate AgentMessageChunk / thought text is preserved on the event
-        payload (not only text_len). Operators who run local smokes want the
-        raw stream for post-hoc training export.
+        payload (not only text_len).
         """
+        if self.suppress_activity:
+            return
         self.mark_activity()
         update_type = type(update).__name__
         event: dict[str, Any] = {

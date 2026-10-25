@@ -92,6 +92,25 @@ def test_miniswe_replay_skips_completed_query_and_bash(tmp_path: Path) -> None:
     assert again_model.calls == 0
     assert again_env.calls == []
     assert replayed["content"] == "done"
+    again_env.execute({"command": "echo next"})
+    ids = [
+        record.payload.get("tool_call_id")
+        for record in scope.log.records
+        if record.kind == "tool_call" and record.status == "in_flight"
+    ]
+    assert ids == ["bash_1", "bash_2"]
+
+
+def test_miniswe_tail_keeps_every_tool_result() -> None:
+    from miniswe_plugin.activity_replay import _tail
+
+    messages = [
+        {"role": "user", "content": "go"},
+        {"role": "assistant", "content": "two commands"},
+        {"role": "tool", "content": "first"},
+        {"role": "tool", "content": "second"},
+    ]
+    assert [item["content"] for item in _tail(messages)] == ["first", "second"]
 
 
 def test_terminus_restore_does_not_replay_keystrokes(tmp_path: Path) -> None:

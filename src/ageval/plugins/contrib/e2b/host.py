@@ -166,8 +166,17 @@ class E2BHost(BaseEnvironment):
             timeout=self._timeout_seconds,
         )
         self._started = True
-        for path in (WORKSPACE_PATH, HOME_PATH, ARTIFACTS_PATH):
-            await asyncio.to_thread(self._sandbox.files.make_dir, path)
+        try:
+            await asyncio.to_thread(self._open_attempt_tree)
+        except EnvironmentFailure:
+            await self.stop(delete=True)
+            raise
+        except Exception as exc:  # noqa: BLE001 — vendor errors become a start failure
+            await self.stop(delete=True)
+            raise EnvironmentFailure(
+                "environment_start_failed",
+                f"could not prepare {BOX_ROOT}: {exc}"[:300],
+            ) from exc
 
     async def stop(self, *, delete: bool) -> None:
         # Ephemeral by nature: keeping it alive is not on offer, and evidence
@@ -384,6 +393,19 @@ class E2BHost(BaseEnvironment):
         await asyncio.to_thread(self._write_script_sync)
         self._script_ready = True
 
+    def _open_attempt_tree(self) -> None:
+        """``/attempt`` is owned by the image user. The sandbox user must be able to write it."""
+        self._sandbox.commands.run(attempt_tree_command(), cwd="/", timeout=60)
+
+    def sync_box_state(self, box: Path) -> None:
+        if self._sandbox is None:
+            return
+        from ageval.environments.remote_state import local_state_files
+
+        self._write_script_sync()
+        for path, remote in local_state_files(box):
+            self._sandbox.files.write(remote, path.read_bytes())
+
     def _write_script_sync(self) -> None:
         self._sandbox.files.make_dir("/attempt/.ageval-state")
         self._sandbox.files.write(
@@ -483,6 +505,15 @@ def _stdout_from_event(event: Any) -> str | bytes | None:
         return event[0] if event else None
     text = getattr(event, "stdout", None)
     return text if text else None
+
+
+def attempt_tree_command() -> str:
+    """Make ``/attempt`` writable by the sandbox user, with sudo when the image requires it."""
+    paths = f"{WORKSPACE_PATH} {HOME_PATH} {ARTIFACTS_PATH} {BOX_ROOT}/.ageval-state"
+    return (
+        f"(mkdir -p {paths} && chmod -R a+rwx {BOX_ROOT}) "
+        f"|| (sudo mkdir -p {paths} && sudo chmod -R a+rwx {BOX_ROOT})"
+    )
 
 
 def _api_key() -> str:

@@ -214,6 +214,17 @@ def apply_checkpoint_tar(box: Path, blob: bytes) -> int:
     return count
 
 
+def local_state_files(box: Path) -> list[tuple[Path, str]]:
+    """Nonce and cursor on the host, with the path they use inside the sandbox."""
+    state = box / ".ageval-state"
+    found: list[tuple[Path, str]] = []
+    for name in ("nonce", "cursor.json"):
+        path = state / name
+        if path.is_file():
+            found.append((path, f"/attempt/.ageval-state/{name}"))
+    return found
+
+
 def state_command(action: str, *args: str) -> list[str]:
     """Argv that runs the uploaded helper inside the environment."""
     return ["python3", f"{_STATE}/{CHECKPOINT_SYNC_NAME}", action, *args]

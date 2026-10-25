@@ -14,6 +14,7 @@ from ageval.evidence.activity import ActivityLog, ActivityScope
 from ageval.plugins.contrib.acp.activity_stream import (
     apply_update,
     note_native_session,
+    prime_stream_state,
     prompt_for_resume,
 )
 from ageval.plugins.contrib.acp.client import _AgevalAcpClient
@@ -195,6 +196,113 @@ def test_worker_steps_are_logged_before_exec_returns(tmp_path: Path) -> None:
     host.exec = exec  # type: ignore[method-assign]
     result = asyncio.run(exec_with_steps(host, ["ignored"], scope))
     assert result.exit_code == 0
+
+
+def test_load_replay_does_not_append_completed_history(tmp_path: Path) -> None:
+    scope = _scope(tmp_path)
+    note_native_session(scope, "native-1")
+    scope.record_model_turn_in_flight(1, [])
+    scope.record_model_turn_completed(1, assistant_text="wrote the file")
+    scope.record_tool_call_in_flight("call_9", "bash", "execute", {"command": "ls"})
+    scope.record_tool_call_completed("call_9", outcome="ok", exit_code=0, content="listed")
+    before = len(scope.log.records)
+    client = _AgevalAcpClient()
+    client.activity = scope
+
+    class Conn:
+        async def load_session(self, **kwargs: object) -> SimpleNamespace:
+            del kwargs
+            await client.session_update(
+                "native-1",
+                _Tool("tool_call", "completed"),
+            )
+            return SimpleNamespace(session_id="native-1")
+
+        async def new_session(self, **kwargs: object) -> SimpleNamespace:
+            del kwargs
+            return SimpleNamespace(session_id="fresh")
+
+    executor = AcpExecutor.__new__(AcpExecutor)
+    executor._conn = Conn()
+    executor._client = client
+    executor.activity = scope
+    opened, resumed = asyncio.run(executor._open_acp_session("/attempt/workspace"))
+    assert resumed is True
+    assert opened.session_id == "native-1"
+    assert len(scope.log.records) == before
+    assert client.suppress_activity is False
+    state = prime_stream_state(client, scope)
+    assert state.step == 1
+    assert "call_9" in state.finished
+    apply_update(
+        scope,
+        client,
+        SimpleNamespace(session_update="agent_message_chunk"),
+        {"text": "next", "update": {"sessionUpdate": "agent_message_chunk"}},
+    )
+    steps = [
+        record.payload.get("step_index")
+        for record in scope.log.records
+        if record.kind == "model_turn" and record.status == "in_flight"
+    ]
+    assert steps == [1, 2]
+
+
+def test_remote_step_log_is_pulled_without_a_bind_mount(tmp_path: Path) -> None:
+    scope = _scope(tmp_path)
+    line = json.dumps(
+        {
+            "type": "tool_call",
+            "tool_call_id": "bash_1",
+            "name": "bash",
+            "tool_kind": "execute",
+            "arguments": {"command": "ls"},
+        }
+    )
+
+    class Host:
+        async def exec(self, command: list[str], **kwargs: object) -> ExecResult:
+            del command, kwargs
+            await asyncio.sleep(0.05)
+            return ExecResult(exit_code=0)
+
+        async def download(self, source: str, dest: Path, service: str | None = None) -> None:
+            del source, service
+            Path(dest).write_text(line + "\n", encoding="utf-8")
+
+    result = asyncio.run(exec_with_steps(Host(), ["ignored"], scope))
+    assert result.exit_code == 0
+    assert any(
+        record.kind == "tool_call" and record.payload.get("tool_call_id") == "bash_1"
+        for record in scope.log.records
+    )
+
+
+def test_box_executors_forward_activity_to_the_worker() -> None:
+    import sys
+
+    root = Path(__file__).resolve().parents[2]
+    for rel in (
+        "plugins/openhands/src",
+        "plugins/acp-oneshot/src",
+        "plugins/dsh/src",
+        "plugins/nooa/src",
+    ):
+        path = str(root / rel)
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    from acp_oneshot_plugin.factory import AcpOneshotExecutorSPI
+    from dsh_plugin.factory import DshExecutorSPI
+    from nooa_plugin.factory import NooaExecutorSPI
+    from openhands_plugin.factory import OpenHandsExecutorSPI
+
+    scope = object()
+    for cls in (OpenHandsExecutorSPI, AcpOneshotExecutorSPI, DshExecutorSPI, NooaExecutorSPI):
+        spi = cls.__new__(cls)
+        spi._box = SimpleNamespace(activity=None)
+        cls.bind_activity(spi, scope)
+        assert spi.activity is scope
+        assert spi._box.activity is scope
 
 
 def test_apply_update_records_compaction(tmp_path: Path) -> None:

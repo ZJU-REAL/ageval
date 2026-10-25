@@ -28,6 +28,31 @@ def state_of(client: Any) -> StreamState:
     return created
 
 
+def prime_stream_state(client: Any, scope: Any) -> StreamState:
+    """Continue step numbers and skip tool ids already stored for this invoke."""
+    state = StreamState()
+    log = getattr(scope, "log", None) if scope is not None else None
+    invoke = getattr(scope, "invoke_request_id", None) if scope is not None else None
+    if log is not None and isinstance(invoke, str):
+        for record in log.records:
+            if record.payload.get("invoke_request_id") != invoke:
+                continue
+            if record.kind == "model_turn":
+                raw = record.payload.get("step_index")
+                if isinstance(raw, int) and not isinstance(raw, bool):
+                    state.step = max(state.step, raw)
+            if record.kind != "tool_call":
+                continue
+            call_id = record.payload.get("tool_call_id")
+            if not isinstance(call_id, str) or not call_id:
+                continue
+            state.tools.add(call_id)
+            if record.status in {"completed", "aborted"}:
+                state.finished.add(call_id)
+    client._activity_state = state
+    return state
+
+
 def note_native_session(scope: Any, native_session_id: str) -> None:
     if scope is None or not native_session_id:
         return

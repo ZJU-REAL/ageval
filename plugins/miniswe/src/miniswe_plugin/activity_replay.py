@@ -59,7 +59,7 @@ def install_activity(model: Any, env: Any, executor: Any) -> None:
 
     model.query = query
     orig_exec = env.execute
-    counter = {"n": 0}
+    counter = {"n": _bash_ordinal(scope)}
 
     def execute(action: dict, cwd: str = "", *, timeout: int | None = None) -> dict[str, Any]:
         cached = replay.take_tool()
@@ -113,11 +113,39 @@ def install_activity(model: Any, env: Any, executor: Any) -> None:
     env.execute = execute
 
 
+def _bash_ordinal(scope: Any) -> int:
+    """Highest ``bash_N`` already stored for this session. New tools start after it."""
+    prefix = f"tool_{scope.session_id}_bash_"
+    best = 0
+    for record in scope.log.records:
+        if record.kind != "tool_call" or not str(record.request_id).startswith(prefix):
+            continue
+        suffix = str(record.request_id)[len(prefix) :]
+        if suffix.isdigit():
+            best = max(best, int(suffix))
+    return best
+
+
 def _tail(messages: Any) -> list[dict[str, Any]]:
+    """Tool results that followed the latest assistant message.
+
+    One model reply can run several bash actions. Keeping only ``messages[-1]``
+    drops every result except the last.
+    """
     if not isinstance(messages, list) or not messages:
         return []
-    last = messages[-1]
-    return [dict(last)] if isinstance(last, dict) else []
+    start = len(messages)
+    saw_assistant = False
+    for index in range(len(messages) - 1, -1, -1):
+        item = messages[index]
+        if isinstance(item, dict) and item.get("role") == "assistant":
+            start = index + 1
+            saw_assistant = True
+            break
+    if not saw_assistant:
+        last = messages[-1]
+        return [dict(last)] if isinstance(last, dict) else []
+    return [dict(item) for item in messages[start:] if isinstance(item, dict)]
 
 
 def _usage(extra: Any) -> dict[str, Any] | None:

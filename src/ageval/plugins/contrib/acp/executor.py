@@ -393,15 +393,24 @@ class AcpExecutor(BaseExecutor):
 
     async def _open_acp_session(self, cwd: str) -> tuple[Any, bool]:
         """Resume the native ACP session, or open a new one."""
-        from ageval.plugins.contrib.acp.activity_stream import native_session_id
+        from ageval.plugins.contrib.acp.activity_stream import native_session_id, prime_stream_state
 
-        native = native_session_id(getattr(self, "activity", None))
+        scope = getattr(self, "activity", None)
+        client = getattr(self, "_client", None)
+        if client is not None:
+            prime_stream_state(client, scope)
+        native = native_session_id(scope)
         load = getattr(self._conn, "load_session", None)
         if native and callable(load):
+            if client is not None:
+                client.suppress_activity = True
             try:
                 loaded = await load(cwd=cwd, session_id=native, mcp_servers=[])
             except Exception:  # noqa: BLE001 — fall back to a new session and the transcript
                 loaded = None
+            finally:
+                if client is not None:
+                    client.suppress_activity = False
             # LoadSessionResponse has no session id. A returned object means the entry accepted it.
             if loaded is not None:
                 from types import SimpleNamespace

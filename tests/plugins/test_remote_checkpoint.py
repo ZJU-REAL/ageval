@@ -10,7 +10,9 @@ import sys
 import tarfile
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 
+from ageval.attempt.recover import capture_box, publish_environment_handle
 from ageval.environments.protocol import BoxSpec, ExecResult
 from ageval.environments.remote_state import (
     CHECKPOINT_SYNC_SCRIPT,
@@ -18,9 +20,11 @@ from ageval.environments.remote_state import (
     parse_state_document,
     push_restored_tree,
 )
+from ageval.evidence.activity import ActivityLog
 from ageval.plugins.contrib.daytona.host import DaytonaHost
-from ageval.plugins.contrib.e2b.host import E2BHost
+from ageval.plugins.contrib.e2b.host import E2BHost, attempt_tree_command
 from ageval.plugins.contrib.ssh.host import SSHHost
+from ageval.runtime.parent_agent import _activity_usage
 
 
 def _spec(tmp_path: Path) -> BoxSpec:
@@ -292,3 +296,65 @@ def test_push_restored_tree_uploads_workspace_and_state(tmp_path: Path) -> None:
     asyncio.run(push_restored_tree(Host(), box))
     assert (box / "workspace", "/attempt/workspace") in seen
     assert (box / ".ageval-state", "/attempt/.ageval-state") in seen
+
+
+def test_e2b_attempt_tree_is_writable_by_the_sandbox_user() -> None:
+    command = attempt_tree_command()
+    assert "chmod -R a+rwx /attempt" in command
+    assert "sudo chmod -R a+rwx /attempt" in command
+
+
+def test_activity_usage_seals_reported_counts_and_keeps_absence() -> None:
+    assert _activity_usage(None) is None
+    sealed = _activity_usage({"prompt_tokens": 3, "completion_tokens": 1})
+    assert sealed is not None
+    assert sealed["prompt_tokens"] == 3
+    assert sealed["completion_tokens"] == 1
+
+
+def test_capture_box_creates_a_remote_tree_and_syncs_the_cursor(tmp_path: Path) -> None:
+    log = ActivityLog.open(tmp_path / "activity.jsonl")
+    log.append(
+        request_id="attempt",
+        kind="attempt",
+        status="completed",
+        payload={
+            "run_id": "run",
+            "trial_id": "trial",
+            "attempt_id": "attempt",
+            "task_id": "hello",
+            "attempt_index": 0,
+            "suite_run_id": None,
+            "locked_config_digest": "digest",
+            "environment_kind": "e2b",
+            "environment_nonce": "nce_9",
+            "environment_handle": None,
+        },
+    )
+    mirrored: list[Path] = []
+    synced: list[bool] = []
+
+    class Evidence:
+        root = tmp_path
+
+        def path(self, rel: str) -> Path:
+            return tmp_path / rel
+
+    class Host:
+        def mirror_checkpoint(self, dest: Path) -> None:
+            mirrored.append(dest)
+
+        def sync_box_state(self, box: Path) -> None:
+            synced.append((box / ".ageval-state" / "cursor.json").is_file())
+
+        def runtime_handle(self) -> dict[str, str]:
+            return {"sandbox_id": "sbx"}
+
+    ctx = SimpleNamespace(evidence=Evidence(), host=Host(), checkpoints=None, activity=log)
+    assert capture_box(ctx, 1) == 1
+    assert mirrored and mirrored[0].is_dir()
+    assert synced == [True]
+    publish_environment_handle(ctx)
+    nonce = tmp_path / "box" / ".ageval-state" / "nonce"
+    assert nonce.read_text(encoding="utf-8") == "nce_9"
+    assert len(synced) == 2

@@ -674,6 +674,7 @@ class ParentAgentService:
                 "invocation_id": handle.invocation_id if handle else None,
                 "evidence_relative": handle.relative_path if handle else None,
                 "tool_calls": _public_tool_calls(result),
+                "usage": result.usage,
             },
         )
 
@@ -961,7 +962,8 @@ class ParentAgentService:
         return {
             "ok": bool(payload.get("ok")),
             "error": payload.get("error"),
-            "model": "",
+            "model": str(payload.get("model") or ""),
+            "usage": payload.get("usage") if isinstance(payload.get("usage"), dict) else None,
             "text": text[-4000:],
             "structured": structured if isinstance(structured, dict) else None,
             "provider_session_handle": None,
@@ -1093,7 +1095,7 @@ class ParentAgentService:
             "text": text,
             "structured": structured if isinstance(structured, dict) else None,
             "tool_calls": calls if isinstance(calls, list) else [],
-            "usage": None,
+            "usage": _activity_usage(response.get("usage")),
             "error": response.get("error") if isinstance(response.get("error"), str) else None,
             "checkpoint_seq": None,
             "invocation_id": handle.invocation_id
@@ -1449,6 +1451,15 @@ class ParentAgentService:
         if not handlers:
             return value
         return _drive(run_handlers(handlers, value, ctx=binding))
+
+
+def _activity_usage(raw: Any) -> dict[str, Any] | None:
+    """Sealed usage for an invoke record. Absent usage stays absent."""
+    if raw is None:
+        return None
+    from ageval.model.usage import to_sealed_document
+
+    return to_sealed_document(raw)
 
 
 def _public_tool_calls(result: Any) -> list[dict[str, Any]]:

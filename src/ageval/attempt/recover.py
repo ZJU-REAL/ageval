@@ -107,12 +107,17 @@ def load_activity(attempt_dir: Path) -> ActivityLog:
     return ActivityLog.open(attempt_dir / ACTIVITY_LOG_REL)
 
 
+def ensure_local_box(box: Path) -> Path:
+    """Create the host-side attempt tree. Remote kinds do not bind-mount it."""
+    for name in ("workspace", "home", "artifacts", ".ageval-state"):
+        (box / name).mkdir(parents=True, exist_ok=True)
+    return box
+
+
 def capture_box(ctx: Any, seq: int) -> int | None:
     """Snapshot the host bind root and advance the in-box cursor."""
     evidence = ctx.evidence
-    box = evidence.path(AGENT_BOX_REL)
-    if not box.is_dir():
-        return None
+    box = ensure_local_box(evidence.path(AGENT_BOX_REL))
     store = ctx.checkpoints
     if store is None:
         store = CheckpointStore(evidence.root, box)
@@ -122,6 +127,7 @@ def capture_box(ctx: Any, seq: int) -> int | None:
         mirror(box)
     store.capture(seq)
     write_cursor(box, seq=seq, request_id=f"seq_{seq}")
+    _sync_remote_state(ctx.host, box)
     return seq
 
 
@@ -134,14 +140,29 @@ def publish_environment_handle(ctx: Any) -> None:
     if header is None:
         return
     nonce = header.payload.get("environment_nonce")
-    box = ctx.evidence.path(AGENT_BOX_REL)
-    if isinstance(nonce, str) and nonce and box.is_dir():
+    box = ensure_local_box(ctx.evidence.path(AGENT_BOX_REL))
+    if isinstance(nonce, str) and nonce:
         write_nonce(box, nonce)
+        _sync_remote_state(ctx.host, box)
     handle_fn = getattr(ctx.host, "runtime_handle", None)
     handle = handle_fn() if callable(handle_fn) else {}
     if not isinstance(handle, dict):
         handle = {}
     log.update_attempt_header(environment_handle=handle or None)
+
+
+def _sync_remote_state(host: Any, box: Path) -> None:
+    """Push nonce and cursor into a sandbox that does not bind-mount ``box``."""
+    root = getattr(host, "root", None)
+    if isinstance(root, Path):
+        try:
+            if root.resolve() == box.resolve():
+                return
+        except OSError:
+            return
+    sync = getattr(host, "sync_box_state", None)
+    if callable(sync):
+        sync(box)
 
 
 def restore_checkpoint(ctx: Any, seq: int) -> None:
