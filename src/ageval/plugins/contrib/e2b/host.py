@@ -26,7 +26,15 @@ from ageval.environments.protocol import (
     EnvironmentFailure,
     ExecResult,
     Placement,
+    ProbeStatus,
     reject_foreign_service,
+)
+from ageval.environments.remote_state import (
+    CHECKPOINT_SYNC_NAME,
+    CHECKPOINT_SYNC_SCRIPT,
+    parse_state_document,
+    state_command,
+    wrapper_line,
 )
 from ageval.plugins.base import BaseEnvironment
 from ageval.plugins.decorators import environment_plugin
@@ -131,6 +139,7 @@ class E2BHost(BaseEnvironment):
         self._template_name = _text(opts.get("template")) or "ageval-attempt"
         self._timeout_seconds = _seconds(opts.get("timeout_seconds"), default=900)
         self._sandbox: Any = None
+        self._script_ready = False
         self._started = False
         self._stopped = False
 
@@ -181,7 +190,6 @@ class E2BHost(BaseEnvironment):
         service: str | None = None,
         request_id: str | None = None,
     ) -> ExecResult:
-        del request_id
         self._assert_started()
         if user is not None:
             raise EnvironmentFailure(
@@ -196,6 +204,9 @@ class E2BHost(BaseEnvironment):
         argv = [str(part) for part in command]
         if not argv:
             raise EnvironmentFailure("environment_exec_invalid", "exec requires a command")
+        if request_id:
+            await self._ensure_sync_script()
+            argv = ["sh", "-c", wrapper_line(request_id, _shell_line(argv))]
         try:
             result = await asyncio.to_thread(
                 self._sandbox.commands.run,
@@ -315,6 +326,85 @@ class E2BHost(BaseEnvironment):
         return E2BStdio(handle)
 
     # --- e2b specifics -------------------------------------------------------
+
+    def runtime_handle(self) -> dict[str, object]:
+        sid = getattr(self._sandbox, "sandbox_id", None)
+        return {"sandbox_id": str(sid)} if sid else {}
+
+    async def probe(self, handle: Mapping[str, object]) -> ProbeStatus:
+        sid = str(handle.get("sandbox_id") or "").strip()
+        if not sid:
+            return ProbeStatus(status="absent")
+        try:
+            sdk = _import_sdk()
+            sandbox = await asyncio.to_thread(sdk.Sandbox.connect, sid)
+        except Exception:  # noqa: BLE001 — a dead or unknown sandbox is absent
+            return ProbeStatus(status="absent")
+        self._sandbox = sandbox
+        try:
+            await self._ensure_sync_script()
+            result = await self._run_line(_shell_line(state_command("dump")))
+        except Exception:  # noqa: BLE001 — unreadable state is absent
+            return ProbeStatus(status="absent")
+        return parse_state_document(result.stdout)
+
+    async def attach(self, handle: Mapping[str, object]) -> None:
+        status = await self.probe(handle)
+        if status.status == "absent" or self._sandbox is None:
+            raise EnvironmentFailure(
+                "environment_attach_invalid",
+                "e2b sandbox is not available to attach",
+            )
+        self._started = True
+        self._stopped = False
+
+    def mirror_checkpoint(self, dest: Path) -> None:
+        if self._sandbox is None:
+            return
+        self._write_script_sync()
+        out = "/tmp/ageval-checkpoint.tar"
+        self._sandbox.commands.run(
+            _shell_line(state_command("pack", out)),
+            cwd="/",
+            timeout=120,
+        )
+        blob = self._sandbox.files.read(out, "bytes")
+        from ageval.environments.remote_state import apply_checkpoint_tar
+
+        raw = blob if isinstance(blob, bytes) else bytes(blob)
+        apply_checkpoint_tar(dest, raw)
+
+    async def _ensure_sync_script(self) -> None:
+        if self._script_ready or self._sandbox is None:
+            return
+        await asyncio.to_thread(self._write_script_sync)
+        self._script_ready = True
+
+    def _write_script_sync(self) -> None:
+        self._sandbox.files.make_dir("/attempt/.ageval-state")
+        self._sandbox.files.write(
+            f"/attempt/.ageval-state/{CHECKPOINT_SYNC_NAME}",
+            CHECKPOINT_SYNC_SCRIPT,
+        )
+
+    async def _run_line(self, line: str) -> ExecResult:
+        try:
+            result = await asyncio.to_thread(
+                self._sandbox.commands.run,
+                line,
+                cwd="/",
+                timeout=60,
+            )
+        except Exception as exc:  # noqa: BLE001 — vendor raises on nonzero
+            code = getattr(exc, "exit_code", None)
+            if code is None:
+                raise
+            return ExecResult(exit_code=int(code or 1), stdout="", stderr=str(exc)[:400])
+        return ExecResult(
+            exit_code=int(getattr(result, "exit_code", 0) or 0),
+            stdout=str(getattr(result, "stdout", "") or ""),
+            stderr=str(getattr(result, "stderr", "") or ""),
+        )
 
     def placement(self) -> Placement:
         if self._sandbox is None:

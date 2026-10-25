@@ -34,7 +34,15 @@ from ageval.environments.protocol import (
     EnvironmentFailure,
     ExecResult,
     Placement,
+    ProbeStatus,
     reject_foreign_service,
+)
+from ageval.environments.remote_state import (
+    CHECKPOINT_SYNC_NAME,
+    CHECKPOINT_SYNC_SCRIPT,
+    apply_checkpoint_tar,
+    parse_state_document,
+    wrapper_line,
 )
 from ageval.plugins.base import BaseEnvironment
 from ageval.plugins.decorators import environment_plugin
@@ -193,7 +201,6 @@ class SSHHost(BaseEnvironment):
         service: str | None = None,
         request_id: str | None = None,
     ) -> ExecResult:
-        del request_id
         self._assert_started()
         if user is not None:
             raise EnvironmentFailure(
@@ -208,6 +215,10 @@ class SSHHost(BaseEnvironment):
         argv = [str(part) for part in command]
         if not argv:
             raise EnvironmentFailure("environment_exec_invalid", "exec requires a command")
+        if request_id:
+            await self._ensure_sync_script()
+            inner = " ".join(shlex.quote(part) for part in argv)
+            argv = ["sh", "-c", wrapper_line(request_id, inner)]
         return await self._ssh(
             self._remote_argv(argv, cwd=cwd or WORKSPACE_PATH, env=env),
             timeout_sec=timeout_sec,
@@ -312,6 +323,105 @@ class SSHHost(BaseEnvironment):
         return pipe
 
     # --- ssh specifics -------------------------------------------------------
+
+    def runtime_handle(self) -> dict[str, object]:
+        if not self._host:
+            return {}
+        return {
+            "host": self._host,
+            "user": self._user,
+            "port": self._port,
+            "remote_root": self._remote_root,
+            "container_id": self._container,
+        }
+
+    async def probe(self, handle: Mapping[str, object]) -> ProbeStatus:
+        host = str(handle.get("host") or "").strip()
+        root = str(handle.get("remote_root") or "").strip()
+        if not host or not root:
+            return ProbeStatus(status="absent")
+        previous = (self._host, self._user, self._port, self._remote_root, self._container)
+        self._host = host
+        self._user = str(handle.get("user") or "") or None
+        self._port = str(handle.get("port") or "") or None
+        self._remote_root = root
+        raw_container = handle.get("container_id")
+        self._container = str(raw_container) if raw_container else None
+        try:
+            script = f"{root}/.ageval-state/{CHECKPOINT_SYNC_NAME}"
+            result = await self._ssh(
+                ["python3", script, "dump"],
+                timeout_sec=30.0,
+            )
+        except Exception:  # noqa: BLE001 — an unreachable host is absent
+            result = None
+        self._host, self._user, self._port, self._remote_root, self._container = previous
+        if result is None or result.exit_code != 0:
+            return ProbeStatus(status="absent")
+        return parse_state_document(result.stdout)
+
+    async def attach(self, handle: Mapping[str, object]) -> None:
+        status = await self.probe(handle)
+        if status.status == "absent":
+            raise EnvironmentFailure(
+                "environment_attach_invalid",
+                "ssh environment is not available to attach",
+            )
+        self._host = str(handle.get("host") or "")
+        self._user = str(handle.get("user") or "") or None
+        self._port = str(handle.get("port") or "") or None
+        self._remote_root = str(handle.get("remote_root") or "")
+        raw_container = handle.get("container_id")
+        self._container = str(raw_container) if raw_container else None
+        self._started = True
+        self._stopped = False
+
+    def mirror_checkpoint(self, dest: Path) -> None:
+        if not self._started:
+            return
+        script = f"{self._remote_root}/.ageval-state/{CHECKPOINT_SYNC_NAME}"
+        out = f"{self._remote_root}/.ageval-state/delta.tar"
+        packed = asyncio.run(
+            self._ssh(["python3", script, "pack", out], timeout_sec=120.0),
+        )
+        if packed.exit_code != 0:
+            return
+        local = dest / ".ageval-state" / "delta.tar"
+        local.parent.mkdir(parents=True, exist_ok=True)
+        fetched = asyncio.run(
+            self._scp(f"{self._target()}:{out}", str(local), recursive=False),
+        )
+        if fetched.exit_code != 0 or not local.is_file():
+            return
+        apply_checkpoint_tar(dest, local.read_bytes())
+        local.unlink()
+
+    async def _ensure_sync_script(self) -> None:
+        remote = f"{self._remote_root}/.ageval-state"
+        made = await self._ssh(["mkdir", "-p", remote], timeout_sec=30.0)
+        if made.exit_code != 0:
+            raise EnvironmentFailure(
+                "environment_setup_failed",
+                "could not create the remote state directory",
+            )
+        import tempfile
+
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
+            handle.write(CHECKPOINT_SYNC_SCRIPT)
+            path = Path(handle.name)
+        try:
+            copied = await self._scp(
+                str(path),
+                f"{self._target()}:{remote}/{CHECKPOINT_SYNC_NAME}",
+                recursive=False,
+            )
+        finally:
+            path.unlink(missing_ok=True)
+        if copied.exit_code != 0:
+            raise EnvironmentFailure(
+                "environment_setup_failed",
+                "could not upload checkpoint_sync.py",
+            )
 
     def placement(self) -> Placement:
         if not self._started:

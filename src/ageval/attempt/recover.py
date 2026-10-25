@@ -117,6 +117,9 @@ def capture_box(ctx: Any, seq: int) -> int | None:
     if store is None:
         store = CheckpointStore(evidence.root, box)
         ctx.checkpoints = store
+    mirror = getattr(ctx.host, "mirror_checkpoint", None)
+    if callable(mirror):
+        mirror(box)
     store.capture(seq)
     write_cursor(box, seq=seq, request_id=f"seq_{seq}")
     return seq

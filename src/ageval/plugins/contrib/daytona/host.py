@@ -29,7 +29,16 @@ from ageval.environments.protocol import (
     EnvironmentFailure,
     ExecResult,
     Placement,
+    ProbeStatus,
     reject_foreign_service,
+)
+from ageval.environments.remote_state import (
+    CHECKPOINT_SYNC_NAME,
+    CHECKPOINT_SYNC_SCRIPT,
+    apply_checkpoint_tar,
+    parse_state_document,
+    state_command,
+    wrapper_line,
 )
 from ageval.plugins.base import BaseEnvironment
 from ageval.plugins.decorators import environment_plugin
@@ -220,7 +229,6 @@ class DaytonaHost(BaseEnvironment):
         service: str | None = None,
         request_id: str | None = None,
     ) -> ExecResult:
-        del request_id
         self._assert_started()
         if user is not None:
             raise EnvironmentFailure(
@@ -235,6 +243,9 @@ class DaytonaHost(BaseEnvironment):
         argv = [str(part) for part in command]
         if not argv:
             raise EnvironmentFailure("environment_exec_invalid", "exec requires a command")
+        if request_id:
+            self._write_sync_script()
+            argv = ["sh", "-c", wrapper_line(request_id, _shell_line(argv))]
         kwargs: dict[str, Any] = {
             "cwd": cwd or WORKSPACE_PATH,
             "env": self._child_env(env),
@@ -379,6 +390,64 @@ class DaytonaHost(BaseEnvironment):
                 "daytona session command did not return cmd_id",
             )
         return DaytonaStdio(self._sandbox, session_id, cmd_id)
+
+    def runtime_handle(self) -> dict[str, object]:
+        sid = getattr(self._sandbox, "id", None) or getattr(self._sandbox, "sandbox_id", None)
+        return {"sandbox_id": str(sid)} if sid else {}
+
+    async def probe(self, handle: Mapping[str, object]) -> ProbeStatus:
+        sid = str(handle.get("sandbox_id") or "").strip()
+        if not sid:
+            return ProbeStatus(status="absent")
+        try:
+            client = self._client or self._connect_client()
+            sandbox = await asyncio.to_thread(client.get, sid)
+        except Exception:  # noqa: BLE001 — a dead sandbox is absent
+            return ProbeStatus(status="absent")
+        self._sandbox = sandbox
+        try:
+            self._write_sync_script()
+            result = await asyncio.to_thread(
+                self._sandbox.process.exec,
+                " ".join(state_command("dump")),
+                cwd="/",
+                timeout=60,
+            )
+        except Exception:  # noqa: BLE001 — unreadable state is absent
+            return ProbeStatus(status="absent")
+        return parse_state_document(str(getattr(result, "result", "") or ""))
+
+    async def attach(self, handle: Mapping[str, object]) -> None:
+        status = await self.probe(handle)
+        if status.status == "absent" or self._sandbox is None:
+            raise EnvironmentFailure(
+                "environment_attach_invalid",
+                "daytona sandbox is not available to attach",
+            )
+        self._started = True
+        self._stopped = False
+
+    def mirror_checkpoint(self, dest: Path) -> None:
+        if self._sandbox is None:
+            return
+        self._write_sync_script()
+        out = "/tmp/ageval-checkpoint.tar"
+        self._sandbox.process.exec(" ".join(state_command("pack", out)), cwd="/", timeout=120)
+        blob = self._sandbox.fs.download_file(out)
+        raw = blob if isinstance(blob, bytes) else bytes(blob)
+        apply_checkpoint_tar(dest, raw)
+
+    def _write_sync_script(self) -> None:
+        self._sandbox.fs.upload_file(
+            CHECKPOINT_SYNC_SCRIPT.encode(),
+            f"/attempt/.ageval-state/{CHECKPOINT_SYNC_NAME}",
+        )
+
+    def _connect_client(self) -> Any:
+        from daytona import Daytona
+
+        self._client = Daytona()
+        return self._client
 
     def placement(self) -> Placement:
         if self._sandbox is None:

@@ -2,12 +2,12 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Draft |
+| Status | Accepted |
 | Date | 2026-10-25 |
 | Decides | `.ageval/runs/<attempt_id>/activity.jsonl` (`ageval.activity/1`) and `.ageval/runs/<attempt_id>/checkpoints/` (`ageval.checkpoint/1`) form the authoritative durability store for an unsealed Attempt. Recovery preserves the `attempt_id` when `result.json` is absent and the lock digest matches. Every `BaseExecutor` streams step boundaries into `activity.jsonl` and restores context on recovery either by projecting `activity.jsonl` (including `compaction` records) or by resuming its native session journal under `/attempt/home` (covering `acp`, `openhands`, `dsh`, `nooa`, `miniswe`, `terminus-2`, `openai-http`, and `anthropic-http`). `EnvironmentProvider` adds `probe(handle)` and `attach(handle)` paired with incremental `/attempt/{workspace,home}` checkpoints so live environments are reused in place and lost environments are restored to the exact step snapshot without fragile bash stdout matching. |
 | Does not decide | The CLI command and selection UX for `fork`. A fork creates a new Attempt from a chosen historical `seq`; it consumes the `activity.jsonl` prefix and `checkpoints/seq_<N>.json` snapshot defined in this RFC. |
 
-Until this RFC is accepted and folded into the design pages listed in the final section, the running codebase retains its current behavior.
+The rules in this RFC are folded into the design pages listed in the final section.
 
 ---
 
