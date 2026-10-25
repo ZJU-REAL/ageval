@@ -402,8 +402,12 @@ class AcpExecutor(BaseExecutor):
                 loaded = await load(cwd=cwd, session_id=native, mcp_servers=[])
             except Exception:  # noqa: BLE001 — fall back to a new session and the transcript
                 loaded = None
-            if loaded is not None and getattr(loaded, "session_id", None):
-                return loaded, True
+            # LoadSessionResponse has no session id. A returned object means the entry accepted it.
+            if loaded is not None:
+                from types import SimpleNamespace
+
+                sid = getattr(loaded, "session_id", None) or native
+                return SimpleNamespace(session_id=str(sid)), True
         assert self._conn is not None
         opened = await self._conn.new_session(cwd=cwd, mcp_servers=[])
         return opened, False

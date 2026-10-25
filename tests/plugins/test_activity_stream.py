@@ -131,6 +131,8 @@ def test_resume_loads_native_session_or_rebuilds_the_transcript(tmp_path: Path) 
             assert kwargs["session_id"] == "native-1"
             if self.mode == "missing":
                 raise RuntimeError("unsupported")
+            if self.mode == "blank":
+                return SimpleNamespace()
             return SimpleNamespace(session_id="native-1")
 
         async def new_session(self, **kwargs: object) -> SimpleNamespace:
@@ -143,6 +145,11 @@ def test_resume_loads_native_session_or_rebuilds_the_transcript(tmp_path: Path) 
     opened, resumed = asyncio.run(executor._open_acp_session("/attempt/workspace"))
     assert resumed is True
     assert opened.session_id == "native-1"
+    executor._conn.mode = "blank"
+    opened, resumed = asyncio.run(executor._open_acp_session("/attempt/workspace"))
+    assert resumed is True
+    assert opened.session_id == "native-1"
+    executor._conn.mode = "load"
     native_prompt = prompt_for_resume(scope, "continue", resumed_native=True)
     assert "partial" in native_prompt
     assert "wrote the file" not in native_prompt
