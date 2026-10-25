@@ -11,6 +11,7 @@ import json
 import tarfile
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 from ageval.environments.protocol import ProbeStatus
 
@@ -84,12 +85,23 @@ def _dump():
             last = json.loads(raw_last)
         except json.JSONDecodeError:
             last = {}
-    pid = text("inflight.pid").strip()
+    pid_text = text("inflight.pid").strip()
+    pid = int(pid_text) if pid_text.isdigit() else None
+    alive = False
+    if pid:
+        try:
+            os.kill(pid, 0)
+        except PermissionError:
+            alive = True
+        except OSError:
+            alive = False
+        else:
+            alive = True
     print(json.dumps({
         "nonce": text("nonce").strip(),
         "cursor": cursor,
-        "inflight_pid": int(pid) if pid.isdigit() else None,
-        "inflight_request": text("inflight.request").strip(),
+        "inflight_pid": pid if alive else None,
+        "inflight_request": text("inflight.request").strip() if alive else "",
         "last_exit": last,
     }))
 
@@ -205,6 +217,28 @@ def apply_checkpoint_tar(box: Path, blob: bytes) -> int:
 def state_command(action: str, *args: str) -> list[str]:
     """Argv that runs the uploaded helper inside the environment."""
     return ["python3", f"{_STATE}/{CHECKPOINT_SYNC_NAME}", action, *args]
+
+
+_RESTORE_DIRS = (
+    ("workspace", "/attempt/workspace"),
+    ("home", "/attempt/home"),
+    ("artifacts", "/attempt/artifacts"),
+    (".ageval-state", "/attempt/.ageval-state"),
+)
+
+
+async def push_restored_tree(host: Any, box: Path) -> None:
+    """Upload a locally restored attempt tree into a remote environment."""
+    upload = getattr(host, "upload", None)
+    if not callable(upload):
+        return
+    for name, remote in _RESTORE_DIRS:
+        local = box / name
+        if not local.is_dir():
+            continue
+        if not any(local.rglob("*")):
+            continue
+        await upload(local, remote)
 
 
 def wrapper_line(request_id: str, inner: str) -> str:

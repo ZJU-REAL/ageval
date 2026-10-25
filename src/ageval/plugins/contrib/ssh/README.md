@@ -11,7 +11,9 @@ environment: ssh
 ```
 
 Locators (`host` / `user` / `port` / `key_env`) are resolved at preflight.
-Keys never enter the lock.
+Keys never enter the lock. A resumed Attempt probes the remote directory
+(Mode A) or remote container (Mode B) and attaches to it, or uploads the
+latest checkpoint when that host is gone.
 
 ## Capabilities
 

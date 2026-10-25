@@ -33,6 +33,7 @@ from ageval.environments.remote_state import (
     CHECKPOINT_SYNC_NAME,
     CHECKPOINT_SYNC_SCRIPT,
     parse_state_document,
+    push_restored_tree,
     state_command,
     wrapper_line,
 )
@@ -357,6 +358,9 @@ class E2BHost(BaseEnvironment):
             )
         self._started = True
         self._stopped = False
+
+    async def push_restored_box(self, box: Path) -> None:
+        await push_restored_tree(self, box)
 
     def mirror_checkpoint(self, dest: Path) -> None:
         if self._sandbox is None:

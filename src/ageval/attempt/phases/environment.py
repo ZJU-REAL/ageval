@@ -41,6 +41,9 @@ async def _finish_rebuild(ctx: AttemptCtx) -> None:
         if seq is not None:
             restore_checkpoint(ctx, seq)
             write_cursor(ctx.evidence.path(AGENT_BOX_REL), seq=seq, request_id=f"seq_{seq}")
+        push = getattr(ctx.host, "push_restored_box", None)
+        if callable(push):
+            await push(ctx.evidence.path(AGENT_BOX_REL))
         publish_environment_handle(ctx)
     except RecordedError:
         raise
