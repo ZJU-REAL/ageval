@@ -12,7 +12,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from ageval.environments.box_state import host_pid_alive, probe_box
+from ageval.environments.box_state import host_pid_alive, probe_box, write_inflight, write_last_exit
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
     EVALUATION_PATH,
@@ -31,6 +31,27 @@ from ageval.plugins.decorators import environment_plugin
 
 _BOX_ROOT = "/attempt"
 _MAX_STREAM_BYTES = 256 * 1024
+
+
+def _finish_exec(box: Path, request_id: str | None, result: ExecResult) -> None:
+    if not request_id:
+        return
+    from ageval.environments.box_state import INFLIGHT_OUTPUT_NAME, ensure_state_dir
+
+    folder = ensure_state_dir(box)
+    (folder / INFLIGHT_OUTPUT_NAME).write_text(
+        f"{result.stdout}{result.stderr}",
+        encoding="utf-8",
+    )
+    write_last_exit(
+        box,
+        {
+            "request_id": request_id,
+            "exit_code": result.exit_code,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        },
+    )
 
 
 class LocalStdio:
@@ -135,6 +156,7 @@ class LocalHost(BaseEnvironment):
         timeout_sec: float | None = None,
         user: str | None = None,
         service: str | None = None,
+        request_id: str | None = None,
     ) -> ExecResult:
         self._assert_started()
         if user is not None:
@@ -159,20 +181,26 @@ class LocalHost(BaseEnvironment):
             stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
         )
+        if request_id:
+            write_inflight(self._root, pid=process.pid, request_id=request_id)
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_sec)
         except TimeoutError:
             self._kill_group(process.pid)
             with contextlib.suppress(OSError):
                 await process.wait()
-            return ExecResult(exit_code=124, stdout="", stderr="exec timed out", truncated=False)
+            result = ExecResult(exit_code=124, stdout="", stderr="exec timed out", truncated=False)
+            _finish_exec(self._root, request_id, result)
+            return result
         truncated = len(stdout) > _MAX_STREAM_BYTES or len(stderr) > _MAX_STREAM_BYTES
-        return ExecResult(
+        result = ExecResult(
             exit_code=int(process.returncode or 0),
             stdout=stdout[:_MAX_STREAM_BYTES].decode("utf-8", errors="replace"),
             stderr=stderr[:_MAX_STREAM_BYTES].decode("utf-8", errors="replace"),
             truncated=truncated,
         )
+        _finish_exec(self._root, request_id, result)
+        return result
 
     async def upload(self, source: Path, dest: str, *, service: str | None = None) -> None:
         self._assert_started()

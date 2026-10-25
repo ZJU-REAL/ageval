@@ -1052,6 +1052,7 @@ class ParentAgentService:
             bind(scope)
         else:
             binding.executor.activity = scope
+        scope.capture = self.checkpoint_capture
         return scope
 
     def _reconcile_resume(self, scope: Any) -> None:

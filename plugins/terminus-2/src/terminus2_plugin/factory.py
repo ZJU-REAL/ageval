@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import uuid
@@ -218,7 +219,7 @@ class Terminus2ExecutorSPI(BaseExecutor):
         user = getattr(self.placement, "user", None)
         session = TmuxSession(
             self.host,
-            session_name="t" + uuid.uuid4().hex[:8],
+            session_name=_tmux_name(self),
             cwd=cwd,
             user=str(user) if user else None,
             pane_width=self.options.pane_width,
@@ -235,6 +236,9 @@ class Terminus2ExecutorSPI(BaseExecutor):
                 invoke_timeout=timeout,
             )
 
+        from ageval.plugins.step_activity import scope_of
+
+        scope = scope_of(self)
         episode = run_episode(
             instruction=prompt,
             session=session,
@@ -244,6 +248,8 @@ class Terminus2ExecutorSPI(BaseExecutor):
             max_format_errors=self.options.max_format_errors,
             timeout=timeout,
             session_id=self.session_id,
+            activity=scope,
+            reuse_session=bool(scope and scope.environment_reattached),
         )
         _write_backend_raw(collect_dir, episode.raw)
         return episode
@@ -281,6 +287,16 @@ class Terminus2ExecutorSPI(BaseExecutor):
         if turns is not None:
             metadata["turns"] = turns
         return metadata
+
+
+def _tmux_name(executor: Terminus2ExecutorSPI) -> str:
+    from ageval.plugins.step_activity import scope_of
+
+    scope = scope_of(executor)
+    if scope is None:
+        return "t" + uuid.uuid4().hex[:8]
+    digest = hashlib.sha256(scope.invoke_request_id.encode()).hexdigest()[:8]
+    return "t" + digest
 
 
 def build_executor(**kwargs: Any) -> Terminus2ExecutorSPI:

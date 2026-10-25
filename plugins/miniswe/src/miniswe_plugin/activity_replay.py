@@ -1,0 +1,142 @@
+"""Log mini-swe steps and replay completed ones without another model or bash call."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from ageval.plugins.step_activity import (
+    StepReplay,
+    checkpoint_prepare,
+    next_step,
+    scope_of,
+)
+
+_TOOLS = frozenset({"bash"})
+
+
+def install_activity(model: Any, env: Any, executor: Any) -> None:
+    scope = scope_of(executor)
+    if scope is None:
+        return
+    replay = StepReplay(scope, tool_names=_TOOLS)
+    orig_query = model.query
+
+    def query(messages: Any, **kwargs: Any) -> Any:
+        cached = replay.take_model()
+        if cached is not None:
+            usage = (
+                cached.payload.get("usage") if isinstance(cached.payload.get("usage"), dict) else {}
+            )
+            cost = usage.get("cost_usd") if isinstance(usage, dict) else 0.0
+            return {
+                "role": "assistant",
+                "content": cached.payload.get("assistant_text") or "",
+                "extra": {
+                    "actions": list(cached.payload.get("tool_calls") or []),
+                    "cost": cost or 0.0,
+                },
+            }
+        step = next_step(scope)
+        tail = _tail(messages)
+        scope.record_model_turn_in_flight(step, tail)
+        try:
+            message = orig_query(messages, **kwargs)
+        except Exception:  # noqa: BLE001 — a cut-off model turn stays in the log
+            scope.record_model_turn_aborted(step, reason="process_interrupted")
+            raise
+        actions: list[Any] = []
+        extra = message.get("extra") if isinstance(message, dict) else None
+        if isinstance(extra, dict) and isinstance(extra.get("actions"), list):
+            actions = list(extra["actions"])
+        content = message.get("content") if isinstance(message, dict) else ""
+        scope.record_model_turn_completed(
+            step,
+            assistant_text=str(content or ""),
+            tool_calls=actions,
+            usage=_usage(extra),
+        )
+        return message
+
+    model.query = query
+    orig_exec = env.execute
+    counter = {"n": 0}
+
+    def execute(action: dict, cwd: str = "", *, timeout: int | None = None) -> dict[str, Any]:
+        cached = replay.take_tool()
+        if cached is not None:
+            code = cached.payload.get("exit_code")
+            out = {
+                "output": str(cached.payload.get("content") or ""),
+                "returncode": code if isinstance(code, int) and not isinstance(code, bool) else 0,
+                "exception_info": "",
+            }
+            from miniswe_plugin.env import _check_submitted
+
+            _check_submitted(out)
+            return out
+        counter["n"] += 1
+        call_id = f"bash_{counter['n']}"
+        command = str(action.get("command") or "")
+        scope.record_tool_call_in_flight(
+            call_id,
+            "bash",
+            "execute",
+            {"command": command},
+            replay_safe=False,
+            timeout_sec=float(timeout or getattr(env, "timeout", 30)),
+        )
+        env._exec_request_id = f"tool_{scope.session_id}_{call_id}"
+        try:
+            out = orig_exec(action, cwd, timeout=timeout)
+        except Exception as exc:  # noqa: BLE001 — Submitted exits; other errors stay in the log
+            content = _submitted_content(exc)
+            scope.record_tool_call_completed(
+                call_id,
+                outcome="ok" if content is not None else "error",
+                exit_code=0 if content is not None else None,
+                content=content if content is not None else f"{type(exc).__name__}:{exc}",
+                prepare=checkpoint_prepare(scope),
+            )
+            raise
+        finally:
+            env._exec_request_id = None
+        code = int(out.get("returncode") or 0)
+        scope.record_tool_call_completed(
+            call_id,
+            outcome="ok" if code == 0 else "error",
+            exit_code=code,
+            content=str(out.get("output") or ""),
+            prepare=checkpoint_prepare(scope),
+        )
+        return out
+
+    env.execute = execute
+
+
+def _tail(messages: Any) -> list[dict[str, Any]]:
+    if not isinstance(messages, list) or not messages:
+        return []
+    last = messages[-1]
+    return [dict(last)] if isinstance(last, dict) else []
+
+
+def _usage(extra: Any) -> dict[str, Any] | None:
+    if not isinstance(extra, dict):
+        return None
+    cost = extra.get("cost")
+    if isinstance(cost, int | float) and not isinstance(cost, bool):
+        return {"cost_usd": float(cost)}
+    return None
+
+
+def _submitted_content(exc: BaseException) -> str | None:
+    try:
+        from minisweagent.exceptions import Submitted
+    except ImportError:
+        return None
+    if not isinstance(exc, Submitted):
+        return None
+    payload = exc.args[0] if exc.args else None
+    if isinstance(payload, dict):
+        return str(payload.get("content") or "")
+    return ""

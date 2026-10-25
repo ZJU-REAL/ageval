@@ -23,7 +23,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 
-from ageval.environments.box_state import probe_box
+from ageval.environments.box_state import probe_box, write_last_exit
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
     EVALUATION_PATH,
@@ -315,6 +315,7 @@ class DockerHost(BaseEnvironment):
         timeout_sec: float | None = None,
         user: str | None = None,
         service: str | None = None,
+        request_id: str | None = None,
     ) -> ExecResult:
         self._assert_started()
         argv = [str(part) for part in command]
@@ -323,16 +324,38 @@ class DockerHost(BaseEnvironment):
         if service is not None:
             return await self._compose_exec(service, argv, timeout_sec=timeout_sec)
         assert self._container is not None
+        child_env = dict(env or {})
+        if request_id:
+            child_env["AGEVAL_EXEC_REQUEST"] = request_id
+            argv = _exec_pid_wrapper(argv)
         prefix = [
             "exec",
             "-u",
             user or self._user,
             "-w",
             cwd or WORKSPACE_PATH,
-            *self._env_flags(env),
+            *self._env_flags(child_env),
             self._container,
         ]
-        return await self._run_docker(prefix + argv, timeout_sec=timeout_sec)
+        result = await self._run_docker(prefix + argv, timeout_sec=timeout_sec)
+        if request_id:
+            from ageval.environments.box_state import INFLIGHT_OUTPUT_NAME, ensure_state_dir
+
+            folder = ensure_state_dir(self._root)
+            (folder / INFLIGHT_OUTPUT_NAME).write_text(
+                f"{result.stdout}{result.stderr}",
+                encoding="utf-8",
+            )
+            write_last_exit(
+                self._root,
+                {
+                    "request_id": request_id,
+                    "exit_code": result.exit_code,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                },
+            )
+        return result
 
     async def upload(self, source: Path, dest: str, *, service: str | None = None) -> None:
         """Copy into the box. ``/attempt`` stays on the bind mount."""
@@ -860,6 +883,16 @@ def copy_bind_tree(src: Path, dest: Path) -> None:
     """
     dest.mkdir(parents=True, exist_ok=True)
     shutil.copytree(src, dest, dirs_exist_ok=True, symlinks=True)
+
+
+def _exec_pid_wrapper(argv: list[str]) -> list[str]:
+    script = (
+        "mkdir -p /attempt/.ageval-state; "
+        "echo $$ > /attempt/.ageval-state/inflight.pid; "
+        'printf %s "$AGEVAL_EXEC_REQUEST" > /attempt/.ageval-state/inflight.request; '
+        'exec "$@"'
+    )
+    return ["sh", "-c", script, "ageval-exec", *argv]
 
 
 def _container_running(container_id: str) -> bool:

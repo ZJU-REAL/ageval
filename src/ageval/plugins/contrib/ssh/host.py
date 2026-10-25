@@ -191,7 +191,9 @@ class SSHHost(BaseEnvironment):
         timeout_sec: float | None = None,
         user: str | None = None,
         service: str | None = None,
+        request_id: str | None = None,
     ) -> ExecResult:
+        del request_id
         self._assert_started()
         if user is not None:
             raise EnvironmentFailure(
