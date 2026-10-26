@@ -12,3 +12,8 @@ repos:
         entry: uv run ruff check src tests plugins services scripts
         language: system
         pass_filenames: false
+      - id: pyright
+        name: pyright
+        entry: uv run pyright
+        language: system
+        pass_filenames: false

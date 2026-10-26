@@ -15,6 +15,7 @@ long-lived connection object to leak.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import contextlib
 import os
 import shlex
@@ -23,6 +24,7 @@ import threading
 import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
@@ -34,7 +36,16 @@ from ageval.environments.protocol import (
     EnvironmentFailure,
     ExecResult,
     Placement,
+    ProbeStatus,
     reject_foreign_service,
+)
+from ageval.environments.remote_state import (
+    CHECKPOINT_SYNC_NAME,
+    CHECKPOINT_SYNC_SCRIPT,
+    apply_checkpoint_tar,
+    parse_state_document,
+    push_restored_tree,
+    wrapper_line,
 )
 from ageval.plugins.base import BaseEnvironment
 from ageval.plugins.decorators import environment_plugin
@@ -180,6 +191,23 @@ class SSHHost(BaseEnvironment):
             # Shape A shares the machine with its operator: only our root goes.
             await self._ssh(["rm", "-rf", self._remote_root], timeout_sec=120.0)
 
+    async def discard(self, handle: Mapping[str, Any]) -> None:
+        """Remove a remote container recorded earlier. A directory-only host stays."""
+        container_id = str(handle.get("container_id") or "").strip()
+        host_name = str(handle.get("host") or "").strip()
+        if not container_id or not host_name:
+            return
+        previous = (self._host, self._user, self._port)
+        self._host = host_name
+        user = handle.get("user")
+        self._user = str(user) if isinstance(user, str) and user else None
+        port = handle.get("port")
+        self._port = str(port) if port else None
+        try:
+            await self._ssh(["docker", "rm", "-f", container_id], timeout_sec=120.0)
+        finally:
+            self._host, self._user, self._port = previous
+
     # --- transport -----------------------------------------------------------
 
     async def exec(
@@ -191,6 +219,7 @@ class SSHHost(BaseEnvironment):
         timeout_sec: float | None = None,
         user: str | None = None,
         service: str | None = None,
+        request_id: str | None = None,
     ) -> ExecResult:
         self._assert_started()
         if user is not None:
@@ -206,6 +235,10 @@ class SSHHost(BaseEnvironment):
         argv = [str(part) for part in command]
         if not argv:
             raise EnvironmentFailure("environment_exec_invalid", "exec requires a command")
+        if request_id:
+            await self._ensure_sync_script()
+            inner = " ".join(shlex.quote(part) for part in argv)
+            argv = ["sh", "-c", wrapper_line(request_id, inner)]
         return await self._ssh(
             self._remote_argv(argv, cwd=cwd or WORKSPACE_PATH, env=env),
             timeout_sec=timeout_sec,
@@ -278,12 +311,19 @@ class SSHHost(BaseEnvironment):
         *,
         placement: Placement,
         env: Mapping[str, str] | None = None,
+        request_id: str | None = None,
     ) -> SSHStdio:
         """Start the process on the far side and hand back its pipes."""
         self._assert_started()
         parts = [str(part) for part in argv]
         if not parts:
             raise EnvironmentFailure("environment_attach_invalid", "attach_stdio requires argv")
+        from ageval.environments.remote_state import stdio_inflight_argv
+
+        remote_env = {"HOME": self.visible_path(placement.home), **dict(env or {})}
+        if request_id:
+            remote_env["AGEVAL_EXEC_REQUEST"] = request_id
+            parts = stdio_inflight_argv(parts)
         command = [
             "ssh",
             "-T",
@@ -295,7 +335,7 @@ class SSHHost(BaseEnvironment):
             *self._remote_argv(
                 parts,
                 cwd=placement.workdir,
-                env={"HOME": self.visible_path(placement.home), **dict(env or {})},
+                env=remote_env,
             ),
         ]
         process = subprocess.Popen(  # noqa: S603 — argv built here, no shell
@@ -310,6 +350,145 @@ class SSHHost(BaseEnvironment):
         return pipe
 
     # --- ssh specifics -------------------------------------------------------
+
+    def runtime_handle(self) -> dict[str, object]:
+        if not self._host:
+            return {}
+        return {
+            "host": self._host,
+            "user": self._user,
+            "port": self._port,
+            "remote_root": self._remote_root,
+            "container_id": self._container,
+        }
+
+    async def probe(self, handle: Mapping[str, object]) -> ProbeStatus:
+        host = str(handle.get("host") or "").strip()
+        root = str(handle.get("remote_root") or "").strip()
+        if not host or not root:
+            return ProbeStatus(status="absent")
+        previous = (self._host, self._user, self._port, self._remote_root, self._container)
+        self._host = host
+        self._user = str(handle.get("user") or "") or None
+        self._port = str(handle.get("port") or "") or None
+        self._remote_root = root
+        raw_container = handle.get("container_id")
+        self._container = str(raw_container) if raw_container else None
+        try:
+            result = await self._ssh(self._state_argv("dump"), timeout_sec=30.0)
+        except Exception:  # noqa: BLE001 — an unreachable host is absent
+            result = None
+        self._host, self._user, self._port, self._remote_root, self._container = previous
+        if result is None or result.exit_code != 0:
+            return ProbeStatus(status="absent")
+        return parse_state_document(result.stdout)
+
+    async def attach(self, handle: Mapping[str, object]) -> None:
+        status = await self.probe(handle)
+        if status.status == "absent":
+            raise EnvironmentFailure(
+                "environment_attach_invalid",
+                "ssh environment is not available to attach",
+            )
+        self._host = str(handle.get("host") or "")
+        self._user = str(handle.get("user") or "") or None
+        self._port = str(handle.get("port") or "") or None
+        self._remote_root = str(handle.get("remote_root") or "")
+        raw_container = handle.get("container_id")
+        self._container = str(raw_container) if raw_container else None
+        self._started = True
+        self._stopped = False
+
+    async def push_restored_box(self, box: Path) -> None:
+        await push_restored_tree(self, box)
+
+    def sync_box_state(self, box: Path) -> None:
+        if not self._started:
+            return
+        _drive(self._sync_box_state(box))
+
+    async def _sync_box_state(self, box: Path) -> None:
+        from ageval.environments.remote_state import local_state_files
+
+        await self._ensure_sync_script()
+        for path, remote in local_state_files(box):
+            await self.upload(path, remote)
+
+    def mirror_checkpoint(self, dest: Path) -> None:
+        if not self._started:
+            return
+        _drive(self._pull_checkpoint(dest))
+
+    async def _pull_checkpoint(self, dest: Path) -> None:
+        out = "/tmp/.ageval-state/delta.tar"
+        packed = await self._ssh(self._state_argv("pack", out), timeout_sec=120.0)
+        if packed.exit_code != 0:
+            return
+        local = dest / "delta.tar"
+        local.parent.mkdir(parents=True, exist_ok=True)
+        fetched = await self._scp(f"{self._target()}:{out}", str(local), recursive=False)
+        if fetched.exit_code != 0 or not local.is_file():
+            return
+        apply_checkpoint_tar(dest, local.read_bytes())
+        local.unlink()
+
+    async def _ensure_sync_script(self) -> None:
+        remote = "/tmp/.ageval-state"
+        made = await self._ssh(["mkdir", "-p", remote], timeout_sec=30.0)
+        if made.exit_code != 0:
+            raise EnvironmentFailure(
+                "environment_setup_failed",
+                "could not create the remote state directory",
+            )
+        import tempfile
+
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
+            handle.write(CHECKPOINT_SYNC_SCRIPT)
+            path = Path(handle.name)
+        try:
+            copied = await self._scp(
+                str(path),
+                f"{self._target()}:{remote}/{CHECKPOINT_SYNC_NAME}",
+                recursive=False,
+            )
+        finally:
+            path.unlink(missing_ok=True)
+        if copied.exit_code != 0:
+            raise EnvironmentFailure(
+                "environment_setup_failed",
+                "could not upload checkpoint_sync.py",
+            )
+        if not self._container:
+            return
+        made_in = await self._ssh(
+            ["docker", "exec", self._container, "mkdir", "-p", remote],
+            timeout_sec=30.0,
+        )
+        if made_in.exit_code != 0:
+            raise EnvironmentFailure(
+                "environment_setup_failed",
+                "could not create the container state directory",
+            )
+        placed = await self._ssh(
+            [
+                "docker",
+                "cp",
+                f"{remote}/{CHECKPOINT_SYNC_NAME}",
+                f"{self._container}:{remote}/{CHECKPOINT_SYNC_NAME}",
+            ],
+            timeout_sec=30.0,
+        )
+        if placed.exit_code != 0:
+            raise EnvironmentFailure(
+                "environment_setup_failed",
+                "could not copy checkpoint_sync.py into the container",
+            )
+
+    def _state_argv(self, *args: str) -> list[str]:
+        inner = ["python3", f"/tmp/.ageval-state/{CHECKPOINT_SYNC_NAME}", *args]
+        if self._container:
+            return ["docker", "exec", self._container, *inner]
+        return inner
 
     def placement(self) -> Placement:
         if not self._started:
@@ -472,6 +651,20 @@ class SSHHost(BaseEnvironment):
             raise EnvironmentFailure("environment_not_started", "ssh box is not started")
         if self._stopped:
             raise EnvironmentFailure("environment_stopped", "ssh box is already stopped")
+
+
+def _drive(coro: Any) -> Any:
+    """Run SSH I/O from ``capture_box``, which already sits on the Attempt loop.
+
+    ``asyncio.run`` on that loop raises ``RuntimeError``. A live loop therefore
+    gets a worker thread and its own loop; a sync caller still uses ``asyncio.run``.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 def _expand_option(raw: str | None, *, field: str) -> str | None:

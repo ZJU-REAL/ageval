@@ -102,9 +102,12 @@ class NooaBoxExecutor:
         timeout: float,
         collect_dir: str | os.PathLike[str] | None,
     ) -> AgentResult:
+        from ageval.plugins.contrib.acp.activity_stream import prompt_for_resume
+
         await self._prepare()
+        scope = getattr(self, "activity", None)
         request = {
-            "prompt": prompt,
+            "prompt": prompt_for_resume(scope, prompt, resumed_native=False),
             "agent": self.agent_ref,
             "method": self.method,
             "model": self.model,
@@ -114,12 +117,16 @@ class NooaBoxExecutor:
         base = self._resolve_base_url()
         if base:
             request["api_base"] = base
-        result = await self._host.exec(
+        from ageval.plugins.step_stream import exec_with_steps
+
+        result = await exec_with_steps(
+            self._host,
             [
                 *self._host.python_command,
                 self._host.visible_path(BOX_WORKER),
                 json.dumps(request, sort_keys=True),
             ],
+            getattr(self, "activity", None),
             cwd=self._placement.workdir or WORKSPACE_PATH,
             env=self._exec_env(),
             timeout_sec=timeout,
@@ -218,7 +225,15 @@ class NooaBoxExecutor:
         metadata.setdefault("agent", self.agent_ref)
         metadata.setdefault("execution_location", "attempt-container")
         structured = payload.get("structured")
-        events = payload.get("events") or ()
+        raw_events = payload.get("events") or ()
+        fresh = (
+            tuple(event for event in raw_events if isinstance(event, dict))
+            if isinstance(raw_events, list)
+            else ()
+        )
+        from ageval.plugins.activity_events import prior_activity_events
+
+        events = tuple(prior_activity_events(getattr(self, "activity", None), fresh))
         usage = payload.get("usage")
         return AgentResult(
             model=str(payload.get("model") or self.model),
@@ -227,7 +242,7 @@ class NooaBoxExecutor:
             ok=bool(payload.get("ok", True)),
             error=str(payload["error"]) if payload.get("error") else None,
             stderr=stderr[-2000:],
-            events=tuple(events) if isinstance(events, list) else (),
+            events=events,
             usage=usage if isinstance(usage, dict) else None,
             metadata=metadata,
         )

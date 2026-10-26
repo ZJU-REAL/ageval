@@ -17,6 +17,12 @@ Placement next to ACP, miniswe, and openhands:
 
 `task_complete` ends the episode. The package evaluator still owns PASS.
 
+A resumed episode rebuilds its message list from the activity log, including a
+logged compaction summary when one exists. An idle environment keeps the
+existing tmux session. A rebuilt environment starts tmux again in the restored
+workspace and continues from the next turn. Completed keystroke batches are
+not sent again.
+
 ## Capabilities
 
 | | Value |

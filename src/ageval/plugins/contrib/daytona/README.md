@@ -5,7 +5,8 @@ First-party exclusive-slot implementation for `environment: daytona`.
 The Attempt runs in a [Daytona](https://www.daytona.io) sandbox built from
 an OCI snapshot. Vendor SDK objects, snapshot names, and sandbox ids stay
 in this package. Neighbors only call Protocol methods (`upload` / `exec` /
-`attach_stdio`).
+`attach_stdio`). A resumed Attempt probes the existing sandbox and attaches
+to it, or uploads the latest checkpoint into a new sandbox.
 
 ## Capabilities
 

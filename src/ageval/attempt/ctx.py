@@ -81,6 +81,12 @@ class AttemptCtx:
     acp_entry_argv0: dict[str, str] = field(default_factory=dict)
     phase: str = "created"
     evaluation_result: Any = None
+    activity: Any = None
+    checkpoints: Any = None
+    recovery_attached: bool = False
+    recovery_rebuild: bool = False
+    _budget_seconds: float | None = None
+    _spent_offset: float = 0.0
     _writers_stopped: bool = False
     _phase_clock_frozen: bool = False
     _frozen_remaining: float | None = None
@@ -115,11 +121,36 @@ class AttemptCtx:
             return
         limits = thaw(getattr(lock, "limits", None) or {})
         raw = limits.get(key) if isinstance(limits, dict) else None
+        already_ms = 0.0
+        if self.activity is not None:
+            phase_name = {
+                "environment_seconds": "environment",
+                "wall_time_seconds": "run",
+                "evaluate_seconds": "evaluate",
+            }.get(key, "")
+            if phase_name:
+                already_ms = float(self.activity.phase_elapsed_ms(phase_name))
+        self._spent_offset = max(0.0, already_ms) / 1000.0
         if isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
+            self._budget_seconds = None
             self.deadline_monotonic = None
         else:
-            self.deadline_monotonic = time.monotonic() + float(raw)
+            self._budget_seconds = float(raw)
+            remaining = self._budget_seconds - self._spent_offset
+            if remaining <= 0:
+                self.deadline_monotonic = time.monotonic()
+            else:
+                self.deadline_monotonic = time.monotonic() + remaining
         self._push_agent_deadline()
+
+    def active_elapsed_ms(self) -> float:
+        """Active milliseconds already consumed on the current phase clock."""
+        if self._budget_seconds is None:
+            return self._spent_offset * 1000.0
+        remaining = self.remaining_seconds()
+        if remaining is None:
+            return self._spent_offset * 1000.0
+        return max(0.0, (self._budget_seconds - remaining) * 1000.0)
 
     def freeze_phase_clock(self) -> None:
         """Hold the current phase's remaining time while an upstream stall waits.

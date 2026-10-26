@@ -47,7 +47,7 @@ preflight      host.preflight: verify daemon / sandbox credentials before provis
 environment    before_environment → host.start → upload data/ → after_environment_ready → environment_setup → after_environment
   │
   ▼
-run            before_run → subprocess run.py (ParentAgentService socket) → seal_run & mark_writers_stopped → harvest task-artifacts/ → after_run
+run            before_run → subprocess run.py (ParentAgentService socket) → mark_writers_stopped → harvest task-artifacts/ → seal_run → after_run
   │
   ▼
 evaluate       before_evaluate → evaluation.collect → upload evaluation/ & artifacts → evaluation_runtime.evaluate (evaluator.py) → bind_evaluation → after_evaluate
@@ -92,7 +92,7 @@ CLI (--task / --profiles / --agent / --model / --set / --layout)
 async def run_attempt(ctx: AttemptCtx) -> None:
     try:
         await environment.run(ctx)  # Provision host, upload data/, probe runtime, run setup.sh
-        await run.run(ctx)          # Execute run.py subprocess, seal solver, harvest artifacts
+        await run.run(ctx)          # Execute run.py, stop writers, harvest artifacts, then seal_run
         await evaluate.run(ctx)     # Upload evaluation/ (gold), run evaluator.py, bind verdict
     finally:
         await record.run(ctx)       # Seal trajectory.jsonl, observation.jsonl, and summary.json
@@ -104,7 +104,7 @@ async def run_attempt(ctx: AttemptCtx) -> None:
 | Phase | Default Implementation (`attempt/phases/`) | Exclusive Slots Used | Chain Slots Emitted (in order) |
 | --- | --- | --- | --- |
 | `environment` | Starts `ctx.host`, uploads `data/` to `/attempt/workspace`, prepares `$HOME` overlays and ACP runtime, runs `environment/setup.sh`. | `environment` (Attempt-wide) | `before_environment` → `after_environment_ready` → `environment_setup` → `after_environment` |
-| `run` | Runs `run.py` in a child process connected to `ParentAgentService` over a Unix socket; calls `seal_run` and snapshots declared `artifacts.publishable` into `task-artifacts/`. | `executor` (per role profile) | `before_run` → `before/after_agent_open` → `before/after_agent_invoke` → `normalize_agent_result` → `before/after_agent_close` → `after_run` |
+| `run` | Runs `run.py` in a child process connected to `ParentAgentService` over a Unix socket. After solver writers stop, declared `artifacts.publishable` are copied into `task-artifacts/`, and `seal_run` is recorded only after that copy succeeds. | `executor` (per role profile) | `before_run` → `before/after_agent_open` → `before/after_agent_invoke` → `normalize_agent_result` → `before/after_agent_close` → `after_run` |
 | `evaluate` | Runs optional `evaluation.collect`, uploads `evaluation/` (`gold`) and harvested artifacts to the scoring host (reused run host, single `evaluate_host.isolated` container, or lazy named `evaluation.environments`), runs `evaluator.py`, and calls `ctx.bind_evaluation`. | `evaluation_runtime` (default: `default`), `executor` (for optional `judge` roles) | `before_evaluate` → `after_evaluate` |
 | `record` | Collects and seals run-phase events into `trajectory.jsonl` (and evaluate-phase judge events into `evaluation/observation.jsonl`), then enriches `summary.extra`. | `trajectory_seal` (default: `default`) | `trajectory_collect` → `trajectory_enrich` → `summary_enrich` |
 | `cleanup` | Stops all started isolated scoring hosts and `ctx.host` (`delete = not ctx.keep_workspace`). | `environment` | `cleanup_report` |
@@ -122,7 +122,7 @@ async def run_attempt(ctx: AttemptCtx) -> None:
 | Limit Key | Default | Enforced Scope | Behavior When Reached |
 | --- | --- | --- | --- |
 | `limits.environment_seconds` | `600` | `environment` phase (`host.start`, `data/` upload, `after_environment_ready`, `environment_setup`) | Raises `TimeoutError("environment_timeout")`; Attempt terminates as `ERROR` (`phase: "environment"`), and `run` does not start. |
-| `limits.wall_time_seconds` | `300` | `run` phase (from phase entry until `run.py` exits and solver calls drain) | Records `limit_reached: "wall_time_seconds"`, seals solver sessions, harvests existing workspace artifacts, and proceeds to `evaluate`. |
+| `limits.wall_time_seconds` | `300` | `run` phase (from phase entry until `run.py` exits and solver calls drain) | Records `limit_reached: "wall_time_seconds"`, seals solver sessions, harvests existing workspace artifacts, and proceeds to `evaluate`. On recovery, `arm_phase_budget` subtracts the active `elapsed_ms` already recorded on completed steps in that phase. If the remainder is already `<= 0`, `run` records the limit and does not start another solver effect. |
 | `limits.evaluate_seconds` | `600` | `evaluate` phase (`evaluation.collect`, scoring host startup/upload, `evaluator.py`, `scoring.exec`, and `judge` calls) | Raises `TimeoutError("evaluate_timeout")`; Attempt terminates as `ERROR` (`phase: "evaluate"`). |
 | `limits.agent_invocations` | `1` | `run`-phase `executor.invoke` calls across all solver sessions (`judge` calls in `evaluate` are exempt) | Atomic reservation via `AgentInvocationQuota.try_consume()` right before `executor.invoke`. Refuses new solver calls with `quota_exceeded`, records `limit_reached: "agent_invocations"`, and proceeds to `evaluate`. |
 | `limits.agent_concurrency` | `1` | Maximum concurrent `running` solver invocations in `ParentAgentService` | Calls within a single `session_id` serialize in arrival order; calls across distinct sessions overlap up to `agent_concurrency` on executors with `concurrent_sessions = True` (`acp`, `openai-http`). |
@@ -151,7 +151,8 @@ All settled Attempt directories (`.ageval/runs/<attempt_id>/` containing `result
 
 | Operation | CLI Invocation | Identity Behavior | Execution Semantics |
 | --- | --- | --- | --- |
-| **Resume suite** | `ageval run <dataset> --resume-suite <suite_run_id>` | Keeps `suite_run_id` | Skips slots that already have a settled `result.json` (`PASS`, `FAIL`, or `ERROR`). Runs only missing slots or `suite_cancelled` placeholders. |
+| **Resume suite** | `ageval run <dataset> --resume-suite <suite_run_id>` | Keeps `suite_run_id`. Reuses an unsealed Attempt whose `activity.jsonl` header matches `(suite_run_id, task_id, attempt_index)` and `locked_config_digest`. | Skips slots that already have a settled `result.json` (`PASS`, `FAIL`, or `ERROR`). Recovers a matching unsealed Attempt in place. A slot with no activity header, or a digest mismatch, mints a new Attempt. `suite_cancelled` placeholders still run. |
+| **Resume Attempt** | `ageval run <dataset> --task <id> --resume <attempt_id>` | Keeps that `attempt_id` | Recovers one unsealed directory in place. The reopened activity log uses the evidence store's redaction sentinels. Exit `2` with no new `result.json` when `result.json` already exists, the lock digest does not match, or the environment stays `busy`. `run` is skipped only when `seal_run` is complete and every declared publishable artifact is present under `task-artifacts/`. A task with no publishable artifacts needs only `seal_run`. |
 | **Retry errors** | `ageval run <dataset> --resume-suite <id> --retry-errors` | Keeps `suite_run_id`; mints **new** Attempt per retried slot | Re-runs slots whose current status is `ERROR` (`PASS` and `FAIL` remain skipped). Moves the old Attempt reference into `previous[]` on the slot. |
 | **Replace slot** | `ageval run <dataset> --resume-suite <id> --task <t> --replace-slot` | Keeps `suite_run_id`; mints **new** Attempt for target slot | Re-runs the targeted `(task_id, attempt_index)` slot regardless of prior status (`PASS`, `FAIL`, or `ERROR`) and moves the prior Attempt into `previous[]`. |
 | **Regrade** | `ageval results regrade <dataset> --run <attempt_id>` | Mints **new** Attempt | Skips `run` (`run.py`, solver sessions, and `evaluation.collect` commands do not run). Copies archived `task-artifacts/` and `verifier-collect/` from the source Attempt into a fresh scoring environment and runs `evaluate → record → cleanup`. |
@@ -197,3 +198,7 @@ During `regrade`, if the source Attempt is missing declared publishable artifact
 | `evaluator.py` returns status other than `PASS` or `FAIL` | `ERROR` | `"evaluate"` | `evaluator_invalid_status` | `evaluation/` |
 | `evaluator.py` raises an unhandled exception | `ERROR` | `"evaluate"` | `ScriptError.title` or exception class name | `evaluation/` |
 | `host.stop` fails during `cleanup` | *(unchanged)* | *(unchanged)* | Recorded as `cleanup_warning` fact in `summary.json`; does not overwrite bound `Result` | `attempt/phases/cleanup.py` |
+| Middle line of `activity.jsonl` is not valid | `ERROR` | `"run"` | `activity_log_corrupt` | `evidence/` |
+| Restarted `run.py` sends a different prompt for a logged `request_id` | `ERROR` | `"run"` | `session_alignment_mismatch` | `runtime/` |
+| Cold rebuild or checkpoint restore fails | `ERROR` | `"environment"` | `recovery_rebuild_failed` | `attempt/` |
+| `--resume` finds a settled Attempt, a digest mismatch, or a still-busy environment | *(unchanged or no Attempt)* | — | Exit `2`; `attempt_already_settled`, `locked_config_mismatch`, or `attempt_still_busy` does not write `result.json` | `application/` |

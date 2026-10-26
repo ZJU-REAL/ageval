@@ -14,7 +14,12 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from ageval.environments.protocol import EnvironmentCapabilities, Placement
+from ageval.environments.protocol import (
+    EnvironmentCapabilities,
+    EnvironmentFailure,
+    Placement,
+    ProbeStatus,
+)
 from ageval.model.spec import ModelSpec
 
 
@@ -37,6 +42,25 @@ class BaseEnvironment(ABC):
     @abstractmethod
     async def start(self, *, force_build: bool = False) -> None:
         """Open the environment for one Attempt."""
+
+    def runtime_handle(self) -> dict[str, Any]:
+        """JSON handle for a started box. Kinds that can reattach override this."""
+        return {}
+
+    async def probe(self, handle: Mapping[str, Any]) -> ProbeStatus:
+        """Default: the previous box is not reusable until the kind implements probe."""
+        del handle
+        return ProbeStatus(status="absent")
+
+    async def attach(self, handle: Mapping[str, Any]) -> None:
+        """Default: refuse. ``local`` and ``docker`` bind a live box instead."""
+        del handle
+        msg = "this environment cannot attach to an existing box"
+        raise EnvironmentFailure("environment_attach_invalid", msg)
+
+    async def discard(self, handle: Mapping[str, Any]) -> None:
+        """Stop a previously recorded box. The default leaves the directory in place."""
+        del handle
 
     @abstractmethod
     async def stop(self, *, delete: bool) -> None:
@@ -98,3 +122,7 @@ class BaseExecutor(ABC):
         """Optional session open. The default does nothing."""
         del kwargs
         return None
+
+    def bind_activity(self, scope: Any) -> None:
+        """Remember the parent activity scope for this executor. Default stores it."""
+        self.activity = scope

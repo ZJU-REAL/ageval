@@ -4,7 +4,9 @@ First-party exclusive-slot implementation for `environment: e2b`.
 
 The Attempt runs in an [E2B](https://e2b.dev) cloud sandbox built from the
 task recipe. Vendor SDK objects stay in this package. Neighbors only call
-Protocol methods (`upload` / `exec` / `attach_stdio`).
+Protocol methods (`upload` / `exec` / `attach_stdio`). A resumed Attempt
+probes the existing sandbox and attaches to it, or uploads the latest
+checkpoint into a new sandbox.
 
 ## Capabilities
 

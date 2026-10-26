@@ -13,6 +13,8 @@ All `.ageval/runs` and `.ageval/suite-runs` path constants live exclusively in `
 | `lock.json` | Canonical lock JSON | Redacted `LockedTaskConfig` snapshot (retains credential env var locator names only). |
 | `result.json` | `Result` schema | Final verdict (`status`, `score`, `kind`, `error`, `limit`, `logs`). Presence of `result.json` marks the Attempt as settled and immutable. |
 | `trajectory.jsonl` | `ageval.trajectory.event/1` | Normalized `run`-phase interaction trajectory written by the `trajectory_seal` exclusive slot during `record`. |
+| `activity.jsonl` | `ageval.activity/1` | Append-only pre-effect log (`attempt`, `session`, `invoke`, `model_turn`, `tool_call`, `compaction`, `phase`). A truncated final line is dropped. A broken non-final line seals `activity_log_corrupt`. |
+| `checkpoints/` | `ageval.checkpoint/1` | Content-addressed snapshots of `box/{workspace,home,artifacts}`. Keyless auth files are not copied into `blobs/`. |
 | `evaluation/observation.jsonl` | `ageval.trajectory.event/1` | Optional `evaluate`-phase `judge` trajectory (`user` prompt rows omitted to protect `gold`). |
 | `evaluation/checks.json` | `ageval.evaluation.checks/1` | Optional step-by-step grading breakdown returned by `evaluator.py`. |
 | `summary.json` | `Summary` schema | Phase wall-clock durations (`phase_timing`), lifecycle `facts[]`, and optional plugin namespace `extra`. |
@@ -31,7 +33,7 @@ Document schemas for `summary.json`, `result.json`, and trajectory `terminal` ev
 During an Attempt, interaction events pass through three stages:
 1. **Raw vendor capture (`backend_raw`)**: Executor-native request/response payloads and stream chunks under `agent/invocations/` (or `evaluation/invocations/`).
 2. **Normalized events (`ageval.trajectory.event/1`)**: Mapped by the executor or `trajectory_collect` chain slot into canonical event kinds (`thought`, `assistant`, `tool_call`, `observation`, `permission`, `terminal`), each stamped with top-level `profile_id` and `session_id`.
-3. **Sealed trajectory (`trajectory.jsonl`)**: Merged and ordered by `trajectory_seal` during `record`.
+3. **Sealed trajectory (`trajectory.jsonl`)**: Merged and ordered by `trajectory_seal` during `record`. Completed steps for an invoke are kept when the executor's fresh event buffer starts after a resume or skips a step that `activity.jsonl` already recorded.
 
 | Web UI Surface | Archive File | Source Phase | Viewer / Hub Location |
 | --- | --- | --- | --- |
@@ -49,7 +51,7 @@ extra: { ... }                                                       # Vendor-sp
 - **`terminal.elapsed_ms`**: Wall-clock invocation latency (`latency_ms`) is copied onto `terminal.elapsed_ms` during sealing.
 
 ### 2.3 Post-seal pruning (`slim_sealed_attempt`)
-Once `trajectory_seal` succeeds in `record`, `slim_sealed_attempt` removes intermediate scratch directories (`agent/invocations/`, `evaluation/invocations/`, `backend_raw/`) by default, retaining only `lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, `task-artifacts/**`, `verifier-collect/**`, `evaluation/observation.jsonl`, and `evaluation/checks.json`. Operators may pass `--keep-vendor-raw` to retain `backend_raw/` and per-invocation scratch files, or `--keep-workspace` to retain the host workspace directory (`box/`).
+Once `trajectory_seal` succeeds in `record`, `slim_sealed_attempt` removes intermediate scratch directories (`agent/invocations/`, `evaluation/invocations/`, `backend_raw/`) by default, retaining only `lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, `task-artifacts/**`, `verifier-collect/**`, `evaluation/observation.jsonl`, and `evaluation/checks.json`. Operators may pass `--keep-vendor-raw` to retain `backend_raw/` and per-invocation scratch files, or `--keep-workspace` to retain the host workspace directory (`box/`). Once `result.json` and `trajectory.jsonl` both exist, Core also deletes `checkpoints/` and `<attempt>/state` unless `--keep-workspace` is set. `local` and `docker` remove `<attempt>/state` when `stop(delete=True)` deletes `box/`.
 
 ---
 

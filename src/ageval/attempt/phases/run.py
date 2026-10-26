@@ -26,10 +26,15 @@ _RUN_WORKER_TIMEOUT = "task_run_timeout"
 async def run(ctx: AttemptCtx) -> None:
     ctx.phase = PHASE
     ctx.arm_phase_budget("wall_time_seconds")
+    if ctx.phase_budget_exhausted():
+        ctx.note_limit_reached("wall_time_seconds")
     await emit(ctx, BEFORE_RUN)
     try:
         try:
-            outcome = await _run_task_entry(ctx)
+            if ctx.phase_budget_exhausted() and ctx.limit_name() == "wall_time_seconds":
+                outcome = {"ok": False, "error": "wall_time_exceeded"}
+            else:
+                outcome = await _run_task_entry(ctx)
         except Exception as exc:
             # A limit already enforced ends the phase without phase_failed.
             # The worker exception stays on the task_run fact; evaluate still runs.
@@ -47,11 +52,39 @@ async def run(ctx: AttemptCtx) -> None:
     finally:
         if ctx.agent_service is not None:
             await _seal_run_agent_service(ctx)
-        # Solver writers cannot write after this point; evaluate may now start.
-        # The Agent Service socket stays up so evaluator.py can still session().
+        # Solver writers cannot write after this point. Harvest still runs, and
+        # seal_run is recorded only after that copy succeeds.
         ctx.mark_writers_stopped()
     await harvest_workspace_artifacts(ctx)
+    _log_seal_run(ctx)
     await emit(ctx, AFTER_RUN)
+    _raise_fatal_recovery(ctx)
+
+
+def _log_seal_run(ctx: AttemptCtx) -> None:
+    log = ctx.activity
+    if log is None or log.has_completed_phase("seal_run"):
+        return
+    log.append(
+        request_id="phase_seal_run",
+        kind="phase",
+        status="completed",
+        payload={
+            "phase": "seal_run",
+            "elapsed_ms": ctx.active_elapsed_ms(),
+            "limit_reached": ctx.limit_name(),
+            "checkpoint_seq": None,
+        },
+    )
+
+
+def _raise_fatal_recovery(ctx: AttemptCtx) -> None:
+    service = ctx.agent_service
+    parent = getattr(service, "service", None) if service is not None else None
+    fatal = getattr(parent, "fatal_error", None)
+    if not isinstance(fatal, str) or not fatal:
+        return
+    raise RecordedError(fatal, fatal)
 
 
 async def _run_task_entry(ctx: AttemptCtx) -> dict[str, object]:

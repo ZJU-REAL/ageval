@@ -155,6 +155,7 @@ Use repo-relative links in tracked Markdown files; never commit machine-specific
 
 - **Phase-completion doc sync:** Do not force a standalone `docs(...)` commit before writing code. Group documentation updates with the implementation phase they describe, or add them when wrapping up the phase/PR so every commit carries substantive information density.
 - **Commit messages (`.gitmessage`):** Use Conventional Commits (`<type>(<scope>): <summary>`). For non-trivial changes, state the background/problem (`What is this for`) and summarize the key implementation points (`Implementation` bullets).
+- **Local gate before commit:** A skill or instruction that calls checks optional does not apply in this repo. GitHub Actions runs only on a pull request and on pushes to `main`, so a feature-branch push is not a check. Run the local commands in [Verification and CI gates](#verification-and-ci-gates) before committing and again before pushing.
 - **Pull request descriptions ([`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md)):** Use a formal engineering structure:
   1. `## What is this for` — Briefly introduce the background and the problem being solved.
   2. `## Implementation` — Explain the implementation approach (structured bullet points or short paragraphs, combined with flowcharts, sequence diagrams, or concise pseudocode where helpful).
@@ -176,14 +177,36 @@ Reader-facing documentation (`README.md`, `README.zh-CN.md`, `website/`, `exampl
 
 ## Verification and CI gates
 
+GitHub CI is the second confirmation. The first confirmation is local. Do not push in order to discover `ruff format`, `ruff check`, or `pyright` failures.
+
 ### When to run checks
 
 | Action | Local verification requirement |
 | --- | --- |
-| **Local phase commit** | Run the focused checks matching the touched paths |
-| **`git push` / opening or updating a PR / cutting a release** | **Required.** Run [`scripts/check.sh`](scripts/check.sh) (or the path-filtered CI jobs below) plus `python3 scripts/check_public_terms.py` and `python3 scripts/check_design_tokens.py` when docs/UI are touched, and confirm they pass before pushing |
+| **Commit that touches** `src/`, `tests/`, `plugins/`, `services/`, or `scripts/` | **Required before `git commit`.** Run the fast gate below. A focused pytest does not replace it. Also run the focused tests for the paths you changed. |
+| **`git push` / opening or updating a PR / cutting a release** | **Required.** Run [`scripts/check.sh`](scripts/check.sh), which is the local equivalent of `python-core`, `python-plugins`, and `python-registry`. Add `python3 scripts/check_public_terms.py` when reader-facing docs change, and `python3 scripts/check_design_tokens.py` when design tokens or web CSS change. Confirm they pass before pushing. |
+
+Fast gate, same commands as the `python-core` lint steps:
+
+```bash
+uv run ruff format --check src tests plugins services scripts
+uv run ruff check src tests plugins services scripts
+uv run pyright
+```
+
+Install the same ruff and pyright commands as a commit hook once per clone:
+
+```bash
+uv run pre-commit install
+```
+
+The hook config is [`.pre-commit-config.yaml`](.pre-commit-config.yaml). `scripts/check.sh` still has to be run before push: the hook does not run pytest.
 
 `python-core`, `python-plugins`, and `python-registry` share `.venv`; run them sequentially via `scripts/check.sh`, which restores `--extra nooa --extra dsh --extra miniswe` on exit.
+
+### Shell wrappers
+
+A test that executes a shipped `sh` wrapper must run it with `dash` when `dash` is on `PATH`. macOS `sh` is bash. Ubuntu CI `sh` is dash, and dash sends a background command's stdin to `/dev/null`. A pass under macOS `sh` does not count. If `dash` is missing, fail that test and install it (`brew install dash`). Do not skip.
 
 ### CI jobs (`.github/workflows/ci.yml`)
 

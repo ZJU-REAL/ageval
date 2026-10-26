@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import uuid
@@ -184,13 +185,17 @@ class Terminus2ExecutorSPI(BaseExecutor):
         usage = adopt_usage(episode.usage or None)
         if usage is NOT_REPORTED and not episode.usage:
             usage = NOT_REPORTED
+        from ageval.plugins.activity_events import prior_activity_events
+
+        fresh = tuple(episode.events)
+        events = tuple(prior_activity_events(getattr(self, "activity", None), fresh))
         return AgentResult(
             model=self.model,
             text=episode.text,
             structured=None,
             ok=episode.ok,
             error=episode.error,
-            events=episode.events,
+            events=events,
             usage=usage,
             repeatable=not episode.keys_sent,
             metadata=self._metadata(turns=episode.raw.get("turns")),
@@ -218,7 +223,7 @@ class Terminus2ExecutorSPI(BaseExecutor):
         user = getattr(self.placement, "user", None)
         session = TmuxSession(
             self.host,
-            session_name="t" + uuid.uuid4().hex[:8],
+            session_name=_tmux_name(self),
             cwd=cwd,
             user=str(user) if user else None,
             pane_width=self.options.pane_width,
@@ -235,6 +240,9 @@ class Terminus2ExecutorSPI(BaseExecutor):
                 invoke_timeout=timeout,
             )
 
+        from ageval.plugins.step_activity import scope_of
+
+        scope = scope_of(self)
         episode = run_episode(
             instruction=prompt,
             session=session,
@@ -244,6 +252,8 @@ class Terminus2ExecutorSPI(BaseExecutor):
             max_format_errors=self.options.max_format_errors,
             timeout=timeout,
             session_id=self.session_id,
+            activity=scope,
+            reuse_session=bool(scope and scope.environment_reattached),
         )
         _write_backend_raw(collect_dir, episode.raw)
         return episode
@@ -281,6 +291,16 @@ class Terminus2ExecutorSPI(BaseExecutor):
         if turns is not None:
             metadata["turns"] = turns
         return metadata
+
+
+def _tmux_name(executor: Terminus2ExecutorSPI) -> str:
+    from ageval.plugins.step_activity import scope_of
+
+    scope = scope_of(executor)
+    if scope is None:
+        return "t" + uuid.uuid4().hex[:8]
+    digest = hashlib.sha256(scope.invoke_request_id.encode()).hexdigest()[:8]
+    return "t" + digest
 
 
 def build_executor(**kwargs: Any) -> Terminus2ExecutorSPI:

@@ -58,6 +58,9 @@ class ProtocolEnv:
         }
         if self.user:
             kwargs["user"] = self.user
+        request_id = getattr(self, "_exec_request_id", None)
+        if isinstance(request_id, str) and request_id:
+            kwargs["request_id"] = request_id
         try:
             result = _run_host_exec(self.host, ["bash", "-lc", command], **kwargs)
             output = f"{result.stdout or ''}{result.stderr or ''}"

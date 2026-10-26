@@ -132,6 +132,10 @@ class AcpOneshotExecutorSPI(BaseExecutor):
     def describe() -> dict[str, Any]:
         return describe_acp_oneshot()
 
+    def bind_activity(self, scope: Any) -> None:
+        super().bind_activity(scope)
+        self._box.activity = scope
+
     def open(self, **kwargs: Any) -> None:
         self._box.open(**kwargs)
 

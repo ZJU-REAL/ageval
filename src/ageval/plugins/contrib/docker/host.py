@@ -23,6 +23,14 @@ import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 
+from ageval.environments.box_state import (
+    ENV_STATE_DIR,
+    INFLIGHT_OUTPUT_NAME,
+    ensure_state_dir,
+    host_state_dir,
+    probe_box,
+    write_last_exit,
+)
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
     EVALUATION_PATH,
@@ -33,6 +41,7 @@ from ageval.environments.protocol import (
     EnvironmentFailure,
     ExecResult,
     Placement,
+    ProbeStatus,
 )
 from ageval.evidence.redaction import redact_text
 from ageval.plugins.base import BaseEnvironment
@@ -173,6 +182,7 @@ class DockerHost(BaseEnvironment):
         self._image: str | None = None
         self._started = False
         self._stopped = False
+        self.reattached = False
         self._attached: list[DockerStdio] = []
 
     # --- lifecycle -----------------------------------------------------------
@@ -252,6 +262,7 @@ class DockerHost(BaseEnvironment):
             )
         self._container = (started.stdout or "").strip() or name
         self._started = True
+        self.reattached = False
         if self._align_app:
             self._align_workspace_app()
 
@@ -271,6 +282,50 @@ class DockerHost(BaseEnvironment):
             docker("rm", "-f", self._container, timeout=120.0)
         if delete and self._root.is_dir():
             shutil.rmtree(self._root, ignore_errors=True)
+        if delete and self.state_root.is_dir():
+            shutil.rmtree(self.state_root, ignore_errors=True)
+
+    async def discard(self, handle: Mapping[str, object]) -> None:
+        """Remove a container recorded on a previous Attempt. The bind root stays."""
+        container_id = str(handle.get("container_id") or "").strip()
+        if container_id:
+            docker("rm", "-f", container_id, timeout=60.0)
+        project = str(handle.get("compose_project") or "").strip()
+        if project:
+            docker("compose", "-p", project, "down", timeout=120.0)
+
+    def runtime_handle(self) -> dict[str, object]:
+        return {
+            "container_id": self._container,
+            "compose_project": self._compose_project,
+        }
+
+    async def probe(self, handle: Mapping[str, object]) -> ProbeStatus:
+        cid = str(handle.get("container_id") or "").strip()
+        if not cid or not _container_running(cid):
+            return ProbeStatus(status="absent")
+        return probe_box(
+            self._root,
+            pid_alive=lambda pid: _pid_in_container(cid, pid),
+            state=self.state_root,
+        )
+
+    async def attach(self, handle: Mapping[str, object]) -> None:
+        cid = str(handle.get("container_id") or "").strip()
+        if not cid or not _container_running(cid):
+            msg = "docker container is absent"
+            raise EnvironmentFailure("environment_absent", msg)
+        self._container = cid
+        compose = handle.get("compose_project")
+        if isinstance(compose, str) and compose.strip():
+            self._compose_project = compose.strip()
+        self._root.mkdir(parents=True, exist_ok=True)
+        for rel in ("workspace", "home", "artifacts"):
+            (self._root / rel).mkdir(parents=True, exist_ok=True)
+        self.state_root.mkdir(parents=True, exist_ok=True)
+        self._started = True
+        self._stopped = False
+        self.reattached = True
 
     # --- transport -----------------------------------------------------------
 
@@ -283,6 +338,7 @@ class DockerHost(BaseEnvironment):
         timeout_sec: float | None = None,
         user: str | None = None,
         service: str | None = None,
+        request_id: str | None = None,
     ) -> ExecResult:
         self._assert_started()
         argv = [str(part) for part in command]
@@ -291,16 +347,38 @@ class DockerHost(BaseEnvironment):
         if service is not None:
             return await self._compose_exec(service, argv, timeout_sec=timeout_sec)
         assert self._container is not None
+        child_env = dict(env or {})
+        if request_id:
+            child_env["AGEVAL_EXEC_REQUEST"] = request_id
+            argv = _exec_pid_wrapper(argv)
         prefix = [
             "exec",
             "-u",
             user or self._user,
             "-w",
             cwd or WORKSPACE_PATH,
-            *self._env_flags(env),
+            *self._env_flags(child_env),
             self._container,
         ]
-        return await self._run_docker(prefix + argv, timeout_sec=timeout_sec)
+        result = await self._run_docker(prefix + argv, timeout_sec=timeout_sec)
+        if request_id:
+            # The wrapper already wrote ``/tmp/.ageval-state``. This overwrite
+            # is the same file on the host mount, with the output docker returned.
+            folder = ensure_state_dir(self.state_root)
+            (folder / INFLIGHT_OUTPUT_NAME).write_text(
+                f"{result.stdout}{result.stderr}",
+                encoding="utf-8",
+            )
+            write_last_exit(
+                self.state_root,
+                {
+                    "request_id": request_id,
+                    "exit_code": result.exit_code,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                },
+            )
+        return result
 
     async def upload(self, source: Path, dest: str, *, service: str | None = None) -> None:
         """Copy into the box. ``/attempt`` stays on the bind mount."""
@@ -352,6 +430,7 @@ class DockerHost(BaseEnvironment):
         *,
         placement: Placement,
         env: Mapping[str, str] | None = None,
+        request_id: str | None = None,
     ) -> DockerStdio:
         """Start a foreground process in the container and hand back its pipes."""
         self._assert_started()
@@ -359,6 +438,11 @@ class DockerHost(BaseEnvironment):
         if not parts:
             raise EnvironmentFailure("environment_attach_invalid", "attach_stdio requires argv")
         assert self._container is not None
+        child_env = {"HOME": placement.home, **dict(env or {})}
+        if request_id:
+            child_env["AGEVAL_EXEC_REQUEST"] = request_id
+            child_env["AGEVAL_STATE_DIR"] = ENV_STATE_DIR
+            parts = _exec_pid_wrapper(parts)
         command = [
             "docker",
             "exec",
@@ -367,7 +451,7 @@ class DockerHost(BaseEnvironment):
             placement.user or self._user,
             "-w",
             placement.workdir,
-            *self._env_flags({"HOME": placement.home, **dict(env or {})}),
+            *self._env_flags(child_env),
             self._container,
             *parts,
         ]
@@ -403,9 +487,23 @@ class DockerHost(BaseEnvironment):
     def root(self) -> Path:
         return self._root
 
+    @property
+    def state_root(self) -> Path:
+        return host_state_dir(self._root)
+
     def _volume_flags(self) -> list[str]:
-        """Bind mounts. Never the docker daemon socket."""
-        return ["-v", f"{self._root}:{BOX_ROOT}"]
+        """Bind mounts. Never the docker daemon socket.
+
+        Recovery files are mounted at ``/tmp/.ageval-state``, outside ``/attempt``.
+        """
+        self.state_root.mkdir(parents=True, exist_ok=True)
+        _make_box_writable(self.state_root)
+        return [
+            "-v",
+            f"{self._root}:{BOX_ROOT}",
+            "-v",
+            f"{self.state_root}:{ENV_STATE_DIR}",
+        ]
 
     def _start_egress_proxy(self) -> list[str]:
         if self._egress != "llm":
@@ -828,6 +926,150 @@ def copy_bind_tree(src: Path, dest: Path) -> None:
     """
     dest.mkdir(parents=True, exist_ok=True)
     shutil.copytree(src, dest, dirs_exist_ok=True, symlinks=True)
+
+
+# Shell stays alive until the command exits, so ``inflight.pid`` is this shell.
+# Python copies both streams to the state files and to this process's pipes.
+# The EXIT trap writes ``last_exit.json`` even when the parent never returns.
+_EXEC_WRAPPER = r"""
+state=${AGEVAL_STATE_DIR:-/tmp/.ageval-state}
+mkdir -p "$state"
+umask 000
+# The python program below is a heredoc, so it must not inherit this stdin.
+exec 3<&0
+echo $$ > "$state/inflight.pid"
+printf %s "${AGEVAL_EXEC_REQUEST-}" > "$state/inflight.request"
+: > "$state/inflight.output"
+: > "$state/inflight.stdout"
+: > "$state/inflight.stderr"
+finish() {
+  status="$1"
+  trap - EXIT INT TERM
+  if [ "${child:-0}" != 0 ]; then
+    kill "$child" 2>/dev/null || true
+    wait "$child" 2>/dev/null || true
+  fi
+  AGEVAL_EXEC_CODE="$status" python3 - "$state" <<'PY'
+import json, os, sys
+from pathlib import Path
+state = Path(sys.argv[1])
+code = int(os.environ.get("AGEVAL_EXEC_CODE", "1"))
+
+def read(name: str) -> str:
+    path = state / name
+    if not path.is_file():
+        return ""
+    return path.read_text(encoding="utf-8", errors="replace")
+
+payload = {
+    "request_id": os.environ.get("AGEVAL_EXEC_REQUEST", ""),
+    "exit_code": code,
+    "stdout": read("inflight.stdout"),
+    "stderr": read("inflight.stderr"),
+}
+tmp = state / f"last_exit.json.tmp.{os.getpid()}"
+tmp.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+os.replace(tmp, state / "last_exit.json")
+for name in ("inflight.pid", "inflight.request"):
+    try:
+        (state / name).unlink()
+    except FileNotFoundError:
+        pass
+PY
+  exit "$status"
+}
+trap 'finish $?' EXIT
+trap 'finish 143' TERM
+trap 'finish 130' INT
+child=0
+python3 -u - "$state" "$@" <<'PY' &
+import os, signal, subprocess, sys, threading
+from pathlib import Path
+state = Path(sys.argv[1])
+cmd = sys.argv[2:]
+if not cmd:
+    sys.exit(127)
+proc = subprocess.Popen(
+    cmd,
+    stdin=3,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    bufsize=0,
+    start_new_session=True,
+)
+out_f = (state / "inflight.stdout").open("ab")
+err_f = (state / "inflight.stderr").open("ab")
+both = (state / "inflight.output").open("ab")
+lock = threading.Lock()
+
+def pump(src, own, shared, mirror) -> None:
+    fd = src.fileno()
+    try:
+        while True:
+            chunk = os.read(fd, 4096)
+            if not chunk:
+                return
+            own.write(chunk)
+            own.flush()
+            mirror.write(chunk)
+            mirror.flush()
+            with lock:
+                shared.write(chunk)
+                shared.flush()
+    finally:
+        src.close()
+
+def _stop(signum, _frame):
+    if proc.poll() is None:
+        os.killpg(proc.pid, signal.SIGTERM)
+    raise SystemExit(128 + signum)
+
+signal.signal(signal.SIGTERM, _stop)
+signal.signal(signal.SIGINT, _stop)
+assert proc.stdout is not None and proc.stderr is not None
+threads = (
+    threading.Thread(target=pump, args=(proc.stdout, out_f, both, sys.stdout.buffer)),
+    threading.Thread(target=pump, args=(proc.stderr, err_f, both, sys.stderr.buffer)),
+)
+for thread in threads:
+    thread.start()
+try:
+    for thread in threads:
+        thread.join()
+    code = proc.wait()
+except SystemExit as exc:
+    code = exc.code if isinstance(exc.code, int) else 1
+    raise
+finally:
+    out_f.close()
+    err_f.close()
+    both.close()
+    if proc.poll() is None:
+        os.killpg(proc.pid, signal.SIGTERM)
+        proc.wait()
+sys.exit(code if code >= 0 else 1)
+PY
+child=$!
+wait "$child"
+status=$?
+finish "$status"
+"""
+
+
+def _exec_pid_wrapper(argv: list[str]) -> list[str]:
+    return ["sh", "-c", _EXEC_WRAPPER, "ageval-exec", *argv]
+
+
+def _container_running(container_id: str) -> bool:
+    found = docker("inspect", "-f", "{{.State.Running}}", container_id, timeout=30.0)
+    return found.returncode == 0 and (found.stdout or "").strip() == "true"
+
+
+def _pid_in_container(container_id: str, pid: int) -> bool:
+    if pid <= 0:
+        return False
+    found = docker("exec", container_id, "sh", "-c", f"kill -0 {pid}", timeout=15.0)
+    return found.returncode == 0
 
 
 def _box_python_version(raw: object) -> str | None:

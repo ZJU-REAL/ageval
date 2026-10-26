@@ -58,6 +58,10 @@ All environment plugins subclass `BaseEnvironment` and register via `@environmen
 
 ---
 
+### Probe, attach, and `/tmp/.ageval-state`
+
+Every environment kind implements `runtime_handle()`, `probe(handle)`, and `attach(handle)`. `probe` returns `absent`, `idle`, or `busy`. Recovery files live at `/tmp/.ageval-state` inside the environment, not under `/attempt`, so the evaluated agent does not see the nonce, cursor, or checkpoint helper. On `local` and `docker` the same files are the host directory `<attempt>/state`, beside the bind-mounted box; docker mounts that directory at `/tmp/.ageval-state`. `local` publishes that host path to child processes as `AGEVAL_STATE_DIR`. When the workspace is not kept, `stop(delete=True)` removes `<attempt>/state` with `box/`, and a sealed Attempt also drops that directory along with `checkpoints/`. `e2b`, `daytona`, and `ssh` reconnect to the handle, then read `/tmp/.ageval-state/{nonce,cursor.json,inflight.pid,last_exit.json}`. The command wrapper writes `inflight.pid` while a command runs, streams stdout and stderr to `inflight.output`, and atomically writes `last_exit.json` (`request_id`, `exit_code`, `stdout`, `stderr`) when the command exits. `attach_stdio` records its process in the same pid file, so a live ACP or worker process makes `probe` return `busy`. Those three remote kinds also run `/tmp/.ageval-state/checkpoint_sync.py` to download a delta of `/attempt/{workspace,home,artifacts}` into the parent checkpoint, and `checkpoint_sync.py wrap` is the command wrapper that keeps the command output. Recovery reuses an `idle` environment whose nonce and cursor match the activity log. A missing or diverged environment is discarded with `discard(handle)` and started again, then restored from `checkpoints/`. `discard` stops the recorded container or sandbox and leaves the attempt directory in place. `local` does not delete that directory. Live cloud probes are skipped when credentials are absent.
+
 ## 2. Environment Kinds and Capability Matrix
 
 Task `requires.environment` defaults to `[]`. When non-empty, `ageval lock` verifies `requires.environment ⊆ capabilities` (and verifies plugin `inject` capability requirements against the same table), failing fast with `capability_missing` if any required capability is absent.
@@ -133,7 +137,7 @@ For the Attempt container, `network_mode`, `cap_add`, and `main_environment` mer
 
 ## 5. `attach_stdio` Transport Implementations
 
-`attach_stdio(argv, *, placement, env)` spawns a foreground process inside the active environment and returns a `StdioTransport` (`stdin`, `stdout`, `stderr`, `terminate()`, `wait()`) so `AcpExecutor` operates identically across all five environment kinds:
+`attach_stdio(argv, *, placement, env, request_id=None)` spawns a foreground process inside the active environment and returns a `StdioTransport` (`stdin`, `stdout`, `stderr`, `terminate()`, `wait()`) so `AcpExecutor` operates identically across all five environment kinds. When `request_id` is set, the process is the `inflight.pid` that `probe` uses for `busy`:
 
 | Environment Kind | `attach_stdio(argv)` Implementation |
 | --- | --- |

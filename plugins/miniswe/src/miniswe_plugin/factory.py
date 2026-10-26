@@ -427,6 +427,9 @@ class MinisweExecutorSPI(BaseExecutor):
             wall_time_limit_seconds=max(0, int(timeout)),
         )
         model.query = wrap_model_query(model.query, stall, watchdog=self.watchdog)
+        from miniswe_plugin.activity_replay import install_activity
+
+        install_activity(model, env, self)
         wait = max(1.0, float(timeout))
 
         def _go() -> dict[str, Any]:

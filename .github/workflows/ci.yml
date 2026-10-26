@@ -146,6 +146,8 @@ jobs:
         run: |
           uv run pytest \
             --ignore=tests/registry \
+            -n auto \
+            --dist loadscope \
             -q
 
   python-plugins:
@@ -187,7 +189,7 @@ jobs:
           AGEVAL_SKIP_REAL_OPENCODE: "1"
           AGEVAL_SKIP_REAL_ACP: "1"
           AGEVAL_REQUIRE_PLUGIN_DEPS: "1"
-        run: uv run pytest tests/plugins -q
+        run: uv run pytest tests/plugins tests/acceptance/test_resume_parent_loop.py -q
 
   python-registry:
     needs: changes

@@ -36,7 +36,8 @@ def episode_events(
         if "keystrokes" not in record:
             continue
         seq += 1
-        call_id = f"terminus2_{seq}"
+        stored = record.get("tool_call_id")
+        call_id = stored if isinstance(stored, str) and stored else f"terminus2_{seq}"
         out.append(
             {
                 "schema": SCHEMA,

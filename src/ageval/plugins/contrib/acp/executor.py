@@ -13,11 +13,11 @@ import concurrent.futures
 import json
 import threading
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from contextlib import suppress as contextlib_suppress
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from acp.exceptions import RequestError
 
@@ -240,6 +240,7 @@ class AcpExecutor(BaseExecutor):
         self._pipe: StdioTransport | None = None
         self._client: _AgevalAcpClient | None = None
         self._acp_session_id: str | None = None
+        self._resumed_native = False
         self._agent_info: dict[str, Any] | None = None
         self._protocol_version: int | None = None
         self._actual_model: str | None = None
@@ -327,11 +328,15 @@ class AcpExecutor(BaseExecutor):
             )
         argv = self.stdio_argv()
         client = _AgevalAcpClient()
+        client.activity = getattr(self, "activity", None)
         self._client = client
+        scope = getattr(self, "activity", None)
+        request_id = getattr(scope, "invoke_request_id", None)
         pipe = await self._host.attach_stdio(
             argv,
             placement=self._placement,
             env=self._child_env(),
+            request_id=request_id if isinstance(request_id, str) and request_id else None,
         )
         self._pipe = pipe
         reader, writer = await open_streams(pipe)
@@ -358,15 +363,18 @@ class AcpExecutor(BaseExecutor):
                 }
 
         # The entry reads this path itself, so it must be its own view of the box.
-        new = await self._conn.new_session(
-            cwd=self._host.visible_path(self._placement.workdir),
-            mcp_servers=[],
-        )
-        self._acp_session_id = getattr(new, "session_id", None)
+        cwd = self._host.visible_path(self._placement.workdir)
+        opened, resumed = await self._open_acp_session(cwd)
+        self._resumed_native = resumed
+        self._acp_session_id = getattr(opened, "session_id", None)
         if not self._acp_session_id:
             raise RuntimeError("acp_protocol_error")
+        if not resumed:
+            from ageval.plugins.contrib.acp.activity_stream import note_native_session
 
-        await self._bind_entry(init, new)
+            note_native_session(getattr(self, "activity", None), str(self._acp_session_id))
+
+        await self._bind_entry(init, opened)
 
     def stdio_argv(self) -> list[str]:
         """ACP stdio argv. argv[0] is the pinned absolute path, never a PATH name."""
@@ -385,6 +393,38 @@ class AcpExecutor(BaseExecutor):
             model=self.model,
             reasoning_effort=self.reasoning_effort,
         )
+
+    async def _open_acp_session(self, cwd: str) -> tuple[Any, bool]:
+        """Resume the native ACP session, or open a new one."""
+        from ageval.plugins.contrib.acp.activity_stream import native_session_id, prime_stream_state
+
+        scope = getattr(self, "activity", None)
+        client = getattr(self, "_client", None)
+        if client is not None:
+            prime_stream_state(client, scope)
+        native = native_session_id(scope)
+        load = getattr(self._conn, "load_session", None)
+        if native and callable(load):
+            if client is not None:
+                client.suppress_activity = True
+            try:
+                loaded = await cast(Callable[..., Awaitable[object]], load)(
+                    cwd=cwd, session_id=native, mcp_servers=[]
+                )
+            except Exception:  # noqa: BLE001 — fall back to a new session and the transcript
+                loaded = None
+            finally:
+                if client is not None:
+                    client.suppress_activity = False
+            # LoadSessionResponse has no session id. A returned object means the entry accepted it.
+            if loaded is not None:
+                from types import SimpleNamespace
+
+                sid = getattr(loaded, "session_id", None) or native
+                return SimpleNamespace(session_id=str(sid)), True
+        assert self._conn is not None
+        opened = await self._conn.new_session(cwd=cwd, mcp_servers=[])
+        return opened, False
 
     async def _bind_entry(self, initialize: Any, new_session_resp: Any) -> None:
         if uses_entry_local_bind(self.entry_id):
@@ -451,6 +491,13 @@ class AcpExecutor(BaseExecutor):
     async def _prompt_once(self, prompt: str) -> AgentResult:
         assert self._conn is not None and self._client is not None
         assert self._acp_session_id is not None
+        from ageval.plugins.contrib.acp.activity_stream import prompt_for_resume, seal_open_turn
+
+        prompt = prompt_for_resume(
+            getattr(self, "activity", None),
+            prompt,
+            resumed_native=self._resumed_native,
+        )
         # Per-prompt isolation: chunks + event buffer reset each invoke so
         # turn-level trajectory merge does not pull prior turns' stream.
         self._client.text_chunks.clear()
@@ -508,6 +555,7 @@ class AcpExecutor(BaseExecutor):
             )
 
         stop = getattr(resp, "stop_reason", None) or getattr(resp, "stopReason", None)
+        seal_open_turn(getattr(self, "activity", None), self._client)
         text = "".join(self._client.text_chunks)
         ok, err = _map_stop_reason(str(stop) if stop is not None else "end_turn")
         # Elicitation decline may have been recorded
@@ -589,7 +637,7 @@ class AcpExecutor(BaseExecutor):
         text = ""
         if error == "acp_idle_timeout" and self._client is not None:
             text = "".join(self._client.text_chunks)
-        mapped = self._mapped_events()
+        mapped = self._with_prior(self._mapped_events())
         usage, extra = self._normalized_usage(partial=True)
         return AgentResult(
             model=self.model,
@@ -632,7 +680,7 @@ class AcpExecutor(BaseExecutor):
         }
         if error_detail:
             meta["error_detail"] = error_detail
-        mapped = self._mapped_events()
+        mapped = self._with_prior(self._mapped_events())
         # Dual-source normalize: tokens from PromptResponse.usage; cost/context
         # from latest UsageUpdate. Never maps context.used → prompt_tokens.
         usage, extra = self._normalized_usage(partial=usage_partial)
@@ -692,6 +740,11 @@ class AcpExecutor(BaseExecutor):
         if self._client is None:
             return ()
         return tuple(acp_session_events_to_ageval(self._client.snapshot_events()))
+
+    def _with_prior(self, fresh: tuple[dict[str, Any], ...]) -> tuple[dict[str, Any], ...]:
+        from ageval.plugins.activity_events import prior_activity_events
+
+        return tuple(prior_activity_events(getattr(self, "activity", None), fresh))
 
     def _write_vendor(self, collect_dir: str | None) -> None:
         if not collect_dir or self._client is None:

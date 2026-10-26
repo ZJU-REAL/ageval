@@ -26,7 +26,16 @@ from ageval.environments.protocol import (
     EnvironmentFailure,
     ExecResult,
     Placement,
+    ProbeStatus,
     reject_foreign_service,
+)
+from ageval.environments.remote_state import (
+    CHECKPOINT_SYNC_NAME,
+    CHECKPOINT_SYNC_SCRIPT,
+    parse_state_document,
+    push_restored_tree,
+    state_command,
+    wrapper_line,
 )
 from ageval.plugins.base import BaseEnvironment
 from ageval.plugins.decorators import environment_plugin
@@ -131,6 +140,7 @@ class E2BHost(BaseEnvironment):
         self._template_name = _text(opts.get("template")) or "ageval-attempt"
         self._timeout_seconds = _seconds(opts.get("timeout_seconds"), default=900)
         self._sandbox: Any = None
+        self._script_ready = False
         self._started = False
         self._stopped = False
 
@@ -156,8 +166,17 @@ class E2BHost(BaseEnvironment):
             timeout=self._timeout_seconds,
         )
         self._started = True
-        for path in (WORKSPACE_PATH, HOME_PATH, ARTIFACTS_PATH):
-            await asyncio.to_thread(self._sandbox.files.make_dir, path)
+        try:
+            await asyncio.to_thread(self._open_attempt_tree)
+        except EnvironmentFailure:
+            await self.stop(delete=True)
+            raise
+        except Exception as exc:  # noqa: BLE001 — vendor errors become a start failure
+            await self.stop(delete=True)
+            raise EnvironmentFailure(
+                "environment_start_failed",
+                f"could not prepare {BOX_ROOT}: {exc}"[:300],
+            ) from exc
 
     async def stop(self, *, delete: bool) -> None:
         # Ephemeral by nature: keeping it alive is not on offer, and evidence
@@ -167,6 +186,13 @@ class E2BHost(BaseEnvironment):
             return
         self._stopped = True
         await asyncio.to_thread(self._sandbox.kill)
+
+    async def discard(self, handle: Mapping[str, Any]) -> None:
+        """Kill a sandbox recorded on a previous Attempt. This instance stays unbound."""
+        sandbox_id = str(handle.get("sandbox_id") or "").strip()
+        if not sandbox_id:
+            return
+        await asyncio.to_thread(_kill_recorded_sandbox, sandbox_id)
 
     # --- transport -----------------------------------------------------------
 
@@ -179,6 +205,7 @@ class E2BHost(BaseEnvironment):
         timeout_sec: float | None = None,
         user: str | None = None,
         service: str | None = None,
+        request_id: str | None = None,
     ) -> ExecResult:
         self._assert_started()
         if user is not None:
@@ -194,6 +221,9 @@ class E2BHost(BaseEnvironment):
         argv = [str(part) for part in command]
         if not argv:
             raise EnvironmentFailure("environment_exec_invalid", "exec requires a command")
+        if request_id:
+            await self._ensure_sync_script()
+            argv = ["sh", "-c", wrapper_line(request_id, _shell_line(argv))]
         try:
             result = await asyncio.to_thread(
                 self._sandbox.commands.run,
@@ -295,24 +325,126 @@ class E2BHost(BaseEnvironment):
         *,
         placement: Placement,
         env: Mapping[str, str] | None = None,
+        request_id: str | None = None,
     ) -> E2BStdio:
         """Start a foreground command in the sandbox and hand back its streams."""
         self._assert_started()
         parts = [str(part) for part in argv]
         if not parts:
             raise EnvironmentFailure("environment_attach_invalid", "attach_stdio requires argv")
+        from ageval.environments.remote_state import stdio_inflight_argv
+
+        child_env = {"HOME": placement.home, **self._child_env(env)}
+        if request_id:
+            child_env["AGEVAL_EXEC_REQUEST"] = request_id
+            parts = stdio_inflight_argv(parts)
         handle = await asyncio.to_thread(
             self._sandbox.commands.run,
             _shell_line(parts),
             background=True,
             cwd=placement.workdir,
-            envs={"HOME": placement.home, **self._child_env(env)},
+            envs=child_env,
             stdin=True,
             timeout=0,
         )
         return E2BStdio(handle)
 
     # --- e2b specifics -------------------------------------------------------
+
+    def runtime_handle(self) -> dict[str, object]:
+        sid = getattr(self._sandbox, "sandbox_id", None)
+        return {"sandbox_id": str(sid)} if sid else {}
+
+    async def probe(self, handle: Mapping[str, object]) -> ProbeStatus:
+        sid = str(handle.get("sandbox_id") or "").strip()
+        if not sid:
+            return ProbeStatus(status="absent")
+        try:
+            sdk = _import_sdk()
+            sandbox = await asyncio.to_thread(sdk.Sandbox.connect, sid)
+        except Exception:  # noqa: BLE001 — a dead or unknown sandbox is absent
+            return ProbeStatus(status="absent")
+        self._sandbox = sandbox
+        try:
+            await self._ensure_sync_script()
+            result = await self._run_line(_shell_line(state_command("dump")))
+        except Exception:  # noqa: BLE001 — unreadable state is absent
+            return ProbeStatus(status="absent")
+        return parse_state_document(result.stdout)
+
+    async def attach(self, handle: Mapping[str, object]) -> None:
+        status = await self.probe(handle)
+        if status.status == "absent" or self._sandbox is None:
+            raise EnvironmentFailure(
+                "environment_attach_invalid",
+                "e2b sandbox is not available to attach",
+            )
+        self._started = True
+        self._stopped = False
+
+    async def push_restored_box(self, box: Path) -> None:
+        await push_restored_tree(self, box)
+
+    def mirror_checkpoint(self, dest: Path) -> None:
+        if self._sandbox is None:
+            return
+        self._write_script_sync()
+        out = "/tmp/ageval-checkpoint.tar"
+        self._sandbox.commands.run(
+            _shell_line(state_command("pack", out)),
+            cwd="/",
+            timeout=120,
+        )
+        blob = self._sandbox.files.read(out, "bytes")
+        from ageval.environments.remote_state import apply_checkpoint_tar
+
+        raw = blob if isinstance(blob, bytes) else bytes(blob)
+        apply_checkpoint_tar(dest, raw)
+
+    async def _ensure_sync_script(self) -> None:
+        if self._script_ready or self._sandbox is None:
+            return
+        await asyncio.to_thread(self._write_script_sync)
+        self._script_ready = True
+
+    def _open_attempt_tree(self) -> None:
+        """``/attempt`` is owned by the image user. The sandbox user must be able to write it."""
+        self._sandbox.commands.run(attempt_tree_command(), cwd="/", timeout=60)
+
+    def sync_box_state(self, box: Path) -> None:
+        if self._sandbox is None:
+            return
+        from ageval.environments.remote_state import local_state_files
+
+        self._write_script_sync()
+        for path, remote in local_state_files(box):
+            self._sandbox.files.write(remote, path.read_bytes())
+
+    def _write_script_sync(self) -> None:
+        self._sandbox.files.make_dir("/tmp/.ageval-state")
+        self._sandbox.files.write(
+            f"/tmp/.ageval-state/{CHECKPOINT_SYNC_NAME}",
+            CHECKPOINT_SYNC_SCRIPT,
+        )
+
+    async def _run_line(self, line: str) -> ExecResult:
+        try:
+            result = await asyncio.to_thread(
+                self._sandbox.commands.run,
+                line,
+                cwd="/",
+                timeout=60,
+            )
+        except Exception as exc:  # noqa: BLE001 — vendor raises on nonzero
+            code = getattr(exc, "exit_code", None)
+            if code is None:
+                raise
+            return ExecResult(exit_code=int(code or 1), stdout="", stderr=str(exc)[:400])
+        return ExecResult(
+            exit_code=int(getattr(result, "exit_code", 0) or 0),
+            stdout=str(getattr(result, "stdout", "") or ""),
+            stderr=str(getattr(result, "stderr", "") or ""),
+        )
 
     def placement(self) -> Placement:
         if self._sandbox is None:
@@ -389,6 +521,16 @@ def _stdout_from_event(event: Any) -> str | bytes | None:
     return text if text else None
 
 
+def attempt_tree_command() -> str:
+    """Make the agent directories writable. Recovery state stays under ``/tmp``."""
+    paths = f"{WORKSPACE_PATH} {HOME_PATH} {ARTIFACTS_PATH}"
+    state = "/tmp/.ageval-state"
+    return (
+        f"(mkdir -p {paths} {state} && chmod -R a+rwx {paths} {state}) "
+        f"|| (sudo mkdir -p {paths} {state} && sudo chmod -R a+rwx {paths} {state})"
+    )
+
+
 def _api_key() -> str:
     """SDK reads ``E2B_API_KEY``; accept the lowercase locator too."""
     for name in _API_KEY_ALIASES:
@@ -398,6 +540,12 @@ def _api_key() -> str:
                 os.environ[API_KEY_ENV] = val
             return val
     return ""
+
+
+def _kill_recorded_sandbox(sandbox_id: str) -> None:
+    sdk = _import_sdk()
+    sandbox = sdk.Sandbox.connect(sandbox_id)
+    sandbox.kill()
 
 
 def _import_sdk() -> Any:

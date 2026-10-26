@@ -112,8 +112,25 @@ def _run_oneshot(
             },
         )
         agent_info = init.get("agentInfo") or init.get("agent_info") or {}
-        new = client.request("session/new", {"cwd": cwd, "mcpServers": []})
-        session_id = str(new.get("sessionId") or new.get("session_id") or "")
+        native = os.environ.get("AGEVAL_NATIVE_SESSION", "").strip()
+        new: dict[str, Any] = {}
+        session_id = ""
+        if native:
+            try:
+                loaded = client.request(
+                    "session/load",
+                    {"sessionId": native, "cwd": cwd, "mcpServers": []},
+                )
+            except Exception:  # noqa: BLE001 — entry has no native resume
+                loaded = None
+            if isinstance(loaded, dict):
+                session_id = str(loaded.get("sessionId") or loaded.get("session_id") or native)
+                new = loaded
+        if not session_id:
+            new = client.request("session/new", {"cwd": cwd, "mcpServers": []})
+            session_id = str(new.get("sessionId") or new.get("session_id") or "")
+            if session_id:
+                _emit_step({"type": "native_session", "id": session_id})
         if not session_id:
             raise RuntimeError("acp_protocol_error")
         actual_model, config_options = _bind_model(client, session_id, model, new)
@@ -406,6 +423,7 @@ class _NdjsonClient:
             event["text"] = text
             event["channel"] = "thought"
         self.events.append(event)
+        _emit_oneshot_update(update, text)
 
     def _reply(
         self, msg_id: Any, result: dict[str, Any], *, error: dict[str, Any] | None = None
@@ -416,6 +434,59 @@ class _NdjsonClient:
         else:
             payload["result"] = result
         self._send(payload)
+
+
+def _step_log() -> Path:
+    root = os.environ.get("AGEVAL_STATE_DIR") or "/tmp/.ageval-state"
+    return Path(root) / "steps.jsonl"
+
+
+def _emit_step(row: dict[str, Any]) -> None:
+    path = _step_log()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError:
+        return
+
+
+def _emit_oneshot_update(update: dict[str, Any], text: str | None) -> None:
+    kind = str(update.get("sessionUpdate") or update.get("session_update") or "")
+    if kind in {"agent_message_chunk", "agent_message"} and text:
+        _emit_step({"type": "assistant", "content": text})
+        return
+    if kind == "tool_call":
+        call_id = str(update.get("toolCallId") or update.get("tool_call_id") or "")
+        tool_kind = str(update.get("kind") or "other").lower()
+        raw = update.get("rawInput") or update.get("raw_input") or {}
+        _emit_step(
+            {
+                "type": "tool_call",
+                "tool_call_id": call_id,
+                "name": str(update.get("title") or "tool"),
+                "tool_kind": tool_kind,
+                "arguments": raw if isinstance(raw, dict) else {},
+                "replay_safe": tool_kind in {"read", "search", "think", "fetch"},
+            }
+        )
+        return
+    if kind == "tool_call_update":
+        status = str(update.get("status") or "").lower()
+        if status not in {"completed", "failed", "error"}:
+            return
+        raw = update.get("rawOutput") or update.get("content") or ""
+        _emit_step(
+            {
+                "type": "tool_result",
+                "tool_call_id": str(update.get("toolCallId") or update.get("tool_call_id") or ""),
+                "name": str(update.get("title") or "tool"),
+                "outcome": "error" if status in {"failed", "error"} else "ok",
+                "content": raw if isinstance(raw, str) else str(raw),
+            }
+        )
 
 
 def _auto_approve(options: Any) -> str:

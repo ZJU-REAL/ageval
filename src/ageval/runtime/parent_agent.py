@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from ageval.evidence.redaction import RedactionError
+from ageval.evidence.redaction import RedactionError, redact_and_assert
 from ageval.evidence.store import AttemptEvidenceStore, InvocationHandle
 from ageval.model.errors import TransportStall
 from ageval.plugins.protocol import ExtensionGraph
@@ -106,6 +106,11 @@ class AgentInvocationQuota:
             self._used += 1
             return True
 
+    def restore_used(self, used: int) -> None:
+        """Set the counter from invokes already admitted in ``activity.jsonl``."""
+        with self._lock:
+            self._used = max(0, int(used))
+
 
 @dataclass
 class SessionBinding:
@@ -139,6 +144,7 @@ class _Ticket:
     messages: Any
     run_phase: bool
     arrival: int
+    turn_index: int | None = None
     state: str = "queued"
     cancel: threading.Event = field(default_factory=threading.Event)
     finished: threading.Event = field(default_factory=threading.Event)
@@ -176,6 +182,13 @@ class ParentAgentService:
     record_stall_fact: Callable[[str, dict[str, Any]], None] | None = None
     task_id: str = ""
     attempt_index: int = 0
+    activity: Any = None
+    environment_reattached: bool = False
+    checkpoint_capture: Any = None
+    elapsed_ms_provider: Any = None
+    read_partial: Any = None
+    fatal_error: str | None = None
+    _ordinals: dict[tuple[str, str, str], int] = field(default_factory=dict, repr=False)
     _phase_clock_frozen: bool = field(default=False, repr=False)
     _stall_freezes: int = field(default=0, repr=False)
     _tickets: dict[str, _Ticket] = field(default_factory=dict, repr=False)
@@ -277,8 +290,15 @@ class ParentAgentService:
                 "detail": str(exc),
             }
 
+        env_key = environment or "main"
+        actor_key = actor or "default"
+        ordinal_key = (profile_id, actor_key, env_key)
+        with self._lock:
+            ordinal = self._ordinals.get(ordinal_key, 0) + 1
+            self._ordinals[ordinal_key] = ordinal
+        session_id = f"sess_{profile_id}_{actor_key}_{env_key}_{ordinal}"
         binding = SessionBinding(
-            session_id=f"sess_{uuid.uuid4().hex[:16]}",
+            session_id=session_id,
             attempt_id=self.attempt_id,
             profile_id=profile_id,
             model=bound.model,
@@ -287,6 +307,7 @@ class ParentAgentService:
             graph=bound.graph,
             actor_id=actor,
         )
+        self._log_session(binding, environment)
         with self._lock:
             self._sessions[binding.session_id] = binding
 
@@ -444,7 +465,17 @@ class ParentAgentService:
         tools: Any = None,
         messages: Any = None,
         request_id: str | None = None,
+        turn_index: int | None = None,
     ) -> dict[str, Any]:
+        replay = self._replay_completed_invoke(
+            session_id,
+            prompt,
+            tools,
+            messages,
+            request_id,
+        )
+        if replay is not None:
+            return replay
         refusal = self._refuse_before_effect(session_id)
         if refusal is not None:
             return refusal
@@ -454,6 +485,7 @@ class ParentAgentService:
             tools=tools,
             messages=messages,
             request_id=request_id,
+            turn_index=turn_index,
         )
         if isinstance(admitted, dict):
             return admitted
@@ -506,9 +538,23 @@ class ParentAgentService:
         tools = ticket.tools
         messages = ticket.messages
         started = time.monotonic()
-        handle, refused = self._begin_evidence(binding, prompt, tools=tools, messages=messages)
+        resuming = self._invoke_is_inflight(ticket.request_id)
+        if resuming:
+            handle = self._reopen_logged_invocation(binding, ticket.request_id)
+            refused = None
+            if handle is None:
+                handle, refused = self._begin_evidence(
+                    binding, prompt, tools=tools, messages=messages
+                )
+        else:
+            handle, refused = self._begin_evidence(binding, prompt, tools=tools, messages=messages)
         if refused is not None:
             return self._failed(binding, handle, error=refused)
+        if self.activity is not None and not resuming:
+            self._log_invoke_inflight(binding, ticket, handle)
+        scope = self._bind_activity_scope(binding, ticket.request_id)
+        if resuming and scope is not None:
+            self._reconcile_resume(scope)
 
         collect_dir = None if handle is None else handle.directory / "backend_raw"
         if collect_dir is not None:
@@ -559,14 +605,20 @@ class ParentAgentService:
             result = self._chain(binding, AFTER_AGENT_INVOKE, result)
             result = self._chain(binding, NORMALIZE_AGENT_RESULT, result)
         except InvokeCancelled:
-            return self._cancelled(binding, handle, started)
+            return self._settle_invoke(
+                binding, ticket, handle, self._cancelled(binding, handle, started)
+            )
         except asyncio.CancelledError:
             # BaseException, so the handler below does not see it.
             # A threadsafe future raises concurrent.futures.CancelledError instead.
-            return self._cancelled(binding, handle, started)
+            return self._settle_invoke(
+                binding, ticket, handle, self._cancelled(binding, handle, started)
+            )
         except Exception as exc:  # noqa: BLE001 — a crash still leaves evidence
             if ticket.cancel.is_set():
-                return self._cancelled(binding, handle, started)
+                return self._settle_invoke(
+                    binding, ticket, handle, self._cancelled(binding, handle, started)
+                )
             latency = (time.monotonic() - started) * 1000.0
             kind = str(getattr(exc, "kind", None) or type(exc).__name__)
             detail = str(getattr(exc, "message", None) or exc).strip()[:500]
@@ -582,7 +634,9 @@ class ParentAgentService:
                     event["detail"] = detail
                 handle.append_event(event)
                 seal_failure(handle, status="crash", error=kind, latency_ms=latency)
-            return self._failed(binding, handle, error=kind)
+            return self._settle_invoke(
+                binding, ticket, handle, self._failed(binding, handle, error=kind)
+            )
         finally:
             if token is not None:
                 reset_stall(token)
@@ -593,25 +647,36 @@ class ParentAgentService:
         if handle is not None:
             redaction_error = seal_invoke_result(handle, result=result, latency_ms=latency)
             if redaction_error is not None:
-                return self._failed(binding, handle, error=redaction_error)
+                return self._settle_invoke(
+                    binding,
+                    ticket,
+                    handle,
+                    self._failed(binding, handle, error=redaction_error),
+                )
 
         with self._lock:
             self.invocations_completed += 1
             if handle is not None:
                 binding.last_handle = handle
                 binding.handles[handle.invocation_id] = handle
-        return {
-            "ok": bool(result.ok),
-            "error": result.error,
-            "model": result.model,
-            "text": (result.text or "")[-4000:],
-            "structured": result.structured if isinstance(result.structured, dict) else None,
-            "provider_session_handle": None,
-            "remaining_after": self._remaining(),
-            "invocation_id": handle.invocation_id if handle else None,
-            "evidence_relative": handle.relative_path if handle else None,
-            "tool_calls": _public_tool_calls(result),
-        }
+        return self._settle_invoke(
+            binding,
+            ticket,
+            handle,
+            {
+                "ok": bool(result.ok),
+                "error": result.error,
+                "model": result.model,
+                "text": (result.text or "")[-4000:],
+                "structured": result.structured if isinstance(result.structured, dict) else None,
+                "provider_session_handle": None,
+                "remaining_after": self._remaining(),
+                "invocation_id": handle.invocation_id if handle else None,
+                "evidence_relative": handle.relative_path if handle else None,
+                "tool_calls": _public_tool_calls(result),
+                "usage": _activity_usage(result.usage),
+            },
+        )
 
     def _cancelled(
         self, binding: SessionBinding, handle: InvocationHandle | None, started: float
@@ -629,6 +694,7 @@ class ParentAgentService:
         tools: Any,
         messages: Any,
         request_id: str | None,
+        turn_index: int | None = None,
     ) -> _Ticket | dict[str, Any]:
         rid = (
             request_id.strip()
@@ -660,6 +726,7 @@ class ParentAgentService:
                 messages=messages,
                 run_phase=not self._run_sealed,
                 arrival=self._arrival,
+                turn_index=turn_index,
             )
             self._tickets[rid] = ticket
             self._session_queues.setdefault(session_id, []).append(rid)
@@ -709,7 +776,12 @@ class ParentAgentService:
             return {"ok": False, "error": "executor_not_concurrent"}
         if ticket.run_phase:
             assert self.invoke_quota is not None
-            if not self.invoke_quota.try_consume():
+            already = self._invoke_is_inflight(ticket.request_id) or (
+                self.activity is not None
+                and self.activity.latest_status(kind="invoke", request_id=ticket.request_id)
+                == "completed"
+            )
+            if not already and not self.invoke_quota.try_consume():
                 self._note_run_limit("agent_invocations")
                 return {"ok": False, "error": "agent_invocation_limit"}
         ticket.state = "running"
@@ -795,6 +867,9 @@ class ParentAgentService:
         call_id = str(tool_call_id or "").strip()
         if not call_id:
             return {"ok": False, "error": "missing_tool_call_id"}
+        observed = self._replay_observation(session_id, call_id)
+        if observed is not None:
+            return observed
         with self._lock:
             binding = self._sessions.get(session_id)
             if binding is None:
@@ -822,11 +897,335 @@ class ParentAgentService:
         if raw_output is not None:
             event["raw_output"] = raw_output
         handle.append_supplement(event)
+        self._log_observation(
+            session_id,
+            call_id,
+            content=text,
+            function_name=str(function_name or ""),
+            error=bool(error),
+            raw_output=raw_output,
+            invocation_id=handle.invocation_id,
+        )
         return {
             "ok": True,
             "invocation_id": handle.invocation_id,
             "tool_call_id": call_id,
         }
+
+    # --- activity ------------------------------------------------------------
+
+    def _log_session(self, binding: SessionBinding, environment: str | None) -> None:
+        if self.activity is None:
+            return
+        if self.activity.session_record(binding.session_id) is not None:
+            return
+        self.activity.append(
+            request_id=binding.session_id,
+            kind="session",
+            status="completed",
+            payload={
+                "session_id": binding.session_id,
+                "profile_id": binding.profile_id,
+                "actor_id": binding.actor_id,
+                "environment": environment,
+                "executor_kind": binding.executor_kind,
+                "native_session_id": None,
+            },
+        )
+
+    def _replay_completed_invoke(
+        self,
+        session_id: str,
+        prompt: str,
+        tools: Any,
+        messages: Any,
+        request_id: str | None,
+    ) -> dict[str, Any] | None:
+        if self.activity is None or not isinstance(request_id, str) or not request_id.strip():
+            return None
+        rid = request_id.strip()
+        if self.activity.latest_status(kind="invoke", request_id=rid) != "completed":
+            return None
+        if not self._invoke_inputs_match(rid, prompt, tools, messages):
+            self.fatal_error = "session_alignment_mismatch"
+            return {"ok": False, "error": "session_alignment_mismatch"}
+        completed = self.activity.records_for(kind="invoke", request_id=rid)[-1]
+        payload = completed.payload
+        if payload.get("session_id") != session_id:
+            return None
+        inv = payload.get("invocation_id")
+        if isinstance(inv, str):
+            self._reopen_logged_invocation_id(session_id, inv)
+        text = payload.get("text") if isinstance(payload.get("text"), str) else ""
+        structured = payload.get("structured")
+        calls = payload.get("tool_calls")
+        return {
+            "ok": bool(payload.get("ok")),
+            "error": payload.get("error"),
+            "model": str(payload.get("model") or ""),
+            "usage": payload.get("usage") if isinstance(payload.get("usage"), dict) else None,
+            "text": text[-4000:],
+            "structured": structured if isinstance(structured, dict) else None,
+            "provider_session_handle": None,
+            "remaining_after": self._remaining(),
+            "invocation_id": inv if isinstance(inv, str) else None,
+            "evidence_relative": None,
+            "tool_calls": calls if isinstance(calls, list) else [],
+        }
+
+    def _invoke_inputs_match(self, request_id: str, prompt: str, tools: Any, messages: Any) -> bool:
+        assert self.activity is not None
+        inflight = None
+        for record in self.activity.records_for(kind="invoke", request_id=request_id):
+            if record.status == "in_flight":
+                inflight = record
+        if inflight is None:
+            return True
+        sentinels = tuple(self.evidence_store.sentinels) if self.evidence_store else ()
+        stored_prompt = inflight.payload.get("prompt")
+        try:
+            cleaned_prompt = redact_and_assert(prompt, extra_sentinels=sentinels)
+        except RedactionError:
+            return False
+        return (
+            stored_prompt == cleaned_prompt
+            and inflight.payload.get("tools_digest") == self._value_digest(tools)
+            and inflight.payload.get("messages_digest") == self._value_digest(messages)
+        )
+
+    def _value_digest(self, value: Any) -> str:
+        from ageval.evidence.activity import canonical_digest
+
+        if value is None:
+            return canonical_digest(None)
+        sentinels = tuple(self.evidence_store.sentinels) if self.evidence_store else ()
+        try:
+            cleaned = redact_and_assert(value, extra_sentinels=sentinels)
+        except RedactionError:
+            cleaned = None
+        return canonical_digest(cleaned)
+
+    def _invoke_is_inflight(self, request_id: str) -> bool:
+        if self.activity is None:
+            return False
+        return self.activity.latest_status(kind="invoke", request_id=request_id) == "in_flight"
+
+    def _turn_of(self, binding: SessionBinding, ticket: _Ticket) -> int:
+        if isinstance(ticket.turn_index, int) and not isinstance(ticket.turn_index, bool):
+            return ticket.turn_index
+        prefix = f"req_{binding.session_id}_turn_"
+        if ticket.request_id.startswith(prefix) and ticket.request_id[len(prefix) :].isdigit():
+            return int(ticket.request_id[len(prefix) :])
+        return 1
+
+    def _log_invoke_inflight(
+        self, binding: SessionBinding, ticket: _Ticket, handle: InvocationHandle | None
+    ) -> None:
+        if self.activity is None:
+            return
+        self.activity.append(
+            request_id=ticket.request_id,
+            kind="invoke",
+            status="in_flight",
+            payload={
+                "session_id": binding.session_id,
+                "turn_index": self._turn_of(binding, ticket),
+                "prompt": ticket.prompt,
+                "tools_digest": self._value_digest(ticket.tools),
+                "messages_digest": self._value_digest(ticket.messages),
+                "explicit_messages": ticket.messages,
+                "invocation_id": None if handle is None else handle.invocation_id,
+            },
+        )
+
+    def _bind_activity_scope(self, binding: SessionBinding, request_id: str) -> Any:
+        if self.activity is None:
+            return None
+        from ageval.evidence.activity import ActivityScope
+
+        scope = ActivityScope(
+            self.activity,
+            session_id=binding.session_id,
+            invoke_request_id=request_id,
+            environment_reattached=self.environment_reattached,
+        )
+        scope.elapsed_ms_provider = self.elapsed_ms_provider
+        bind = getattr(binding.executor, "bind_activity", None)
+        if callable(bind):
+            bind(scope)
+        else:
+            binding.executor.activity = scope
+        scope.capture = self.checkpoint_capture
+        return scope
+
+    def _reconcile_resume(self, scope: Any) -> None:
+        from ageval.evidence.activity import reconcile_inflight_tail
+
+        raw_partial = self.read_partial() if callable(self.read_partial) else None
+        partial = raw_partial if isinstance(raw_partial, str) else None
+        reconcile_inflight_tail(scope, partial_output=partial, prepare=self._checkpoint_prepare())
+
+    def _checkpoint_prepare(self) -> Any:
+        capture = self.checkpoint_capture
+
+        def prepare(seq: int) -> dict[str, Any]:
+            if not callable(capture):
+                return {}
+            return {"checkpoint_seq": capture(seq)}
+
+        return prepare
+
+    def _settle_invoke(
+        self,
+        binding: SessionBinding,
+        ticket: _Ticket,
+        handle: InvocationHandle | None,
+        response: dict[str, Any],
+    ) -> dict[str, Any]:
+        if self.activity is None:
+            return response
+        if self.activity.latest_status(kind="invoke", request_id=ticket.request_id) != "in_flight":
+            return response
+        elapsed = self.elapsed_ms_provider() if callable(self.elapsed_ms_provider) else None
+        text = response.get("text") if isinstance(response.get("text"), str) else ""
+        structured = response.get("structured")
+        calls = response.get("tool_calls")
+        payload: dict[str, Any] = {
+            "session_id": binding.session_id,
+            "turn_index": self._turn_of(binding, ticket),
+            "ok": bool(response.get("ok")),
+            "text": text,
+            "structured": structured if isinstance(structured, dict) else None,
+            "tool_calls": calls if isinstance(calls, list) else [],
+            "usage": _activity_usage(response.get("usage")),
+            "error": response.get("error") if isinstance(response.get("error"), str) else None,
+            "checkpoint_seq": None,
+            "invocation_id": handle.invocation_id
+            if handle is not None
+            else response.get("invocation_id"),
+        }
+        if isinstance(elapsed, int | float) and not isinstance(elapsed, bool):
+            payload["elapsed_ms"] = float(elapsed)
+        self.activity.append(
+            request_id=ticket.request_id,
+            kind="invoke",
+            status="completed",
+            payload=payload,
+            prepare=self._checkpoint_prepare(),
+        )
+        return response
+
+    def _reopen_logged_invocation(
+        self, binding: SessionBinding, request_id: str
+    ) -> InvocationHandle | None:
+        if self.activity is None:
+            return None
+        inv = None
+        for record in self.activity.records_for(kind="invoke", request_id=request_id):
+            raw = record.payload.get("invocation_id")
+            if isinstance(raw, str) and raw:
+                inv = raw
+        if inv is None:
+            return None
+        return self._reopen_logged_invocation_id(binding.session_id, inv)
+
+    def _reopen_logged_invocation_id(
+        self, session_id: str, invocation_id: str
+    ) -> InvocationHandle | None:
+        if self.evidence_store is None:
+            return None
+        handle = self.evidence_store.reopen_invocation(invocation_id)
+        if handle is None:
+            return None
+        with self._lock:
+            binding = self._sessions.get(session_id)
+            if binding is not None:
+                binding.handles[handle.invocation_id] = handle
+                binding.last_handle = handle
+        return handle
+
+    def _replay_observation(self, session_id: str, tool_call_id: str) -> dict[str, Any] | None:
+        if self.activity is None:
+            return None
+        request_id = f"obs_{session_id}_{tool_call_id}"
+        if self.activity.latest_status(kind="tool_call", request_id=request_id) != "completed":
+            return None
+        return {"ok": True, "tool_call_id": tool_call_id, "replayed": True}
+
+    def _log_observation(
+        self,
+        session_id: str,
+        tool_call_id: str,
+        *,
+        content: str,
+        function_name: str,
+        error: bool,
+        raw_output: Any,
+        invocation_id: str,
+    ) -> None:
+        if self.activity is None:
+            return
+        request_id = f"obs_{session_id}_{tool_call_id}"
+        if self.activity.latest_status(kind="tool_call", request_id=request_id) == "completed":
+            return
+        with self._lock:
+            binding = self._sessions.get(session_id)
+        invoke_request_id = ""
+        if binding is not None and binding.last_handle is not None:
+            invoke_request_id = self._invoke_request_for_invocation(
+                binding.last_handle.invocation_id
+            )
+        self.activity.append(
+            request_id=request_id,
+            kind="tool_call",
+            status="in_flight",
+            payload={
+                "session_id": session_id,
+                "invoke_request_id": invoke_request_id,
+                "tool_call_id": tool_call_id,
+                "tool_name": function_name or "domain",
+                "tool_kind": "domain",
+                "arguments": {},
+                "replay_safe": False,
+                "system_effect": False,
+                "timeout_sec": None,
+                "deadline_utc": None,
+            },
+        )
+        completed_payload: dict[str, Any] = {
+            "session_id": session_id,
+            "invoke_request_id": invoke_request_id,
+            "tool_call_id": tool_call_id,
+            "outcome": "error" if error else "ok",
+            "exit_code": None,
+            "content": content,
+            "stderr": None,
+            "raw_output": raw_output,
+            "checkpoint_seq": None,
+        }
+        provider = self.elapsed_ms_provider
+        if callable(provider):
+            elapsed = provider()
+            if not isinstance(elapsed, bool) and isinstance(elapsed, int | float):
+                completed_payload["elapsed_ms"] = float(elapsed)
+        self.activity.append(
+            request_id=request_id,
+            kind="tool_call",
+            status="completed",
+            payload=completed_payload,
+            prepare=self._checkpoint_prepare(),
+        )
+        del invocation_id
+
+    def _invoke_request_for_invocation(self, invocation_id: str) -> str:
+        if self.activity is None:
+            return ""
+        for record in reversed(self.activity.records):
+            if record.kind != "invoke":
+                continue
+            if record.payload.get("invocation_id") == invocation_id:
+                return record.request_id
+        return ""
 
     # --- guards --------------------------------------------------------------
 
@@ -1060,6 +1459,15 @@ class ParentAgentService:
         if not handlers:
             return value
         return _drive(run_handlers(handlers, value, ctx=binding))
+
+
+def _activity_usage(raw: Any) -> dict[str, Any] | None:
+    """Sealed usage for an invoke record. Absent usage stays absent."""
+    if raw is None:
+        return None
+    from ageval.model.usage import to_sealed_document
+
+    return to_sealed_document(raw)
 
 
 def _public_tool_calls(result: Any) -> list[dict[str, Any]]:

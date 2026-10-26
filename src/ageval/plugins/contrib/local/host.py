@@ -9,9 +9,21 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+from ageval.environments.box_state import (
+    INFLIGHT_OUTPUT_NAME,
+    clear_inflight,
+    ensure_state_dir,
+    host_pid_alive,
+    host_state_dir,
+    probe_box,
+    read_inflight,
+    write_inflight,
+    write_last_exit,
+)
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
     EVALUATION_PATH,
@@ -22,6 +34,7 @@ from ageval.environments.protocol import (
     EnvironmentFailure,
     ExecResult,
     Placement,
+    ProbeStatus,
     reject_foreign_service,
 )
 from ageval.plugins.base import BaseEnvironment
@@ -29,6 +42,42 @@ from ageval.plugins.decorators import environment_plugin
 
 _BOX_ROOT = "/attempt"
 _MAX_STREAM_BYTES = 256 * 1024
+
+
+def _clear_inflight_when_exits(state: Path, process: subprocess.Popen[bytes]) -> None:
+    """Drop the pid file after this process ends, unless a newer one replaced it."""
+    pid = process.pid
+
+    def watch() -> None:
+        process.wait()
+        current, _request = read_inflight(state)
+        if current == pid:
+            clear_inflight(state)
+
+    threading.Thread(target=watch, name=f"ageval-stdio-{pid}", daemon=True).start()
+
+
+def _decode_capped(raw: bytes) -> str:
+    return raw[:_MAX_STREAM_BYTES].decode("utf-8", errors="replace")
+
+
+def _finish_exec(box: Path, request_id: str | None, result: ExecResult) -> None:
+    if not request_id:
+        return
+    folder = ensure_state_dir(box)
+    (folder / INFLIGHT_OUTPUT_NAME).write_text(
+        f"{result.stdout}{result.stderr}",
+        encoding="utf-8",
+    )
+    write_last_exit(
+        box,
+        {
+            "request_id": request_id,
+            "exit_code": result.exit_code,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        },
+    )
 
 
 class LocalStdio:
@@ -89,6 +138,7 @@ class LocalHost(BaseEnvironment):
         self._root = spec.attempt_root.expanduser().resolve(strict=False)
         self._started = False
         self._stopped = False
+        self.reattached = False
         self._attached: list[LocalStdio] = []
 
     # --- lifecycle -----------------------------------------------------------
@@ -108,7 +158,9 @@ class LocalHost(BaseEnvironment):
             raise EnvironmentFailure("environment_already_started", "local box already started")
         for rel in ("workspace", "home", "artifacts"):
             (self._root / rel).mkdir(parents=True, exist_ok=True)
+        self.state_root.mkdir(parents=True, exist_ok=True)
         self._started = True
+        self.reattached = False
 
     async def stop(self, *, delete: bool) -> None:
         if self._stopped:
@@ -119,6 +171,12 @@ class LocalHost(BaseEnvironment):
         self._attached.clear()
         if delete and self._root.is_dir():
             shutil.rmtree(self._root, ignore_errors=True)
+        if delete and self.state_root.is_dir():
+            shutil.rmtree(self.state_root, ignore_errors=True)
+
+    async def discard(self, handle: Mapping[str, object]) -> None:
+        """A local box is the attempt directory. Rebuilding reuses it."""
+        del handle
 
     # --- transport -----------------------------------------------------------
 
@@ -131,6 +189,7 @@ class LocalHost(BaseEnvironment):
         timeout_sec: float | None = None,
         user: str | None = None,
         service: str | None = None,
+        request_id: str | None = None,
     ) -> ExecResult:
         self._assert_started()
         if user is not None:
@@ -155,20 +214,63 @@ class LocalHost(BaseEnvironment):
             stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
         )
+        if request_id:
+            folder = ensure_state_dir(self.state_root)
+            (folder / INFLIGHT_OUTPUT_NAME).write_text("", encoding="utf-8")
+            write_inflight(self.state_root, pid=process.pid, request_id=request_id)
+        stdout_parts: list[bytes] = []
+        stderr_parts: list[bytes] = []
+
+        async def _drain(stream: asyncio.StreamReader | None, parts: list[bytes]) -> None:
+            if stream is None:
+                return
+            while True:
+                block = await stream.read(4096)
+                if not block:
+                    return
+                parts.append(block)
+                if request_id:
+                    self._append_inflight_output(block)
+
+        async def _pump() -> None:
+            await asyncio.gather(
+                _drain(process.stdout, stdout_parts),
+                _drain(process.stderr, stderr_parts),
+            )
+            await process.wait()
+
         try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_sec)
+            await asyncio.wait_for(_pump(), timeout=timeout_sec)
         except TimeoutError:
             self._kill_group(process.pid)
             with contextlib.suppress(OSError):
                 await process.wait()
-            return ExecResult(exit_code=124, stdout="", stderr="exec timed out", truncated=False)
+            result = ExecResult(
+                exit_code=124,
+                stdout=_decode_capped(b"".join(stdout_parts)),
+                stderr="exec timed out",
+                truncated=False,
+            )
+            _finish_exec(self.state_root, request_id, result)
+            return result
+        stdout = b"".join(stdout_parts)
+        stderr = b"".join(stderr_parts)
         truncated = len(stdout) > _MAX_STREAM_BYTES or len(stderr) > _MAX_STREAM_BYTES
-        return ExecResult(
+        result = ExecResult(
             exit_code=int(process.returncode or 0),
-            stdout=stdout[:_MAX_STREAM_BYTES].decode("utf-8", errors="replace"),
-            stderr=stderr[:_MAX_STREAM_BYTES].decode("utf-8", errors="replace"),
+            stdout=_decode_capped(stdout),
+            stderr=_decode_capped(stderr),
             truncated=truncated,
         )
+        _finish_exec(self.state_root, request_id, result)
+        return result
+
+    def _append_inflight_output(self, block: bytes) -> None:
+        folder = ensure_state_dir(self.state_root)
+        path = folder / INFLIGHT_OUTPUT_NAME
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(block.decode("utf-8", errors="replace"))
+            handle.flush()
 
     async def upload(self, source: Path, dest: str, *, service: str | None = None) -> None:
         self._assert_started()
@@ -215,6 +317,7 @@ class LocalHost(BaseEnvironment):
         *,
         placement: Placement,
         env: Mapping[str, str] | None = None,
+        request_id: str | None = None,
     ) -> LocalStdio:
         """Start a foreground process in the open box and hand back its pipes."""
         self._assert_started()
@@ -232,6 +335,9 @@ class LocalHost(BaseEnvironment):
             stderr=subprocess.PIPE,
             start_new_session=True,
         )
+        if request_id:
+            write_inflight(self.state_root, pid=process.pid, request_id=request_id)
+            _clear_inflight_when_exits(self.state_root, process)
         pipe = LocalStdio(process)
         self._attached.append(pipe)
         return pipe
@@ -241,6 +347,31 @@ class LocalHost(BaseEnvironment):
     @property
     def root(self) -> Path:
         return self._root
+
+    @property
+    def state_root(self) -> Path:
+        return host_state_dir(self._root)
+
+    def runtime_handle(self) -> dict[str, object]:
+        return {"kind": "local"}
+
+    async def probe(self, handle: Mapping[str, object]) -> ProbeStatus:
+        del handle
+        if not self._root.is_dir():
+            return ProbeStatus(status="absent")
+        return probe_box(self._root, pid_alive=host_pid_alive, state=self.state_root)
+
+    async def attach(self, handle: Mapping[str, object]) -> None:
+        del handle
+        if not self._root.is_dir():
+            msg = "local box directory is absent"
+            raise EnvironmentFailure("environment_absent", msg)
+        for rel in ("workspace", "home", "artifacts"):
+            (self._root / rel).mkdir(parents=True, exist_ok=True)
+        self.state_root.mkdir(parents=True, exist_ok=True)
+        self._started = True
+        self._stopped = False
+        self.reattached = True
 
     def placement(self) -> Placement:
         """Attach facts for this box. ``target_id`` is opaque above the kind."""
@@ -285,6 +416,7 @@ class LocalHost(BaseEnvironment):
         out.setdefault("AGEVAL_WORKSPACE", self.visible_path(WORKSPACE_PATH))
         out.setdefault("AGEVAL_ARTIFACTS", self.visible_path(ARTIFACTS_PATH))
         out.setdefault("AGEVAL_EVALUATION", self.visible_path(EVALUATION_PATH))
+        out.setdefault("AGEVAL_STATE_DIR", str(self.state_root))
         return out
 
     def _assert_started(self) -> None:

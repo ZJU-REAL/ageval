@@ -75,6 +75,7 @@ class TmuxSession:
         self.pane_width = pane_width
         self.pane_height = pane_height
         self.cmd_timeout = cmd_timeout
+        self.exec_request_id: str | None = None
         self._started = False
 
     def ensure_tmux(self) -> None:
@@ -94,9 +95,18 @@ class TmuxSession:
             code = "terminus2_tmux_unavailable"
             raise EnvironmentFailure("environment_setup_failed", code)
 
-    def start(self) -> None:
+    def start(self, *, reuse: bool = False) -> None:
         self.ensure_tmux()
         name = shlex.quote(self.session_name)
+        if reuse:
+            probe = self._bash(
+                f"tmux has-session -t {name}",
+                user=self.user,
+                timeout=self.cmd_timeout,
+            )
+            if probe.exit_code == 0:
+                self._started = True
+                return
         work = shlex.quote(self.cwd)
         width = int(self.pane_width)
         height = int(self.pane_height)
@@ -209,6 +219,8 @@ class TmuxSession:
             kwargs["cwd"] = self.cwd
         if user:
             kwargs["user"] = user
+        if self.exec_request_id:
+            kwargs["request_id"] = self.exec_request_id
         return run_exec(self.host, ["bash", "-lc", script], **kwargs)
 
 

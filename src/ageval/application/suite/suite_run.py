@@ -316,6 +316,7 @@ async def _run_one(
     on_phase: PhaseObserver | None = None,
     on_progress: ProgressCallback | None = None,
     allow_prepare: bool = False,
+    recover_unsealed: bool = False,
 ) -> dict[str, Any]:
     """Run one (task_id, attempt_index) unit. Concurrency is owned by the claim pool."""
     global _inflight_current, _inflight_peak
@@ -334,6 +335,8 @@ async def _run_one(
             on_progress=on_progress,
             attempt_index=attempt_index,
             layout=plan.layout,
+            suite_run_id=plan.suite_run_id if recover_unsealed else None,
+            recover_unsealed=recover_unsealed,
             **({"allow_prepare": True} if allow_prepare else {}),
         )
         status = getattr(result, "status", None) or "ERROR"
@@ -1083,6 +1086,7 @@ async def _execute_suite_run(
                 keep_workspace=keep_workspace,
                 keep_vendor_raw=keep_vendor_raw,
                 allow_prepare=allow_prepare,
+                recover_unsealed=resume,
                 on_phase=_phase_forwarder(on_progress, tid, idx),
                 on_progress=on_progress,
             )

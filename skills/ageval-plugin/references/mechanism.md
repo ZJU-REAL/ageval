@@ -40,18 +40,31 @@ Until a listed class is itself the exclusive factory, `load_builtin_*` still cal
 class DockerHost(BaseEnvironment):
     kind = "docker"  # exclusive-slot plugin id
     capabilities = EnvironmentCapabilities(
-        exec=True, upload=True, download=True, attach_stdio=True,
-        uid_gid=True, path_views=True, compose=True,
+        exec=True,
+        upload=True,
+        download=True,
+        attach_stdio=True,
+        uid_gid=True,
+        path_views=True,
+        compose=True,
     )
+
 
 @executor_plugin(priority=120, source="first-party")
 class OpenAIHttpExecutor(BaseExecutor):
     kind = "openai-http"
     requires_environment = False
     supported_apis = frozenset({"chat", "responses"})
-    supported_model_fields = frozenset({
-        "id", "api", "reasoning_effort", "timeout", "watchdog", "extra",
-    })
+    supported_model_fields = frozenset(
+        {
+            "id",
+            "api",
+            "reasoning_effort",
+            "timeout",
+            "watchdog",
+            "extra",
+        }
+    )
     extra_allowlist = frozenset({"provider"})  # required; empty frozenset() is valid
 ```
 

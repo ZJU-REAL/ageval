@@ -28,6 +28,7 @@ BOX_PLUGIN = f"{HOME_PATH}/_openhands"
 BOX_WORKER = f"{BOX_PLUGIN}/ageval_executor_openhands.py"
 BOX_INSTRUCTION = f"{BOX_PLUGIN}/instruction.md"
 BOX_TRAJECTORY = f"{BOX_PLUGIN}/trajectory.json"
+BOX_PERSISTENCE = f"{HOME_PATH}/openhands"
 _INSTALL_TIMEOUT_SEC = 600.0
 _PROBE = "import openhands.sdk, openhands.tools"
 
@@ -115,14 +116,27 @@ class OpenHandsBoxExecutor:
         collect_dir: str | os.PathLike[str] | None,
         redaction_sentinels: tuple[str, ...] | list[str] | None,
     ) -> AgentResult:
+        from ageval.plugins.contrib.acp.activity_stream import (
+            native_session_id,
+            prompt_for_resume,
+        )
+
         await self._prepare()
-        await self._upload_instruction(prompt)
+        scope = getattr(self, "activity", None)
+        native = native_session_id(scope)
+        instruction = prompt_for_resume(scope, prompt, resumed_native=bool(native))
+        await self._upload_instruction(instruction)
+        self._native_session_id = native
         sentinels = tuple(redaction_sentinels or ())
         key = self._api_key_value()
         if key:
             sentinels = (*sentinels, key)
-        result = await self._host.exec(
+        from ageval.plugins.step_stream import exec_with_steps
+
+        result = await exec_with_steps(
+            self._host,
             self._worker_argv(),
+            getattr(self, "activity", None),
             cwd=self._placement.workdir or WORKSPACE_PATH,
             env=self._exec_env(key),
             timeout_sec=timeout,
@@ -242,6 +256,10 @@ class OpenHandsBoxExecutor:
         if base:
             env["OPENAI_BASE_URL"] = base
             env["LLM_BASE_URL"] = base
+        env["OH_PERSISTENCE_DIR"] = self._host.visible_path(BOX_PERSISTENCE)
+        native = getattr(self, "_native_session_id", None)
+        if isinstance(native, str) and native:
+            env["OH_CONVERSATION_ID"] = native
         return env
 
     async def _read_trajectory(self, sentinels: tuple[str, ...]) -> dict[str, Any] | None:
@@ -289,7 +307,10 @@ class OpenHandsBoxExecutor:
         native: tuple[dict[str, Any], ...] = ()
         if isinstance(steps, list):
             native = tuple(step for step in steps if isinstance(step, dict))
-        events = tuple(to_ageval_trajectory_events(native))
+        fresh = tuple(to_ageval_trajectory_events(native))
+        from ageval.plugins.activity_events import prior_activity_events
+
+        events = tuple(prior_activity_events(getattr(self, "activity", None), fresh))
         text = str(document.get("text") or "")
         error = document.get("error")
         ok = bool(document.get("ok")) and exit_code == 0 and not error

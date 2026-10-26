@@ -24,6 +24,11 @@ whatever that client routes: an OpenAI-compatible `base_url`, or a LiteLLM
 prefix (`openai/`, `openrouter/`, `anthropic/`, …). Credentials are locators
 projected into the parent HTTP client; they never enter the lock.
 
+A resumed attempt replays completed model queries and bash commands from the
+attempt activity log. The agent loop still runs, and those steps do not call
+the model or the shell again. mini-swe-agent does not compact its own message
+list, so there is no summary record to project.
+
 ## Capabilities
 
 | | Value |

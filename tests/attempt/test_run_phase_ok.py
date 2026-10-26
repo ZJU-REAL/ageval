@@ -15,10 +15,14 @@ class _Ctx:
         self.phase = ""
         self.phase_facts: list[SimpleNamespace] = []
         self.agent_service = None
+        self.activity = None
         self.stopped = False
 
     def arm_phase_budget(self, key: str) -> None:
         del key
+
+    def phase_budget_exhausted(self) -> bool:
+        return False
 
     def record_fact(self, name: str, detail: dict[str, object] | None = None) -> None:
         self.phase_facts.append(SimpleNamespace(name=name, detail=dict(detail or {})))

@@ -239,8 +239,21 @@ def main() -> int:
             sanitizing_base_url(),
             DeepSeekHarness(**harness_kwargs) as harness,
         ):
-            session = harness.start_session(session_id_s)
-            result = session.run(prompt)
+            session = open_dsh_session(
+                harness,
+                session_id_s,
+                resume=req.get("resume") is True,
+            )
+
+            def _on_notification(notification: Any) -> None:
+                if getattr(notification, "method", None) != "session.event":
+                    return
+                payload = getattr(notification, "payload", None)
+                event = payload.get("event") if isinstance(payload, dict) else None
+                if isinstance(event, dict):
+                    _emit_dsh(event)
+
+            result = session.run(prompt, on_notification=_on_notification)
         native = [e for e in (result.events or []) if isinstance(e, dict)]
         mapped: list[dict[str, Any]] = []
         usage = None
@@ -289,6 +302,93 @@ def main() -> int:
             },
             code=1,
         )
+
+
+def open_dsh_session(
+    harness: Any,
+    session_id: str | None,
+    *,
+    resume: bool,
+    session_cls: Any = None,
+) -> Any:
+    """Continue a persisted harness session, or start one and publish its id."""
+    if resume:
+        if not session_id:
+            raise ValueError
+        _resume_dsh(harness, session_id)
+        cls = session_cls or _dsh_session_cls()
+        return cls(harness, session_id)
+    session = harness.start_session(session_id)
+    _emit_step({"type": "native_session", "id": str(session.id)})
+    return session
+
+
+def _resume_dsh(harness: Any, session_id: str) -> None:
+    """Ask the runtime to resume. ``start_session`` collides with a persisted log."""
+    from pydantic import BaseModel, ConfigDict
+
+    class _Ack(BaseModel):
+        model_config = ConfigDict(extra="allow")
+
+    harness.client.request(
+        "session/resume",
+        {"sessionId": session_id},
+        response_model=_Ack,
+    )
+
+
+def _dsh_session_cls() -> Any:
+    from deepseek_harness.api import Session
+
+    return Session
+
+
+def _step_log() -> Path:
+    root = os.environ.get("AGEVAL_STATE_DIR") or "/tmp/.ageval-state"
+    return Path(root) / "steps.jsonl"
+
+
+def _emit_step(row: dict[str, Any]) -> None:
+    path = _step_log()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError:
+        return
+
+
+def _emit_dsh(event: dict[str, Any]) -> None:
+    kind = str(event.get("type") or "")
+    data = event.get("data") if isinstance(event.get("data"), dict) else {}
+    if kind == "tool/call":
+        _emit_step(
+            {
+                "type": "tool_call",
+                "tool_call_id": str(data.get("callId") or data.get("id") or ""),
+                "name": str(data.get("name") or "tool"),
+                "tool_kind": "other",
+                "arguments": (
+                    data.get("arguments") if isinstance(data.get("arguments"), dict) else {}
+                ),
+            }
+        )
+    elif kind == "tool/result":
+        _emit_step(
+            {
+                "type": "tool_result",
+                "tool_call_id": str(data.get("callId") or data.get("toolCallId") or ""),
+                "name": str(data.get("name") or "tool"),
+                "outcome": "error" if data.get("isError") else "ok",
+                "content": str(data.get("output") or data.get("content") or ""),
+            }
+        )
+    elif kind == "assistant/message":
+        text = data.get("text") or data.get("content") or ""
+        if isinstance(text, str) and text.strip():
+            _emit_step({"type": "assistant", "content": text})
 
 
 if __name__ == "__main__":

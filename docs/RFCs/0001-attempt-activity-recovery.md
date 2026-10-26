@@ -2,12 +2,12 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Draft |
+| Status | Accepted |
 | Date | 2026-10-25 |
 | Decides | `.ageval/runs/<attempt_id>/activity.jsonl` (`ageval.activity/1`) and `.ageval/runs/<attempt_id>/checkpoints/` (`ageval.checkpoint/1`) form the authoritative durability store for an unsealed Attempt. Recovery preserves the `attempt_id` when `result.json` is absent and the lock digest matches. Every `BaseExecutor` streams step boundaries into `activity.jsonl` and restores context on recovery either by projecting `activity.jsonl` (including `compaction` records) or by resuming its native session journal under `/attempt/home` (covering `acp`, `openhands`, `dsh`, `nooa`, `miniswe`, `terminus-2`, `openai-http`, and `anthropic-http`). `EnvironmentProvider` adds `probe(handle)` and `attach(handle)` paired with incremental `/attempt/{workspace,home}` checkpoints so live environments are reused in place and lost environments are restored to the exact step snapshot without fragile bash stdout matching. |
 | Does not decide | The CLI command and selection UX for `fork`. A fork creates a new Attempt from a chosen historical `seq`; it consumes the `activity.jsonl` prefix and `checkpoints/seq_<N>.json` snapshot defined in this RFC. |
 
-Until this RFC is accepted and folded into the design pages listed in the final section, the running codebase retains its current behavior.
+The rules in this RFC are folded into the design pages listed in the final section.
 
 ---
 
@@ -246,7 +246,7 @@ To support cold environment rebuilds (`probe == "absent"`), rollback of interrup
 
 1. **Scope**: Checkpoints cover `workspace/` (`/attempt/workspace`), `home/` (`/attempt/home`), and `artifacts/` (`/attempt/artifacts`). Plaintext credential files (such as `.codex/auth.json` or `.claude/.credentials.json` copied from the host during `keyless_auth`) are excluded from `checkpoints/blobs/` by the `keyless_auth_paths` denylist and are re-injected by `after_environment_ready` when a new environment starts.
 2. **Capture on `local` and `docker`**: Because `local` and `docker` mount `/attempt` directly from `.ageval/runs/<attempt_id>/box/` on the host, the parent process scans `box/` directly on the host filesystem. An in-memory stat cache `(rel_path -> (mtime_ns, size, sha256))` avoids hashing unchanged files; only files whose `mtime_ns` or `size` changed since the previous checkpoint are hashed and copied into `checkpoints/blobs/`.
-3. **Capture on `e2b`, `daytona`, and `ssh`**: A lightweight helper script placed in `/attempt/.ageval-state/checkpoint_sync.py` (outside `/attempt/workspace`) compares current file `(mtime_ns, size)` against `/attempt/.ageval-state/stat_index.json`, packs changed files and a manifest delta into a stream, and transfers them to the parent via `host.download`.
+3. **Capture on `e2b`, `daytona`, and `ssh`**: A helper script at `/tmp/.ageval-state/checkpoint_sync.py` (outside `/attempt`) compares current file `(mtime_ns, size)` against `/tmp/.ageval-state/stat_index.json`, packs changed files and a manifest delta into a stream, and transfers them to the parent via `host.download`.
 4. **Pruning upon Attempt settlement**: During `record`, once `trajectory.jsonl` and `result.json` are sealed, `slim_sealed_attempt` removes `checkpoints/` unless `--keep-workspace` or a future fork-retention flag is set, keeping settled archive sizes small.
 
 ---
@@ -255,7 +255,7 @@ To support cold environment rebuilds (`probe == "absent"`), rollback of interrup
 
 ### 4.1 `EnvironmentProvider` and `BaseEnvironment` contract
 
-`EnvironmentProvider` (`src/ageval/environments/protocol.py`) and `BaseEnvironment` (`src/ageval/plugins/base.py`) gain three methods for environment state inspection and reattachment, plus an internal state directory `/attempt/.ageval-state/` (mapped to `box/.ageval-state/` on `local` and `docker`):
+`EnvironmentProvider` (`src/ageval/environments/protocol.py`) and `BaseEnvironment` (`src/ageval/plugins/base.py`) gain three methods for environment state inspection and reattachment, plus an internal state directory `/tmp/.ageval-state/` (the host directory `<attempt>/state`, beside `box/`, on `local` and `docker`):
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -284,12 +284,12 @@ class EnvironmentProvider(Protocol):
         ...
 ```
 
-#### In-environment state files (`/attempt/.ageval-state/`)
+#### In-environment state files (`/tmp/.ageval-state/`)
 
-All recovery metadata inside the environment lives under `/attempt/.ageval-state/` so that `/attempt/workspace` remains clean:
-- `/attempt/.ageval-state/nonce`: written once when `host.start` completes; must match `environment_nonce` on `seq: 1` of `activity.jsonl`.
-- `/attempt/.ageval-state/cursor.json`: written after each completed step (`{seq, request_id}`).
-- `/attempt/.ageval-state/inflight.pid` and `/attempt/.ageval-state/last_exit.json`: maintained by the command execution wrapper (`exec_with_wrapper`) and ACP process supervisor. While a command or tool is running, `inflight.pid` holds its PID and `/attempt/.ageval-state/inflight.output` streams its stdout/stderr. When the command exits, the wrapper atomically writes `last_exit.json` (`{request_id, exit_code, stdout, stderr}`) and removes `inflight.pid`.
+Recovery metadata lives at `/tmp/.ageval-state/` inside the environment, not under `/attempt`, so the evaluated agent does not see the nonce, cursor, or checkpoint helper when it lists the attempt tree. On `local` and `docker` those files are the host directory `<attempt>/state` next to `box/`; `docker` bind-mounts that directory at `/tmp/.ageval-state`.
+- `/tmp/.ageval-state/nonce`: written once when `host.start` completes; must match `environment_nonce` on `seq: 1` of `activity.jsonl`.
+- `/tmp/.ageval-state/cursor.json`: written after each completed step (`{seq, request_id}`).
+- `/tmp/.ageval-state/inflight.pid` and `/tmp/.ageval-state/last_exit.json`: maintained by the command execution wrapper (`exec_with_wrapper`) and ACP process supervisor. While a command or tool is running, `inflight.pid` holds its PID and `/tmp/.ageval-state/inflight.output` streams its stdout/stderr. When the command exits, the wrapper atomically writes `last_exit.json` (`{request_id, exit_code, stdout, stderr}`) and removes `inflight.pid`.
 
 #### How `probe(handle)` determines `status`
 
@@ -363,8 +363,8 @@ Used by `acp` (`pi`, `claude-code`, `codex`, `opencode`, `grok-build`), `acp-one
 | `terminus-2` | Executor (Strategy A) | Parent loop wraps `model(messages)` (`model_turn`) and `TmuxSession` batch execution (`tool_call`). | Rebuilds episode `messages` and turn counter from `activity.jsonl`. If `probe == "idle"`, reuses the live `tmux` session; if rebuilt from checkpoint, restarts `tmux` in `/attempt/workspace` and continues. |
 | `acp` / `acp-oneshot` | Executor (Strategy B) | `_AgevalAcpClient.session_update` streams `model_turn`, `tool_call`, and `compaction` to `ActivityScope` in real time. | Reuses `/attempt/home` native session journal (preserving agent-internal compaction) and `/attempt/workspace` (live or restored from `checkpoints/`); falls back to transcript rehydration if entry lacks session resume. |
 | `openhands` / `dsh` / `nooa` | Executor (Strategy B) | Worker streams JSONL step events (`MessageEvent`, `ActionEvent`, `ObservationEvent`) over stdout/pipe to parent `ActivityScope` as they occur instead of waiting until process exit. | Re-launches worker with saved session/event state under `/attempt/home` and restored `/attempt/workspace` checkpoint; worker continues from last completed iteration. |
-| `local` / `docker` | Environment | Writes `/attempt/.ageval-state/{nonce,cursor.json,last_exit.json}`; parent checkpoints `box/{workspace,home}` via host stat cache. | `probe` checks container/process liveness and `.ageval-state/`; `attach` rebinds to existing `box/` or running container; rebuild mounts restored `box/`. |
-| `e2b` / `daytona` / `ssh` | Environment | Writes `/attempt/.ageval-state/*`; incremental tar delta downloaded to parent `checkpoints/` after each step. | `probe` queries sandbox/SSH liveness and downloads `.ageval-state/`; `attach` reconnects SDK/SSH handle; rebuild provisions new sandbox and uploads latest checkpoint. |
+| `local` / `docker` | Environment | Writes `<attempt>/state/{nonce,cursor.json,last_exit.json}`, mounted at `/tmp/.ageval-state` for `docker`; parent checkpoints `box/{workspace,home}` via host stat cache. | `probe` checks container/process liveness and `<attempt>/state`; `attach` rebinds to existing `box/` or running container; rebuild mounts restored `box/`. |
+| `e2b` / `daytona` / `ssh` | Environment | Writes `/tmp/.ageval-state/*`; incremental tar delta downloaded to parent `checkpoints/` after each step. | `probe` queries sandbox/SSH liveness and downloads `/tmp/.ageval-state/`; `attach` reconnects SDK/SSH handle; rebuild provisions new sandbox and uploads latest checkpoint. |
 
 ### 4.4 Deterministic identity in `ageval_sdk` and `ParentAgentService`
 
@@ -584,6 +584,6 @@ When this RFC is accepted, update the following authoritative documents and mark
 - [`ARCHITECTURE.md`](../../ARCHITECTURE.md): Add `activity.jsonl` and `checkpoints/` to the evidence data flow and document `probe` / `attach` on `EnvironmentProvider`.
 - [`docs/design/01-core-lifecycle.md`](../design/01-core-lifecycle.md): Add the recovery transition for unsealed Attempts lacking `result.json`, define `--resume <attempt_id>`, and update `--resume-suite` to recover matching unsealed slots in place.
 - [`docs/design/03-task-sdk-and-evaluation.md`](../design/03-task-sdk-and-evaluation.md): Specify deterministic `session_id` and `request_id` generation in `ageval_sdk` and replay behavior when `run.py` re-enters on recovery.
-- [`docs/design/04-environments.md`](../design/04-environments.md): Specify `/attempt/.ageval-state/`, `runtime_handle`, `probe`, `attach`, and incremental workspace/home checkpoints across `local`, `docker`, `e2b`, `ssh`, and `daytona`.
+- [`docs/design/04-environments.md`](../design/04-environments.md): Specify `/tmp/.ageval-state/` (host `<attempt>/state` for `local` and `docker`), `runtime_handle`, `probe`, `attach`, and incremental workspace/home checkpoints across `local`, `docker`, `e2b`, `ssh`, and `daytona`.
 - [`docs/design/05-executors-and-acp.md`](../design/05-executors-and-acp.md): Specify `BaseExecutor.bind_activity`, real-time `ActivityScope` streaming, and dual-strategy context restoration (Log-Projected vs. Native Home Continuation) across `acp`, `miniswe`, `terminus-2`, `openhands`, `dsh`, `nooa`, `openai-http`, and `anthropic-http`.
 - [`docs/design/07-evidence-and-analysis.md`](../design/07-evidence-and-analysis.md): Add `activity.jsonl` (`ageval.activity/1`) and `checkpoints/` (`ageval.checkpoint/1`) to the Attempt evidence layout and `slim_sealed_attempt` rules.

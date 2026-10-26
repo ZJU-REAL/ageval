@@ -93,11 +93,15 @@ class DshBoxExecutor:
         timeout: float,
         collect_dir: str | os.PathLike[str] | None,
     ) -> AgentResult:
+        from ageval.plugins.contrib.acp.activity_stream import (
+            native_session_id,
+            prompt_for_resume,
+        )
+
         await self._prepare()
-        # The harness runtime rejects a new live session whose id matches an
-        # already-persisted log ("id collision"), so every invoke gets its own
-        # session id; role affinity stays in the stable prefix.
-        self._invoke_seq += 1
+        scope = getattr(self, "activity", None)
+        native = native_session_id(scope)
+        prompt = prompt_for_resume(scope, prompt, resumed_native=bool(native))
         request = {
             "prompt": prompt,
             "model": self.model,
@@ -105,7 +109,8 @@ class DshBoxExecutor:
             "workdir": self._host.visible_path(self._placement.workdir or WORKSPACE_PATH),
             "session_root": self._host.visible_path(BOX_SESSIONS),
             "cordis": self._host.visible_path(f"{BOX_COMPOSITIONS}/{self.composition}.cordis.yml"),
-            "session_id": f"{self.session_id}-{self._invoke_seq}",
+            "session_id": native,
+            "resume": bool(native),
             "composition": self.composition,
         }
         if self.permission:
@@ -113,12 +118,16 @@ class DshBoxExecutor:
         if self.max_tokens is not None:
             request["max_tokens"] = self.max_tokens
         env = self._exec_env()
-        result = await self._host.exec(
+        from ageval.plugins.step_stream import exec_with_steps
+
+        result = await exec_with_steps(
+            self._host,
             [
                 *self._host.python_command,
                 self._host.visible_path(BOX_WORKER),
                 json.dumps(request, sort_keys=True),
             ],
+            getattr(self, "activity", None),
             cwd=self._placement.workdir or WORKSPACE_PATH,
             env=env,
             timeout_sec=timeout,
@@ -196,7 +205,15 @@ class DshBoxExecutor:
         if self.permission:
             metadata["permission"] = self.permission
         structured = payload.get("structured")
-        events = payload.get("events") or ()
+        raw_events = payload.get("events") or ()
+        fresh = (
+            tuple(event for event in raw_events if isinstance(event, dict))
+            if isinstance(raw_events, list)
+            else ()
+        )
+        from ageval.plugins.activity_events import prior_activity_events
+
+        events = tuple(prior_activity_events(getattr(self, "activity", None), fresh))
         usage = payload.get("usage")
         return AgentResult(
             model=str(payload.get("model") or self.model),
@@ -205,7 +222,7 @@ class DshBoxExecutor:
             ok=bool(payload.get("ok", True)),
             error=str(payload["error"]) if payload.get("error") else None,
             stderr=stderr[-2000:],
-            events=tuple(events) if isinstance(events, list) else (),
+            events=events,
             usage=usage if isinstance(usage, dict) else None,
             metadata=metadata,
         )

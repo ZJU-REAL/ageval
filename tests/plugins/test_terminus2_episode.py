@@ -140,6 +140,7 @@ def test_format_errors_do_not_touch_tmux_keys() -> None:
 
 
 def test_invoke_records_events_and_is_not_repeatable_after_keys(monkeypatch) -> None:
+    monkeypatch.delenv("AGEVAL_OFFLINE_AGENT", raising=False)
     host = FakeHost()
     host.kind = "docker"  # type: ignore[attr-defined]
 
