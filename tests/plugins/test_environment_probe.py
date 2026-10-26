@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import signal
 import time
 from pathlib import Path
@@ -292,6 +293,20 @@ def test_live_stdio_pid_blocks_recovery_attach(tmp_path: Path) -> None:
         asyncio.run(host.stop(delete=True))
 
 
+def _dash_argv(argv: list[str]) -> list[str]:
+    """Run a shipped ``sh`` wrapper under dash.
+
+    macOS ``sh`` is bash. Ubuntu CI ``sh`` is dash. A bash pass hides a dash
+    stdin bug, so this test fails closed when dash is not installed.
+    """
+    dash = shutil.which("dash")
+    if dash is None:
+        pytest.fail("install dash (brew install dash); macOS sh is bash and does not match CI")
+    wrapped = list(argv)
+    wrapped[0] = dash
+    return wrapped
+
+
 def test_docker_exec_wrapper_forwards_stdin(tmp_path: Path) -> None:
     import os
     import subprocess
@@ -301,7 +316,9 @@ def test_docker_exec_wrapper_forwards_stdin(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["AGEVAL_STATE_DIR"] = str(tmp_path)
     env["AGEVAL_EXEC_REQUEST"] = "req_stdin"
-    argv = _exec_pid_wrapper(["python3", "-c", "import sys; sys.stdout.write(sys.stdin.read())"])
+    argv = _dash_argv(
+        _exec_pid_wrapper(["python3", "-c", "import sys; sys.stdout.write(sys.stdin.read())"])
+    )
     proc = subprocess.Popen(
         argv,
         env=env,
@@ -324,7 +341,9 @@ def test_remote_stdio_wrapper_forwards_stdin(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["AGEVAL_STATE_DIR"] = str(tmp_path)
     env["AGEVAL_EXEC_REQUEST"] = "req_remote_stdin"
-    argv = stdio_inflight_argv(["python3", "-c", "import sys; sys.stdout.write(sys.stdin.read())"])
+    argv = _dash_argv(
+        stdio_inflight_argv(["python3", "-c", "import sys; sys.stdout.write(sys.stdin.read())"])
+    )
     proc = subprocess.Popen(
         argv,
         env=env,
@@ -348,7 +367,7 @@ def test_stdio_wrapper_is_busy_without_logging_on_stdout(tmp_path: Path) -> None
     env = os.environ.copy()
     env["AGEVAL_STATE_DIR"] = str(tmp_path)
     env["AGEVAL_EXEC_REQUEST"] = "req_remote"
-    argv = stdio_inflight_argv(["sleep", "30"])
+    argv = _dash_argv(stdio_inflight_argv(["sleep", "30"]))
     proc = subprocess.Popen(argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
         deadline = time.monotonic() + 2
