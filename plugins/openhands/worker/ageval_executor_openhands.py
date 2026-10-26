@@ -283,6 +283,35 @@ def _emit_openhands(event: Any) -> None:
         )
 
 
+DEFAULT_PERSISTENCE_DIR = "/attempt/home/openhands"
+
+
+def start_conversation(
+    conversation_cls: Any,
+    *,
+    agent: Any,
+    workspace: Any,
+    persistence_dir: str,
+    conversation_id: str | None,
+    max_iterations: int,
+) -> Any:
+    """Open one persisted conversation. An id reloads that state."""
+    kwargs: dict[str, Any] = {
+        "agent": agent,
+        "workspace": workspace,
+        "persistence_dir": persistence_dir,
+        "max_iteration_per_run": max_iterations,
+        "visualizer": None,
+        "delete_on_close": False,
+    }
+    if conversation_id:
+        kwargs["conversation_id"] = conversation_id
+    conversation = conversation_cls(**kwargs)
+    if not conversation_id:
+        _emit_step({"type": "native_session", "id": str(conversation.id)})
+    return conversation
+
+
 def run_agent(instruction: str, *, workdir: str) -> dict[str, Any]:
     """One headless SDK conversation on a local workspace."""
     from openhands.sdk import LLM, Agent, Conversation, LocalWorkspace
@@ -318,11 +347,15 @@ def run_agent(instruction: str, *, workdir: str) -> dict[str, Any]:
     # start another sandbox; this runner never builds one.
     workspace = LocalWorkspace(working_dir=workdir)
     max_iterations = int(os.environ.get("OH_MAX_ITERATIONS") or "40")
-    conversation = Conversation(
+    persistence_dir = os.environ.get("OH_PERSISTENCE_DIR", "").strip() or DEFAULT_PERSISTENCE_DIR
+    raw_id = os.environ.get("OH_CONVERSATION_ID", "").strip()
+    conversation = start_conversation(
+        Conversation,
         agent=agent,
         workspace=workspace,
-        max_iteration_per_run=max_iterations,
-        visualizer=None,
+        persistence_dir=persistence_dir,
+        conversation_id=raw_id or None,
+        max_iterations=max_iterations,
     )
     import threading
     import time

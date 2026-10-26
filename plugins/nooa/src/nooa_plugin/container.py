@@ -102,11 +102,12 @@ class NooaBoxExecutor:
         timeout: float,
         collect_dir: str | os.PathLike[str] | None,
     ) -> AgentResult:
-        from ageval.plugins.step_stream import resume_prefix
+        from ageval.plugins.contrib.acp.activity_stream import prompt_for_resume
 
         await self._prepare()
+        scope = getattr(self, "activity", None)
         request = {
-            "prompt": resume_prefix(getattr(self, "activity", None)) + prompt,
+            "prompt": prompt_for_resume(scope, prompt, resumed_native=False),
             "agent": self.agent_ref,
             "method": self.method,
             "model": self.model,

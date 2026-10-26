@@ -28,6 +28,7 @@ BOX_PLUGIN = f"{HOME_PATH}/_openhands"
 BOX_WORKER = f"{BOX_PLUGIN}/ageval_executor_openhands.py"
 BOX_INSTRUCTION = f"{BOX_PLUGIN}/instruction.md"
 BOX_TRAJECTORY = f"{BOX_PLUGIN}/trajectory.json"
+BOX_PERSISTENCE = f"{HOME_PATH}/openhands"
 _INSTALL_TIMEOUT_SEC = 600.0
 _PROBE = "import openhands.sdk, openhands.tools"
 
@@ -115,10 +116,17 @@ class OpenHandsBoxExecutor:
         collect_dir: str | os.PathLike[str] | None,
         redaction_sentinels: tuple[str, ...] | list[str] | None,
     ) -> AgentResult:
-        from ageval.plugins.step_stream import resume_prefix
+        from ageval.plugins.contrib.acp.activity_stream import (
+            native_session_id,
+            prompt_for_resume,
+        )
 
         await self._prepare()
-        await self._upload_instruction(resume_prefix(getattr(self, "activity", None)) + prompt)
+        scope = getattr(self, "activity", None)
+        native = native_session_id(scope)
+        instruction = prompt_for_resume(scope, prompt, resumed_native=bool(native))
+        await self._upload_instruction(instruction)
+        self._native_session_id = native
         sentinels = tuple(redaction_sentinels or ())
         key = self._api_key_value()
         if key:
@@ -248,6 +256,10 @@ class OpenHandsBoxExecutor:
         if base:
             env["OPENAI_BASE_URL"] = base
             env["LLM_BASE_URL"] = base
+        env["OH_PERSISTENCE_DIR"] = self._host.visible_path(BOX_PERSISTENCE)
+        native = getattr(self, "_native_session_id", None)
+        if isinstance(native, str) and native:
+            env["OH_CONVERSATION_ID"] = native
         return env
 
     async def _read_trajectory(self, sentinels: tuple[str, ...]) -> dict[str, Any] | None:

@@ -93,14 +93,15 @@ class DshBoxExecutor:
         timeout: float,
         collect_dir: str | os.PathLike[str] | None,
     ) -> AgentResult:
-        from ageval.plugins.step_stream import resume_prefix
+        from ageval.plugins.contrib.acp.activity_stream import (
+            native_session_id,
+            prompt_for_resume,
+        )
 
         await self._prepare()
-        prompt = resume_prefix(getattr(self, "activity", None)) + prompt
-        # The harness runtime rejects a new live session whose id matches an
-        # already-persisted log ("id collision"), so every invoke gets its own
-        # session id; role affinity stays in the stable prefix.
-        self._invoke_seq += 1
+        scope = getattr(self, "activity", None)
+        native = native_session_id(scope)
+        prompt = prompt_for_resume(scope, prompt, resumed_native=bool(native))
         request = {
             "prompt": prompt,
             "model": self.model,
@@ -108,7 +109,8 @@ class DshBoxExecutor:
             "workdir": self._host.visible_path(self._placement.workdir or WORKSPACE_PATH),
             "session_root": self._host.visible_path(BOX_SESSIONS),
             "cordis": self._host.visible_path(f"{BOX_COMPOSITIONS}/{self.composition}.cordis.yml"),
-            "session_id": f"{self.session_id}-{self._invoke_seq}",
+            "session_id": native,
+            "resume": bool(native),
             "composition": self.composition,
         }
         if self.permission:

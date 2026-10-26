@@ -239,7 +239,11 @@ def main() -> int:
             sanitizing_base_url(),
             DeepSeekHarness(**harness_kwargs) as harness,
         ):
-            session = harness.start_session(session_id_s)
+            session = open_dsh_session(
+                harness,
+                session_id_s,
+                resume=req.get("resume") is True,
+            )
 
             def _on_notification(notification: Any) -> None:
                 if getattr(notification, "method", None) != "session.event":
@@ -298,6 +302,45 @@ def main() -> int:
             },
             code=1,
         )
+
+
+def open_dsh_session(
+    harness: Any,
+    session_id: str | None,
+    *,
+    resume: bool,
+    session_cls: Any = None,
+) -> Any:
+    """Continue a persisted harness session, or start one and publish its id."""
+    if resume:
+        if not session_id:
+            raise ValueError
+        _resume_dsh(harness, session_id)
+        cls = session_cls or _dsh_session_cls()
+        return cls(harness, session_id)
+    session = harness.start_session(session_id)
+    _emit_step({"type": "native_session", "id": str(session.id)})
+    return session
+
+
+def _resume_dsh(harness: Any, session_id: str) -> None:
+    """Ask the runtime to resume. ``start_session`` collides with a persisted log."""
+    from pydantic import BaseModel, ConfigDict
+
+    class _Ack(BaseModel):
+        model_config = ConfigDict(extra="allow")
+
+    harness.client.request(
+        "session/resume",
+        {"sessionId": session_id},
+        response_model=_Ack,
+    )
+
+
+def _dsh_session_cls() -> Any:
+    from deepseek_harness.api import Session
+
+    return Session
 
 
 def _step_log() -> Path:
