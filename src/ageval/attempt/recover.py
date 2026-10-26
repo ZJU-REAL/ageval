@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -257,15 +257,42 @@ def _adopt_last_exit(ctx: Any, probe: ProbeStatus) -> None:
 
 
 async def _wait_until_idle(host: Any, handle: dict[str, Any], log: ActivityLog) -> None:
-    raw = log.inflight_tool_deadline()
-    deadline = _parse_utc(raw) if raw else None
-    if deadline is None:
-        return
-    while datetime.now(UTC) < deadline:
-        await asyncio.sleep(0.25)
+    """Wait out a busy probe.
+
+    ``deadline_utc`` wins. Otherwise the in-flight row's ``at`` plus
+    ``timeout_sec`` is the deadline. With neither, wait until the probe
+    is no longer busy.
+    """
+    deadline = _busy_deadline(log)
+    while True:
+        if deadline is not None and datetime.now(UTC) >= deadline:
+            return
         probe = await host.probe(handle)
         if probe.status != "busy":
             return
+        delay = 0.05
+        if deadline is not None:
+            remaining = (deadline - datetime.now(UTC)).total_seconds()
+            if remaining <= 0:
+                return
+            delay = min(delay, remaining)
+        await asyncio.sleep(delay)
+
+
+def _busy_deadline(log: ActivityLog) -> datetime | None:
+    step = log.open_inflight(kinds=frozenset({"tool_call"}))
+    if step is None:
+        return None
+    raw = step.payload.get("deadline_utc")
+    if isinstance(raw, str) and raw:
+        return _parse_utc(raw)
+    timeout = step.payload.get("timeout_sec")
+    if isinstance(timeout, bool) or not isinstance(timeout, int | float) or timeout <= 0:
+        return None
+    started = _parse_utc(step.at)
+    if started is None:
+        return None
+    return started + timedelta(seconds=float(timeout))
 
 
 async def _stop_old_handle(header: ActivityRecord, handle: dict[str, Any]) -> None:
