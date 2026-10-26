@@ -38,6 +38,7 @@ Core owns configuration locking (`lock`), the Attempt phase pipeline, the `Envir
 5. Coding agents bind via `executor: acp` + `options.entry`, not `executor: pi`.
 6. Plugins implement exclusive or chain slots only. `ageval plugin install` never rewrites `profiles.yaml`.
 7. Do not claim `isolated` or `real-benchmark-verified` from a single smoke pass.
+8. Logic tests build the input and assert `status`, `error.title`, or the exit code. Fidelity tests run the real CLI on a real filesystem, container, or ACP entry, and record a skip when that boundary is missing.
 
 ## Skills
 

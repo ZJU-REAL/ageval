@@ -126,4 +126,4 @@ cleanup phase (finally)
 
 1. **Thin task scripts + `<dataset_root>/shared/lib`**: Extract reusable interaction loops, domain tool bridges, and common grading helpers into `<dataset_root>/shared/lib/` (`from shared.lib... import ...`). Record upstream `provenance` (repository URL, commit/version, adaptation notes) in `ageval.yaml` or `task.yaml`.
 2. **Explicit `shared/` copy for in-container scripts**: Docker image builds do not implicitly copy `<dataset_root>/shared/`. If an in-container helper script needs `shared.lib.*`, the task's `Dockerfile` must `COPY` it explicitly and set `PYTHONPATH`.
-3. **Real-environment verification without mocks**: Acceptance tests drive `ageval lock` and `ageval run` against real environments (`local`, `docker`, etc.). There is no product `executor: mock`; live checks without credentials or with `AGEVAL_SKIP_REAL_ACP=1` are reported as **skipped / not run**, never faked to pass.
+3. **Fidelity checks**: `ageval lock` and `ageval run` on a real `local` or `docker` environment. The product has no `executor: mock`. No credential, or `AGEVAL_SKIP_REAL_ACP=1`: record **skipped**. Parser, lock, and phase tests use fixtures.

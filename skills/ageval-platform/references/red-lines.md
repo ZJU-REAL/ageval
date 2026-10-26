@@ -25,6 +25,11 @@
 - **OK:** Report the actual verified `execution_location` and environment kind.
 - **Forbidden:** Claim full `isolated` or `real-benchmark-verified` from a single local/Docker smoke pass, or treat skipped CI checks (`AGEVAL_SKIP_REAL_ACP=1`) as passed.
 
+## Tests
+
+- **OK:** Logic test: fixture in, `status` / `error.title` / exit code out. Fidelity test: `ageval lock` or `ageval run` on a real filesystem, container, or ACP entry. Missing boundary: skip.
+- **Forbidden:** A logic test that needs the docker daemon, the host uid, a credential, or a quiet machine. A resume case built by killing a live process. A stub daemon, stub ACP entry, or stub provider reported as the fidelity result.
+
 ## Environment kind
 
 - **OK:** `environment: local|docker|e2b|ssh|daytona` in `profiles.yaml`.

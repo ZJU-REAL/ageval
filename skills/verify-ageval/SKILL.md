@@ -10,7 +10,7 @@ description: >
 
 # Verify ageval
 
-Drive `uv run ageval`. A missing credential or `AGEVAL_SKIP_REAL_ACP=1` is **not run**, never passed. Report format: [references/report.md](references/report.md).
+Drive `uv run ageval`. This is the fidelity check: real CLI, real boundary. A missing credential or `AGEVAL_SKIP_REAL_ACP=1` stays **skipped**. Logic tests use fixtures; see root `AGENTS.md` (Test layers). Report format: [references/report.md](references/report.md).
 
 Work in a copy of the dataset and a temporary `AGEVAL_HOME`. Leave the run evidence. Stop only the gateway and viewer processes this procedure started.
 

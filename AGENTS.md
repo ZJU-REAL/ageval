@@ -92,6 +92,12 @@ There is no product `executor: mock`. A fake host or stubbed service does not sa
 
 `AGEVAL_SKIP_REAL_ACP=1` means **CI did not run that check**; a skipped check is not a pass.
 
+### Test layers
+
+Most tests check one code path. The test builds the input (an activity prefix, a file mode, a clock, or a server it starts and stops) and asserts `status`, `error.title`, or the exit code.
+
+A fidelity test runs public `ageval lock` / `ageval run` on a real filesystem, a real container, or a real ACP entry. No daemon, no entry, or no credential: record it as skipped. `AGEVAL_SKIP_*` is that record.
+
 ### 4. Fail fast without silent fallbacks
 
 Write direct control flow and surface failures explicitly rather than swallowing exceptions.
@@ -117,7 +123,7 @@ Write direct control flow and surface failures explicitly rather than swallowing
 ### Structural invariants (design §4.10)
 
 1. `attempt/__init__.py` defines the top-level phase sequence directly.
-2. Acceptance testing targets real environment implementations through the public CLI.
+2. Fidelity tests run the public CLI on a real environment. Logic tests use a fixture.
 3. **No copy-grep tests or UI snapshot tests:** Website, Hub, and Viewer UIs are verified visually on the rendered page. Do not add pytest assertions that grep prose in `README.md` or `website/`, and do not add component/snapshot test files under `apps/` or `website/`. Use `scripts/check_design_tokens.py` and `scripts/check_public_terms.py` for token and terminology checks, and Python HTTP/CLI tests for backend behavior.
 4. **Locality:** `docker exec` stays inside `plugins/contrib/docker/`. ACP, `attempt/`, and `run.py` never inspect `container_id` or branch on environment kind (`if kind == "e2b"`).
 5. **Single resolution path:** Environment and executor plugins are resolved exclusively through exclusive slots in `ExtensionRegistry`.
