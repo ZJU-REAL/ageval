@@ -57,7 +57,7 @@ async def run_attempt(ctx: AttemptCtx) -> None:
         if not (ctx.recovery_attached and _phase_done(ctx, environment.PHASE)):
             await _timed(ctx, environment.PHASE, environment.run)
         should_record = True
-        if _phase_done(ctx, "seal_run"):
+        if _phase_done(ctx, "seal_run") and _artifacts_ready(ctx):
             ctx.mark_writers_stopped()
             _seal_solver_profile(ctx)
         else:
@@ -161,6 +161,13 @@ def _phase_done(ctx: AttemptCtx, name: str) -> bool:
     if log is None:
         return False
     return bool(log.has_completed_phase(name))
+
+
+def _artifacts_ready(ctx: AttemptCtx) -> bool:
+    from ageval.attempt.artifact_harvest import artifacts_present
+    from ageval.evidence.store import TASK_ARTIFACTS_REL
+
+    return artifacts_present(ctx.lock, ctx.evidence.path(TASK_ARTIFACTS_REL))
 
 
 def _restore_verdict(ctx: AttemptCtx) -> None:

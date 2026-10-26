@@ -129,6 +129,18 @@ def _prune_excluded(root: Path, exclude: list[str]) -> None:
             path.unlink(missing_ok=True)
 
 
+def artifacts_present(lock: Any, staged: Path) -> bool:
+    """True when a completed ``seal_run`` may skip ``run`` on resume.
+
+    No publishable declaration is enough (harvest is a no-op). A declaration
+    is enough only when ``regrade_harvest_gap`` would accept every snapshot.
+    """
+    gap = regrade_harvest_gap(lock, staged)
+    if gap is None:
+        return True
+    return gap[0] == "undeclared"
+
+
 def regrade_harvest_gap(lock: Any, staged: Path) -> tuple[str, tuple[str, ...]] | None:
     """Why this snapshot cannot be regraded, or None when every declared artifact is there.
 

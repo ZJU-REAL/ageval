@@ -52,11 +52,11 @@ async def run(ctx: AttemptCtx) -> None:
     finally:
         if ctx.agent_service is not None:
             await _seal_run_agent_service(ctx)
-        _log_seal_run(ctx)
-        # Solver writers cannot write after this point; evaluate may now start.
-        # The Agent Service socket stays up so evaluator.py can still session().
+        # Solver writers cannot write after this point. Harvest still runs, and
+        # seal_run is recorded only after that copy succeeds.
         ctx.mark_writers_stopped()
     await harvest_workspace_artifacts(ctx)
+    _log_seal_run(ctx)
     await emit(ctx, AFTER_RUN)
     _raise_fatal_recovery(ctx)
 
