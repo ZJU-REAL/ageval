@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -196,6 +197,43 @@ def test_worker_steps_are_logged_before_exec_returns(tmp_path: Path) -> None:
     host.exec = exec  # type: ignore[method-assign]
     result = asyncio.run(exec_with_steps(host, ["ignored"], scope))
     assert result.exit_code == 0
+
+
+def test_exec_with_steps_keeps_the_worker_busy(tmp_path: Path) -> None:
+    scope = _scope(tmp_path)
+    host = local_box(tmp_path / "box")
+    asyncio.run(host.start())
+
+    async def run() -> tuple[ExecResult, object, dict[str, object]]:
+        task = asyncio.create_task(
+            exec_with_steps(
+                host,
+                ["python3", "-c", "import time; time.sleep(2)"],
+                scope,
+            )
+        )
+        deadline = time.monotonic() + 5
+        busy = False
+        while time.monotonic() < deadline:
+            seen = await host.probe({})
+            if seen.status == "busy" and seen.inflight_request_id == "req":
+                busy = True
+                break
+            await asyncio.sleep(0.05)
+        assert busy
+        result = await task
+        idle = await host.probe({})
+        last = json.loads((host.state_root / "last_exit.json").read_text(encoding="utf-8"))
+        return result, idle, last
+
+    try:
+        result, idle, last = asyncio.run(run())
+    finally:
+        asyncio.run(host.stop(delete=True))
+    assert result.exit_code == 0
+    assert idle.status == "idle"
+    assert last["request_id"] == "req"
+    assert scope.log.matches_inflight_tool("req") is False
 
 
 def test_load_replay_does_not_append_completed_history(tmp_path: Path) -> None:

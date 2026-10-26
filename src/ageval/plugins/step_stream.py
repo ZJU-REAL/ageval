@@ -56,7 +56,12 @@ async def exec_with_steps(host: Any, argv: list[str], scope: Any, **kwargs: Any)
         remote = Path(name)
         path = remote
     cursor = path.stat().st_size if path is not None and path.is_file() else 0
-    task = asyncio.create_task(host.exec(argv, **kwargs))
+    call = dict(kwargs)
+    if "request_id" not in call:
+        request_id = getattr(scope, "invoke_request_id", None)
+        if isinstance(request_id, str) and request_id:
+            call["request_id"] = request_id
+    task = asyncio.create_task(host.exec(argv, **call))
     try:
         while not task.done():
             if remote is not None:
