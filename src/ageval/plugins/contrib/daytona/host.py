@@ -365,16 +365,23 @@ class DaytonaHost(BaseEnvironment):
         *,
         placement: Placement,
         env: Mapping[str, str] | None = None,
+        request_id: str | None = None,
     ) -> DaytonaStdio:
         """Start a foreground command and hand back fileno() pipes."""
         self._assert_started()
         parts = [str(part) for part in argv]
         if not parts:
             raise EnvironmentFailure("environment_attach_invalid", "attach_stdio requires argv")
+        from ageval.environments.remote_state import stdio_inflight_argv
+
+        child_env = self._child_env(env)
+        if request_id:
+            child_env["AGEVAL_EXEC_REQUEST"] = request_id
+            parts = stdio_inflight_argv(parts)
         session_id = f"ageval-stdio-{uuid.uuid4().hex[:12]}"
         await asyncio.to_thread(self._sandbox.process.create_session, session_id)
         sdk = _import_sdk()
-        command = _login_command(parts, cwd=placement.workdir, env=self._child_env(env))
+        command = _login_command(parts, cwd=placement.workdir, env=child_env)
         request = sdk.SessionExecuteRequest(
             command=command,
             run_async=True,

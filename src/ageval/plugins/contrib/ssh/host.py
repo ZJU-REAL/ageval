@@ -294,12 +294,19 @@ class SSHHost(BaseEnvironment):
         *,
         placement: Placement,
         env: Mapping[str, str] | None = None,
+        request_id: str | None = None,
     ) -> SSHStdio:
         """Start the process on the far side and hand back its pipes."""
         self._assert_started()
         parts = [str(part) for part in argv]
         if not parts:
             raise EnvironmentFailure("environment_attach_invalid", "attach_stdio requires argv")
+        from ageval.environments.remote_state import stdio_inflight_argv
+
+        remote_env = {"HOME": self.visible_path(placement.home), **dict(env or {})}
+        if request_id:
+            remote_env["AGEVAL_EXEC_REQUEST"] = request_id
+            parts = stdio_inflight_argv(parts)
         command = [
             "ssh",
             "-T",
@@ -311,7 +318,7 @@ class SSHHost(BaseEnvironment):
             *self._remote_argv(
                 parts,
                 cwd=placement.workdir,
-                env={"HOME": self.visible_path(placement.home), **dict(env or {})},
+                env=remote_env,
             ),
         ]
         process = subprocess.Popen(  # noqa: S603 — argv built here, no shell

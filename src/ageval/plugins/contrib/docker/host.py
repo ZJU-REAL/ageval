@@ -421,6 +421,7 @@ class DockerHost(BaseEnvironment):
         *,
         placement: Placement,
         env: Mapping[str, str] | None = None,
+        request_id: str | None = None,
     ) -> DockerStdio:
         """Start a foreground process in the container and hand back its pipes."""
         self._assert_started()
@@ -428,6 +429,11 @@ class DockerHost(BaseEnvironment):
         if not parts:
             raise EnvironmentFailure("environment_attach_invalid", "attach_stdio requires argv")
         assert self._container is not None
+        child_env = {"HOME": placement.home, **dict(env or {})}
+        if request_id:
+            child_env["AGEVAL_EXEC_REQUEST"] = request_id
+            child_env["AGEVAL_STATE_DIR"] = ENV_STATE_DIR
+            parts = _exec_pid_wrapper(parts)
         command = [
             "docker",
             "exec",
@@ -436,7 +442,7 @@ class DockerHost(BaseEnvironment):
             placement.user or self._user,
             "-w",
             placement.workdir,
-            *self._env_flags({"HOME": placement.home, **dict(env or {})}),
+            *self._env_flags(child_env),
             self._container,
             *parts,
         ]

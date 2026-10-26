@@ -200,6 +200,7 @@ class EnvironmentProvider(Protocol):
         *,
         placement: Placement,
         env: Mapping[str, str] | None = None,
+        request_id: str | None = None,
     ) -> StdioTransport: ...
 
     async def stop(self, *, delete: bool) -> None: ...

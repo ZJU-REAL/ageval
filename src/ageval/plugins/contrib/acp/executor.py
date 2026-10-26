@@ -330,10 +330,13 @@ class AcpExecutor(BaseExecutor):
         client = _AgevalAcpClient()
         client.activity = getattr(self, "activity", None)
         self._client = client
+        scope = getattr(self, "activity", None)
+        request_id = getattr(scope, "invoke_request_id", None)
         pipe = await self._host.attach_stdio(
             argv,
             placement=self._placement,
             env=self._child_env(),
+            request_id=request_id if isinstance(request_id, str) and request_id else None,
         )
         self._pipe = pipe
         reader, writer = await open_streams(pipe)

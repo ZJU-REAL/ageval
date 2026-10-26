@@ -318,18 +318,25 @@ class E2BHost(BaseEnvironment):
         *,
         placement: Placement,
         env: Mapping[str, str] | None = None,
+        request_id: str | None = None,
     ) -> E2BStdio:
         """Start a foreground command in the sandbox and hand back its streams."""
         self._assert_started()
         parts = [str(part) for part in argv]
         if not parts:
             raise EnvironmentFailure("environment_attach_invalid", "attach_stdio requires argv")
+        from ageval.environments.remote_state import stdio_inflight_argv
+
+        child_env = {"HOME": placement.home, **self._child_env(env)}
+        if request_id:
+            child_env["AGEVAL_EXEC_REQUEST"] = request_id
+            parts = stdio_inflight_argv(parts)
         handle = await asyncio.to_thread(
             self._sandbox.commands.run,
             _shell_line(parts),
             background=True,
             cwd=placement.workdir,
-            envs={"HOME": placement.home, **self._child_env(env)},
+            envs=child_env,
             stdin=True,
             timeout=0,
         )

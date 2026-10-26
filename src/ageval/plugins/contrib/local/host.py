@@ -9,15 +9,18 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from ageval.environments.box_state import (
     INFLIGHT_OUTPUT_NAME,
+    clear_inflight,
     ensure_state_dir,
     host_pid_alive,
     host_state_dir,
     probe_box,
+    read_inflight,
     write_inflight,
     write_last_exit,
 )
@@ -39,6 +42,19 @@ from ageval.plugins.decorators import environment_plugin
 
 _BOX_ROOT = "/attempt"
 _MAX_STREAM_BYTES = 256 * 1024
+
+
+def _clear_inflight_when_exits(state: Path, process: subprocess.Popen[bytes]) -> None:
+    """Drop the pid file after this process ends, unless a newer one replaced it."""
+    pid = process.pid
+
+    def watch() -> None:
+        process.wait()
+        current, _request = read_inflight(state)
+        if current == pid:
+            clear_inflight(state)
+
+    threading.Thread(target=watch, name=f"ageval-stdio-{pid}", daemon=True).start()
 
 
 def _decode_capped(raw: bytes) -> str:
@@ -297,6 +313,7 @@ class LocalHost(BaseEnvironment):
         *,
         placement: Placement,
         env: Mapping[str, str] | None = None,
+        request_id: str | None = None,
     ) -> LocalStdio:
         """Start a foreground process in the open box and hand back its pipes."""
         self._assert_started()
@@ -314,6 +331,9 @@ class LocalHost(BaseEnvironment):
             stderr=subprocess.PIPE,
             start_new_session=True,
         )
+        if request_id:
+            write_inflight(self.state_root, pid=process.pid, request_id=request_id)
+            _clear_inflight_when_exits(self.state_root, process)
         pipe = LocalStdio(process)
         self._attached.append(pipe)
         return pipe

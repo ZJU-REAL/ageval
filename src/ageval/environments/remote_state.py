@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import tarfile
+from collections.abc import Sequence
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -159,6 +160,35 @@ def main(argv):
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv))
 '''
+
+
+def stdio_inflight_argv(argv: Sequence[str]) -> list[str]:
+    """Run ``argv`` with inherited stdio and record this shell in the state dir.
+
+    The shell does not write to stdout. ``AGEVAL_EXEC_REQUEST`` is the request id.
+    The pid file is removed when the shell exits, including after a signal.
+    """
+    script = r"""
+state=${AGEVAL_STATE_DIR:-/tmp/.ageval-state}
+mkdir -p "$state"
+echo $$ > "$state/inflight.pid"
+printf %s "${AGEVAL_EXEC_REQUEST-}" > "$state/inflight.request"
+child=0
+cleanup() {
+  if [ "${child:-0}" != 0 ]; then
+    kill "$child" 2>/dev/null || true
+    wait "$child" 2>/dev/null || true
+  fi
+  rm -f "$state/inflight.pid" "$state/inflight.request"
+}
+trap cleanup EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+"$@" &
+child=$!
+wait "$child"
+"""
+    return ["sh", "-c", script, "ageval-stdio", *[str(part) for part in argv]]
 
 
 def parse_state_document(raw: str) -> ProbeStatus:

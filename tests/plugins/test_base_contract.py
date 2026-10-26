@@ -71,8 +71,9 @@ class _ReadyEnvironment(BaseEnvironment):
         *,
         placement: Placement,
         env: Mapping[str, str] | None = None,
+        request_id: str | None = None,
     ) -> StdioTransport:
-        del argv, placement, env
+        del argv, placement, env, request_id
         raise AssertionError("not used")
 
 
