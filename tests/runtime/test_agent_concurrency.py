@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import pytest
 from tests.helpers.agent_binding import ScriptedBinder
 
 from ageval.evidence.store import AttemptEvidenceStore
@@ -357,7 +358,11 @@ def test_evidence_intervals_overlap_only_when_the_cap_allows(tmp_path: Path) -> 
     assert ordered[1][0] >= ordered[0][1]
 
 
-def test_socket_dispatch_overlaps_two_clients(tmp_path: Path) -> None:
+def test_socket_dispatch_overlaps_two_clients(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The socket client refuses invoke while the CI offline switch is on.
+    monkeypatch.delenv("AGEVAL_OFFLINE_AGENT", raising=False)
     backend = HoldExecutor()
     service = _service(tmp_path, backend, concurrency=2)
     # macOS rejects a unix socket whose path is longer than about 100 bytes.

@@ -338,10 +338,13 @@ def test_acp_resume_loads_the_native_session(tmp_path: Path) -> None:
                     preview = preview + "\n" + trace.read_text(encoding="utf-8")
             assert attempt is not None, preview
             os.killpg(proc.pid, signal.SIGKILL)
+            _kill_recorded_entry(attempt)
             proc.wait(timeout=10)
         except Exception:
             if proc.poll() is None:
                 os.killpg(proc.pid, signal.SIGKILL)
+            if attempt is not None:
+                _kill_recorded_entry(attempt)
             raise
     finally:
         out_handle.close()
@@ -381,6 +384,24 @@ def test_acp_resume_loads_the_native_session(tmp_path: Path) -> None:
         if json.loads(line).get("kind") == "session"
     ]
     assert native == ["native-1"]
+
+
+def _kill_recorded_entry(attempt: Path) -> None:
+    """Stop the stdio entry. It is its own session, so killing ageval leaves it."""
+    pid_path = attempt / "state" / "inflight.pid"
+    if not pid_path.is_file():
+        return
+    raw = pid_path.read_text(encoding="utf-8").strip()
+    try:
+        pid = int(raw)
+    except ValueError:
+        return
+    if pid <= 0:
+        return
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
 
 
 def _unsealed_with_tool(dataset: Path) -> Path | None:

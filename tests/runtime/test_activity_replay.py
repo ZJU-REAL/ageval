@@ -4,11 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from tests.helpers.agent_binding import ScriptedBinder, ScriptedExecutor
 
 from ageval.evidence.activity import ActivityLog
 from ageval.evidence.store import AttemptEvidenceStore
 from ageval.runtime.parent_agent import ParentAgentService
+
+
+@pytest.fixture(autouse=True)
+def _scripted_invoke_is_online(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AGEVAL_OFFLINE_AGENT", raising=False)
 
 
 def test_completed_invoke_is_not_sent_again(tmp_path: Path) -> None:

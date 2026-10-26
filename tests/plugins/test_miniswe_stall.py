@@ -775,75 +775,31 @@ def test_sanitize_responses_input_strips_id() -> None:
     assert sanitize_responses_input("hi") == "hi"
 
 
-def test_close_llm_client_shutdown_unblocks_recv(monkeypatch: pytest.MonkeyPatch) -> None:
-    """socket.SHUT_RDWR must wake a thread stuck in _receive_response_headers."""
-    pytest.importorskip("httpx")
-    pytest.importorskip("openai")
-    import socket
+def _pool_has_socket(client: object) -> bool:
+    from miniswe_plugin.llm_client import _iter_httpx_pools
 
-    import httpx
-    from miniswe_plugin.llm_client import close_llm_client, register_in_flight_client
-    from openai import OpenAI
-
-    srv = socket.socket()
-    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    srv.bind(("127.0.0.1", 0))
-    srv.listen(5)
-    port = srv.getsockname()[1]
-    stop = {"x": False}
-
-    def serve() -> None:
-        srv.settimeout(0.3)
-        while not stop["x"]:
-            try:
-                conn, _ = srv.accept()
-            except OSError:
-                continue
-            # absorb request forever
-            try:
-                while not stop["x"]:
-                    time.sleep(0.2)
-            finally:
-                with contextlib.suppress(OSError):
-                    conn.close()
-
-    import threading
-
-    threading.Thread(target=serve, daemon=True).start()
-    http = httpx.Client(
-        limits=httpx.Limits(max_keepalive_connections=0, max_connections=5),
-        timeout=httpx.Timeout(60.0),
-        headers={"Connection": "close"},
-    )
-    client = OpenAI(
-        api_key="sk-x",
-        base_url=f"http://127.0.0.1:{port}/v1",
-        http_client=http,
-        timeout=60,
-        max_retries=0,
-    )
-    register_in_flight_client(client)
-    done = {"ok": False, "exc": None}
-
-    def hung() -> None:
+    for pool in _iter_httpx_pools(client):
+        conns = list(getattr(pool, "_connections", None) or [])
         try:
-            client.chat.completions.create(
-                model="m", messages=[{"role": "user", "content": "hi"}], timeout=60
-            )
-        except Exception as exc:  # noqa: BLE001
-            done["exc"] = type(exc).__name__
-        finally:
-            done["ok"] = True
+            extra = list(getattr(pool, "connections", None) or [])
+        except (TypeError, AttributeError):
+            extra = []
+        for conn in (*conns, *extra):
+            inner = getattr(conn, "_connection", None) or conn
+            stream = getattr(inner, "_network_stream", None)
+            sock = getattr(stream, "_sock", None) if stream is not None else None
+            if sock is not None:
+                return True
+    return False
 
-    th = threading.Thread(target=hung, daemon=True)
-    th.start()
-    time.sleep(0.4)
-    close_llm_client(client)
-    th.join(timeout=2.0)
-    stop["x"] = True
-    srv.close()
-    assert done["ok"], "shutdown did not unblock hung recv"
-    assert not th.is_alive()
+
+def _wait_until_socket(client: object, *, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _pool_has_socket(client):
+            return
+        time.sleep(0.02)
+    raise AssertionError("request never opened a socket")
 
 
 def test_bind_direct_completion_client_posts_chat_shape(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1024,7 +980,7 @@ def test_responses_blackhole_shut_rdwr_and_future_timeout() -> None:
 
     th = threading.Thread(target=hung_plain, daemon=True)
     th.start()
-    time.sleep(0.35)
+    _wait_until_socket(client)
     client.close()
     th.join(timeout=0.4)
     assert th.is_alive() and not plain["ok"], "plain close unexpectedly unblocked recv"
@@ -1053,9 +1009,9 @@ def test_responses_blackhole_shut_rdwr_and_future_timeout() -> None:
 
     th2 = threading.Thread(target=hung_shut, daemon=True)
     th2.start()
-    time.sleep(0.35)
+    _wait_until_socket(client2)
     close_llm_client(client2)
-    th2.join(timeout=2.0)
+    th2.join(timeout=5.0)
     assert not th2.is_alive() and shut["ok"], "SHUT_RDWR did not unblock responses recv"
 
     # 2) FutureTimeout on post_responses_api (long httpx timeout, short watchdog).

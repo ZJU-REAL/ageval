@@ -8,6 +8,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Event, Thread
@@ -126,6 +127,17 @@ def _install(home: Path, *plugin_ids: str) -> None:
         install_from_path(REPO / "plugins" / plugin_id)
 
 
+def _need_docker() -> None:
+    if os.environ.get("AGEVAL_SKIP_DOCKER") == "1":
+        pytest.skip("AGEVAL_SKIP_DOCKER=1")
+    if not daemon_available():
+        pytest.skip("docker daemon is not reachable")
+
+
+def _need_miniswe() -> None:
+    pytest.importorskip("minisweagent")
+
+
 def _ageval(env: dict[str, str], *args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "ageval.cli.main", *args],
@@ -166,12 +178,17 @@ def _kill_when_holding(
             start_new_session=True,
         )
         try:
-            held = gateway.holding.wait(timeout=180)
-            if not held:
-                if proc.poll() is not None:
-                    proc.wait(timeout=5)
-                preview = log_path.read_text(encoding="utf-8")[-2000:]
-                pytest.fail(f"run never reached the blocked model call\n{preview}")
+            deadline = time.monotonic() + 180
+            while not gateway.holding.is_set():
+                if proc.poll() is not None or time.monotonic() >= deadline:
+                    if proc.poll() is None:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                        proc.wait(timeout=10)
+                    else:
+                        proc.wait(timeout=5)
+                    preview = log_path.read_text(encoding="utf-8")[-2000:]
+                    pytest.fail(f"run never reached the blocked model call\n{preview}")
+                gateway.holding.wait(timeout=0.2)
             os.killpg(proc.pid, signal.SIGKILL)
             proc.wait(timeout=10)
         except Exception:
@@ -285,8 +302,9 @@ def _write_miniswe_dataset(dataset: Path) -> None:
 def test_miniswe_resume_does_not_requery_finished_steps(
     environment: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    if environment == "docker" and not daemon_available():
-        pytest.skip("docker daemon is not reachable")
+    if environment == "docker":
+        _need_docker()
+    _need_miniswe()
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("AGEVAL_HOME", str(home))
@@ -337,10 +355,11 @@ def test_miniswe_resume_does_not_requery_finished_steps(
         gateway.close()
 
 
-@pytest.mark.skipif(not daemon_available(), reason="docker daemon is not available")
 def test_miniswe_resume_restores_checkpoint_after_container_removal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    _need_docker()
+    _need_miniswe()
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("AGEVAL_HOME", str(home))
@@ -396,10 +415,10 @@ def test_miniswe_resume_restores_checkpoint_after_container_removal(
         gateway.close()
 
 
-@pytest.mark.skipif(not daemon_available(), reason="docker daemon is not available")
 def test_terminus_resume_reuses_the_live_container(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    _need_docker()
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("AGEVAL_HOME", str(home))
