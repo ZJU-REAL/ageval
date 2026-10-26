@@ -674,7 +674,7 @@ class ParentAgentService:
                 "invocation_id": handle.invocation_id if handle else None,
                 "evidence_relative": handle.relative_path if handle else None,
                 "tool_calls": _public_tool_calls(result),
-                "usage": result.usage,
+                "usage": _activity_usage(result.usage),
             },
         )
 
