@@ -102,11 +102,16 @@ class CheckpointStore:
         for rel, path in _iter_files(self.box_dir):
             if rel in self.exclude or _excluded(rel, self.exclude):
                 continue
-            payload = self._checkpoint_bytes(rel, path)
-            if payload is None:
+            try:
+                payload = self._checkpoint_bytes(rel, path)
+                if payload is None:
+                    continue
+                stat = path.stat()
+            except FileNotFoundError:
+                # The agent can delete a home file (sqlite sidecars, staging
+                # dirs) between the walk and the read. It is not part of this seq.
                 continue
             seen.add(rel)
-            stat = path.stat()
             cached = self._cache.get(rel)
             if cached is not None and cached[0] == stat.st_mtime_ns and cached[1] == stat.st_size:
                 digest = cached[2]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -112,6 +113,25 @@ def test_restore_rolls_back_files_and_deletes_extras(tmp_path: Path) -> None:
     assert not extra.exists()
     assert not extra.parent.exists()
     assert note.stat().st_mode & 0o777 == 0o640
+
+
+def test_capture_skips_a_file_removed_during_the_scan(tmp_path: Path, monkeypatch) -> None:
+    box = _box(tmp_path)
+    (box / "workspace" / "note.txt").write_text("kept", encoding="utf-8")
+    gone = box / "home" / "gone.txt"
+    gone.write_text("temp", encoding="utf-8")
+    original = Path.read_bytes
+
+    def read_bytes(self: Path) -> bytes:
+        if self.name == "gone.txt":
+            gone.unlink()
+            raise FileNotFoundError(gone)
+        return original(self)
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    manifest = json.loads(CheckpointStore(tmp_path, box).capture(1).read_text(encoding="utf-8"))
+    assert "workspace/note.txt" in manifest["entries"]
+    assert "home/gone.txt" not in manifest["entries"]
 
 
 def test_prune_removes_checkpoint_dir(tmp_path: Path) -> None:
