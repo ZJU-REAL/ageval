@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -16,6 +17,8 @@ from ageval.evidence.attempt_record import RESULT_FILENAME
 from ageval.evidence.checkpoints import CheckpointStore
 from ageval.evidence.locators import default_runs_root
 from ageval.evidence.store import ACTIVITY_LOG_REL, AGENT_BOX_REL
+
+logger = logging.getLogger(__name__)
 
 _NO_SEAL = frozenset(
     {
@@ -304,14 +307,72 @@ def _busy_deadline(log: ActivityLog) -> datetime | None:
 
 
 async def _stop_old_handle(header: ActivityRecord, handle: dict[str, Any]) -> None:
-    if header.payload.get("environment_kind") != "docker":
-        return
-    container_id = handle.get("container_id")
-    if not isinstance(container_id, str) or not container_id.strip():
-        return
+    """Best-effort stop of the previous environment. Failure does not block rebuild."""
+    kind = str(header.payload.get("environment_kind") or "")
+    try:
+        if kind == "docker":
+            await asyncio.to_thread(_stop_docker, handle)
+        elif kind == "e2b":
+            await asyncio.to_thread(_stop_e2b, handle)
+        elif kind == "daytona":
+            await asyncio.to_thread(_stop_daytona, handle)
+        elif kind == "ssh":
+            await _stop_ssh(handle)
+    except Exception as exc:  # noqa: BLE001 — a failed stop must not replace rebuild
+        logger.warning("stop old %s environment failed: %s", kind, exc)
+
+
+def _stop_docker(handle: dict[str, Any]) -> None:
     from ageval.plugins.contrib.docker.images import docker
 
-    docker("rm", "-f", container_id.strip(), timeout=60.0)
+    container_id = str(handle.get("container_id") or "").strip()
+    if container_id:
+        docker("rm", "-f", container_id, timeout=60.0)
+    project = str(handle.get("compose_project") or "").strip()
+    if project:
+        docker("compose", "-p", project, "down", timeout=120.0)
+
+
+def _stop_e2b(handle: dict[str, Any]) -> None:
+    sandbox_id = str(handle.get("sandbox_id") or "").strip()
+    if not sandbox_id:
+        return
+    from ageval.plugins.contrib.e2b.host import _import_sdk
+
+    sdk = _import_sdk()
+    sandbox = sdk.Sandbox.connect(sandbox_id)
+    sandbox.kill()
+
+
+def _stop_daytona(handle: dict[str, Any]) -> None:
+    sandbox_id = str(handle.get("sandbox_id") or "").strip()
+    if not sandbox_id:
+        return
+    from daytona import Daytona
+
+    client = Daytona()
+    sandbox = client.get(sandbox_id)
+    client.delete(sandbox)
+
+
+async def _stop_ssh(handle: dict[str, Any]) -> None:
+    """Remove a remote container. A directory-only SSH environment is left in place."""
+    container_id = str(handle.get("container_id") or "").strip()
+    host_name = str(handle.get("host") or "").strip()
+    if not container_id or not host_name:
+        return
+    from ageval.environments.protocol import BoxSpec
+    from ageval.plugins.contrib.ssh.host import SSHHost
+
+    host = SSHHost(
+        spec=BoxSpec(attempt_root=Path("."), task_root=Path("."), repo_root=Path("."))
+    )
+    host._host = host_name
+    user = handle.get("user")
+    host._user = str(user) if isinstance(user, str) and user else None
+    port = handle.get("port")
+    host._port = str(port) if port else None
+    await host._ssh(["docker", "rm", "-f", container_id], timeout_sec=120.0)
 
 
 def partial_output(ctx: Any) -> str | None:
