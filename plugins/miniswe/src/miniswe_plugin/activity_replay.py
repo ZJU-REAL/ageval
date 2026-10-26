@@ -77,12 +77,15 @@ def install_activity(model: Any, env: Any, executor: Any) -> None:
         counter["n"] += 1
         call_id = f"bash_{counter['n']}"
         command = str(action.get("command") or "")
+        from ageval.evidence.system_effect import command_system_effect
+
         scope.record_tool_call_in_flight(
             call_id,
             "bash",
             "execute",
             {"command": command},
             replay_safe=False,
+            system_effect=command_system_effect(command, cwd or None),
             timeout_sec=float(timeout or getattr(env, "timeout", 30)),
         )
         env._exec_request_id = f"tool_{scope.session_id}_{call_id}"

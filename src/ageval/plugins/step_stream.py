@@ -160,12 +160,21 @@ def _tool_started(scope: Any, row: dict[str, Any]) -> None:
         return
     kind = str(row.get("tool_kind") or "other")
     arguments = row.get("arguments") if isinstance(row.get("arguments"), dict) else {}
+    from ageval.evidence.system_effect import command_system_effect
+
+    command = arguments.get("command")
+    cwd = arguments.get("cwd") if isinstance(arguments.get("cwd"), str) else None
+    system = kind == "execute" and command_system_effect(
+        command if isinstance(command, str) else "",
+        cwd,
+    )
     scope.record_tool_call_in_flight(
         call_id,
         str(row.get("name") or "tool"),
         kind,
         arguments,
         replay_safe=kind in _REPLAY_SAFE or row.get("replay_safe") is True,
+        system_effect=system or row.get("system_effect") is True,
     )
 
 

@@ -163,12 +163,18 @@ def _tool_started(scope: Any, state: StreamState, update: Any, event: dict[str, 
         return
     state.tools.add(call_id)
     kind = _tool_kind(update, event)
+    arguments = _arguments(update, event)
+    command = arguments.get("command") if isinstance(arguments.get("command"), str) else ""
+    cwd = arguments.get("cwd") if isinstance(arguments.get("cwd"), str) else None
+    from ageval.evidence.system_effect import command_system_effect
+
     scope.record_tool_call_in_flight(
         call_id,
         _tool_name(update, event),
         kind,
-        _arguments(update, event),
+        arguments,
         replay_safe=kind in _REPLAY_SAFE,
+        system_effect=kind == "execute" and command_system_effect(command, cwd),
     )
 
 

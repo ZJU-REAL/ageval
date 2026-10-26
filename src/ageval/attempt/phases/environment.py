@@ -26,7 +26,7 @@ PHASE = "environment"
 
 async def _finish_rebuild(ctx: AttemptCtx) -> None:
     """Replay system effects, then restore the latest checkpoint onto the new box."""
-    from ageval.attempt.recover import publish_environment_handle, restore_checkpoint
+    from ageval.attempt.recover import restore_checkpoint
     from ageval.environments.box_state import write_cursor
     from ageval.evaluation.error_record import RecordedError
     from ageval.evidence.store import AGENT_BOX_REL
@@ -46,7 +46,6 @@ async def _finish_rebuild(ctx: AttemptCtx) -> None:
         push = getattr(ctx.host, "push_restored_box", None)
         if callable(push):
             await push(ctx.evidence.path(AGENT_BOX_REL))
-        publish_environment_handle(ctx)
     except RecordedError:
         raise
     except Exception as exc:  # noqa: BLE001 — rebuild failure is a terminal Attempt error
@@ -69,7 +68,10 @@ async def _replay_system_effect(ctx: AttemptCtx, completed: Any) -> None:
     elif isinstance(command, list):
         argv = [str(part) for part in command]
     else:
-        return
+        raise RecordedError(
+            "recovery_rebuild_failed",
+            f"system effect {completed.request_id} has no command",
+        )
     timeout = inflight.payload.get("timeout_sec") if inflight is not None else None
     result = await ctx.host.exec(
         argv,
@@ -106,10 +108,10 @@ async def run(ctx: AttemptCtx) -> None:
     ctx.assert_deadline()
     await emit(ctx, ENVIRONMENT_SETUP)
     ctx.assert_deadline()
-    await emit(ctx, AFTER_ENVIRONMENT)
     if ctx.recovery_rebuild:
         await _finish_rebuild(ctx)
-    elif ctx.activity is not None:
+    await emit(ctx, AFTER_ENVIRONMENT)
+    if ctx.activity is not None:
         from ageval.attempt.recover import publish_environment_handle
 
         publish_environment_handle(ctx)

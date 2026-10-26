@@ -362,12 +362,15 @@ def _begin_tmux(activity: Any, parsed: ParseResult, call_id: str) -> None:
     ):
         return
     keystrokes = "\n".join(command.keystrokes for command in parsed.commands)
+    from ageval.evidence.system_effect import command_system_effect
+
     activity.record_tool_call_in_flight(
         call_id,
         "tmux",
         "execute",
         {"command": keystrokes},
         replay_safe=False,
+        system_effect=command_system_effect(keystrokes, "/attempt/workspace"),
         timeout_sec=30.0,
     )
 
