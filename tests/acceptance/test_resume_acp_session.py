@@ -320,9 +320,9 @@ def test_acp_resume_loads_the_native_session(tmp_path: Path) -> None:
             stderr=err_handle,
             start_new_session=True,
         )
+        attempt = None
         try:
             deadline = time.monotonic() + 90
-            attempt = None
             while time.monotonic() < deadline:
                 attempt = _unsealed_with_tool(dataset)
                 if attempt is not None:
