@@ -247,7 +247,9 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
-"$@" &
+# An explicit stdin redirect keeps the pipe. A bare background command
+# would otherwise read /dev/null when job control is off.
+"$@" <&0 &
 child=$!
 wait "$child"
 """

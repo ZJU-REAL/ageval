@@ -292,6 +292,56 @@ def test_live_stdio_pid_blocks_recovery_attach(tmp_path: Path) -> None:
         asyncio.run(host.stop(delete=True))
 
 
+def test_docker_exec_wrapper_forwards_stdin(tmp_path: Path) -> None:
+    import os
+    import subprocess
+
+    from ageval.plugins.contrib.docker.host import _exec_pid_wrapper
+
+    env = os.environ.copy()
+    env["AGEVAL_STATE_DIR"] = str(tmp_path)
+    env["AGEVAL_EXEC_REQUEST"] = "req_stdin"
+    argv = _exec_pid_wrapper(
+        ["python3", "-c", "import sys; sys.stdout.write(sys.stdin.read())"]
+    )
+    proc = subprocess.Popen(
+        argv,
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    stdout, stderr = proc.communicate(b"token-from-parent\n", timeout=15)
+    assert proc.returncode == 0, stderr.decode("utf-8", errors="replace")
+    assert b"token-from-parent" in stdout
+    assert b"token-from-parent" not in stderr
+
+
+def test_remote_stdio_wrapper_forwards_stdin(tmp_path: Path) -> None:
+    import os
+    import subprocess
+
+    from ageval.environments.remote_state import stdio_inflight_argv
+
+    env = os.environ.copy()
+    env["AGEVAL_STATE_DIR"] = str(tmp_path)
+    env["AGEVAL_EXEC_REQUEST"] = "req_remote_stdin"
+    argv = stdio_inflight_argv(
+        ["python3", "-c", "import sys; sys.stdout.write(sys.stdin.read())"]
+    )
+    proc = subprocess.Popen(
+        argv,
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    stdout, stderr = proc.communicate(b"token-from-parent\n", timeout=15)
+    assert proc.returncode == 0, stderr.decode("utf-8", errors="replace")
+    assert stdout == b"token-from-parent\n"
+    assert stderr == b""
+
+
 def test_stdio_wrapper_is_busy_without_logging_on_stdout(tmp_path: Path) -> None:
     import os
     import select

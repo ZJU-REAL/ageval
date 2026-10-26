@@ -926,6 +926,8 @@ _EXEC_WRAPPER = r"""
 state=${AGEVAL_STATE_DIR:-/tmp/.ageval-state}
 mkdir -p "$state"
 umask 000
+# The python program below is a heredoc, so it must not inherit this stdin.
+exec 3<&0
 echo $$ > "$state/inflight.pid"
 printf %s "${AGEVAL_EXEC_REQUEST-}" > "$state/inflight.request"
 : > "$state/inflight.output"
@@ -980,6 +982,7 @@ if not cmd:
     sys.exit(127)
 proc = subprocess.Popen(
     cmd,
+    stdin=3,
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
     bufsize=0,
