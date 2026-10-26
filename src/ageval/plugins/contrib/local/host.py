@@ -13,6 +13,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from ageval.environments.box_state import (
+    INFLIGHT_OUTPUT_NAME,
+    ensure_state_dir,
     host_pid_alive,
     host_state_dir,
     probe_box,
@@ -39,11 +41,13 @@ _BOX_ROOT = "/attempt"
 _MAX_STREAM_BYTES = 256 * 1024
 
 
+def _decode_capped(raw: bytes) -> str:
+    return raw[:_MAX_STREAM_BYTES].decode("utf-8", errors="replace")
+
+
 def _finish_exec(box: Path, request_id: str | None, result: ExecResult) -> None:
     if not request_id:
         return
-    from ageval.environments.box_state import INFLIGHT_OUTPUT_NAME, ensure_state_dir
-
     folder = ensure_state_dir(box)
     (folder / INFLIGHT_OUTPUT_NAME).write_text(
         f"{result.stdout}{result.stderr}",
@@ -191,25 +195,62 @@ class LocalHost(BaseEnvironment):
             start_new_session=True,
         )
         if request_id:
+            folder = ensure_state_dir(self.state_root)
+            (folder / INFLIGHT_OUTPUT_NAME).write_text("", encoding="utf-8")
             write_inflight(self.state_root, pid=process.pid, request_id=request_id)
+        stdout_parts: list[bytes] = []
+        stderr_parts: list[bytes] = []
+
+        async def _drain(stream: asyncio.StreamReader | None, parts: list[bytes]) -> None:
+            if stream is None:
+                return
+            while True:
+                block = await stream.read(4096)
+                if not block:
+                    return
+                parts.append(block)
+                if request_id:
+                    self._append_inflight_output(block)
+
+        async def _pump() -> None:
+            await asyncio.gather(
+                _drain(process.stdout, stdout_parts),
+                _drain(process.stderr, stderr_parts),
+            )
+            await process.wait()
+
         try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_sec)
+            await asyncio.wait_for(_pump(), timeout=timeout_sec)
         except TimeoutError:
             self._kill_group(process.pid)
             with contextlib.suppress(OSError):
                 await process.wait()
-            result = ExecResult(exit_code=124, stdout="", stderr="exec timed out", truncated=False)
+            result = ExecResult(
+                exit_code=124,
+                stdout=_decode_capped(b"".join(stdout_parts)),
+                stderr="exec timed out",
+                truncated=False,
+            )
             _finish_exec(self.state_root, request_id, result)
             return result
+        stdout = b"".join(stdout_parts)
+        stderr = b"".join(stderr_parts)
         truncated = len(stdout) > _MAX_STREAM_BYTES or len(stderr) > _MAX_STREAM_BYTES
         result = ExecResult(
             exit_code=int(process.returncode or 0),
-            stdout=stdout[:_MAX_STREAM_BYTES].decode("utf-8", errors="replace"),
-            stderr=stderr[:_MAX_STREAM_BYTES].decode("utf-8", errors="replace"),
+            stdout=_decode_capped(stdout),
+            stderr=_decode_capped(stderr),
             truncated=truncated,
         )
         _finish_exec(self.state_root, request_id, result)
         return result
+
+    def _append_inflight_output(self, block: bytes) -> None:
+        folder = ensure_state_dir(self.state_root)
+        path = folder / INFLIGHT_OUTPUT_NAME
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(block.decode("utf-8", errors="replace"))
+            handle.flush()
 
     async def upload(self, source: Path, dest: str, *, service: str | None = None) -> None:
         self._assert_started()

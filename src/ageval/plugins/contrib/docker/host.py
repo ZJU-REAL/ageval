@@ -23,7 +23,14 @@ import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 
-from ageval.environments.box_state import ENV_STATE_DIR, host_state_dir, probe_box, write_last_exit
+from ageval.environments.box_state import (
+    ENV_STATE_DIR,
+    INFLIGHT_OUTPUT_NAME,
+    ensure_state_dir,
+    host_state_dir,
+    probe_box,
+    write_last_exit,
+)
 from ageval.environments.protocol import (
     ARTIFACTS_PATH,
     EVALUATION_PATH,
@@ -346,15 +353,15 @@ class DockerHost(BaseEnvironment):
         ]
         result = await self._run_docker(prefix + argv, timeout_sec=timeout_sec)
         if request_id:
-            from ageval.environments.box_state import INFLIGHT_OUTPUT_NAME, ensure_state_dir
-
+            # The wrapper already wrote ``/tmp/.ageval-state``. This overwrite
+            # is the same file on the host mount, with the output docker returned.
             folder = ensure_state_dir(self.state_root)
             (folder / INFLIGHT_OUTPUT_NAME).write_text(
                 f"{result.stdout}{result.stderr}",
                 encoding="utf-8",
             )
             write_last_exit(
-                self._root,
+                self.state_root,
                 {
                     "request_id": request_id,
                     "exit_code": result.exit_code,
@@ -475,6 +482,7 @@ class DockerHost(BaseEnvironment):
         Recovery files are mounted at ``/tmp/.ageval-state``, outside ``/attempt``.
         """
         self.state_root.mkdir(parents=True, exist_ok=True)
+        _make_box_writable(self.state_root)
         return [
             "-v",
             f"{self._root}:{BOX_ROOT}",
@@ -905,14 +913,133 @@ def copy_bind_tree(src: Path, dest: Path) -> None:
     shutil.copytree(src, dest, dirs_exist_ok=True, symlinks=True)
 
 
+# Shell stays alive until the command exits, so ``inflight.pid`` is this shell.
+# Python copies both streams to the state files and to this process's pipes.
+# The EXIT trap writes ``last_exit.json`` even when the parent never returns.
+_EXEC_WRAPPER = r"""
+state=${AGEVAL_STATE_DIR:-/tmp/.ageval-state}
+mkdir -p "$state"
+umask 000
+echo $$ > "$state/inflight.pid"
+printf %s "${AGEVAL_EXEC_REQUEST-}" > "$state/inflight.request"
+: > "$state/inflight.output"
+: > "$state/inflight.stdout"
+: > "$state/inflight.stderr"
+finish() {
+  status="$1"
+  trap - EXIT INT TERM
+  if [ "${child:-0}" != 0 ]; then
+    kill "$child" 2>/dev/null || true
+    wait "$child" 2>/dev/null || true
+  fi
+  AGEVAL_EXEC_CODE="$status" python3 - "$state" <<'PY'
+import json, os, sys
+from pathlib import Path
+state = Path(sys.argv[1])
+code = int(os.environ.get("AGEVAL_EXEC_CODE", "1"))
+
+def read(name: str) -> str:
+    path = state / name
+    if not path.is_file():
+        return ""
+    return path.read_text(encoding="utf-8", errors="replace")
+
+payload = {
+    "request_id": os.environ.get("AGEVAL_EXEC_REQUEST", ""),
+    "exit_code": code,
+    "stdout": read("inflight.stdout"),
+    "stderr": read("inflight.stderr"),
+}
+tmp = state / f"last_exit.json.tmp.{os.getpid()}"
+tmp.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+os.replace(tmp, state / "last_exit.json")
+for name in ("inflight.pid", "inflight.request"):
+    try:
+        (state / name).unlink()
+    except FileNotFoundError:
+        pass
+PY
+  exit "$status"
+}
+trap 'finish $?' EXIT
+trap 'finish 143' TERM
+trap 'finish 130' INT
+child=0
+python3 -u - "$state" "$@" <<'PY' &
+import os, signal, subprocess, sys, threading
+from pathlib import Path
+state = Path(sys.argv[1])
+cmd = sys.argv[2:]
+if not cmd:
+    sys.exit(127)
+proc = subprocess.Popen(
+    cmd,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    bufsize=0,
+    start_new_session=True,
+)
+out_f = (state / "inflight.stdout").open("ab")
+err_f = (state / "inflight.stderr").open("ab")
+both = (state / "inflight.output").open("ab")
+lock = threading.Lock()
+
+def pump(src, own, shared, mirror) -> None:
+    fd = src.fileno()
+    try:
+        while True:
+            chunk = os.read(fd, 4096)
+            if not chunk:
+                return
+            own.write(chunk)
+            own.flush()
+            mirror.write(chunk)
+            mirror.flush()
+            with lock:
+                shared.write(chunk)
+                shared.flush()
+    finally:
+        src.close()
+
+def _stop(signum, _frame):
+    if proc.poll() is None:
+        os.killpg(proc.pid, signal.SIGTERM)
+    raise SystemExit(128 + signum)
+
+signal.signal(signal.SIGTERM, _stop)
+signal.signal(signal.SIGINT, _stop)
+assert proc.stdout is not None and proc.stderr is not None
+threads = (
+    threading.Thread(target=pump, args=(proc.stdout, out_f, both, sys.stdout.buffer)),
+    threading.Thread(target=pump, args=(proc.stderr, err_f, both, sys.stderr.buffer)),
+)
+for thread in threads:
+    thread.start()
+try:
+    for thread in threads:
+        thread.join()
+    code = proc.wait()
+except SystemExit as exc:
+    code = exc.code if isinstance(exc.code, int) else 1
+    raise
+finally:
+    out_f.close()
+    err_f.close()
+    both.close()
+    if proc.poll() is None:
+        os.killpg(proc.pid, signal.SIGTERM)
+        proc.wait()
+sys.exit(code if code >= 0 else 1)
+PY
+child=$!
+wait "$child"
+status=$?
+finish "$status"
+"""
+
+
 def _exec_pid_wrapper(argv: list[str]) -> list[str]:
-    script = (
-        "mkdir -p /tmp/.ageval-state; "
-        "echo $$ > /tmp/.ageval-state/inflight.pid; "
-        'printf %s "$AGEVAL_EXEC_REQUEST" > /tmp/.ageval-state/inflight.request; '
-        'exec "$@"'
-    )
-    return ["sh", "-c", script, "ageval-exec", *argv]
+    return ["sh", "-c", _EXEC_WRAPPER, "ageval-exec", *argv]
 
 
 def _container_running(container_id: str) -> bool:
