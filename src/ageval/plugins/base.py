@@ -58,6 +58,10 @@ class BaseEnvironment(ABC):
         msg = "this environment cannot attach to an existing box"
         raise EnvironmentFailure("environment_attach_invalid", msg)
 
+    async def discard(self, handle: Mapping[str, Any]) -> None:
+        """Stop a previously recorded box. The default leaves the directory in place."""
+        del handle
+
     @abstractmethod
     async def stop(self, *, delete: bool) -> None:
         """Release the environment. ``delete`` drops its work root when true."""

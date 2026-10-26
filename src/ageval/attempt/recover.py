@@ -110,7 +110,6 @@ def load_activity(attempt_dir: Path) -> ActivityLog:
     return ActivityLog.open(attempt_dir / ACTIVITY_LOG_REL)
 
 
-
 def bind_sentinels(log: ActivityLog, sentinels: Any) -> None:
     """Use the evidence store's redaction sentinels on a reopened activity log."""
     values = sentinels if isinstance(sentinels, (list, tuple)) else ()
@@ -227,7 +226,7 @@ async def classify_environment(ctx: Any) -> str:
         if adopt:
             _adopt_last_exit(ctx, probe)
         return "attached"
-    await _stop_old_handle(header, handle)
+    await _discard_recorded(ctx.host, handle)
     ctx.recovery_rebuild = True
     _set_reattached(ctx.host, False)
     return "rebuild"
@@ -314,67 +313,12 @@ def _busy_deadline(log: ActivityLog) -> datetime | None:
     return started + timedelta(seconds=float(timeout))
 
 
-async def _stop_old_handle(header: ActivityRecord, handle: dict[str, Any]) -> None:
-    """Best-effort stop of the previous environment. Failure does not block rebuild."""
-    kind = str(header.payload.get("environment_kind") or "")
-    threaded = {
-        "docker": _stop_docker,
-        "e2b": _stop_e2b,
-        "daytona": _stop_daytona,
-    }
+async def _discard_recorded(host: Any, handle: dict[str, Any]) -> None:
+    """Ask the bound environment to stop a recorded box. Failure still rebuilds."""
     try:
-        if kind in threaded:
-            await asyncio.to_thread(threaded[kind], handle)
-        elif kind == "ssh":
-            await _stop_ssh(handle)
+        await host.discard(handle)
     except Exception as exc:  # noqa: BLE001 — a failed stop must not replace rebuild
-        logger.warning("stop old %s environment failed: %s", kind, exc)
-
-
-def _stop_docker(handle: dict[str, Any]) -> None:
-    from ageval.plugins.contrib.docker.images import docker
-
-    container_id = str(handle.get("container_id") or "").strip()
-    if container_id:
-        docker("rm", "-f", container_id, timeout=60.0)
-    project = str(handle.get("compose_project") or "").strip()
-    if project:
-        docker("compose", "-p", project, "down", timeout=120.0)
-
-
-def _stop_e2b(handle: dict[str, Any]) -> None:
-    sandbox_id = str(handle.get("sandbox_id") or "").strip()
-    if not sandbox_id:
-        return
-    from ageval.plugins.contrib.e2b.host import _import_sdk
-
-    sdk = _import_sdk()
-    sandbox = sdk.Sandbox.connect(sandbox_id)
-    sandbox.kill()
-
-
-def _stop_daytona(handle: dict[str, Any]) -> None:
-    from ageval.plugins.contrib.daytona.host import stop_recorded_sandbox
-
-    stop_recorded_sandbox(handle)
-
-
-async def _stop_ssh(handle: dict[str, Any]) -> None:
-    """Remove a remote container. A directory-only SSH environment is left in place."""
-    container_id = str(handle.get("container_id") or "").strip()
-    host_name = str(handle.get("host") or "").strip()
-    if not container_id or not host_name:
-        return
-    from ageval.environments.protocol import BoxSpec
-    from ageval.plugins.contrib.ssh.host import SSHHost
-
-    host = SSHHost(spec=BoxSpec(attempt_root=Path("."), task_root=Path("."), repo_root=Path(".")))
-    host._host = host_name
-    user = handle.get("user")
-    host._user = str(user) if isinstance(user, str) and user else None
-    port = handle.get("port")
-    host._port = str(port) if port else None
-    await host._ssh(["docker", "rm", "-f", container_id], timeout_sec=120.0)
+        logger.warning("discard recorded environment failed: %s", exc)
 
 
 def partial_output(ctx: Any) -> str | None:

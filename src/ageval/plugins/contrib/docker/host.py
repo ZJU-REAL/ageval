@@ -285,6 +285,15 @@ class DockerHost(BaseEnvironment):
         if delete and self.state_root.is_dir():
             shutil.rmtree(self.state_root, ignore_errors=True)
 
+    async def discard(self, handle: Mapping[str, object]) -> None:
+        """Remove a container recorded on a previous Attempt. The bind root stays."""
+        container_id = str(handle.get("container_id") or "").strip()
+        if container_id:
+            docker("rm", "-f", container_id, timeout=60.0)
+        project = str(handle.get("compose_project") or "").strip()
+        if project:
+            docker("compose", "-p", project, "down", timeout=120.0)
+
     def runtime_handle(self) -> dict[str, object]:
         return {
             "container_id": self._container,

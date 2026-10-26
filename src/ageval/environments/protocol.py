@@ -154,6 +154,13 @@ class EnvironmentProvider(Protocol):
         """Bind this instance to a live box identified by ``handle``."""
         ...
 
+    async def discard(self, handle: Mapping[str, Any]) -> None:
+        """Stop a box recorded on ``handle``. The attempt directory stays.
+
+        Kinds that own an external machine override this. ``local`` does nothing.
+        """
+        ...
+
     def placement(self) -> Placement:
         """Engine-issued attach facts for the open box (no vendor handle)."""
         ...

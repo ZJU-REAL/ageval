@@ -187,6 +187,13 @@ class E2BHost(BaseEnvironment):
         self._stopped = True
         await asyncio.to_thread(self._sandbox.kill)
 
+    async def discard(self, handle: Mapping[str, Any]) -> None:
+        """Kill a sandbox recorded on a previous Attempt. This instance stays unbound."""
+        sandbox_id = str(handle.get("sandbox_id") or "").strip()
+        if not sandbox_id:
+            return
+        await asyncio.to_thread(_kill_recorded_sandbox, sandbox_id)
+
     # --- transport -----------------------------------------------------------
 
     async def exec(
@@ -533,6 +540,12 @@ def _api_key() -> str:
                 os.environ[API_KEY_ENV] = val
             return val
     return ""
+
+
+def _kill_recorded_sandbox(sandbox_id: str) -> None:
+    sdk = _import_sdk()
+    sandbox = sdk.Sandbox.connect(sandbox_id)
+    sandbox.kill()
 
 
 def _import_sdk() -> Any:

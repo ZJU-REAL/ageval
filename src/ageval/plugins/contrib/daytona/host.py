@@ -220,6 +220,10 @@ class DaytonaHost(BaseEnvironment):
         if client is not None:
             await asyncio.to_thread(client.delete, sandbox)
 
+    async def discard(self, handle: Mapping[str, Any]) -> None:
+        """Delete a sandbox recorded on a previous Attempt. This instance stays unbound."""
+        await asyncio.to_thread(_delete_recorded_sandbox, handle)
+
     async def exec(
         self,
         command: Sequence[str],
@@ -679,7 +683,7 @@ def _is_missing(exc: BaseException) -> bool:
 __all__ = ["API_KEY_ENV", "ATTACH_STDIO", "DaytonaHost", "DaytonaStdio"]
 
 
-def stop_recorded_sandbox(handle: Mapping[str, Any]) -> None:
+def _delete_recorded_sandbox(handle: Mapping[str, Any]) -> None:
     """Delete a sandbox recorded on an Attempt header. Missing id is a no-op."""
     sandbox_id = str(handle.get("sandbox_id") or "").strip()
     if not sandbox_id:

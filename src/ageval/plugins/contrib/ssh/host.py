@@ -191,6 +191,23 @@ class SSHHost(BaseEnvironment):
             # Shape A shares the machine with its operator: only our root goes.
             await self._ssh(["rm", "-rf", self._remote_root], timeout_sec=120.0)
 
+    async def discard(self, handle: Mapping[str, Any]) -> None:
+        """Remove a remote container recorded earlier. A directory-only host stays."""
+        container_id = str(handle.get("container_id") or "").strip()
+        host_name = str(handle.get("host") or "").strip()
+        if not container_id or not host_name:
+            return
+        previous = (self._host, self._user, self._port)
+        self._host = host_name
+        user = handle.get("user")
+        self._user = str(user) if isinstance(user, str) and user else None
+        port = handle.get("port")
+        self._port = str(port) if port else None
+        try:
+            await self._ssh(["docker", "rm", "-f", container_id], timeout_sec=120.0)
+        finally:
+            self._host, self._user, self._port = previous
+
     # --- transport -----------------------------------------------------------
 
     async def exec(

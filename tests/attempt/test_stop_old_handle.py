@@ -1,7 +1,8 @@
-"""A mismatched environment is stopped, then rebuilt, even if stop fails."""
+"""A mismatched environment is discarded, then rebuilt, even if discard fails."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -18,9 +19,11 @@ from ageval.runtime.cancellation import CancellationSignal
 
 
 class _Host:
-    def __init__(self) -> None:
+    def __init__(self, *, fail: bool = False) -> None:
         self.attaches = 0
         self.starts = 0
+        self.discarded: list[dict[str, object]] = []
+        self.fail = fail
 
     async def probe(self, handle: dict[str, object]) -> ProbeStatus:
         del handle
@@ -34,8 +37,13 @@ class _Host:
         del force_build
         self.starts += 1
 
+    async def discard(self, handle: dict[str, object]) -> None:
+        if self.fail:
+            raise RuntimeError("down")
+        self.discarded.append(handle)
 
-def _ctx(tmp_path: Path, kind: str, handle: dict[str, object]) -> AttemptCtx:
+
+def _ctx(tmp_path: Path, host: _Host, handle: Mapping[str, object]) -> AttemptCtx:
     log = ActivityLog.open(tmp_path / "activity.jsonl")
     write_attempt_header(
         log,
@@ -46,10 +54,10 @@ def _ctx(tmp_path: Path, kind: str, handle: dict[str, object]) -> AttemptCtx:
         attempt_index=0,
         suite_run_id=None,
         digest="sha256:abc",
-        environment_kind=kind,
+        environment_kind="docker",
         nonce="nce_test",
     )
-    log.update_attempt_header(environment_handle=handle, environment_kind=kind)
+    log.update_attempt_header(environment_handle=handle)
     evidence = AttemptEvidenceStore(root=tmp_path / "run", attempt_id="a", run_id="r")
     return AttemptCtx(
         run_id="r",
@@ -60,7 +68,7 @@ def _ctx(tmp_path: Path, kind: str, handle: dict[str, object]) -> AttemptCtx:
         bindings=ExtensionGraph(profile_id="solver"),
         registry=ExtensionRegistry(),
         services=ServiceTable(),
-        host=_Host(),  # type: ignore[arg-type]
+        host=host,  # type: ignore[arg-type]
         evidence=evidence,
         cancellation=CancellationSignal(),
         task_root=tmp_path,
@@ -70,72 +78,21 @@ def _ctx(tmp_path: Path, kind: str, handle: dict[str, object]) -> AttemptCtx:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("kind", "handle", "target"),
-    [
-        ("docker", {"container_id": "c1", "compose_project": "proj"}, "_stop_docker"),
-        ("e2b", {"sandbox_id": "sbx"}, "_stop_e2b"),
-        ("daytona", {"sandbox_id": "day"}, "_stop_daytona"),
-        ("ssh", {"host": "box.example", "container_id": "c9"}, "_stop_ssh"),
-    ],
-)
-async def test_cursor_mismatch_stops_then_rebuilds(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    kind: str,
-    handle: dict[str, object],
-    target: str,
-) -> None:
-    import ageval.attempt.recover as recover
-
-    seen: list[dict[str, object]] = []
-
-    def _sync(payload: dict[str, object]) -> None:
-        seen.append(payload)
-
-    async def _async(payload: dict[str, object]) -> None:
-        seen.append(payload)
-
-    monkeypatch.setattr(recover, target, _async if target == "_stop_ssh" else _sync)
-    ctx = _ctx(tmp_path, kind, handle)
-    decision = await classify_environment(ctx)
+async def test_cursor_mismatch_discards_then_rebuilds(tmp_path: Path) -> None:
+    handle = {"container_id": "c1", "compose_project": "proj"}
+    host = _Host()
+    decision = await classify_environment(_ctx(tmp_path, host, handle))
     assert decision == "rebuild"
-    assert seen == [handle]
-    host = ctx.host
-    assert isinstance(host, _Host)
+    assert host.discarded == [handle]
     assert host.attaches == 0
     assert host.starts == 0
 
 
 @pytest.mark.asyncio
-async def test_stop_failure_still_rebuilds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import ageval.attempt.recover as recover
-
-    def _boom(handle: dict[str, object]) -> None:
-        del handle
-        raise RuntimeError("down")
-
-    monkeypatch.setattr(recover, "_stop_docker", _boom)
-    ctx = _ctx(tmp_path, "docker", {"container_id": "c1", "compose_project": "proj"})
-    assert await classify_environment(ctx) == "rebuild"
-
-
-@pytest.mark.asyncio
-async def test_ssh_without_a_container_does_not_stop(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import ageval.attempt.recover as recover
-
-    called: list[str] = []
-
-    async def _ssh(self, argv: list[str], *, timeout_sec: float | None) -> None:  # noqa: ANN001
-        del self, timeout_sec
-        called.append(" ".join(argv))
-
-    monkeypatch.setattr(recover, "_stop_ssh", recover._stop_ssh)
-    from ageval.plugins.contrib.ssh.host import SSHHost
-
-    monkeypatch.setattr(SSHHost, "_ssh", _ssh)
-    ctx = _ctx(tmp_path, "ssh", {"host": "box.example"})
-    assert await classify_environment(ctx) == "rebuild"
-    assert called == []
+async def test_discard_failure_still_rebuilds(tmp_path: Path) -> None:
+    host = _Host(fail=True)
+    decision = await classify_environment(
+        _ctx(tmp_path, host, {"container_id": "c1", "compose_project": "proj"})
+    )
+    assert decision == "rebuild"
+    assert host.attaches == 0

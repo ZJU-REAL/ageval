@@ -174,6 +174,10 @@ class LocalHost(BaseEnvironment):
         if delete and self.state_root.is_dir():
             shutil.rmtree(self.state_root, ignore_errors=True)
 
+    async def discard(self, handle: Mapping[str, object]) -> None:
+        """A local box is the attempt directory. Rebuilding reuses it."""
+        del handle
+
     # --- transport -----------------------------------------------------------
 
     async def exec(
