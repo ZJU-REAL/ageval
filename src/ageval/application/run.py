@@ -16,6 +16,7 @@ from ageval.application.phase_timing import timing_from_facts
 from ageval.attempt import run_attempt as run_attempt_pipeline
 from ageval.attempt.ctx import AttemptCtx, PhaseObserver
 from ageval.attempt.recover import (
+    bind_sentinels,
     capture_box,
     classify_environment,
     find_unsealed_attempt,
@@ -217,6 +218,8 @@ async def run_attempt(
         attempt_index=attempt_index,
         suite_run_id=suite_run_id,
     )
+    if resumed.activity is not None:
+        bind_sentinels(activity, evidence.sentinels)
     if activity.corrupt:
         return _seal_recovery_error(
             evidence,

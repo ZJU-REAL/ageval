@@ -110,6 +110,13 @@ def load_activity(attempt_dir: Path) -> ActivityLog:
     return ActivityLog.open(attempt_dir / ACTIVITY_LOG_REL)
 
 
+
+def bind_sentinels(log: ActivityLog, sentinels: Any) -> None:
+    """Use the evidence store's redaction sentinels on a reopened activity log."""
+    values = sentinels if isinstance(sentinels, (list, tuple)) else ()
+    log.sentinels = tuple(item for item in values if isinstance(item, str) and item)
+
+
 def ensure_local_box(box: Path) -> Path:
     """Create the host-side attempt tree. Remote kinds do not bind-mount it."""
     for name in ("workspace", "home", "artifacts"):
