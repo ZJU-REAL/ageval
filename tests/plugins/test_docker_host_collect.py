@@ -123,6 +123,11 @@ async def test_bind_mount_download_does_not_use_docker_cp(
         raise AssertionError
 
     monkeypatch.setattr(host, "_run_docker", fake)
+
+    async def tar_fallback(source: str, dest: Path) -> None:
+        raise AssertionError(source)
+
+    monkeypatch.setattr(host, "_download_bind_via_tar", tar_fallback)
     workspace = host.host_path(WORKSPACE_PATH)
     (workspace / "note.txt").write_text("ok", encoding="utf-8")
     dest = tmp_path / "note.txt"

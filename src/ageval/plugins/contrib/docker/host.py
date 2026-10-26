@@ -5,10 +5,12 @@ exec`` argv, the uid/gid, the compose calls, and the rule that the daemon's own
 locator variables must never reach a process inside the box. Above it, the ACP
 executor and the Attempt phases see only the environment Protocol.
 
-Files under ``/attempt`` move through the bind mount. Other absolute paths
-use ``docker cp``. A compose service uses ``docker compose cp``.
-``/attempt/evaluation`` therefore appears exactly when the evaluate phase
-uploads it, and not one moment earlier.
+Files under ``/attempt`` are copied from the bind mount. When that copy cannot
+read a root-owned private file, download deletes the destination and replaces
+it from one ``docker cp`` tar stream. Source modes on the mount stay as the
+agent wrote them. Other absolute paths use ``docker cp``. A compose service
+uses ``docker compose cp``. ``/attempt/evaluation`` therefore appears exactly
+when the evaluate phase uploads it, and not one moment earlier.
 """
 
 from __future__ import annotations
@@ -18,7 +20,10 @@ import contextlib
 import os
 import re
 import shutil
+import stat
 import subprocess
+import tarfile
+import threading
 import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
@@ -409,20 +414,122 @@ class DockerHost(BaseEnvironment):
     async def download(self, source: str, dest: Path, *, service: str | None = None) -> None:
         self._assert_started()
         if service is None and str(source or "").strip().startswith(BOX_ROOT):
-            src = self.host_path(source)
+            await self._download_bind(source, Path(dest))
+            return
+        await self._cp_out(source, Path(dest), service=service)
+
+    async def _download_bind(self, source: str, dest: Path) -> None:
+        """Copy a ``/attempt`` path off the bind mount.
+
+        The host user cannot read root-owned ``0600`` files or list ``0700``
+        directories on that mount. ``docker cp`` can: dockerd reads the source
+        and the tar is extracted as this user. A failed host copy may already
+        have left host-owned ``0444`` / ``0555`` residue at ``dest``; that tree
+        is removed, not merged. Nothing here chmods the bind source.
+        """
+        src = self.host_path(source)
+        target = dest.expanduser()
+        try:
             if not src.exists():
                 raise EnvironmentFailure(
                     "environment_download_missing",
                     f"download source does not exist in box: {source}",
                 )
-            target = Path(dest).expanduser()
             if src.is_dir():
                 copy_bind_tree(src, target)
-                return
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, target)
-            return
-        await self._cp_out(source, Path(dest), service=service)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, target)
+        except (PermissionError, shutil.Error):
+            try:
+                _rmtree_force(target)
+            except OSError as exc:
+                raise EnvironmentFailure(
+                    "environment_collect_missing",
+                    f"collect copy could not clear {target}: {exc}",
+                ) from exc
+            await self._download_bind_via_tar(source, target)
+
+    async def _download_bind_via_tar(self, source: str, dest: Path) -> None:
+        """Replace ``dest`` with a fresh ``docker cp`` extract. Never merges."""
+        remote = _absolute_container_path(source)
+        assert self._container is not None
+        ref = f"{self._container}:{remote}"
+        parent = dest.parent
+        parent.mkdir(parents=True, exist_ok=True)
+        scratch = parent / f".ageval-cp-{uuid.uuid4().hex}"
+        scratch.mkdir()
+        holder: list[subprocess.Popen[bytes]] = []
+        try:
+            try:
+                await asyncio.wait_for(
+                    asyncio.to_thread(self._extract_docker_cp_tar, ref, scratch, holder),
+                    timeout=_CP_TIMEOUT_SEC,
+                )
+            except TimeoutError as exc:
+                _kill_cp(holder)
+                raise EnvironmentFailure(
+                    "environment_collect_missing",
+                    f"collect copy timed out for {remote}",
+                ) from exc
+            extracted = _sole_tar_entry(scratch, remote)
+            _rmtree_force(dest)
+            os.replace(extracted, dest)
+        finally:
+            _rmtree_force(scratch)
+
+    def _extract_docker_cp_tar(
+        self,
+        ref: str,
+        scratch: Path,
+        holder: list[subprocess.Popen[bytes]],
+    ) -> None:
+        proc = subprocess.Popen(  # noqa: S603 — docker cp argv is built in this method
+            ["docker", "cp", ref, "-"],
+            env=self._cli_env(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        holder.append(proc)
+        assert proc.stdout is not None
+        assert proc.stderr is not None
+        stderr_parts: list[bytes] = []
+
+        def _drain() -> None:
+            assert proc.stderr is not None
+            stderr_parts.append(proc.stderr.read())
+
+        drain = threading.Thread(target=_drain)
+        drain.start()
+        try:
+            with tarfile.open(fileobj=proc.stdout, mode="r|") as archive:
+                archive.extractall(scratch, filter=_bind_cp_filter)
+        except (tarfile.TarError, OSError) as exc:
+            if proc.poll() is None:
+                proc.kill()
+            drain.join(timeout=30)
+            proc.wait(timeout=30)
+            detail = redact_text(_stderr_text(stderr_parts))[-300:]
+            raise EnvironmentFailure(
+                "environment_collect_missing",
+                f"collect copy failed for {ref}: {detail or exc}",
+            ) from exc
+        drain.join(timeout=30)
+        try:
+            code = proc.wait(timeout=30)
+        except subprocess.TimeoutExpired as exc:
+            proc.kill()
+            proc.wait(timeout=5)
+            raise EnvironmentFailure(
+                "environment_collect_missing",
+                f"collect copy timed out for {ref}",
+            ) from exc
+        if code != 0:
+            detail = redact_text(_stderr_text(stderr_parts))[-300:]
+            raise EnvironmentFailure(
+                "environment_collect_missing",
+                f"collect copy failed for {ref} exit {code}: {detail}",
+            )
 
     async def attach_stdio(
         self,
@@ -916,6 +1023,90 @@ def _absolute_container_path(raw: str) -> str:
     if normalized != "/":
         normalized = normalized.rstrip("/")
     return normalized
+
+
+def _rmtree_force(path: Path) -> None:
+    """Delete ``path``. chmod retries stay inside this tree, never a source mount."""
+    if path.is_symlink():
+        path.unlink(missing_ok=True)
+        return
+    if not path.exists():
+        return
+    if not path.is_dir():
+        _chmod_user_writable(path)
+        path.unlink()
+        return
+
+    root = path
+
+    def onexc(func, failed: str, exc: BaseException) -> None:
+        if not isinstance(exc, PermissionError):
+            raise exc
+        failed_path = Path(failed)
+        if not failed_path.is_symlink():
+            _chmod_user_writable(failed_path)
+        parent = failed_path.parent
+        if _is_under(root, parent):
+            _chmod_user_writable(parent)
+        func(failed)
+
+    shutil.rmtree(path, onexc=onexc)
+
+
+def _chmod_user_writable(path: Path) -> None:
+    info = path.lstat()
+    mode = stat.S_IMODE(info.st_mode) | stat.S_IRUSR | stat.S_IWUSR
+    if stat.S_ISDIR(info.st_mode):
+        mode |= stat.S_IXUSR
+    os.chmod(path, mode)
+
+
+def _is_under(root: Path, path: Path) -> bool:
+    try:
+        Path(os.path.abspath(path)).relative_to(os.path.abspath(root))
+    except ValueError:
+        return False
+    return True
+
+
+def _kill_cp(holder: list[subprocess.Popen[bytes]]) -> None:
+    for proc in holder:
+        if proc.poll() is None:
+            proc.kill()
+
+
+def _stderr_text(parts: list[bytes]) -> str:
+    return b"".join(parts).decode("utf-8", errors="replace")
+
+
+def _sole_tar_entry(scratch: Path, remote: str) -> Path:
+    entries = list(scratch.iterdir())
+    if len(entries) != 1:
+        shown = ", ".join(sorted(entry.name for entry in entries)) or "empty"
+        raise EnvironmentFailure(
+            "environment_collect_missing",
+            f"collect copy of {remote} produced {len(entries)} top-level entries: {shown}",
+        )
+    return entries[0]
+
+
+def _bind_cp_filter(member: tarfile.TarInfo, dest_path: str) -> tarfile.TarInfo:
+    """Reject archive paths that escape the scratch dir.
+
+    Symlink targets may be absolute. Workspace venv links point at in-box
+    interpreters; the copy keeps the link node and does not follow it.
+    """
+    del dest_path
+    pure = PurePosixPath(member.name)
+    if pure.is_absolute() or not pure.parts or ".." in pure.parts:
+        raise tarfile.FilterError(member.name)
+    if member.islnk():
+        link = PurePosixPath(member.linkname)
+        if link.is_absolute() or ".." in link.parts:
+            raise tarfile.FilterError(member.linkname)
+    if member.isdev() or member.isfifo():
+        raise tarfile.FilterError(member.name)
+    return member
 
 
 def copy_bind_tree(src: Path, dest: Path) -> None:

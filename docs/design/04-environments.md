@@ -121,7 +121,11 @@ Hardware limits are declared under `parameters` in `task.yaml` and enforced by `
 
 If `gpus > 0` or `gpu_types` is non-empty and the host lacks sufficient matching GPUs (or `nvidia-smi` is unavailable), the `environment` phase fails fast with `environment_gpu_unavailable` before starting any Compose sidecars or Attempt containers. For Compose sidecars declaring `cpus` or `mem_limit` without `deploy.resources.limits`, `DockerHost` generates a runtime Compose overlay so limits are enforced consistently.
 
-### 4.3 Docker Compose sidecars and `services.main` parity
+### 4.3 Copying `/attempt` back to the host
+
+`download` of a `/attempt` path first copies the bind mount as the host user. Root inside the container can leave `0600` files and `0700` directories on that mount. The host copy then raises `PermissionError` or `shutil.Error`. Download removes the destination — chmod retries apply only to that leftover tree, including host-owned `0444` / `0555` residue — and replaces it with one `docker cp` tar stream extracted as the host user. Modes on the mount stay as the agent wrote them. `upload` onto `/attempt` stays a host-side copy. Paths outside `/attempt`, and any copy for a compose service, stay on `docker cp` / `docker compose cp`.
+
+### 4.4 Docker Compose sidecars and `services.main` parity
 
 Both `environment/compose.yaml` and `environment/docker-compose.yaml` are recognized (`compose.yaml` takes precedence when both exist). `DockerHost` strips `services.main` (and any `depends_on` pointing to `main`) before running `docker compose up -d` for auxiliary services, because the Attempt itself always runs in a dedicated `docker run` container. If `main` was the only service declared, no Compose project is started.
 
