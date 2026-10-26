@@ -32,6 +32,7 @@
   - [Screenshots](#screenshots)
 - [⚙️ How it works](#how-it-works)
   - [End-to-end flow](#end-to-end-flow)
+  - [Resume an interrupted Attempt](#resume-an-interrupted-attempt)
   - [Core base](#core-base)
   - [Plugins](#plugins)
 - [📁 Project structure](#project-structure)
@@ -41,7 +42,13 @@
 
 </details>
 
-To decouple benchmark task logic from execution backends across heterogeneous agent harnesses, models, and environments, **ageval** combines programmable task scripts with declarative plugin composition. Install the CLI and skills so a coding agent can author or convert a benchmark and run evaluations end to end; publish datasets, plugins, Agent packages, and evaluation results to the Hub for reproducible comparison and reuse.
+**ageval** combines programmable task scripts with declarative plugin composition, and records each step of a long-running Attempt in an activity log and checkpoints so an interruption resumes that same Attempt. Install the CLI and skills so a coding agent can author or convert a benchmark and run evaluations end to end; publish datasets, plugins, Agent packages, and evaluation results to the Hub for reproducible comparison and reuse.
+
+<p align="center">
+  <img src="docs/assets/framework.png" alt="ageval framework: datasets and tasks, plugin composition, environments, and durable Attempt state" width="100%">
+  <br>
+  Framework: datasets and tasks, plugin composition, environments, and durable Attempt state
+</p>
 
 <p align="center">
   <video src="https://github.com/user-attachments/assets/79f54d94-999f-44c1-b2a4-72d79d3ce1f4" controls width="100%" title="ageval highlights"></video>
@@ -66,6 +73,11 @@ ageval run official/minimal-demo@0.1.3 --task terminal-jsonl-agg
 ageval run <org>/<name>@<version> --task <task-id>
 ageval executors -v
 ageval view <org>/<name>@<version> --no-browser
+
+# continue one Attempt that stopped before result.json
+ageval run <dataset> --task <id> --resume <attempt_id>
+# a suite recovers an unfinished slot in place
+ageval run <dataset> --resume-suite <suite_run_id>
 ```
 
 ### Install skills
@@ -113,6 +125,10 @@ Environments and agent executors both connect through plugin slots. Coding agent
 **Automated benchmark conversion and inspection**
 
 With the CLI and skills installed, a coding agent can author or convert a dataset and execute evaluations end to end. Afterwards, `ageval view` opens the dataset (or a directory of datasets) to inspect phase timings, tool-call trajectories, and reproduction commands locally, while `ageval results regrade` re-runs grading on archived artifact snapshots without repeating model inference.
+
+**Resume a long-running Attempt from the last completed step**
+
+ageval appends each step to an activity log and checkpoints the workspace and agent home before that step's effect settles. An Attempt that never wrote `result.json` continues in place with `--resume`, or inside a suite with `--resume-suite`. A settled Attempt stays immutable.
 
 **Isolated phase boundary and flexible grading**
 
@@ -193,9 +209,17 @@ sequenceDiagram
     r->>r: record · finally cleanup<br/>lock.json · result.json · trajectory.jsonl
 ```
 
+### Resume an interrupted Attempt
+
+A long task spends many model and tool turns inside one Attempt. If the parent process is killed before `result.json` is written, those completed turns and the workspace are still on disk. ageval appends every step to `.ageval/runs/<attempt_id>/activity.jsonl` and stores a checkpoint of `/attempt/workspace` and `/attempt/home` when the step settles.
+
+`--resume` continues that Attempt when `result.json` is absent and the locked configuration digest still matches. `--resume-suite` does the same for an unfinished suite slot, and still skips slots that already settled as `PASS`, `FAIL`, or `ERROR`. If the environment is still running the Attempt, the command exits without writing `result.json`.
+
+A live environment that still matches the last completed step is reused. A lost environment is started again and restored from the latest checkpoint. `openai-http`, `anthropic-http`, `miniswe`, and `terminus-2` rebuild the next model context from the activity log. `acp`, OpenHands, and dsh resume the session stored under the attempt home. `nooa` has no native session and continues from the logged transcript. Calls that already completed are not executed again, and the wall-clock time and invocation count already spent stay charged. A settled Attempt is immutable: `--retry-errors` and `--replace-slot` allocate a new Attempt.
+
 ### Core base
 
-ageval Core coordinates a fixed pipeline: `lock → environment → run → evaluate → record`, with resource `cleanup` in `finally`. During `ageval lock`, Core binds the environment plugin and per-role executor plugins and validates their contracts. At runtime, Core enforces `limits` (wall-clock timeouts, invocation quotas, and concurrency caps) prior to execution and archives structured evidence (`lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, and `task-artifacts/`).
+ageval Core coordinates a fixed pipeline: `lock → environment → run → evaluate → record`, with resource `cleanup` in `finally`. During `ageval lock`, Core binds the environment plugin and per-role executor plugins and validates their contracts. At runtime, Core enforces `limits` (wall-clock timeouts, invocation quotas, and concurrency caps) prior to execution and archives structured evidence (`lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, and `task-artifacts/`). An Attempt that has not settled also keeps `activity.jsonl` and `checkpoints/` so `--resume` can continue it.
 
 <p align="center">
   <img src="docs/assets/core-base.png" alt="ageval Core base overview" width="100%">
@@ -257,7 +281,7 @@ ageval/
 │   │   └── contrib/                 # acp · local · docker/attempt · e2b · daytona · ssh · openai_http · anthropic_http
 │   ├── runtime/                     # identity, parent Agent Service, task_worker
 │   ├── evaluation/                  # bind_evaluation
-│   └── evidence/                    # .ageval/runs layout & trajectory sealing
+│   └── evidence/                    # .ageval/runs layout, activity log, checkpoints, trajectory sealing
 ├── src/ageval_sdk/                  # ageval_sdk for run.py and evaluator.py
 ├── plugins/                         # external ageval.plugin/1 (nooa, dsh, miniswe, openhands, acp-oneshot, …)
 ├── examples/

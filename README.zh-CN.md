@@ -32,6 +32,7 @@
   - [截图](#截图)
 - [⚙️ 如何运行](#如何运行)
   - [整体流程](#整体流程)
+  - [断点恢复](#断点恢复)
   - [基座总览](#基座总览)
   - [插件接入](#插件接入)
 - [📁 目录结构](#目录结构)
@@ -41,7 +42,13 @@
 
 </details>
 
-为解耦任务逻辑与执行后端，避免针对不同 harness、模型与环境的组合重复编写适配代码，**ageval** 将可编程任务脚本与声明式插件组合相结合。安装 CLI 和 skill 后，coding agent 可自行编写或转换 benchmark 并执行评测；评测结果、dataset、插件与 Agent 包均可发布至 Hub 共享与复用。
+**ageval** 将可编程任务脚本与声明式插件组合相结合，并用活动日志和检查点记下长程 Attempt 的每一步，中断后从断点恢复同一次运行。安装 CLI 和 skill 后，coding agent 可自行编写或转换 benchmark 并执行评测；评测结果、dataset、插件与 Agent 包均可发布至 Hub 共享与复用。
+
+<p align="center">
+  <img src="docs/assets/framework.png" alt="ageval 框架：任务与数据、插件组合、执行环境，以及可恢复的 Attempt 状态" width="100%">
+  <br>
+  框架说明：任务与数据、插件组合、执行环境，以及可恢复的 Attempt 状态
+</p>
 
 <p align="center">
   <video src="https://github.com/user-attachments/assets/79f54d94-999f-44c1-b2a4-72d79d3ce1f4" controls width="100%" title="ageval highlights"></video>
@@ -66,6 +73,11 @@ ageval run official/minimal-demo@0.1.3 --task terminal-jsonl-agg
 ageval run <org>/<name>@<version> --task <task-id>
 ageval executors -v
 ageval view <org>/<name>@<version> --no-browser
+
+# 继续一次尚未写出 result.json 的 Attempt
+ageval run <dataset> --task <id> --resume <attempt_id>
+# suite 就地恢复尚未结束的槽位
+ageval run <dataset> --resume-suite <suite_run_id>
 ```
 
 ### 安装 skills
@@ -113,6 +125,10 @@ uv run ageval view examples/datasets/minimal-demo --no-browser
 **支持 Agent 自主转换与结果核查**
 
 安装 CLI 和 skill 后，coding agent 可按规范编写或转换 dataset 并端到端完成评测。运行结束后，使用 `ageval view` 打开单个或多个 dataset 目录，即可在本地查看各阶段耗时、工具调用轨迹与失败复现命令；迭代评分逻辑时，还可使用 `ageval results regrade` 基于已保存的产物快照直接重新评分，无需重跑模型。
+
+**长程任务可从上次完成的步骤恢复**
+
+ageval 在每一步产生外部效果之前写入活动日志，并保存工作区与 Agent home 的检查点。尚未写出 `result.json` 的 Attempt 用 `--resume` 原地继续；suite 中用 `--resume-suite`。已经封存的 Attempt 保持不变。
 
 **严格的阶段边界与双评分策略**
 
@@ -193,9 +209,17 @@ sequenceDiagram
     r->>r: record · finally cleanup<br/>lock.json · result.json · trajectory.jsonl
 ```
 
+### 断点恢复
+
+长程任务会在同一次 Attempt 里走很多轮模型调用和工具调用。父进程在写出 `result.json` 之前被杀掉时，已经完成的轮次和工作区仍留在磁盘上。ageval 把每一步追加到 `.ageval/runs/<attempt_id>/activity.jsonl`，并在该步落定时为 `/attempt/workspace` 和 `/attempt/home` 保存检查点。
+
+`--resume` 仅在 `result.json` 尚不存在、且锁定配置的摘要仍然一致时，继续这同一次 Attempt。`--resume-suite` 对 suite 里尚未结束的槽位做同样的事，已经以 `PASS`、`FAIL` 或 `ERROR` 结束的槽位仍然跳过。环境若还在跑这次 Attempt，命令直接退出，不写 `result.json`。
+
+仍与最后完成步骤对齐的环境会被原地接回。环境已经丢失时，会重新启动并从最近的检查点恢复。`openai-http`、`anthropic-http`、`miniswe` 和 `terminus-2` 从活动日志重建下一轮模型上下文。`acp`、OpenHands 和 dsh 恢复 Attempt home 里保存的会话。`nooa` 没有原生会话，从已记录的对话继续。已经完成的调用不会再执行一次，已经消耗的墙钟时间和调用次数仍然计入限额。已经封存的 Attempt 不可改写：`--retry-errors` 和 `--replace-slot` 会分配一次新的 Attempt。
+
 ### 基座总览
 
-ageval Core 统一管理固定阶段流水线：`lock → environment → run → evaluate → record`，并在 `finally` 中无条件执行环境清理（`cleanup`）。在 `ageval lock` 阶段，系统解析环境插件与各角色的 executor 插件并校验契约；在运行阶段，Core 在调用前强制执行 `limits` 资源与配额上限，并将配置绑定、评分结果、交互轨迹与产物快照归档至 evidence 目录（`lock.json`、`result.json`、`trajectory.jsonl`、`summary.json` 及 `task-artifacts/`）。
+ageval Core 统一管理固定阶段流水线：`lock → environment → run → evaluate → record`，并在 `finally` 中无条件执行环境清理（`cleanup`）。在 `ageval lock` 阶段，系统解析环境插件与各角色的 executor 插件并校验契约；在运行阶段，Core 在调用前强制执行 `limits` 资源与配额上限，并将配置绑定、评分结果、交互轨迹与产物快照归档至 evidence 目录（`lock.json`、`result.json`、`trajectory.jsonl`、`summary.json` 及 `task-artifacts/`）。尚未封存的 Attempt 还会保留 `activity.jsonl` 和 `checkpoints/`，供 `--resume` 继续。
 
 <p align="center">
   <img src="docs/assets/core-base.zh-CN.png" alt="ageval Core 基座总览" width="100%">
@@ -257,7 +281,7 @@ ageval/
 │   │   └── contrib/                 # acp · local · docker/attempt · e2b · daytona · ssh · openai_http · anthropic_http
 │   ├── runtime/                     # 身份、父进程 Agent Service、task_worker
 │   ├── evaluation/                  # bind_evaluation
-│   └── evidence/                    # .ageval/runs 目录结构与轨迹封存
+│   └── evidence/                    # .ageval/runs 目录、活动日志、检查点与轨迹封存
 ├── src/ageval_sdk/                  # 任务脚本使用的 ageval_sdk
 ├── plugins/                         # 外置 ageval.plugin/1（nooa、dsh、miniswe、openhands、acp-oneshot 等）
 ├── examples/
