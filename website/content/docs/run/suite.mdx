@@ -24,7 +24,7 @@ ageval run examples/datasets/minimal-demo -k 5 --max-concurrent-tasks 2
 # Always-k on one task
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg -k 5
 
-# Resume: append into an existing suite job and recompute metrics
+# Continue an existing suite: recover unfinished slots in place, skip settled PASS / FAIL / ERROR
 ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task terminal-jsonl-agg -k 5
 
 # Replace one finished row (PASS / FAIL / ERROR): new Attempt, same suite id
@@ -42,7 +42,7 @@ ageval results regrade examples/datasets/minimal-demo --run <attempt_id>
 Hard rules:
 
 - `n_attempts` is **not** allowed in `task.yaml` and is **not** part of `config_fingerprint`  
-- Resume without `--replace-slot` or `--retry-errors` only **appends** missing indices; finished PASS / FAIL / ERROR stay skipped  
+- Resume without `--replace-slot` or `--retry-errors` skips settled PASS / FAIL / ERROR. An unfinished slot whose `activity.jsonl` header matches this suite, task, attempt index, and lock digest continues in place. A slot with no matching header, or a digest mismatch, starts a new Attempt. Missing Always-k indices are still appended  
 - `--retry-errors` (with `--resume-suite`) re-runs finished ERROR rows in this filter. PASS and FAIL stay skipped. Each retry is a new Attempt; the old row stays in `previous[]`  
 - `--replace-slot` writes a **new** Attempt; the old row stays on disk and in `previous[]`; metrics use the new current only  
 - `ageval results regrade` mints a new Attempt, copies the source Attempt’s `task-artifacts/` onto the scoring host, and runs evaluate only. Gold and `evaluator.py` come from the dataset. The source `result.json` stays. A missing harvest is ERROR. Trajectory text is not a verdict. There is no task field that turns regrade on or off  

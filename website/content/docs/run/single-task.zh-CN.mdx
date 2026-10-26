@@ -27,6 +27,16 @@ ageval lock examples/datasets/minimal-demo --task terminal-jsonl-agg
 `--task` 必须等于成员目录名和 `task.yaml` 里的 `task_id`。  
 TTY 下 stdout 是短 recap（单题含 `logs` 路径）；管道或 `--json` 仍是完整文档。`k>1` 走整份 dataset 的 job，写 `.ageval/suite-runs/`。
 
+## 断点恢复
+
+```bash
+ageval run <dataset> --task <task_id> --resume <attempt_id>
+```
+
+父进程在写出 `result.json` 之前停掉时，用这条命令继续同一次 Attempt。ageval 保留原来的 Attempt id。已经完成的步骤留在 `.ageval/runs/<attempt_id>/activity.jsonl`。仍与最后完成步骤对齐的环境会被原地接回。环境已经丢失时，会重新启动，并从最近的检查点恢复 `/attempt/workspace` 和 `/attempt/home`。已经完成的调用不会再执行。已经消耗的墙钟时间和调用次数仍然计入限额。
+
+`result.json` 已经存在、锁定配置摘要对不上、或环境还在跑这次 Attempt 时，命令以 exit 2 结束，不写 `result.json`。
+
 <Callout type="info" title="整份 dataset 跑一遍">
 
 不加 `--task` 就会整份跑，所有成员进同一个 job。`ageval status <suite_run_id> --dataset <dataset>` 看 progress，`ageval cancel <suite_run_id> --dataset <dataset>` 叫停。

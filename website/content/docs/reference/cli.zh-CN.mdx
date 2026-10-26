@@ -16,6 +16,7 @@ ageval run <dataset>                         # 整份 dataset
 ageval run official/demo@0.1.0 --dir tmp --task <id>
 ageval run <dataset> --max-concurrent-tasks 2
 ageval run <dataset> -k 5                    # Always-k（每题 k 次）
+ageval run <dataset> --task <id> --resume <attempt_id>
 ageval run <dataset> --resume-suite <suite_run_id> --task <id> -k 5
 ageval run <dataset> --resume-suite <suite_run_id> --retry-errors
 ageval results regrade <dataset> --run <attempt_id>
@@ -64,7 +65,8 @@ ageval results revoke-snapshot <token-or-url>
 | `--oracle` | 仅配合 `--layout harbor`：跑 `solution/solve.sh`，不再调用 Agent。省略时不使用 `solution/` |
 | `--max-concurrent-tasks N` | 并行上限；**只加速**，不改 k / PASS |
 | `--n-attempts` / `-k N` | Always-k：每题 N 次独立运行（默认 1）；只写在 CLI / job 上 |
-| `--resume-suite <suite_run_id>` | 并进已有 job：跳过已完成的（PASS / FAIL / ERROR），追加一次运行，重算 pass@k / pass^k |
+| `--resume <attempt_id>` | 原地继续这一次尚未封存的 Attempt。必须配一个 `--task`。`result.json` 已存在、锁定摘要不一致、或环境仍在跑这次 Attempt 时 exit 2，不写 `result.json` |
+| `--resume-suite <suite_run_id>` | 继续已有 suite：跳过已以 PASS / FAIL / ERROR 结束的槽位。活动日志与本次 suite、task、attempt index 匹配的未结束槽位原地继续；没有匹配日志则新开一次 Attempt。重算 pass@k / pass^k |
 | `--retry-errors` | 配合 `--resume-suite`：重跑本次过滤里的 ERROR 格。PASS / FAIL 仍跳过。新的一次运行；旧行进 `previous[]` |
 | `--replace-slot` | 配合 `--resume-suite --task`：重跑那一行；新的一次运行；旧行进 `previous[]` |
 | `--attempt-index N` | Always-k 要换的格（默认 0）。只与 `--replace-slot` 一起用 |

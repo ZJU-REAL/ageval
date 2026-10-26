@@ -1,6 +1,6 @@
 # docs/RFCs
 
-RFCs in this directory are architectural and mechanism proposals that have not yet landed in `docs/design/` or `ARCHITECTURE.md`. A `Draft` RFC does not describe current shipped behavior. Product and mechanism truth lives in [`docs/design/`](../design/), and module layout lives in the root [`ARCHITECTURE.md`](../../ARCHITECTURE.md).
+RFCs in this directory are architectural and mechanism proposals. A `Draft` RFC has not yet landed in `docs/design/` or `ARCHITECTURE.md` and does not describe current shipped behavior. An `Accepted` RFC has been folded into those pages and remains the decision record. Product and mechanism truth lives in [`docs/design/`](../design/), and module layout lives in the root [`ARCHITECTURE.md`](../../ARCHITECTURE.md).
 
 One RFC decides one mechanism. Name the file `NNNN-short-name.md`, starting at `0001`. Put the status, date, and decision summary in the metadata table at the top of the file. Valid statuses are `Draft`, `Accepted`, and `Superseded`.
 

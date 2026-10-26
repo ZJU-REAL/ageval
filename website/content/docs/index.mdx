@@ -9,6 +9,7 @@ To decouple task logic from execution backends across heterogeneous agent harnes
 Equip your local coding agent with the CLI and skills so it can design, convert, and run benchmarks end to end. Publish datasets, plugins, Agent packages, and evaluation results to the Hub so others can inspect and reproduce them.
 
 - **Swap the evaluated agent and environment.** Environments and agent executors connect through declarative plugin slots ([ACP](https://agentclientprotocol.com) by default; `nooa`, `dsh`, `miniswe`, `terminus-2`, and `openhands` use the same plugin mechanism). Update one line in `profiles.yaml`, or pass `--agent` (and optional `--model`) for a single run.
+- **Resume a long-running Attempt from the last completed step.** Each step is appended to an activity log, and the workspace and agent home are checkpointed when that step settles. `--resume` continues one Attempt that never wrote `result.json`. `--resume-suite` continues an unfinished suite slot the same way.
 - **Automate benchmark conversion and execution.** Skills teach your coding agent the CLI, dataset layout, and SDK contracts so it can author or convert a benchmark and execute the evaluation end to end.
 - **Share and compare on the Hub.** Run published datasets directly with `ageval run <org>/<name>@<version>`, inspect trajectories, and compare models and harnesses on the Leaderboard.
 

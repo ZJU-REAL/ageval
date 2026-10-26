@@ -52,7 +52,7 @@ Recommended reading order is summarized in [design/README.md](design/README.md).
 
 | RFC | Status | Summary |
 | --- | --- | --- |
-| [RFCs/0001-attempt-activity-recovery.md](RFCs/0001-attempt-activity-recovery.md) | Draft | Unified `activity.jsonl` (`ageval.activity/1`) and incremental `/attempt/{workspace,home}` checkpoints (`ageval.checkpoint/1`) for recovering unsealed Attempts across all executors (including `acp`) and environment kinds. |
+| [RFCs/0001-attempt-activity-recovery.md](RFCs/0001-attempt-activity-recovery.md) | Accepted | Unified `activity.jsonl` (`ageval.activity/1`) and incremental `/attempt/{workspace,home}` checkpoints (`ageval.checkpoint/1`) for recovering unsealed Attempts across all executors (including `acp`) and environment kinds. Normative rules are folded into design 01, 04, 05, and 07. |
 
 ---
 

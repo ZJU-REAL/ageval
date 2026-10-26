@@ -9,6 +9,7 @@ icon: BookOpen
 安装 CLI 和 skill 后，本机 coding agent 可以自主设计、转换 benchmark 并完成评测；评测结果、dataset、插件和 Agent 包均可上传至 Hub 供他人复现与对比。
 
 - **通过插件切换待测 Agent 与环境。** 执行环境与 Agent 执行器均经插件槽接入（默认走 [ACP](https://agentclientprotocol.com)，`nooa` / `dsh` / `miniswe` / `terminus-2` / `openhands` 采用同一插件机制）。修改 `profiles.yaml` 中的一行，或在运行时传入 `--agent`（及可选 `--model`）即可切换。
+- **长程 Attempt 从最后完成的一步继续。** 每一步写入活动日志，并在该步落定时保存工作区与 Agent home 的检查点。尚未写出 `result.json` 的 Attempt 用 `--resume` 原地继续；suite 里尚未结束的槽位用 `--resume-suite`。
 - **让 Agent 自主完成评测。** Skill 指导本机 coding agent 使用 CLI、编写 dataset 与任务脚本，从而自动设计或转换 benchmark 并端到端跑完评测。
 - **在 Hub 上共享与复用。** 公开的 dataset、插件与 Agent 包可直接复用：`ageval run <org>/<name>@<version>`。
 

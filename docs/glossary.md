@@ -40,7 +40,7 @@ Machine verification for public surfaces is enforced by `python3 scripts/check_p
 | **jobs** | jobs | both | Run history table in Hub and Viewer. | Calling `profiles.yaml` or an Attempt a `job` |
 | **Agent package** | Agent 包 | both | `ageval.agent/1` configuration bundle (executor, entry, model defaults, overlays). | Calling the package format itself a `harness` |
 | **harness / agent runtime** | harness / Agent 运行时 | both | The evaluated runtime driving model turns and tool calls (`pi`, `codex`, `claude-code`, `miniswe`, `terminus-2`, `openhands`, `dsh`, `nooa`). | Calling `ageval` a harness; `first-class eval axis`; `一等评测维度`; `harness beneath` |
-| **Attempt** | Attempt / 单次运行 | both | Single execution of one task, archived under `.ageval/runs/<attempt_id>/`. Retries and regrades mint a new Attempt. | `可见 Attempt`, calling an Attempt a `job` |
+| **Attempt** | Attempt / 单次运行 | both | Single execution of one task, archived under `.ageval/runs/<attempt_id>/`. An unsealed Attempt (no `result.json`) continues in place with `--resume` or `--resume-suite`. A settled retry, replace, or regrade mints a new Attempt. | `可见 Attempt`, calling an Attempt a `job` |
 | **Trial** | Trial | internal | Sequence of Attempts sampling `(task_id, locked_config_digest)`. | Mixing Trial and Attempt in introductory guides |
 | **`ageval run`** | `ageval run` | both | CLI execution entrypoint (not a synonym for an Attempt directory). | Using `run` to mean `.ageval/runs/<id>/` |
 | **suite** | suite / 整份 dataset 运行 | both | Dataset-wide execution (`ageval run <dataset>` without `--task`), archived under `.ageval/suite-runs/<suite_run_id>/`. | `suite PASS` |
@@ -59,6 +59,8 @@ Machine verification for public surfaces is enforced by `python3 scripts/check_p
 | **reference materials** (`gold`) | 参考材料 / 参考答案 / `gold` | both | Grading assets under `tasks/<id>/evaluation/`, uploaded only during `evaluate`. | `金标` |
 | **evidence** | 执行证据 / evidence | both | Secret-redacted Attempt archive under `.ageval/runs/<attempt_id>/`. | `证据包`, `存证` |
 | **trajectory** | 轨迹 (`trajectory.jsonl`) | both | Normalized interaction event log sealed during `record`; observational only, never decides `PASS`. | `密封轨迹`, `layer-B`, `layer-C`, `层 B`, `层 C` |
+| **activity log** (`activity.jsonl`) | 活动日志 / `activity.jsonl` | both | Append-only step log (`ageval.activity/1`) for an unsealed Attempt. `--resume` and `--resume-suite` continue from it when `result.json` is absent. | — |
+| **checkpoint** (`checkpoints/`) | 检查点 / `checkpoints/` | both | Content-addressed snapshot of the attempt workspace and agent home (`ageval.checkpoint/1`), written when a step settles. Removed after the Attempt settles unless `--keep-workspace`. | — |
 | **`extra` field** | 扩展字段 / `extra` | both | Structured extension object on `terminal.extra` or `summary.extra`. | `观察袋`, `插件袋`, `袋子` |
 | **analyzer** | 分析器 / analyzer | both | Post-run read-only diagnostics (`stats`, `hack`, `review`) over sealed evidence. | — |
 | **checks** (`evaluation/checks.json`) | 检查项 / `checks` | both | Optional step-level grading breakdown returned by `evaluator.py` (`ageval.evaluation.checks/1`). | `勾选机` |
@@ -97,7 +99,7 @@ Machine verification for public surfaces is enforced by `python3 scripts/check_p
 ## 5. Registered Schema Formats
 
 ```text
-ageval.dataset/1 · ageval.task/1 · ageval.plugin/1 · ageval.profiles/1 · ageval.agent/1 · ageval.trajectory.event/1 · ageval.evaluation.checks/1 · ageval.analysis.report/1 · ageval.analysis.summary/1
+ageval.dataset/1 · ageval.task/1 · ageval.plugin/1 · ageval.profiles/1 · ageval.agent/1 · ageval.trajectory.event/1 · ageval.activity/1 · ageval.checkpoint/1 · ageval.evaluation.checks/1 · ageval.analysis.report/1 · ageval.analysis.summary/1
 ```
 
 Any unrecognized `format` value fails immediately with `invalid_format` at `/format` without legacy alias fallback.

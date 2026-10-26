@@ -42,7 +42,7 @@ Offline: `AGEVAL_OFFLINE_AGENT=1` must not PASS agent tasks.
 
 Hub Leaderboard needs suite upload (`ageval results upload-suite`), not a lone `results upload`.
 
-`ageval results regrade <dataset> --run <attempt_id>` scores a finished Attempt again from `task-artifacts/` and `verifier-collect/` (new Attempt, no agent run, collect commands are not re-run). Default `--resume-suite` skips ERROR; `--retry-errors` re-runs those slots. `--replace-slot` still replaces one named slot.
+`ageval run <dataset> --task <id> --resume <attempt_id>` continues one unsealed Attempt in place. Exit 2, and no new `result.json`, when `result.json` already exists, the lock digest does not match, or the environment is still busy. `--resume-suite` skips settled PASS / FAIL / ERROR and continues a matching unsealed slot in place; a slot with no matching activity header starts a new Attempt. `ageval results regrade <dataset> --run <attempt_id>` scores a finished Attempt again from `task-artifacts/` and `verifier-collect/` (new Attempt, no agent run, collect commands are not re-run). Default `--resume-suite` skips ERROR; `--retry-errors` re-runs those slots. `--replace-slot` still replaces one named slot.
 
 Flags: `uv run ageval <cmd> --help`. Source: `src/ageval/cli/main.py`.
 

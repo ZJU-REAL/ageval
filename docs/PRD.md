@@ -36,7 +36,7 @@ Evaluating autonomous coding and tool-using agents across benchmarks typically s
 | --- | --- | --- |
 | **Benchmark Author / Converter** | Package tasks with `task.yaml`, `run.py`, `evaluator.py`, `data/`, `evaluation/`, and optional `environment/Dockerfile` without managing container lifecycles or host credentials. | `ageval lock`, `ageval prepare`, `ageval publish` |
 | **Plugin Author** | Extend `environment` or `executor` exclusive slots and lifecycle chain slots by protocol or execution mechanism (`acp`, `docker`, `e2b`, `daytona`, `ssh`, `openai-http`, `miniswe`, `terminus-2`, `openhands`). | `BaseEnvironment`, `BaseExecutor`, `ageval plugin` |
-| **Evaluation Operator** | Run single tasks, full dataset suites, or parameter campaigns across different agents, models, and environments using CLI flags or hosted jobs. | `ageval run`, `ageval campaign`, `--agent`, `--model`, `--resume-suite` |
+| **Evaluation Operator** | Run single tasks, full dataset suites, or parameter campaigns across different agents, models, and environments using CLI flags or hosted jobs. Continue an unsealed Attempt in place. | `ageval run`, `ageval campaign`, `--agent`, `--model`, `--resume`, `--resume-suite` |
 | **Result Analyzer / Reviewer** | Inspect sealed trajectories, run read-only post-run analyzers (`stats`, `hack`, `review`), regrade archived artifacts (`regrade`), and curate public Leaderboards on Hub. | `ageval view`, `ageval results analyze`, `ageval results regrade`, Hub SPA |
 
 ---

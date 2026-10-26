@@ -16,6 +16,7 @@ ageval run <dataset>
 ageval run official/demo@0.1.0 --dir tmp --task <id>
 ageval run <dataset> --max-concurrent-tasks 2
 ageval run <dataset> -k 5
+ageval run <dataset> --task <id> --resume <attempt_id>
 ageval run <dataset> --resume-suite <suite_run_id> --task <id> -k 5
 ageval run <dataset> --resume-suite <suite_run_id> --retry-errors
 ageval results regrade <dataset> --run <attempt_id>
@@ -64,7 +65,8 @@ With `--layout harbor`, the built-in run sends `instruction.md` once to role `so
 | `--oracle` | With `--layout harbor`, run `solution/solve.sh` and skip the agent. Omit leaves `solution/` unused |
 | `--max-concurrent-tasks N` | Max concurrent units; **speeds wall time only** |
 | `--n-attempts` / `-k N` | Always-k: N independent Attempts per task (default 1); **CLI/job only** |
-| `--resume-suite <suite_run_id>` | Resume job: skip finished units (PASS / FAIL / ERROR), append Attempts, recompute pass@k / pass^k |
+| `--resume <attempt_id>` | Continue that unsealed Attempt in place. Requires one `--task`. Exit 2, and no new `result.json`, when `result.json` already exists, the lock digest does not match, or the environment is still running the Attempt |
+| `--resume-suite <suite_run_id>` | Continue an existing suite. Skip slots that already settled as PASS, FAIL, or ERROR. An unfinished slot whose activity log matches this suite, task, and attempt index continues in place. A slot with no matching log starts a new Attempt. Recompute pass@k / pass^k |
 | `--retry-errors` | With `--resume-suite`: re-run finished ERROR rows in this filter. PASS / FAIL stay skipped. New Attempt; old row stays in `previous[]` |
 | `--replace-slot` | With `--resume-suite --task`: re-run that finished slot; new Attempt; old row stays in `previous[]` |
 | `--attempt-index N` | Always-k slot to replace (default 0). Only with `--replace-slot` |

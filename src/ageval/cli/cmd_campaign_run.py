@@ -161,8 +161,10 @@ def register(app: typer.Typer) -> None:
                 "--resume-suite",
                 help=(
                     "Resume an existing suite_run_id under .ageval/suite-runs/. "
-                    "Skips finished PASS / FAIL / ERROR units, appends new Attempts, "
-                    "recomputes pass@k / pass^k. Combine with --task to top up one task. "
+                    "Skips finished PASS / FAIL / ERROR units. An unfinished slot whose "
+                    "activity log matches this suite, task, and attempt index continues "
+                    "in place; otherwise a new Attempt is appended. Recomputes pass@k / "
+                    "pass^k. Combine with --task to top up one task. "
                     "With --retry-errors, re-run ERROR slots in this filter. "
                     "With --replace-slot, re-run one named finished slot instead."
                 ),

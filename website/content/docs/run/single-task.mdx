@@ -27,6 +27,16 @@ ageval lock examples/datasets/minimal-demo --task terminal-jsonl-agg
 `--task` must match the member directory name and `task_id` in `task.yaml`.  
 On a TTY, stdout is a short recap (single task: `logs` path). A pipe or `--json` still writes the JSON document. With `k>1`, the run is a suite job under `.ageval/suite-runs/`.
 
+## Resume an interrupted Attempt
+
+```bash
+ageval run <dataset> --task <task_id> --resume <attempt_id>
+```
+
+Use this when the parent process stopped before `result.json` was written. ageval keeps that Attempt id. Completed steps stay in `.ageval/runs/<attempt_id>/activity.jsonl`. A live environment that still matches the last completed step is reused. A lost environment is started again and restored from the latest checkpoint of `/attempt/workspace` and `/attempt/home`. Completed calls are not run again. Wall-clock time and invocation count already spent stay charged.
+
+The command exits 2 and does not write `result.json` when that file already exists, the locked configuration digest does not match, or the environment is still running this Attempt.
+
 <Callout type="info" title="The whole dataset">
 
 Omit `--task` to run every member in one job. `ageval status <suite_run_id> --dataset <dataset>` shows progress; `ageval cancel <suite_run_id> --dataset <dataset>` stops it.

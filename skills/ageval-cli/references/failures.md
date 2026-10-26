@@ -15,6 +15,8 @@
 | PASS without real model | Forbidden — do not use fixtures as public proof |
 | Trajectory empty | Non-empty `agent_profiles` + `run.py` `Agent.session`/`invoke` |
 | Resume skipped an ERROR | Default `--resume-suite` skips finished PASS / FAIL / ERROR. `--retry-errors` re-runs those ERROR slots. `--replace-slot --task T` still replaces one named slot (any finished status) |
+| `--resume` exit 2, no new `result.json` | `attempt_already_settled`, `locked_config_mismatch`, `attempt_still_busy`, or `activity_log_missing`. A busy environment is still running this Attempt |
+| Suite resume started a new Attempt | The unfinished slot had no matching `activity.jsonl` header, or the lock digest differed. A matching unsealed directory continues in place |
 | Export fails `unsealed_invocation` | Attempt still running or metadata not terminal |
 | Export fails `secret_residual` | Fix source evidence; do not strip secrets by hand in export dir |
 | Docker ERROR | Docker daemon, image build, network/creds projection; read result / agent meta under `.ageval/runs/` |

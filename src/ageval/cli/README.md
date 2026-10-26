@@ -139,7 +139,9 @@ uv run ageval run examples/core
 # Always-k (#47): k independent Attempts per task — CLI/job only (not task.yaml)
 uv run ageval run examples/core -k 5 --max-concurrent-tasks 2
 uv run ageval run examples/core --task sdk-agent-session -k 5
-# Resume / top-up: skip real finished units; re-run suite-cancel placeholders; recompute pass@k
+# Continue one unsealed Attempt in place (exit 2 when result.json exists, the digest mismatches, or the environment is still busy)
+# uv run ageval run examples/core --task sdk-agent-session --resume <attempt_id>
+# Resume suite: recover a matching unsealed slot in place; skip settled PASS / FAIL / ERROR; append missing Always-k indices
 # uv run ageval run examples/core --resume-suite <suite_run_id> --task sdk-agent-session -k 5
 # Replace one finished slot (new Attempt; old current → previous[]):
 # uv run ageval run examples/core --resume-suite <suite_run_id> --task sdk-agent-session --replace-slot
