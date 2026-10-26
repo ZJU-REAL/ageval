@@ -57,6 +57,67 @@ def _record(request_id):
     (state / "inflight.pid").write_text(str(os.getpid()) + "\n", encoding="utf-8")
 
 
+def _pump(src, own, shared, mirror, lock):
+    try:
+        fd = src.fileno()
+        while True:
+            chunk = os.read(fd, 4096)
+            if not chunk:
+                return
+            own.write(chunk)
+            own.flush()
+            mirror.write(chunk)
+            mirror.flush()
+            with lock:
+                shared.write(chunk)
+                shared.flush()
+    finally:
+        src.close()
+
+
+def _wrap(request_id, argv):
+    import subprocess
+    import threading
+
+    state = STATE
+    state.mkdir(parents=True, exist_ok=True)
+    (state / "inflight.pid").write_text(str(os.getpid()) + "\n", encoding="utf-8")
+    (state / "inflight.request").write_text(request_id, encoding="utf-8")
+    out_f = (state / "inflight.stdout").open("wb")
+    err_f = (state / "inflight.stderr").open("wb")
+    both = (state / "inflight.output").open("wb")
+    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+    lock = threading.Lock()
+    threads = (
+        threading.Thread(target=_pump, args=(proc.stdout, out_f, both, sys.stdout.buffer, lock)),
+        threading.Thread(target=_pump, args=(proc.stderr, err_f, both, sys.stderr.buffer, lock)),
+    )
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    code = proc.wait()
+    out_f.close()
+    err_f.close()
+    both.close()
+    stdout = (state / "inflight.stdout").read_text(encoding="utf-8", errors="replace")
+    stderr = (state / "inflight.stderr").read_text(encoding="utf-8", errors="replace")
+    payload = {
+        "request_id": request_id,
+        "exit_code": code if isinstance(code, int) and code >= 0 else 1,
+        "stdout": stdout,
+        "stderr": stderr,
+    }
+    tmp = state / ("last_exit.json.tmp.%s" % os.getpid())
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    os.replace(tmp, state / "last_exit.json")
+    for name in ("inflight.pid", "inflight.request"):
+        path = state / name
+        if path.exists():
+            path.unlink()
+    return payload["exit_code"]
+
+
 def _finish(request_id, code):
     state = STATE
     state.mkdir(parents=True, exist_ok=True)
@@ -141,6 +202,8 @@ def _pack(out_path):
 
 
 def main(argv):
+    if len(argv) >= 4 and argv[1] == "wrap":
+        return _wrap(argv[2], argv[3:])
     if len(argv) >= 3 and argv[1] == "record":
         _record(argv[2])
         return 0
@@ -153,7 +216,7 @@ def main(argv):
     if len(argv) >= 3 and argv[1] == "pack":
         _pack(argv[2])
         return 0
-    print("usage: checkpoint_sync.py dump|pack|record|finish", file=sys.stderr)
+    print("usage: checkpoint_sync.py dump|pack|record|finish|wrap", file=sys.stderr)
     return 2
 
 
@@ -285,12 +348,6 @@ async def push_restored_tree(host: Any, box: Path) -> None:
 
 
 def wrapper_line(request_id: str, inner: str) -> str:
-    """Shell that records the in-flight request around ``inner``."""
-    quoted = json.dumps(request_id)
+    """Run ``inner`` under the helper so stdout is teed into state."""
     script = f"{_STATE}/{CHECKPOINT_SYNC_NAME}"
-    return (
-        f"python3 {script} record {quoted}; "
-        f"{inner}; ec=$?; "
-        f"python3 {script} finish {quoted} $ec; "
-        "exit $ec"
-    )
+    return f"python3 {script} wrap {json.dumps(request_id)} sh -c {json.dumps(inner)}"

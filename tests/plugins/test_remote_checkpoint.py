@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import tarfile
+import time
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -362,3 +363,57 @@ def test_capture_box_creates_a_remote_tree_and_syncs_the_cursor(tmp_path: Path) 
     nonce = tmp_path / "state" / "nonce"
     assert nonce.read_text(encoding="utf-8") == "nce_9"
     assert len(synced) == 2
+
+
+def test_wrap_tees_stdout_into_last_exit(tmp_path: Path) -> None:
+    script = tmp_path / "checkpoint_sync.py"
+    script.write_text(CHECKPOINT_SYNC_SCRIPT, encoding="utf-8")
+    state = tmp_path / "state"
+    state.mkdir()
+    env = os.environ.copy()
+    env["AGEVAL_STATE_DIR"] = str(state)
+    running = subprocess.Popen(
+        [
+            sys.executable,
+            str(script),
+            "wrap",
+            "call_live",
+            sys.executable,
+            "-u",
+            "-c",
+            "print('partial', flush=True); import time; time.sleep(30)",
+        ],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        deadline = time.monotonic() + 5
+        text = ""
+        while time.monotonic() < deadline:
+            path = state / "inflight.output"
+            text = path.read_text(encoding="utf-8") if path.is_file() else ""
+            if "partial" in text and (state / "inflight.pid").is_file():
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError(text)
+        assert "partial" in text
+    finally:
+        running.terminate()
+        running.wait(timeout=5)
+
+    done = subprocess.run(
+        [sys.executable, str(script), "wrap", "call_1", "echo", "hi"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0
+    assert "hi" in done.stdout
+    last = json.loads((state / "last_exit.json").read_text(encoding="utf-8"))
+    assert last["request_id"] == "call_1"
+    assert last["exit_code"] == 0
+    assert "hi" in last["stdout"]
+    assert not (state / "inflight.pid").is_file()
