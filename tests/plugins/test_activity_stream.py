@@ -305,6 +305,93 @@ def test_box_executors_forward_activity_to_the_worker() -> None:
         assert spi._box.activity is scope
 
 
+def test_worker_step_log_follows_ageval_state_dir(monkeypatch, tmp_path: Path) -> None:
+    import importlib.util
+
+    root = Path(__file__).resolve().parents[2]
+    scripts = (
+        root / "plugins/openhands/worker/ageval_executor_openhands.py",
+        root / "plugins/acp-oneshot/worker/ageval_acp_oneshot.py",
+        root / "plugins/dsh/worker/ageval_executor_dsh.py",
+        root / "plugins/nooa/src/nooa_plugin/trajectory.py",
+    )
+    monkeypatch.setenv("AGEVAL_STATE_DIR", str(tmp_path / "state"))
+    for script in scripts:
+        spec = importlib.util.spec_from_file_location(script.stem, script)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        assert module._step_log() == tmp_path / "state" / "steps.jsonl"
+    monkeypatch.delenv("AGEVAL_STATE_DIR")
+    spec = importlib.util.spec_from_file_location("oneshot_again", scripts[1])
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module._step_log() == Path("/tmp/.ageval-state/steps.jsonl")
+
+
+def test_box_result_keeps_activity_steps_the_worker_omitted(tmp_path: Path) -> None:
+    import sys
+
+    root = Path(__file__).resolve().parents[2]
+    for rel in ("plugins/acp-oneshot/src", "plugins/dsh/src", "plugins/nooa/src"):
+        path = str(root / rel)
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    from acp_oneshot_plugin.container import AcpOneshotBoxExecutor
+    from dsh_plugin.container import DshBoxExecutor
+    from nooa_plugin.container import NooaBoxExecutor
+
+    scope = _scope(tmp_path)
+    scope.record_tool_call_in_flight("old_tool", "bash", "execute", {"command": "ls"})
+    scope.record_tool_call_completed("old_tool", outcome="ok", exit_code=0, content="listed")
+    scope.record_tool_call_in_flight("new_tool", "bash", "execute", {"command": "cat"})
+    scope.record_tool_call_completed("new_tool", outcome="ok", exit_code=0, content="file")
+    fresh = {
+        "schema": "ageval.trajectory.event/1",
+        "kind": "tool",
+        "phase": "update",
+        "tool_call_id": "new_tool",
+    }
+    payload = {"ok": True, "text": "done", "events": [fresh], "model": "m"}
+
+    oneshot = AcpOneshotBoxExecutor.__new__(AcpOneshotBoxExecutor)
+    oneshot.activity = scope
+    oneshot.model = "m"
+    oneshot.entry_id = "pi"
+    oneshot.reasoning_effort = None
+    oneshot_ids = [
+        event.get("tool_call_id")
+        for event in oneshot._result_from(
+            SimpleNamespace(stdout="", stderr="", exit_code=0),
+            collect_dir=None,
+            payload=payload,
+        ).events
+        if event.get("kind") == "tool"
+    ]
+    assert oneshot_ids == ["old_tool", "old_tool", "new_tool"]
+
+    stdout = json.dumps(payload)
+    for cls, extra in (
+        (DshBoxExecutor, {"composition": "slim", "permission": None}),
+        (NooaBoxExecutor, {"agent_ref": "agent"}),
+    ):
+        box = cls.__new__(cls)
+        box.activity = scope
+        box.model = "m"
+        for key, value in extra.items():
+            setattr(box, key, value)
+        ids = [
+            event.get("tool_call_id")
+            for event in box._result_from(
+                SimpleNamespace(stdout=stdout, stderr="", exit_code=0),
+                collect_dir=None,
+            ).events
+            if event.get("kind") == "tool"
+        ]
+        assert ids == ["old_tool", "old_tool", "new_tool"]
+
+
 def test_prior_activity_events_keep_steps_missing_from_the_fresh_stream(tmp_path: Path) -> None:
     from ageval.plugins.activity_events import prior_activity_events
 

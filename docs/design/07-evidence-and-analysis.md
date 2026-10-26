@@ -51,7 +51,7 @@ extra: { ... }                                                       # Vendor-sp
 - **`terminal.elapsed_ms`**: Wall-clock invocation latency (`latency_ms`) is copied onto `terminal.elapsed_ms` during sealing.
 
 ### 2.3 Post-seal pruning (`slim_sealed_attempt`)
-Once `trajectory_seal` succeeds in `record`, `slim_sealed_attempt` removes intermediate scratch directories (`agent/invocations/`, `evaluation/invocations/`, `backend_raw/`) by default, retaining only `lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, `task-artifacts/**`, `verifier-collect/**`, `evaluation/observation.jsonl`, and `evaluation/checks.json`. Operators may pass `--keep-vendor-raw` to retain `backend_raw/` and per-invocation scratch files, or `--keep-workspace` to retain the host workspace directory (`box/`). Once `result.json` and `trajectory.jsonl` both exist, Core also deletes `checkpoints/` unless `--keep-workspace` is set.
+Once `trajectory_seal` succeeds in `record`, `slim_sealed_attempt` removes intermediate scratch directories (`agent/invocations/`, `evaluation/invocations/`, `backend_raw/`) by default, retaining only `lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, `task-artifacts/**`, `verifier-collect/**`, `evaluation/observation.jsonl`, and `evaluation/checks.json`. Operators may pass `--keep-vendor-raw` to retain `backend_raw/` and per-invocation scratch files, or `--keep-workspace` to retain the host workspace directory (`box/`). Once `result.json` and `trajectory.jsonl` both exist, Core also deletes `checkpoints/` and `<attempt>/state` unless `--keep-workspace` is set. `local` and `docker` remove `<attempt>/state` when `stop(delete=True)` deletes `box/`.
 
 ---
 

@@ -9,6 +9,7 @@ from ageval.evidence.checkpoints import (
     CHECKPOINT_FORMAT,
     CheckpointStore,
     prune_checkpoints,
+    prune_recovery_state,
 )
 
 
@@ -74,6 +75,11 @@ def test_prune_removes_checkpoint_dir(tmp_path: Path) -> None:
     box = _box(tmp_path)
     (box / "workspace" / "note.txt").write_text("x", encoding="utf-8")
     CheckpointStore(tmp_path, box).capture(1)
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "nonce").write_text("n", encoding="utf-8")
     prune_checkpoints(tmp_path)
+    prune_recovery_state(tmp_path)
     assert not (tmp_path / "checkpoints").exists()
+    assert not state.exists()
     assert (box / "workspace" / "note.txt").is_file()

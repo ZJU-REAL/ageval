@@ -262,12 +262,15 @@ class AcpOneshotBoxExecutor:
                 },
             )
         events_raw = payload.get("events") or ()
-        events = tuple(
+        fresh = tuple(
             to_ageval_trajectory_events(
                 tuple(e for e in events_raw if isinstance(e, dict)),
                 session_id=str(payload.get("session_id") or "acp-oneshot"),
             )
         )
+        from ageval.plugins.activity_events import prior_activity_events
+
+        events = tuple(prior_activity_events(getattr(self, "activity", None), fresh))
         ok = bool(payload.get("ok", False))
         text = str(payload.get("text") or "")
         error = str(payload["error"]) if payload.get("error") else None

@@ -151,6 +151,8 @@ class LocalHost(BaseEnvironment):
         self._attached.clear()
         if delete and self._root.is_dir():
             shutil.rmtree(self._root, ignore_errors=True)
+        if delete and self.state_root.is_dir():
+            shutil.rmtree(self.state_root, ignore_errors=True)
 
     # --- transport -----------------------------------------------------------
 
@@ -349,6 +351,7 @@ class LocalHost(BaseEnvironment):
         out.setdefault("AGEVAL_WORKSPACE", self.visible_path(WORKSPACE_PATH))
         out.setdefault("AGEVAL_ARTIFACTS", self.visible_path(ARTIFACTS_PATH))
         out.setdefault("AGEVAL_EVALUATION", self.visible_path(EVALUATION_PATH))
+        out.setdefault("AGEVAL_STATE_DIR", str(self.state_root))
         return out
 
     def _assert_started(self) -> None:

@@ -33,7 +33,7 @@ from ageval.config.model import LockedTaskConfig, thaw
 from ageval.config.resources import resource_options
 from ageval.environments.protocol import BoxSpec
 from ageval.evaluation.bind import AttemptResult, bind_result
-from ageval.evidence.checkpoints import prune_checkpoints
+from ageval.evidence.checkpoints import prune_checkpoints, prune_recovery_state
 from ageval.evidence.locators import default_runs_root
 from ageval.evidence.store import (
     ACTIVITY_LOG_REL,
@@ -353,6 +353,7 @@ async def run_attempt(
         and (evidence.root / "result.json").is_file()
     ):
         prune_checkpoints(evidence.root)
+        prune_recovery_state(evidence.root)
     return _exit_code(result), result
 
 

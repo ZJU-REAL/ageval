@@ -224,7 +224,15 @@ class NooaBoxExecutor:
         metadata.setdefault("agent", self.agent_ref)
         metadata.setdefault("execution_location", "attempt-container")
         structured = payload.get("structured")
-        events = payload.get("events") or ()
+        raw_events = payload.get("events") or ()
+        fresh = (
+            tuple(event for event in raw_events if isinstance(event, dict))
+            if isinstance(raw_events, list)
+            else ()
+        )
+        from ageval.plugins.activity_events import prior_activity_events
+
+        events = tuple(prior_activity_events(getattr(self, "activity", None), fresh))
         usage = payload.get("usage")
         return AgentResult(
             model=str(payload.get("model") or self.model),
@@ -233,7 +241,7 @@ class NooaBoxExecutor:
             ok=bool(payload.get("ok", True)),
             error=str(payload["error"]) if payload.get("error") else None,
             stderr=stderr[-2000:],
-            events=tuple(events) if isinstance(events, list) else (),
+            events=events,
             usage=usage if isinstance(usage, dict) else None,
             metadata=metadata,
         )

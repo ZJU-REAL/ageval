@@ -275,6 +275,8 @@ class DockerHost(BaseEnvironment):
             docker("rm", "-f", self._container, timeout=120.0)
         if delete and self._root.is_dir():
             shutil.rmtree(self._root, ignore_errors=True)
+        if delete and self.state_root.is_dir():
+            shutil.rmtree(self.state_root, ignore_errors=True)
 
     def runtime_handle(self) -> dict[str, object]:
         return {

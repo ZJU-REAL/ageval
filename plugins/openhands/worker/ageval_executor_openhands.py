@@ -236,8 +236,13 @@ def _failed(model: str, error: str) -> dict[str, Any]:
     return _document(model=model, ok=False, text="", error=error, steps=[], usage=None)
 
 
+def _step_log() -> Path:
+    root = os.environ.get("AGEVAL_STATE_DIR") or "/tmp/.ageval-state"
+    return Path(root) / "steps.jsonl"
+
+
 def _emit_step(row: dict[str, Any]) -> None:
-    path = Path("/tmp/.ageval-state/steps.jsonl")
+    path = _step_log()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:

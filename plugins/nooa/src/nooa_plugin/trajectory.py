@@ -251,6 +251,11 @@ class EventTap:
         return list(self._rows)
 
 
+def _step_log() -> Path:
+    root = os.environ.get("AGEVAL_STATE_DIR") or "/tmp/.ageval-state"
+    return Path(root) / "steps.jsonl"
+
+
 def _emit_nooa_step(row: dict[str, Any]) -> None:
     kind = str(row.get("event_type") or "")
     if kind == "ToolCallEvent":
@@ -276,7 +281,7 @@ def _emit_nooa_step(row: dict[str, Any]) -> None:
         step = {"type": "assistant", "content": text}
     else:
         return
-    path = Path("/tmp/.ageval-state/steps.jsonl")
+    path = _step_log()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:

@@ -61,6 +61,17 @@ def prune_checkpoints(attempt_dir: Path) -> None:
         shutil.rmtree(root)
 
 
+def prune_recovery_state(attempt_dir: Path) -> None:
+    """Remove ``<attempt>/state`` once the Attempt is settled.
+
+    ``local`` and ``docker`` also delete this directory in ``stop(delete=True)``.
+    Remote kinds leave the host copy beside ``box/`` until seal.
+    """
+    root = attempt_dir / "state"
+    if root.is_dir():
+        shutil.rmtree(root)
+
+
 class CheckpointStore:
     """Incremental snapshots of one Attempt box."""
 
