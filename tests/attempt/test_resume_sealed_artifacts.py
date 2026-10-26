@@ -134,7 +134,7 @@ async def test_harvest_failure_does_not_complete_seal_run(
     ctx.recovery_attached = False
 
     async def _boom(_ctx: object) -> None:
-        raise RuntimeError("harvest broke")
+        raise _HarvestBroke
 
     monkeypatch.setattr(run, "harvest_workspace_artifacts", _boom)
 
@@ -142,7 +142,7 @@ async def test_harvest_failure_does_not_complete_seal_run(
         return {"ok": True}
 
     monkeypatch.setattr(run, "_run_task_entry", _worker)
-    with pytest.raises(RuntimeError, match="harvest broke"):
+    with pytest.raises(_HarvestBroke):
         await run.run(ctx)
     assert log.has_completed_phase("seal_run") is False
     assert ctx._writers_stopped is True
@@ -168,6 +168,10 @@ async def test_seal_run_is_written_after_harvest(
     await run.run(ctx)
     assert seen == [False]
     assert log.has_completed_phase("seal_run") is True
+
+
+class _HarvestBroke(RuntimeError):
+    """Stand-in harvest failure. The message stays on the class."""
 
 
 async def _async_none() -> None:

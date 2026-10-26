@@ -6,8 +6,9 @@ import asyncio
 import json
 import os
 import tempfile
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ageval.environments.protocol import EnvironmentFailure
 
@@ -83,7 +84,7 @@ async def _pull_remote_steps(host: Any, dest: Path) -> None:
     if not callable(download):
         return
     try:
-        await download(_REMOTE_STEPS, dest)
+        await cast(Callable[..., Awaitable[object]], download)(_REMOTE_STEPS, dest)
     except (OSError, EnvironmentFailure):
         return
 
@@ -164,15 +165,15 @@ def _tool_started(scope: Any, row: dict[str, Any]) -> None:
     if not call_id or _known_tool(scope, call_id) is not None:
         return
     kind = str(row.get("tool_kind") or "other")
-    arguments = row.get("arguments") if isinstance(row.get("arguments"), dict) else {}
+    raw_arguments = row.get("arguments")
+    arguments = raw_arguments if isinstance(raw_arguments, dict) else {}
     from ageval.evidence.system_effect import command_system_effect
 
-    command = arguments.get("command")
-    cwd = arguments.get("cwd") if isinstance(arguments.get("cwd"), str) else None
-    system = kind == "execute" and command_system_effect(
-        command if isinstance(command, str) else "",
-        cwd,
-    )
+    raw_command = arguments.get("command")
+    command = raw_command if isinstance(raw_command, str) else ""
+    raw_cwd = arguments.get("cwd")
+    cwd = raw_cwd if isinstance(raw_cwd, str) else None
+    system = kind == "execute" and command_system_effect(command, cwd)
     scope.record_tool_call_in_flight(
         call_id,
         str(row.get("name") or "tool"),

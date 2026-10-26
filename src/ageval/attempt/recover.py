@@ -250,7 +250,8 @@ def _adopt_last_exit(ctx: Any, probe: ProbeStatus) -> None:
     )
     exit_code = last.get("exit_code")
     code = exit_code if isinstance(exit_code, int) and not isinstance(exit_code, bool) else None
-    content = last.get("stdout") if isinstance(last.get("stdout"), str) else ""
+    raw_stdout = last.get("stdout")
+    content = raw_stdout if isinstance(raw_stdout, str) else ""
     stderr = last.get("stderr") if isinstance(last.get("stderr"), str) else ""
 
     def prepare(seq: int) -> dict[str, int | None]:
@@ -309,13 +310,14 @@ def _busy_deadline(log: ActivityLog) -> datetime | None:
 async def _stop_old_handle(header: ActivityRecord, handle: dict[str, Any]) -> None:
     """Best-effort stop of the previous environment. Failure does not block rebuild."""
     kind = str(header.payload.get("environment_kind") or "")
+    threaded = {
+        "docker": _stop_docker,
+        "e2b": _stop_e2b,
+        "daytona": _stop_daytona,
+    }
     try:
-        if kind == "docker":
-            await asyncio.to_thread(_stop_docker, handle)
-        elif kind == "e2b":
-            await asyncio.to_thread(_stop_e2b, handle)
-        elif kind == "daytona":
-            await asyncio.to_thread(_stop_daytona, handle)
+        if kind in threaded:
+            await asyncio.to_thread(threaded[kind], handle)
         elif kind == "ssh":
             await _stop_ssh(handle)
     except Exception as exc:  # noqa: BLE001 — a failed stop must not replace rebuild
@@ -345,14 +347,9 @@ def _stop_e2b(handle: dict[str, Any]) -> None:
 
 
 def _stop_daytona(handle: dict[str, Any]) -> None:
-    sandbox_id = str(handle.get("sandbox_id") or "").strip()
-    if not sandbox_id:
-        return
-    from daytona import Daytona
+    from ageval.plugins.contrib.daytona.host import stop_recorded_sandbox
 
-    client = Daytona()
-    sandbox = client.get(sandbox_id)
-    client.delete(sandbox)
+    stop_recorded_sandbox(handle)
 
 
 async def _stop_ssh(handle: dict[str, Any]) -> None:
@@ -364,9 +361,7 @@ async def _stop_ssh(handle: dict[str, Any]) -> None:
     from ageval.environments.protocol import BoxSpec
     from ageval.plugins.contrib.ssh.host import SSHHost
 
-    host = SSHHost(
-        spec=BoxSpec(attempt_root=Path("."), task_root=Path("."), repo_root=Path("."))
-    )
+    host = SSHHost(spec=BoxSpec(attempt_root=Path("."), task_root=Path("."), repo_root=Path(".")))
     host._host = host_name
     user = handle.get("user")
     host._user = str(user) if isinstance(user, str) and user else None

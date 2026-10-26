@@ -101,8 +101,10 @@ async def test_cursor_mismatch_stops_then_rebuilds(
     decision = await classify_environment(ctx)
     assert decision == "rebuild"
     assert seen == [handle]
-    assert ctx.host.attaches == 0
-    assert ctx.host.starts == 0
+    host = ctx.host
+    assert isinstance(host, _Host)
+    assert host.attaches == 0
+    assert host.starts == 0
 
 
 @pytest.mark.asyncio

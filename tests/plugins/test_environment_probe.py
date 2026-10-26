@@ -301,9 +301,7 @@ def test_docker_exec_wrapper_forwards_stdin(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["AGEVAL_STATE_DIR"] = str(tmp_path)
     env["AGEVAL_EXEC_REQUEST"] = "req_stdin"
-    argv = _exec_pid_wrapper(
-        ["python3", "-c", "import sys; sys.stdout.write(sys.stdin.read())"]
-    )
+    argv = _exec_pid_wrapper(["python3", "-c", "import sys; sys.stdout.write(sys.stdin.read())"])
     proc = subprocess.Popen(
         argv,
         env=env,
@@ -326,9 +324,7 @@ def test_remote_stdio_wrapper_forwards_stdin(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["AGEVAL_STATE_DIR"] = str(tmp_path)
     env["AGEVAL_EXEC_REQUEST"] = "req_remote_stdin"
-    argv = stdio_inflight_argv(
-        ["python3", "-c", "import sys; sys.stdout.write(sys.stdin.read())"]
-    )
+    argv = stdio_inflight_argv(["python3", "-c", "import sys; sys.stdout.write(sys.stdin.read())"])
     proc = subprocess.Popen(
         argv,
         env=env,

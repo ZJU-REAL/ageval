@@ -1061,7 +1061,8 @@ class ParentAgentService:
     def _reconcile_resume(self, scope: Any) -> None:
         from ageval.evidence.activity import reconcile_inflight_tail
 
-        partial = self.read_partial() if callable(self.read_partial) else None
+        raw_partial = self.read_partial() if callable(self.read_partial) else None
+        partial = raw_partial if isinstance(raw_partial, str) else None
         reconcile_inflight_tail(scope, partial_output=partial, prepare=self._checkpoint_prepare())
 
     def _checkpoint_prepare(self) -> Any:

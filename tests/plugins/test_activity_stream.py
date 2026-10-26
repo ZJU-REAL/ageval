@@ -7,10 +7,11 @@ import json
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 from tests.helpers.box import local_box
 
-from ageval.environments.protocol import ExecResult
+from ageval.environments.protocol import ExecResult, ProbeStatus
 from ageval.evidence.activity import ActivityLog, ActivityScope
 from ageval.plugins.contrib.acp.activity_stream import (
     apply_update,
@@ -204,7 +205,7 @@ def test_exec_with_steps_keeps_the_worker_busy(tmp_path: Path) -> None:
     host = local_box(tmp_path / "box")
     asyncio.run(host.start())
 
-    async def run() -> tuple[ExecResult, object, dict[str, object]]:
+    async def run() -> tuple[ExecResult, ProbeStatus, dict[str, object]]:
         task = asyncio.create_task(
             exec_with_steps(
                 host,
@@ -336,9 +337,9 @@ def test_box_executors_forward_activity_to_the_worker() -> None:
 
     scope = object()
     for cls in (OpenHandsExecutorSPI, AcpOneshotExecutorSPI, DshExecutorSPI, NooaExecutorSPI):
-        spi = cls.__new__(cls)
+        spi = cast(Any, cls.__new__(cls))
         spi._box = SimpleNamespace(activity=None)
-        cls.bind_activity(spi, scope)
+        cast(Any, cls.bind_activity)(spi, scope)
         assert spi.activity is scope
         assert spi._box.activity is scope
 
@@ -393,7 +394,7 @@ def test_box_result_keeps_activity_steps_the_worker_omitted(tmp_path: Path) -> N
     }
     payload = {"ok": True, "text": "done", "events": [fresh], "model": "m"}
 
-    oneshot = AcpOneshotBoxExecutor.__new__(AcpOneshotBoxExecutor)
+    oneshot = cast(Any, AcpOneshotBoxExecutor.__new__(AcpOneshotBoxExecutor))
     oneshot.activity = scope
     oneshot.model = "m"
     oneshot.entry_id = "pi"
@@ -414,7 +415,7 @@ def test_box_result_keeps_activity_steps_the_worker_omitted(tmp_path: Path) -> N
         (DshBoxExecutor, {"composition": "slim", "permission": None}),
         (NooaBoxExecutor, {"agent_ref": "agent"}),
     ):
-        box = cls.__new__(cls)
+        box = cast(Any, cls.__new__(cls))
         box.activity = scope
         box.model = "m"
         for key, value in extra.items():

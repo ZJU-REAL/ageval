@@ -119,7 +119,7 @@ def prompt_for_resume(scope: Any, prompt: str, *, resumed_native: bool) -> str:
 
 
 def _update_kind(update: Any, event: dict[str, Any]) -> str:
-    dumped = event.get("update") if isinstance(event.get("update"), dict) else {}
+    dumped = _mapping(event.get("update"))
     raw = (
         getattr(update, "session_update", None)
         or dumped.get("sessionUpdate")
@@ -131,7 +131,8 @@ def _update_kind(update: Any, event: dict[str, Any]) -> str:
 
 
 def _chunk(scope: Any, state: StreamState, event: dict[str, Any], *, thought: bool) -> None:
-    text = event.get("text") if isinstance(event.get("text"), str) else ""
+    raw_text = event.get("text")
+    text = raw_text if isinstance(raw_text, str) else ""
     if state.open_step is None:
         state.step += 1
         state.open_step = state.step
@@ -164,8 +165,10 @@ def _tool_started(scope: Any, state: StreamState, update: Any, event: dict[str, 
     state.tools.add(call_id)
     kind = _tool_kind(update, event)
     arguments = _arguments(update, event)
-    command = arguments.get("command") if isinstance(arguments.get("command"), str) else ""
-    cwd = arguments.get("cwd") if isinstance(arguments.get("cwd"), str) else None
+    raw_command = arguments.get("command")
+    command = raw_command if isinstance(raw_command, str) else ""
+    raw_cwd = arguments.get("cwd")
+    cwd = raw_cwd if isinstance(raw_cwd, str) else None
     from ageval.evidence.system_effect import command_system_effect
 
     scope.record_tool_call_in_flight(
@@ -191,8 +194,9 @@ def _tool_finished(scope: Any, state: StreamState, update: Any, event: dict[str,
     from ageval.plugins.step_activity import checkpoint_prepare
 
     outcome = "error" if status in {"failed", "error"} else "ok"
-    raw = event.get("update") if isinstance(event.get("update"), dict) else {}
-    content = raw.get("rawOutput") or raw.get("raw_output") or raw.get("content") or ""
+    raw = _mapping(event.get("update"))
+    raw_content = raw.get("rawOutput") or raw.get("raw_output") or raw.get("content") or ""
+    content = raw_content if isinstance(raw_content, str) else str(raw_content)
     scope.record_tool_call_completed(
         call_id,
         outcome=outcome,
@@ -205,7 +209,7 @@ def _tool_finished(scope: Any, state: StreamState, update: Any, event: dict[str,
 def _compaction(scope: Any, event: dict[str, Any]) -> None:
     from ageval.plugins.step_activity import checkpoint_prepare
 
-    dumped = event.get("update") if isinstance(event.get("update"), dict) else {}
+    dumped = _mapping(event.get("update"))
     rel = dumped.get("nativeJournalRel") or dumped.get("path") or dumped.get("sessionFile")
     journal = rel if isinstance(rel, str) else None
     if isinstance(journal, str) and journal.startswith("/attempt/home/"):
@@ -275,7 +279,8 @@ def _tool_kind(update: Any, event: dict[str, Any]) -> str:
 
 
 def _arguments(update: Any, event: dict[str, Any]) -> dict[str, Any]:
-    dumped = event.get("update") if isinstance(event.get("update"), dict) else {}
+    del update
+    dumped = _mapping(event.get("update"))
     raw = dumped.get("rawInput") or dumped.get("raw_input") or dumped.get("arguments") or {}
     return raw if isinstance(raw, dict) else {"value": raw}
 
@@ -283,7 +288,11 @@ def _arguments(update: Any, event: dict[str, Any]) -> dict[str, Any]:
 def _field(update: Any, event: dict[str, Any], name: str) -> Any:
     if name in event:
         return event[name]
-    dumped = event.get("update") if isinstance(event.get("update"), dict) else {}
+    dumped = _mapping(event.get("update"))
     if name in dumped:
         return dumped[name]
     return getattr(update, name, None)
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}

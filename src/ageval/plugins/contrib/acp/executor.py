@@ -13,11 +13,11 @@ import concurrent.futures
 import json
 import threading
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from contextlib import suppress as contextlib_suppress
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from acp.exceptions import RequestError
 
@@ -408,7 +408,9 @@ class AcpExecutor(BaseExecutor):
             if client is not None:
                 client.suppress_activity = True
             try:
-                loaded = await load(cwd=cwd, session_id=native, mcp_servers=[])
+                loaded = await cast(Callable[..., Awaitable[object]], load)(
+                    cwd=cwd, session_id=native, mcp_servers=[]
+                )
             except Exception:  # noqa: BLE001 — fall back to a new session and the transcript
                 loaded = None
             finally:

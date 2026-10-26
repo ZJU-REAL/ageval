@@ -9,7 +9,8 @@ is not among them — it arrives in the evaluate phase, after the Agent stops.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, cast
 
 from ageval.attempt.ctx import AttemptCtx
 from ageval.attempt.emit import emit
@@ -45,7 +46,7 @@ async def _finish_rebuild(ctx: AttemptCtx) -> None:
             write_cursor(attempt_state_dir(ctx), seq=seq, request_id=f"seq_{seq}")
         push = getattr(ctx.host, "push_restored_box", None)
         if callable(push):
-            await push(ctx.evidence.path(AGENT_BOX_REL))
+            await cast(Callable[..., Awaitable[object]], push)(ctx.evidence.path(AGENT_BOX_REL))
     except RecordedError:
         raise
     except Exception as exc:  # noqa: BLE001 — rebuild failure is a terminal Attempt error

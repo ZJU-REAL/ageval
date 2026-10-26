@@ -9,17 +9,17 @@ from __future__ import annotations
 
 import json
 import tarfile
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ageval.environments.protocol import ProbeStatus
 
 CHECKPOINT_SYNC_NAME = "checkpoint_sync.py"
 _STATE = "/tmp/.ageval-state"
 
-CHECKPOINT_SYNC_SCRIPT = r'''
+CHECKPOINT_SYNC_SCRIPT = r"""
 import json, os, sys, tarfile
 from pathlib import Path
 
@@ -222,7 +222,7 @@ def main(argv):
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv))
-'''
+"""
 
 
 def stdio_inflight_argv(argv: Sequence[str]) -> list[str]:
@@ -234,6 +234,9 @@ def stdio_inflight_argv(argv: Sequence[str]) -> list[str]:
     script = r"""
 state=${AGEVAL_STATE_DIR:-/tmp/.ageval-state}
 mkdir -p "$state"
+# Keep the parent pipe on fd 3 before the command is backgrounded.
+# dash replaces a background command's stdin with /dev/null.
+exec 3<&0
 echo $$ > "$state/inflight.pid"
 printf %s "${AGEVAL_EXEC_REQUEST-}" > "$state/inflight.request"
 child=0
@@ -247,11 +250,13 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
-# An explicit stdin redirect keeps the pipe. A bare background command
-# would otherwise read /dev/null when job control is off.
-"$@" <&0 &
+"$@" <&3 &
 child=$!
 wait "$child"
+status=$?
+cleanup
+trap - EXIT
+exit "$status"
 """
     return ["sh", "-c", script, "ageval-stdio", *[str(part) for part in argv]]
 
@@ -268,7 +273,8 @@ def parse_state_document(raw: str) -> ProbeStatus:
     if not isinstance(data, dict):
         return ProbeStatus(status="absent")
     nonce = data.get("nonce") if isinstance(data.get("nonce"), str) and data.get("nonce") else None
-    cursor = data.get("cursor") if isinstance(data.get("cursor"), dict) else {}
+    raw_cursor = data.get("cursor")
+    cursor: dict[str, Any] = raw_cursor if isinstance(raw_cursor, dict) else {}
     seq = cursor.get("seq")
     request = cursor.get("request_id")
     last = data.get("last_exit") if isinstance(data.get("last_exit"), dict) else None
@@ -343,10 +349,10 @@ async def push_restored_tree(host: Any, box: Path) -> None:
             continue
         if not any(local.rglob("*")):
             continue
-        await upload(local, remote)
+        await cast(Callable[..., Awaitable[object]], upload)(local, remote)
     state = box.parent / "state"
     if state.is_dir() and any(state.iterdir()):
-        await upload(state, _STATE)
+        await cast(Callable[..., Awaitable[object]], upload)(state, _STATE)
 
 
 def wrapper_line(request_id: str, inner: str) -> str:

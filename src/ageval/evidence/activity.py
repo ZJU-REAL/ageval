@@ -697,6 +697,7 @@ class ActivityScope:
         # Parent phase clock (``AttemptCtx.active_elapsed_ms``). Stall time is
         # already excluded. Unset scopes omit ``elapsed_ms`` so older lines stay valid.
         self.elapsed_ms_provider: Callable[[], Any] | None = None
+        self.capture: Callable[[int], Any] | None = None
 
     def record_model_turn_in_flight(
         self,

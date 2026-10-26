@@ -13,6 +13,7 @@ description: >
 ```python
 from ageval_sdk import RunContext, RunTerminal
 
+
 async def run(ctx: RunContext) -> RunTerminal:
     async with ctx.agent.session("solver", max_turns=1) as session:
         reply = await session.invoke(ctx.params["instruction"])

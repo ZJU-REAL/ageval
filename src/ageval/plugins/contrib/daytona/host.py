@@ -677,3 +677,15 @@ def _is_missing(exc: BaseException) -> bool:
 
 
 __all__ = ["API_KEY_ENV", "ATTACH_STDIO", "DaytonaHost", "DaytonaStdio"]
+
+
+def stop_recorded_sandbox(handle: Mapping[str, Any]) -> None:
+    """Delete a sandbox recorded on an Attempt header. Missing id is a no-op."""
+    sandbox_id = str(handle.get("sandbox_id") or "").strip()
+    if not sandbox_id:
+        return
+    from daytona import Daytona
+
+    client = Daytona()
+    sandbox = client.get(sandbox_id)
+    client.delete(sandbox)
