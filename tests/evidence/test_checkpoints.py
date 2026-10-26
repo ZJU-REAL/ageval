@@ -53,6 +53,49 @@ def test_capture_is_incremental_and_skips_keyless_auth(tmp_path: Path) -> None:
     assert len(blob_files) == 2
 
 
+def test_home_journal_is_redacted_and_workspace_is_not(tmp_path: Path) -> None:
+    box = _box(tmp_path)
+    secret = "sk-abcdefghijklmnop"
+    (box / "home" / "notes.txt").write_text(f"remember {secret}\n", encoding="utf-8")
+    (box / "workspace" / "task.txt").write_text(f"keep {secret}\n", encoding="utf-8")
+    auth = box / "home" / ".codex" / "auth.json"
+    auth.parent.mkdir(parents=True)
+    auth.write_text('{"token":"secret"}', encoding="utf-8")
+    binary = box / "home" / "blob.bin"
+    binary.write_bytes(b"\x00" + secret.encode("ascii"))
+    store = CheckpointStore(tmp_path, box, sentinels=("SENTINELVALUE",))
+    (box / "home" / "marked.txt").write_text("see SENTINELVALUE\n", encoding="utf-8")
+    manifest_path = store.capture(2)
+    blobs = tmp_path / "checkpoints" / "blobs"
+    blob_text = "\n".join(
+        path.read_text(encoding="utf-8", errors="replace")
+        for path in blobs.rglob("*")
+        if path.is_file() and "notes" not in path.name
+    )
+    # The secret from home text must not survive in any home blob.
+    home_blobs = []
+    manifest = manifest_path.read_text(encoding="utf-8")
+    assert "auth.json" not in manifest
+    assert secret not in manifest
+    assert "home/blob.bin" in store.redaction_notes
+    assert "home/blob.bin" not in manifest
+    for path in blobs.rglob("*"):
+        if path.is_file():
+            home_blobs.append(path.read_bytes())
+    joined = b"".join(home_blobs)
+    assert secret.encode("ascii") not in joined or b"keep " + secret.encode("ascii") in joined
+    # Workspace copy is intact. Home notes are not.
+    assert b"keep " + secret.encode("ascii") in joined
+    assert b"remember " + secret.encode("ascii") not in joined
+    assert b"SENTINELVALUE" not in joined
+    store.restore(2)
+    restored = (box / "home" / "notes.txt").read_text(encoding="utf-8")
+    assert secret not in restored
+    assert "REDACTED" in restored
+    assert (box / "workspace" / "task.txt").read_text(encoding="utf-8") == f"keep {secret}\n"
+    del blob_text
+
+
 def test_restore_rolls_back_files_and_deletes_extras(tmp_path: Path) -> None:
     box = _box(tmp_path)
     note = box / "workspace" / "note.txt"

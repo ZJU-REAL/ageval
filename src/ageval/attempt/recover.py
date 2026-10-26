@@ -130,14 +130,22 @@ def capture_box(ctx: Any, seq: int) -> int | None:
     """Snapshot the host bind root and advance the in-box cursor."""
     evidence = ctx.evidence
     box = ensure_local_box(evidence.path(AGENT_BOX_REL))
+    log = getattr(ctx, "activity", None)
+    sentinels = tuple(getattr(log, "sentinels", ()) or ())
     store = ctx.checkpoints
     if store is None:
-        store = CheckpointStore(evidence.root, box)
+        store = CheckpointStore(evidence.root, box, sentinels=sentinels)
         ctx.checkpoints = store
+    else:
+        store.sentinels = sentinels
     mirror = getattr(ctx.host, "mirror_checkpoint", None)
     if callable(mirror):
         mirror(box)
     store.capture(seq)
+    notes = list(getattr(store, "redaction_notes", ()) or ())
+    record = getattr(ctx, "record_fact", None)
+    if notes and callable(record):
+        record("checkpoint_redaction", {"omitted": notes})
     state = attempt_state_dir(ctx)
     write_cursor(state, seq=seq, request_id=f"seq_{seq}")
     _sync_remote_state(ctx.host, state)

@@ -81,22 +81,29 @@ class CheckpointStore:
         box_dir: Path,
         *,
         exclude: Iterable[str] = (),
+        sentinels: Iterable[str] = (),
     ) -> None:
         self.attempt_dir = attempt_dir
         self.box_dir = box_dir
         self.root = attempt_dir / CHECKPOINTS_DIR_REL
         self.exclude = set(DEFAULT_EXCLUDED_RELS)
         self.exclude.update(str(item) for item in exclude if str(item).strip())
+        self.sentinels = tuple(item for item in sentinels if item)
+        self.redaction_notes: list[str] = []
         self._cache: dict[str, tuple[int, int, str]] = {}
 
     def capture(self, seq: int) -> Path:
         """Write ``seq_<NNNNNN>.json`` and any new blobs. Return the manifest path."""
         if isinstance(seq, bool) or not isinstance(seq, int) or seq < 1:
             _invalid(f"checkpoint seq must be a positive int, got {seq!r}")
+        self.redaction_notes = []
         entries: dict[str, dict[str, Any]] = {}
         seen: set[str] = set()
         for rel, path in _iter_files(self.box_dir):
             if rel in self.exclude or _excluded(rel, self.exclude):
+                continue
+            payload = self._checkpoint_bytes(rel, path)
+            if payload is None:
                 continue
             seen.add(rel)
             stat = path.stat()
@@ -104,13 +111,13 @@ class CheckpointStore:
             if cached is not None and cached[0] == stat.st_mtime_ns and cached[1] == stat.st_size:
                 digest = cached[2]
             else:
-                digest = _sha256_file(path)
+                digest = hashlib.sha256(payload).hexdigest()
                 self._cache[rel] = (stat.st_mtime_ns, stat.st_size, digest)
-                _write_blob(self.root, digest, path)
+                _write_blob_bytes(self.root, digest, payload)
             entries[rel] = {
                 "kind": "file",
                 "mode": stat.st_mode & 0o777,
-                "size": stat.st_size,
+                "size": len(payload),
                 "mtime_ns": stat.st_mtime_ns,
                 "sha256": digest,
             }
@@ -125,6 +132,22 @@ class CheckpointStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         _atomic_write(path, manifest)
         return path
+
+    def _checkpoint_bytes(self, rel: str, path: Path) -> bytes | None:
+        """Bytes to store. Home text is redacted. A secret in a binary home file is omitted."""
+        raw = path.read_bytes()
+        if not rel.startswith("home/"):
+            return raw
+        if _looks_binary(raw):
+            if _binary_has_secret(raw, self.sentinels):
+                self.redaction_notes.append(rel)
+                return None
+            return raw
+        text = raw.decode("utf-8")
+        from ageval.evidence.redaction import redact_text
+
+        cleaned = redact_text(text, extra_sentinels=self.sentinels)
+        return cleaned.encode("utf-8")
 
     def manifest_path(self, seq: int) -> Path:
         return self.root / f"seq_{seq:06d}.json"
@@ -195,24 +218,25 @@ def _iter_files(box: Path) -> list[tuple[str, Path]]:
     return found
 
 
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        while True:
-            chunk = handle.read(1024 * 1024)
-            if not chunk:
-                break
-            digest.update(chunk)
-    return digest.hexdigest()
+def _looks_binary(raw: bytes) -> bool:
+    sample = raw[:8192]
+    return b"\x00" in sample
 
 
-def _write_blob(root: Path, digest: str, source: Path) -> None:
+def _binary_has_secret(raw: bytes, sentinels: tuple[str, ...]) -> bool:
+    from ageval.evidence.redaction import scan_for_secrets
+
+    text = raw.decode("latin-1")
+    return bool(scan_for_secrets(text, extra_sentinels=sentinels))
+
+
+def _write_blob_bytes(root: Path, digest: str, payload: bytes) -> None:
     dest = root / "blobs" / digest[:2] / digest
     if dest.is_file():
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(f".tmp.{os.getpid()}")
-    shutil.copyfile(source, tmp)
+    tmp.write_bytes(payload)
     os.replace(tmp, dest)
 
 
