@@ -248,3 +248,53 @@ def test_admitted_invokes_stop_at_seal_run(tmp_path: Path) -> None:
     assert log.admitted_run_invoke_count() == 1
     assert log.invoke_already_admitted("req_a")
     assert log.phase_elapsed_ms("seal_run") == 10.0
+
+
+def test_step_elapsed_ms_counts_without_an_invoke_completed_line(tmp_path: Path) -> None:
+    path = tmp_path / "activity.jsonl"
+    log = ActivityLog.open(path)
+    log.append(
+        request_id="phase_run",
+        kind="phase",
+        status="in_flight",
+        payload={"phase": "run"},
+    )
+    clock = iter((12000.0, 25000.0, 25000.0))
+    scope = ActivityScope(log, session_id="sess_a", invoke_request_id="req_a")
+    scope.elapsed_ms_provider = lambda: next(clock)
+    scope.record_tool_call_in_flight("call_1", "execute", "execute", {"command": "ls"})
+    scope.record_tool_call_completed("call_1", outcome="ok", exit_code=0, content="listed")
+    scope.record_model_turn_completed(1, assistant_text="next")
+    completed = [
+        record
+        for record in log.records
+        if record.status == "completed" and record.kind in {"tool_call", "model_turn"}
+    ]
+    assert [record.payload["elapsed_ms"] for record in completed] == [12000.0, 25000.0]
+    assert log.phase_elapsed_ms("run") == 25000.0
+    assert not any(record.kind == "invoke" for record in log.records)
+
+    # A finished step written before this clock existed is still a valid line.
+    bare = {
+        "format": ACTIVITY_FORMAT,
+        "seq": len(log.records) + 1,
+        "at": "2026-10-25T06:00:05.120Z",
+        "request_id": "mt_req_a_0",
+        "kind": "model_turn",
+        "status": "completed",
+        "payload": {
+            "session_id": "sess_a",
+            "invoke_request_id": "req_a",
+            "step_index": 0,
+            "assistant_text": "old",
+            "thought": None,
+            "tool_calls": [],
+            "usage": None,
+            "stop_reason": None,
+        },
+    }
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(bare) + "\n")
+    opened = ActivityLog.open(path)
+    assert opened.corrupt is None
+    assert opened.phase_elapsed_ms("run") == 25000.0

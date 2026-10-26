@@ -41,6 +41,29 @@ def test_completed_invoke_is_not_sent_again(tmp_path: Path) -> None:
     assert second_executor.prompts == []
 
 
+def test_completed_invoke_replay_does_not_spend_another_slot(tmp_path: Path) -> None:
+    evidence = AttemptEvidenceStore(
+        root=tmp_path / "attempt", attempt_id="attempt_a", run_id="run_a"
+    )
+    log = ActivityLog.open(tmp_path / "attempt" / "activity.jsonl")
+    first = _service(evidence, log, ScriptedExecutor(), limit=1)
+    opened = first.open_session(profile_id="solver")
+    session_id = opened["session_id"]
+    request_id = f"req_{session_id}_turn_1"
+    assert first.invoke(session_id=session_id, prompt="hello", request_id=request_id)["ok"] is True
+
+    again = _service(evidence, ActivityLog.open(log.path), ScriptedExecutor(), limit=1)
+    assert again.invoke_quota is not None
+    again.invoke_quota.restore_used(ActivityLog.open(log.path).admitted_run_invoke_count())
+    assert again.invoke_quota.remaining == 0
+    again.open_session(profile_id="solver")
+    replayed = again.invoke(session_id=session_id, prompt="hello", request_id=request_id)
+    assert replayed["ok"] is True
+    assert again.invoke_quota.remaining == 0
+    refused = again.invoke(session_id=session_id, prompt="another", request_id="req_new")
+    assert refused["error"] == "agent_invocation_limit"
+
+
 def test_conflicting_prompt_is_alignment_mismatch(tmp_path: Path) -> None:
     evidence = AttemptEvidenceStore(
         root=tmp_path / "attempt", attempt_id="attempt_a", run_id="run_a"
@@ -62,13 +85,17 @@ def test_conflicting_prompt_is_alignment_mismatch(tmp_path: Path) -> None:
 
 
 def _service(
-    evidence: AttemptEvidenceStore, log: ActivityLog, executor: ScriptedExecutor
+    evidence: AttemptEvidenceStore,
+    log: ActivityLog,
+    executor: ScriptedExecutor,
+    *,
+    limit: int = 4,
 ) -> ParentAgentService:
     binder = ScriptedBinder(executor)
     service = ParentAgentService(
         attempt_id=evidence.attempt_id,
         binder=binder,
-        agent_invocation_limit=4,
+        agent_invocation_limit=limit,
         evidence_store=evidence,
         activity=log,
     )

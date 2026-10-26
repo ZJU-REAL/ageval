@@ -1049,6 +1049,7 @@ class ParentAgentService:
             invoke_request_id=request_id,
             environment_reattached=self.environment_reattached,
         )
+        scope.elapsed_ms_provider = self.elapsed_ms_provider
         bind = getattr(binding.executor, "bind_activity", None)
         if callable(bind):
             bind(scope)
@@ -1190,21 +1191,27 @@ class ParentAgentService:
                 "deadline_utc": None,
             },
         )
+        completed_payload: dict[str, Any] = {
+            "session_id": session_id,
+            "invoke_request_id": invoke_request_id,
+            "tool_call_id": tool_call_id,
+            "outcome": "error" if error else "ok",
+            "exit_code": None,
+            "content": content,
+            "stderr": None,
+            "raw_output": raw_output,
+            "checkpoint_seq": None,
+        }
+        provider = self.elapsed_ms_provider
+        if callable(provider):
+            elapsed = provider()
+            if not isinstance(elapsed, bool) and isinstance(elapsed, int | float):
+                completed_payload["elapsed_ms"] = float(elapsed)
         self.activity.append(
             request_id=request_id,
             kind="tool_call",
             status="completed",
-            payload={
-                "session_id": session_id,
-                "invoke_request_id": invoke_request_id,
-                "tool_call_id": tool_call_id,
-                "outcome": "error" if error else "ok",
-                "exit_code": None,
-                "content": content,
-                "stderr": None,
-                "raw_output": raw_output,
-                "checkpoint_seq": None,
-            },
+            payload=completed_payload,
             prepare=self._checkpoint_prepare(),
         )
         del invocation_id

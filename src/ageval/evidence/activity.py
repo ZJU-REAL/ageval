@@ -694,6 +694,9 @@ class ActivityScope:
         self.session_id = session_id
         self.invoke_request_id = invoke_request_id
         self.environment_reattached = environment_reattached
+        # Parent phase clock (``AttemptCtx.active_elapsed_ms``). Stall time is
+        # already excluded. Unset scopes omit ``elapsed_ms`` so older lines stay valid.
+        self.elapsed_ms_provider: Callable[[], Any] | None = None
 
     def record_model_turn_in_flight(
         self,
@@ -729,16 +732,18 @@ class ActivityScope:
             request_id=f"mt_{self.invoke_request_id}_{step_index}",
             kind="model_turn",
             status="completed",
-            payload={
-                "session_id": self.session_id,
-                "invoke_request_id": self.invoke_request_id,
-                "step_index": step_index,
-                "assistant_text": assistant_text,
-                "thought": thought,
-                "tool_calls": list(tool_calls or []),
-                "usage": usage,
-                "stop_reason": stop_reason,
-            },
+            payload=self._with_elapsed(
+                {
+                    "session_id": self.session_id,
+                    "invoke_request_id": self.invoke_request_id,
+                    "step_index": step_index,
+                    "assistant_text": assistant_text,
+                    "thought": thought,
+                    "tool_calls": list(tool_calls or []),
+                    "usage": usage,
+                    "stop_reason": stop_reason,
+                }
+            ),
         )
 
     def record_model_turn_aborted(
@@ -753,14 +758,16 @@ class ActivityScope:
             request_id=f"mt_{self.invoke_request_id}_{step_index}",
             kind="model_turn",
             status="aborted",
-            payload={
-                "session_id": self.session_id,
-                "invoke_request_id": self.invoke_request_id,
-                "step_index": step_index,
-                "partial_text": partial_text,
-                "partial_thought": partial_thought,
-                "reason": reason,
-            },
+            payload=self._with_elapsed(
+                {
+                    "session_id": self.session_id,
+                    "invoke_request_id": self.invoke_request_id,
+                    "step_index": step_index,
+                    "partial_text": partial_text,
+                    "partial_thought": partial_thought,
+                    "reason": reason,
+                }
+            ),
         )
 
     def record_tool_call_in_flight(
@@ -807,17 +814,19 @@ class ActivityScope:
         request_id: str | None = None,
         prepare: Callable[[int], Mapping[str, Any]] | None = None,
     ) -> ActivityRecord:
-        payload: dict[str, Any] = {
-            "session_id": self.session_id,
-            "invoke_request_id": self.invoke_request_id,
-            "tool_call_id": tool_call_id,
-            "outcome": outcome,
-            "exit_code": exit_code,
-            "content": content,
-            "stderr": stderr,
-            "raw_output": raw_output,
-            "checkpoint_seq": checkpoint_seq,
-        }
+        payload: dict[str, Any] = self._with_elapsed(
+            {
+                "session_id": self.session_id,
+                "invoke_request_id": self.invoke_request_id,
+                "tool_call_id": tool_call_id,
+                "outcome": outcome,
+                "exit_code": exit_code,
+                "content": content,
+                "stderr": stderr,
+                "raw_output": raw_output,
+                "checkpoint_seq": checkpoint_seq,
+            }
+        )
         return self.log.append(
             request_id=request_id or f"tool_{self.session_id}_{tool_call_id}",
             kind="tool_call",
@@ -852,18 +861,32 @@ class ActivityScope:
             request_id=request_id,
             kind="compaction",
             status="completed",
-            payload={
-                "session_id": self.session_id,
-                "invoke_request_id": self.invoke_request_id,
-                "source": source,
-                "replaces_through_seq": replaces_through_seq,
-                "summary_messages": summary_messages,
-                "native_journal_rel": native_journal_rel,
-                "usage": usage,
-                "checkpoint_seq": checkpoint_seq,
-            },
+            payload=self._with_elapsed(
+                {
+                    "session_id": self.session_id,
+                    "invoke_request_id": self.invoke_request_id,
+                    "source": source,
+                    "replaces_through_seq": replaces_through_seq,
+                    "summary_messages": summary_messages,
+                    "native_journal_rel": native_journal_rel,
+                    "usage": usage,
+                    "checkpoint_seq": checkpoint_seq,
+                }
+            ),
             prepare=prepare,
         )
+
+    def _with_elapsed(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Stamp cumulative active phase time. Omitted when no parent clock is bound."""
+        provider = self.elapsed_ms_provider
+        if not callable(provider):
+            return payload
+        elapsed = provider()
+        if isinstance(elapsed, bool) or not isinstance(elapsed, int | float):
+            return payload
+        stamped = dict(payload)
+        stamped["elapsed_ms"] = float(elapsed)
+        return stamped
 
     def completed_steps(self) -> list[ActivityRecord]:
         return [
