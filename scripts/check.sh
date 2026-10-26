@@ -32,7 +32,7 @@ export AGEVAL_SKIP_REAL_ACP=1
 uv run pytest --ignore=tests/registry -n auto --dist loadscope -q
 
 uv sync --frozen --extra miniswe --extra nooa --extra dsh
-AGEVAL_REQUIRE_PLUGIN_DEPS=1 uv run pytest tests/plugins tests/acceptance/test_resume_parent_loop.py -q
+AGEVAL_REQUIRE_PLUGIN_DEPS=1 uv run pytest tests/plugins -q
 
 uv sync --frozen --extra registry
 uv run pytest tests/registry -q

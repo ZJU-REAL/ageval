@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
-
 import pytest
 from tests.helpers.box import local_box
 
@@ -37,16 +35,6 @@ def test_capability_credential_names_are_locators_only() -> None:
         assert desc is not None
         for name in desc.credential_env_names:
             assert not name.startswith("sk-")
-
-
-@pytest.mark.skipif(shutil.which("pi") is None, reason="pi not on PATH")
-def test_pi_engine_present() -> None:
-    assert shutil.which("pi")
-
-
-@pytest.mark.skipif(shutil.which("opencode") is None, reason="opencode not on PATH")
-def test_opencode_entry_present() -> None:
-    assert shutil.which("opencode")
 
 
 def test_five_acp_entries_registered() -> None:

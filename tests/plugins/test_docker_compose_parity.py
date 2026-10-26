@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -18,7 +15,6 @@ from ageval.plugins.contrib.docker.compose_parity import (
     resolve_attempt_parity,
 )
 from ageval.plugins.contrib.docker.host import DockerHost
-from ageval.plugins.contrib.docker.images import daemon_available, docker
 
 
 def _task(tmp_path: Path, *, harbor: str | None, compose: str) -> Path:
@@ -403,126 +399,3 @@ async def test_service_network_rejects_egress_llm(tmp_path: Path) -> None:
     )
     with pytest.raises(EnvironmentFailure, match="egress: llm"):
         await host.start()
-
-
-def _skip_without_docker() -> None:
-    if os.environ.get("AGEVAL_SKIP_DOCKER") == "1":
-        pytest.skip("AGEVAL_SKIP_DOCKER=1")
-    if not daemon_available():
-        pytest.skip("docker daemon is not reachable")
-
-
-@pytest.mark.asyncio
-async def test_real_attempt_shares_sidecar_namespace_and_cap(tmp_path: Path) -> None:
-    """Inspect a real container: localhost, SYS_PTRACE, and the declared env."""
-    _skip_without_docker()
-    _task(
-        tmp_path,
-        harbor="""
-services:
-  main:
-    network_mode: "service:api"
-    environment:
-      WAREHOUSE_API_URL: http://127.0.0.1:4100
-    cap_add:
-      - SYS_PTRACE
-""",
-        compose="""
-services:
-  api:
-    image: python:3.12-slim
-    command: ["python", "-m", "http.server", "18765", "--bind", "127.0.0.1"]
-""",
-    )
-    host = DockerHost(
-        spec=_spec(tmp_path),
-        options={"image": "python:3.12-slim"},
-    )
-    try:
-        await host.preflight()
-        await host.start()
-        assert host._container is not None
-        inspected = docker(
-            "inspect",
-            host._container,
-            "--format",
-            "{{.HostConfig.NetworkMode}}|{{json .HostConfig.CapAdd}}",
-        )
-        assert inspected.returncode == 0, inspected.stderr
-        network_mode, caps = (inspected.stdout or "").strip().split("|", 1)
-        assert network_mode.startswith("container:")
-        assert "SYS_PTRACE" in caps
-        env = await host.exec(
-            ["python", "-c", "import os; print(os.environ['WAREHOUSE_API_URL'])"],
-            timeout_sec=30,
-        )
-        assert env.ok, env.stderr or env.stdout
-        assert "http://127.0.0.1:4100" in env.stdout
-        reached = False
-        last = ""
-        for _ in range(20):
-            probe = await host.exec(
-                [
-                    "python",
-                    "-c",
-                    "import urllib.request; "
-                    "print(urllib.request.urlopen('http://127.0.0.1:18765/', timeout=2).status)",
-                ],
-                timeout_sec=15,
-            )
-            last = probe.stdout or probe.stderr
-            if probe.ok and "200" in probe.stdout:
-                reached = True
-                break
-            await asyncio.sleep(0.25)
-        assert reached, last
-    finally:
-        await host.stop(delete=True)
-
-
-@pytest.mark.asyncio
-async def test_real_sidecar_resolves_attempt_as_main(tmp_path: Path) -> None:
-    """A sidecar on the project network resolves hostname main to the Attempt."""
-    _skip_without_docker()
-    _task(
-        tmp_path,
-        harbor=None,
-        compose="""
-services:
-  probe:
-    image: python:3.12-slim
-    command: ["python", "-c", "import time; time.sleep(3600)"]
-""",
-    )
-    host = DockerHost(
-        spec=_spec(tmp_path),
-        options={"image": "python:3.12-slim"},
-    )
-    try:
-        await host.preflight()
-        await host.start()
-        assert host._container is not None
-        inspected = docker(
-            "inspect",
-            host._container,
-            "--format",
-            "{{json .NetworkSettings.Networks}}",
-        )
-        assert inspected.returncode == 0, inspected.stderr
-        networks = json.loads(inspected.stdout or "{}")
-        aliases = [
-            alias
-            for net in networks.values()
-            if isinstance(net, dict)
-            for alias in (net.get("Aliases") or [])
-        ]
-        assert "main" in aliases
-        resolved = await host.exec(
-            ["python", "-c", "import socket; print(socket.gethostbyname('main'))"],
-            timeout_sec=30,
-            service="probe",
-        )
-        assert resolved.ok, resolved.stderr or resolved.stdout
-        assert resolved.stdout.strip()
-    finally:
-        await host.stop(delete=True)

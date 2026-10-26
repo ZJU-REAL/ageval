@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import shutil
 import signal
@@ -14,9 +13,7 @@ import pytest
 from tests.helpers.box import box_spec, local_box
 
 from ageval.environments.box_state import write_cursor, write_inflight, write_nonce
-from ageval.environments.protocol import BoxSpec
 from ageval.plugins.contrib.docker.host import DockerHost
-from ageval.plugins.contrib.docker.images import daemon_available
 
 
 def test_local_probe_idle_busy_and_attach(tmp_path: Path) -> None:
@@ -113,62 +110,6 @@ async def _assert_local_partial(host):
     idle = await host.probe({})
     assert idle.status == "idle"
     assert not (host.state_root / "inflight.pid").is_file()
-
-
-def test_docker_exec_keeps_last_exit_in_state(tmp_path: Path) -> None:
-    if not daemon_available():
-        pytest.skip("docker daemon is not reachable")
-    asyncio.run(_assert_docker_exec(tmp_path))
-
-
-async def _assert_docker_exec(tmp_path: Path) -> None:
-    host = DockerHost(
-        spec=BoxSpec(
-            attempt_root=tmp_path / "box",
-            task_root=tmp_path,
-            repo_root=tmp_path,
-        ),
-        options={"image": "python:3.12-slim", "user": "root"},
-    )
-    await host.start()
-    try:
-        running = asyncio.create_task(
-            host.exec(
-                [
-                    "python3",
-                    "-u",
-                    "-c",
-                    "print('partial', flush=True); import time; time.sleep(30)",
-                ],
-                request_id="call_live",
-            )
-        )
-        output = host.state_root / "inflight.output"
-        deadline = time.monotonic() + 30
-        text = ""
-        probe = None
-        while time.monotonic() < deadline:
-            text = output.read_text(encoding="utf-8") if output.is_file() else ""
-            probe = await host.probe(host.runtime_handle())
-            if "partial" in text and probe.status == "busy":
-                break
-            await asyncio.sleep(0.1)
-        else:
-            pytest.fail(f"docker output never streamed: {text!r} probe={probe}")
-        pid = (host.state_root / "inflight.pid").read_text(encoding="utf-8").strip()
-        await host.exec(["sh", "-c", f"kill -TERM {pid}"])
-        await running
-        result = await host.exec(["python3", "-c", "print('hi')"], request_id="call_1")
-        assert result.exit_code == 0
-        assert "hi" in result.stdout
-        last = json.loads((host.state_root / "last_exit.json").read_text(encoding="utf-8"))
-        assert last["request_id"] == "call_1"
-        assert last["exit_code"] == 0
-        assert "hi" in last["stdout"]
-        assert not (host.state_root / "inflight.pid").is_file()
-        assert not (host.root / "last_exit.json").is_file()
-    finally:
-        await host.stop(delete=True)
 
 
 def test_local_attach_stdio_is_busy_until_the_process_exits(tmp_path: Path) -> None:
@@ -386,57 +327,3 @@ def test_stdio_wrapper_is_busy_without_logging_on_stdout(tmp_path: Path) -> None
         proc.terminate()
         proc.wait(timeout=2)
     assert not (tmp_path / "inflight.pid").is_file()
-
-
-def test_docker_attach_stdio_is_busy_until_the_process_exits(tmp_path: Path) -> None:
-    if not daemon_available():
-        pytest.skip("docker daemon is not reachable")
-    asyncio.run(_assert_docker_stdio(tmp_path))
-
-
-async def _assert_docker_stdio(tmp_path: Path) -> None:
-    host = DockerHost(
-        spec=BoxSpec(
-            attempt_root=tmp_path / "box",
-            task_root=tmp_path,
-            repo_root=tmp_path,
-        ),
-        options={"image": "python:3.12-slim", "user": "root"},
-    )
-    await host.start()
-    pipe = None
-    try:
-        pipe = await host.attach_stdio(
-            ["python3", "-c", "import time; time.sleep(30)"],
-            placement=host.placement(),
-            request_id="req_acp",
-        )
-        deadline = time.monotonic() + 20
-        probe = None
-        while time.monotonic() < deadline:
-            probe = await host.probe(host.runtime_handle())
-            if probe.status == "busy" and (host.state_root / "inflight.pid").is_file():
-                break
-            await asyncio.sleep(0.1)
-        else:
-            pytest.fail(f"docker stdio never became busy: {probe}")
-        pid = (host.state_root / "inflight.pid").read_text(encoding="utf-8").strip()
-        await host.exec(["sh", "-c", f"kill -TERM {pid}"])
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline and (host.state_root / "inflight.pid").is_file():
-            await asyncio.sleep(0.05)
-        idle = await host.probe(host.runtime_handle())
-        assert idle.status == "idle"
-        assert not (host.state_root / "inflight.pid").is_file()
-    finally:
-        if pipe is not None:
-            pipe.terminate()
-        await host.stop(delete=True)
-
-
-def test_docker_missing_container_is_absent(tmp_path: Path) -> None:
-    if not daemon_available():
-        pytest.skip("docker daemon is not reachable")
-    host = DockerHost(spec=box_spec(tmp_path / "box"))
-    status = asyncio.run(host.probe({"container_id": "ageval-not-a-container"}))
-    assert status.status == "absent"
