@@ -10,8 +10,8 @@ Implementation modules live in `src/ageval_sdk/`, `src/ageval/attempt/phases/eva
 
 1. **Subprocess isolation**: The parent control plane executes `tasks/<id>/run.py` (`async def run(ctx: RunContext) -> RunTerminal`) and `tasks/<id>/evaluator.py` inside isolated worker subprocesses (`src/ageval/runtime/task_worker.py` and `eval_worker.py`) rather than importing task modules in-process.
 2. **One-way SDK dependency**: `ageval_sdk` imports only public DTOs and protocol shapes and NEVER imports `ageval` control-plane internals, never mints Attempt identity, never reads host credentials, never starts/stops environments, and never binds `PASS` or `FAIL`.
-3. **Evaluation barrier and gold isolation**: Reference materials under `tasks/<id>/evaluation/` (`gold`) remain unmounted during `environment` and `run`. They are uploaded to the scoring host only after `seal_run` drains all solver sessions and `AttemptCtx.assert_writers_stopped()` succeeds at the entry of `evaluate`.
-4. **Verdict exclusivity**: `PASS` and `FAIL` enter `Result` exclusively through `AttemptCtx.bind_evaluation` during `evaluate`. `RunTerminal.completed`, trajectory completion, ACP `end_turn`, raw judge text, or individual `checks` exit codes never set `Result.status` directly.
+3. **Evaluation barrier and gold isolation**: Reference materials under `tasks/<id>/evaluation/` (`gold`) remain unmounted during `environment` and `run`. They are uploaded to the scoring host only after `seal_run` drains all solver sessions and `AttemptCtx.assert_writers_stopped()` succeeds at the entry of `evaluate`. A terminal-action replay does not run `run.py`. Gold stays unmounted through that run phase. `--evaluate` enters `evaluate` and uses `evaluator.py`. Without `--evaluate`, the evaluate phase does not run.
+4. **Verdict exclusivity**: `PASS` and `FAIL` enter `Result` exclusively through `AttemptCtx.bind_evaluation` during `evaluate`. `RunTerminal.completed`, trajectory completion, ACP `end_turn`, raw judge text, individual `checks` exit codes, and replay completion never set `Result.status` to PASS or FAIL.
 
 | `run.py` Owns | `run.py` Must Never Do |
 | --- | --- |
