@@ -52,6 +52,7 @@ class ResultStore(ResultStoreProtocol):
                         row.score,
                         row.error_json,
                         row.limit_name,
+                        row.fork_json or "",
                     ),
                 )
                 conn.commit()
@@ -309,6 +310,7 @@ class ResultStore(ResultStoreProtocol):
                 score = None
         error_json = str(r["error_json"]) if "error_json" in keys and r["error_json"] else None
         limit_name = str(r["limit_name"]) if "limit_name" in keys and r["limit_name"] else None
+        fork_json = str(r["fork_json"]) if "fork_json" in keys and r["fork_json"] else ""
         return AttemptResultRow(
             run_id=r["run_id"],
             dataset_id=r["dataset_id"],
@@ -330,6 +332,7 @@ class ResultStore(ResultStoreProtocol):
             score=score,
             error_json=error_json,
             limit_name=limit_name,
+            fork_json=fork_json,
         )
 
     @staticmethod

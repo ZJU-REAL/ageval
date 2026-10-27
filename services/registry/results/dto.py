@@ -39,6 +39,9 @@ def attempt_to_dict(row: AttemptResultRow) -> dict[str, Any]:
         out["score"] = row.score
     out["error"] = _load_error_json(row.error_json)
     out["limit"] = row.limit_name or None
+    fork = _load_error_json(row.fork_json)
+    if isinstance(fork, dict) and fork.get("parent_attempt_id"):
+        out["fork"] = fork
     return out
 
 

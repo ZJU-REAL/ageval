@@ -475,6 +475,12 @@ export type AttemptMeta = {
   score?: number | null;
   error?: string | { phase?: string | null; title?: string; message?: string } | null;
   limit?: string | null;
+  fork?: {
+    parent_attempt_id?: string;
+    checkpoint_seq?: number | null;
+    source_model?: string;
+    continuation_model?: string;
+  } | null;
 };
 
 export async function listAttempts(

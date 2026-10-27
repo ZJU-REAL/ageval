@@ -85,6 +85,12 @@ def _dump_error(value: object) -> str | None:
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
+def _dump_fork(value: object) -> str:
+    if not isinstance(value, dict) or not value.get("parent_attempt_id"):
+        return ""
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
 def _refuse_snapshot_share_import(meta: Mapping[str, Any], archive: Path) -> None:
     from ageval.registry.share_snapshot import (
         SNAPSHOT_SHARE_KIND,
@@ -217,6 +223,7 @@ class ResultService:
             score=score,
             error_json=error_json,
             limit_name=limit_name,
+            fork_json=_dump_fork(meta.get("fork")),
         )
         try:
             self.blobs.put_if_absent(blob_digest, archive, prefix="results")
