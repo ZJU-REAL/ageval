@@ -37,6 +37,16 @@ ageval run <dataset> --task <task_id> --resume <attempt_id>
 
 `result.json` 已经存在、锁定配置摘要对不上、或环境还在跑这次 Attempt 时，命令以 exit 2 结束，不写 `result.json`。
 
+## 从保留的检查点 fork
+
+```bash
+ageval run <dataset> --task <task_id> --keep-recovery-state
+ageval checkpoints <dataset> --run <attempt_id>
+ageval run <dataset> --task <task_id> --fork <attempt_id> --checkpoint <seq> --model <model_id>
+```
+
+`--keep-recovery-state` 在源 Attempt 封存后仍保留 `activity.jsonl` 和 `checkpoints/`。`ageval checkpoints` 列出切点。`--fork` 从一次已完成的 run 阶段切点新开 Attempt，使用新的环境、源 harness，以及你传入的模型。父 Attempt 保持封存。默认 pass@k 不计入这次子 Attempt。
+
 <Callout type="info" title="整份 dataset 跑一遍">
 
 不加 `--task` 就会整份跑，所有成员进同一个 job。`ageval status <suite_run_id> --dataset <dataset>` 看 progress，`ageval cancel <suite_run_id> --dataset <dataset>` 叫停。

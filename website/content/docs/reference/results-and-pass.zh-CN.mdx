@@ -30,6 +30,8 @@ description: Result 怎么读；pass@k 是 job 指标，不是整份 dataset 的
 | `per_task` | 各 task 的 `n` / `c` 与 per-k 映射（审计） |
 | 整份汇总分 | 各 **task** 上该指标的 **mean**（样本不够的 task 不进分母） |
 
+带 `fork` 的 Attempt 不进入默认 pass@k 和 pass^k。它们仍作为单独的行保留。
+
 ### `metrics.pass_at_k` / `pass_power_k` 契约
 
 每个键是 **字符串化的 k**（如 `"1"`、`"2"`、`"5"`），值为：
