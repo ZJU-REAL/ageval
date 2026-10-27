@@ -19,6 +19,7 @@ from ageval.evidence.replay_input import (
     action_divergence,
 )
 from ageval.evidence.store import REPLAY_OBSERVATIONS_REL, TASK_ARTIFACTS_REL
+from ageval.evidence.trajectory import TRAJECTORY_FILENAME
 
 _SESSION = "replay"
 _INVOKE = "replay"
@@ -187,6 +188,155 @@ def _store(
     if divergence is not None:
         payload["first_divergence"] = divergence
     ctx.replay_provenance = payload
+
+
+def replay_display_rows(ctx: Any) -> list[dict[str, object]]:
+    """Sealed trajectory rows for a replay that did not invoke a model.
+
+    The page reads ``trajectory.jsonl``. Replay has no invocation archive, so
+    the fold would otherwise seal an empty file. These rows are the task text
+    from the source trajectory plus each action actually executed here, with
+    the new observation. Model usage is not copied.
+    """
+    plan = ctx.replay_plan if isinstance(getattr(ctx, "replay_plan", None), Mapping) else None
+    if plan is None:
+        return []
+    actions = plan.get("actions")
+    planned = (
+        [item for item in actions if isinstance(item, Mapping)] if isinstance(actions, list) else []
+    )
+    observations = _read_observations(getattr(getattr(ctx, "evidence", None), "root", None))
+    by_id = {str(item.get("tool_call_id") or ""): item for item in observations}
+    prompt, profile_id = _source_prompt(ctx)
+    session_id = _SESSION
+    rows: list[dict[str, object]] = []
+    if prompt:
+        rows.append(
+            {
+                "type": "turn",
+                "role": "user",
+                "content": prompt,
+                "turn_index": 1,
+                "session_id": session_id,
+                "source": "ageval",
+                "profile_id": profile_id,
+            }
+        )
+    for action in planned:
+        if action.get("executable") is not True:
+            continue
+        call_id = str(action.get("tool_call_id") or "")
+        arguments = action.get("arguments") if isinstance(action.get("arguments"), Mapping) else {}
+        command = str(arguments.get("command") or "")
+        observed = by_id.get(call_id, {})
+        exit_code = observed.get("exit_code")
+        status = "completed" if exit_code == 0 else "failed"
+        raw = observed.get("raw_output")
+        output = observed.get("output")
+        content = raw if isinstance(raw, str) and raw else output if isinstance(output, str) else ""
+        rows.append(
+            {
+                "type": "tool_call",
+                "tool_call_id": call_id,
+                "function_name": "bash",
+                "title": "bash",
+                "args": {"command": command},
+                "status": status,
+                "turn_index": 1,
+                "session_id": session_id,
+                "source": "miniswe",
+                "profile_id": profile_id,
+            }
+        )
+        rows.append(
+            {
+                "type": "observation",
+                "tool_call_id": call_id,
+                "status": status,
+                "content": content,
+                "raw_output": content,
+                "turn_index": 1,
+                "session_id": session_id,
+                "source": "miniswe",
+                "profile_id": profile_id,
+            }
+        )
+    provenance = (
+        ctx.replay_provenance
+        if isinstance(getattr(ctx, "replay_provenance", None), Mapping)
+        else {}
+    )
+    rows.append(
+        {
+            "type": "terminal",
+            "ok": provenance.get("status") != "error",
+            "error": None,
+            "turn_index": 1,
+            "session_id": session_id,
+            "source": "ageval",
+            "profile_id": profile_id,
+            "metadata": {
+                "executor_kind": "miniswe",
+                "profile_id": profile_id,
+                "replay": True,
+                "parent_attempt_id": str(
+                    provenance.get("parent_attempt_id")
+                    or getattr(ctx, "replay_source_id", "")
+                    or ""
+                ),
+                "replay_status": str(provenance.get("status") or ""),
+            },
+        }
+    )
+    return rows
+
+
+def _read_observations(root: Path | None) -> list[dict[str, object]]:
+    if root is None:
+        return []
+    path = root / REPLAY_OBSERVATIONS_REL
+    if not path.is_file():
+        return []
+    rows: list[dict[str, object]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict):
+            rows.append(item)
+    return rows
+
+
+def _source_prompt(ctx: Any) -> tuple[str, str]:
+    parent = str(getattr(ctx, "replay_source_id", "") or "")
+    dataset = getattr(ctx, "dataset_root", None)
+    if not parent or not isinstance(dataset, Path) or parent in {".", ".."} or "/" in parent:
+        return "", "solver"
+    path = dataset / ".ageval" / "runs" / parent / TRAJECTORY_FILENAME
+    if not path.is_file():
+        return "", "solver"
+    prompt = ""
+    profile_id = "solver"
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(row, dict):
+            continue
+        if row.get("type") == "turn" and row.get("role") == "user" and not prompt:
+            prompt = str(row.get("content") or "")
+        raw_profile = row.get("profile_id")
+        if isinstance(raw_profile, str) and raw_profile.strip():
+            profile_id = raw_profile.strip()
+            if prompt:
+                break
+    return prompt, profile_id
 
 
 def _artifact_divergence(ctx: Any, source: Path) -> dict[str, object] | None:

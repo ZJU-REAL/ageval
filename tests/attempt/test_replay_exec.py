@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -81,6 +82,64 @@ def _ctx(tmp_path: Path, actions: list[dict[str, object]]) -> SimpleNamespace:
         replay_source_dir=tmp_path / "source",
         replay_provenance=None,
     )
+
+
+def test_replay_display_rows_include_the_source_prompt_and_new_observation(tmp_path: Path) -> None:
+    source = tmp_path / "dataset" / ".ageval" / "runs" / "source-attempt"
+    source.mkdir(parents=True)
+    (source / "trajectory.jsonl").write_text(
+        json.dumps(
+            {
+                "type": "turn",
+                "role": "user",
+                "content": "Copy note.txt to out.txt, then submit.\n",
+                "profile_id": "solver",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    child = tmp_path / "dataset" / ".ageval" / "runs" / "child"
+    (child / "replay").mkdir(parents=True)
+    (child / "replay" / "observations.jsonl").write_text(
+        json.dumps(
+            {
+                "ordinal": 1,
+                "tool_call_id": "bash_1",
+                "exit_code": 0,
+                "output": "",
+                "raw_output": "",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    ctx = SimpleNamespace(
+        replay_plan={
+            "actions": [
+                {
+                    "ordinal": 1,
+                    "tool_call_id": "bash_1",
+                    "executable": True,
+                    "arguments": {"command": "cp note.txt out.txt"},
+                }
+            ]
+        },
+        replay_source_id="source-attempt",
+        dataset_root=tmp_path / "dataset",
+        evidence=SimpleNamespace(root=child),
+        replay_provenance={"status": "matched", "parent_attempt_id": "source-attempt"},
+    )
+    from ageval.attempt.replay_exec import replay_display_rows
+
+    rows = replay_display_rows(ctx)
+    assert rows[0]["role"] == "user"
+    assert "Copy note.txt" in str(rows[0]["content"])
+    assert rows[1]["type"] == "tool_call"
+    assert rows[1]["args"] == {"command": "cp note.txt out.txt"}
+    assert rows[2]["type"] == "observation"
+    assert rows[-1]["type"] == "terminal"
+    assert "usage" not in rows[-1]
 
 
 def test_replay_executes_and_ignores_recorded_stdout(tmp_path: Path) -> None:
