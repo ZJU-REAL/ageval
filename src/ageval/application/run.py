@@ -34,7 +34,7 @@ from ageval.config.model import LockedTaskConfig, thaw
 from ageval.config.resources import resource_options
 from ageval.environments.protocol import BoxSpec
 from ageval.evaluation.bind import AttemptResult, bind_result
-from ageval.evidence.checkpoints import prune_checkpoints, prune_recovery_state
+from ageval.evidence.checkpoints import prune_recovery_bundle, prune_recovery_state
 from ageval.evidence.locators import default_runs_root
 from ageval.evidence.store import (
     ACTIVITY_LOG_REL,
@@ -135,6 +135,7 @@ async def run_attempt(
     profiles_path: Path | str | None = None,
     overrides: dict[str, Any] | None = None,
     keep_workspace: bool = False,
+    keep_recovery_state: bool = False,
     keep_vendor_raw: bool = False,
     force_build: bool = False,
     identity_factory: IdentityFactory | None = None,
@@ -146,29 +147,77 @@ async def run_attempt(
     resume_attempt_id: str | None = None,
     suite_run_id: str | None = None,
     recover_unsealed: bool = False,
+    fork: Any = None,
 ) -> tuple[int, AttemptResult]:
     """Run one foreground Attempt and return its exit code and result."""
     from ageval.application.composition import build_lock_command
+    from ageval.application.fork import (
+        ForkRejection,
+        model_override,
+        prepare_fork,
+        solver_role_from_source,
+        source_profiles_file,
+    )
+
+    if fork is not None and (resume_attempt_id or recover_unsealed or suite_run_id):
+        return _refused_plain(
+            kind="",
+            evidence_path="",
+            title="fork_resume_exclusive",
+            message="--fork cannot be combined with --resume",
+        )
+    fork_overrides = dict(overrides or {})
+    if fork is not None:
+        try:
+            role = solver_role_from_source(
+                Path(dataset),
+                fork.source_attempt_id,
+                fork.checkpoint_seq,
+            )
+        except ForkRejection as exc:
+            return _refused_plain(
+                kind="",
+                evidence_path="",
+                title=exc.error_code,
+                message=exc.message,
+            )
+        fork_overrides.update(model_override(role, fork.model))
+        profiles_path = source_profiles_file(Path(dataset), fork.source_attempt_id)
 
     # Lock and preflight run before AttemptCtx exists; notify the observer
     # directly so the live label covers the whole Attempt, not just the phases.
     if on_phase is not None:
         on_phase("started", "lock")
-    locked = build_lock_command().lock(
-        dataset,
-        task,
-        profile=profile,
-        profiles_path=profiles_path,
-        overrides=overrides,
-        force_build=force_build,
-        allow_prepare=allow_prepare,
-        layout=layout,
-    )
+    try:
+        locked = build_lock_command().lock(
+            dataset,
+            task,
+            profile=profile,
+            profiles_path=profiles_path,
+            overrides=fork_overrides or None,
+            force_build=force_build,
+            allow_prepare=allow_prepare,
+            layout=layout,
+        )
+    finally:
+        if fork is not None and profiles_path is not None:
+            Path(profiles_path).unlink(missing_ok=True)
     if on_phase is not None:
         on_phase("finished", "lock")
     lock = locked.lock
     dataset_root = locked.resolved.dataset_root
     task_root = locked.resolved.task_dir
+    fork_plan = None
+    if fork is not None:
+        try:
+            fork_plan = prepare_fork(dataset_root, fork, child_lock=locked.summary())
+        except ForkRejection as exc:
+            return _refused_plain(
+                kind=str(lock.environment),
+                evidence_path="",
+                title=exc.error_code,
+                message=exc.message,
+            )
 
     factory = identity_factory or IdentityFactory()
     resumed = _locate_resume(
@@ -209,15 +258,28 @@ async def run_attempt(
         evidence.sync_invocation_counters()
     if not (evidence.root / "lock.json").is_file():
         evidence.write_lock_summary(locked.summary())
-    activity = resumed.activity or _open_fresh_activity(
-        evidence,
-        lock=lock,
-        run_id=run_id,
-        trial_id=trial_id,
-        attempt_id=attempt_id,
-        attempt_index=attempt_index,
-        suite_run_id=suite_run_id,
-    )
+    if fork_plan is not None:
+        from ageval.application.fork import copy_fork_prefix
+
+        activity = copy_fork_prefix(
+            fork_plan.source_dir,
+            evidence.root,
+            seq=fork_plan.checkpoint_seq,
+            run_id=run_id,
+            trial_id=trial_id,
+            attempt_id=attempt_id,
+            digest=lock.digest,
+        )
+    else:
+        activity = resumed.activity or _open_fresh_activity(
+            evidence,
+            lock=lock,
+            run_id=run_id,
+            trial_id=trial_id,
+            attempt_id=attempt_id,
+            attempt_index=attempt_index,
+            suite_run_id=suite_run_id,
+        )
     if resumed.activity is not None:
         bind_sentinels(activity, evidence.sentinels)
     if activity.corrupt:
@@ -291,6 +353,10 @@ async def run_attempt(
         keep_vendor_raw=keep_vendor_raw,
         on_phase=on_phase,
         activity=activity,
+        fork_checkpoint_seq=None if fork_plan is None else fork_plan.checkpoint_seq,
+        fork_provenance=None
+        if fork_plan is None
+        else fork_plan.provenance(child_digest=lock.digest, verified=True),
     )
     _bind_evaluate_session_target(ctx, agent_service)
     parent = agent_service.service
@@ -298,9 +364,9 @@ async def run_attempt(
     parent.elapsed_ms_provider = ctx.active_elapsed_ms
     parent.checkpoint_capture = lambda seq: capture_box(ctx, seq)
     parent.read_partial = lambda: partial_output(ctx)
-    if parent.invoke_quota is not None and resumed.activity is not None:
+    if fork_plan is None and parent.invoke_quota is not None and resumed.activity is not None:
         parent.invoke_quota.restore_used(activity.admitted_run_invoke_count())
-    if resumed.activity is not None:
+    if fork_plan is None and resumed.activity is not None:
         decision = await classify_environment(ctx)
         parent.environment_reattached = bool(ctx.recovery_attached)
         if decision == "busy":
@@ -327,6 +393,7 @@ async def run_attempt(
         # The run phase stops it too; this is the guarantee for earlier failures.
         agent_service.stop()
 
+    fork_doc = ctx.fork_provenance if isinstance(ctx.fork_provenance, dict) else None
     result = bind_result(
         evaluator_raw=ctx.evaluation_result,
         kind=host.kind,
@@ -337,6 +404,7 @@ async def run_attempt(
         error=_error_fact(ctx),
         limit=_fact_detail(ctx, "limit_reached", "name"),
         facts=tuple(ctx.facts_as_list()),
+        fork=fork_doc,
     )
     facts = ctx.facts_as_list()
     summary: dict[str, Any] = {
@@ -348,16 +416,39 @@ async def run_attempt(
     extra = ctx.summary_extra
     if extra:
         summary["extra"] = extra
+    if fork_doc:
+        summary["fork"] = fork_doc
     evidence.write_summary(summary)
     _write_result(evidence, result)
-    if (
-        not keep_workspace
-        and (evidence.root / TRAJECTORY_FILENAME).is_file()
-        and (evidence.root / "result.json").is_file()
-    ):
-        prune_checkpoints(evidence.root)
-        prune_recovery_state(evidence.root)
+    _prune_settled_recovery(
+        evidence.root,
+        keep_workspace=keep_workspace,
+        keep_recovery_state=keep_recovery_state,
+    )
     return _exit_code(result), result
+
+
+def _prune_settled_recovery(
+    attempt_dir: Path,
+    *,
+    keep_workspace: bool,
+    keep_recovery_state: bool,
+) -> None:
+    """Drop recovery files only after the display archive is sealed.
+
+    Interrupted Attempts keep ``activity.jsonl`` and ``checkpoints/`` so
+    ``--resume`` works without ``--keep-recovery-state``. ``state/`` is
+    environment probe state and follows ``--keep-workspace``.
+    """
+    settled = (attempt_dir / TRAJECTORY_FILENAME).is_file() and (
+        attempt_dir / "result.json"
+    ).is_file()
+    if not settled:
+        return
+    if not keep_recovery_state:
+        prune_recovery_bundle(attempt_dir)
+    if not keep_workspace:
+        prune_recovery_state(attempt_dir)
 
 
 @dataclass

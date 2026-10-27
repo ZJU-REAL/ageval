@@ -7,6 +7,7 @@ import shutil
 import tempfile
 import urllib.error
 import urllib.request
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -434,6 +435,7 @@ class RegistryClient:
         score: float | None = None,
         error: Any = None,
         limit: str | None = None,
+        fork: Mapping[str, object] | None = None,
     ) -> dict[str, Any]:
         meta: dict[str, Any] = {
             "run_id": run_id,
@@ -461,6 +463,8 @@ class RegistryClient:
         meta["error"] = error
         if isinstance(limit, str) and limit.strip():
             meta["limit"] = limit.strip()
+        if isinstance(fork, dict) and fork.get("parent_attempt_id"):
+            meta["fork"] = fork
         http_status, raw, _ = self._put_multipart(
             "/v1/results/attempts",
             meta=meta,

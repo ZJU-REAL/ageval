@@ -230,8 +230,8 @@ def _restore_episode(
                 {"role": "assistant", "content": str(record.payload.get("assistant_text") or "")}
             )
             turns += 1
-            raw_usage = record.payload.get("usage")
-            _merge_usage(usage, raw_usage)
+            if record.payload.get("inherited") is not True:
+                _merge_usage(usage, record.payload.get("usage"))
             if record.payload.get("stop_reason") == "format_error":
                 format_errors += 1
                 assistant = str(record.payload.get("assistant_text") or "")

@@ -40,6 +40,35 @@ class ResultError:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class ForkChange:
+    """One solver-model field that differs between the source lock and the child."""
+
+    role: str
+    path: str
+    # JSON names match the fork contract. Python cannot bind the keyword ``from``.
+    before: str = field(metadata={"json_name": "from"})
+    after: str = field(metadata={"json_name": "to"})
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ForkProvenance:
+    """``result.fork`` and ``summary.fork``. Absent when the Attempt is not a fork."""
+
+    format: Literal["ageval.fork/1"]
+    parent_attempt_id: str
+    checkpoint_seq: int
+    source_locked_config_digest: str
+    child_locked_config_digest: str
+    source_model: str
+    continuation_model: str
+    continuation_model_verified: bool
+    context_conversion: str
+    executor_kind: str
+    changes: list[ForkChange]
+    shared_prefix_usage: MeasuredUsage | None = _omit()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class AttemptResultDocument:
     """``result.json`` and ``summary.result``. ``facts`` is not on this object."""
 
@@ -55,6 +84,7 @@ class AttemptResultDocument:
     metrics: dict[str, Any]
     score: float | None = _null()
     status: ResultStatus
+    fork: ForkProvenance | None = _omit()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -97,6 +127,7 @@ class SummaryDocument:
     phase_timing: PhaseTimingDocument
     keep_vendor_raw: bool
     extra: dict[str, Any] | None = _omit()
+    fork: ForkProvenance | None = _omit()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -267,11 +298,12 @@ def _object_schema(
         if spec.metadata.get("presence") == "omit":
             pass
         node, node_refs, node_unions = _type_schema(hints[spec.name], dict(spec.metadata))
-        properties[spec.name] = node
+        name = str(spec.metadata.get("json_name") or spec.name)
+        properties[name] = node
         refs.extend(node_refs)
         unions.extend(node_unions)
         if spec.metadata.get("presence") != "omit":
-            required.append(spec.name)
+            required.append(name)
     schema: dict[str, Any] = {
         "type": "object",
         "additionalProperties": False,

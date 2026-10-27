@@ -9,6 +9,7 @@ the phase. ``summary_enrich`` runs once after the seal step, successful or not.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
@@ -16,8 +17,13 @@ from typing import Any
 from ageval.attempt.ctx import AttemptCtx
 from ageval.attempt.emit import emit
 from ageval.evidence.invocation import read_invocation_payload
+from ageval.evidence.locators import default_runs_root
 from ageval.evidence.slim import slim_sealed_attempt
-from ageval.evidence.trajectory import turn_rows, write_evaluation_observation
+from ageval.evidence.trajectory import (
+    TRAJECTORY_FILENAME,
+    turn_rows,
+    write_evaluation_observation,
+)
 from ageval.plugins.binding import bind_winner
 from ageval.plugins.slots import (
     SUMMARY_ENRICH,
@@ -47,6 +53,10 @@ async def run(ctx: AttemptCtx) -> None:
     async def fold() -> None:
         nonlocal turns
         turns = await _fold_invocations(ctx, ctx.evidence.list_invocations(), include_user=True)
+        if not any(turns):
+            inherited = inherited_display_rows(ctx)
+            if inherited:
+                turns = [inherited]
 
     async def seal() -> None:
         impl = bind_winner(ctx.registry, ctx.bindings, TRAJECTORY_SEAL)
@@ -107,6 +117,51 @@ async def _fold_invocations(
         shaped = await emit(ctx, TRAJECTORY_ENRICH, shaped)
         turns.append(turn_rows(**_fields(shaped, payload), include_user=include_user))
     return turns
+
+
+def inherited_display_rows(ctx: AttemptCtx) -> list[dict[str, object]]:
+    """Parent display trajectory for a fork that replayed a finished invoke.
+
+    A completed invoke returns the old result and writes no new events. The
+    parent's sealed ``trajectory.jsonl`` is that invoke. Copy it so the child
+    page is not an empty trajectory. A cut inside the invoke is not this case:
+    later parent lines must not be treated as the child's steps.
+    """
+    seq = getattr(ctx, "fork_checkpoint_seq", None)
+    log = getattr(ctx, "activity", None)
+    if not isinstance(seq, int) or isinstance(seq, bool) or log is None:
+        return []
+    records = getattr(log, "records", None)
+    if not isinstance(records, list):
+        return []
+    completed_invoke = any(
+        getattr(record, "seq", None) == seq
+        and getattr(record, "kind", None) == "invoke"
+        and getattr(record, "status", None) == "completed"
+        for record in records
+    )
+    if not completed_invoke:
+        return []
+    prov = getattr(ctx, "fork_provenance", None)
+    parent = prov.get("parent_attempt_id") if isinstance(prov, dict) else None
+    if not isinstance(parent, str) or not parent or parent in {".", ".."} or "/" in parent:
+        return []
+    path = default_runs_root(ctx.dataset_root) / parent / TRAJECTORY_FILENAME
+    if not path.is_file():
+        return []
+    rows: list[dict[str, object]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict):
+            copied = dict(row)
+            copied["inherited"] = True
+            rows.append(copied)
+    return rows
 
 
 def _fields(shaped: Any, original: dict[str, Any]) -> dict[str, Any]:

@@ -146,6 +146,12 @@ def _actor_agent_name(
     return ""
 
 
+def _fork_marker(result: object, summary: object) -> dict[str, object] | None:
+    from ageval.evidence.fork_cuts import fork_marker
+
+    return fork_marker(result, summary)
+
+
 def _provenance_surface(lock: dict[str, Any]) -> dict[str, Any]:
     """Project lock provenance for Attempt top bar (url only when present)."""
     prov = lock.get("provenance")
@@ -398,6 +404,7 @@ def _trial_meta_from_evidence(
         "actors": surface.get("actors") or [],
         "agent_label": surface.get("agent_label"),
         "model_label": surface.get("model_label"),
+        "fork": _fork_marker(result, summary),
         "executor_kind": surface.get("executor_kind"),
         "profiles": surface.get("profiles") or [],
         "provenance": surface.get("provenance"),

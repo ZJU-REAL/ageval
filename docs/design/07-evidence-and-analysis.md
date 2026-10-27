@@ -13,8 +13,8 @@ All `.ageval/runs` and `.ageval/suite-runs` path constants live exclusively in `
 | `lock.json` | Canonical lock JSON | Redacted `LockedTaskConfig` snapshot (retains credential env var locator names only). |
 | `result.json` | `Result` schema | Final verdict (`status`, `score`, `kind`, `error`, `limit`, `logs`). Presence of `result.json` marks the Attempt as settled and immutable. |
 | `trajectory.jsonl` | `ageval.trajectory.event/1` | Normalized `run`-phase interaction trajectory written by the `trajectory_seal` exclusive slot during `record`. |
-| `activity.jsonl` | `ageval.activity/1` | Append-only pre-effect log (`attempt`, `session`, `invoke`, `model_turn`, `tool_call`, `compaction`, `phase`). A truncated final line is dropped. A broken non-final line seals `activity_log_corrupt`. |
-| `checkpoints/` | `ageval.checkpoint/1` | Content-addressed snapshots of `box/{workspace,home,artifacts}`. Keyless auth files are not copied into `blobs/`. |
+| `activity.jsonl` | `ageval.activity/1` | Append-only pre-effect log (`attempt`, `session`, `invoke`, `model_turn`, `tool_call`, `compaction`, `phase`). A truncated final line is dropped. A broken non-final line seals `activity_log_corrupt`. Written during execution regardless of retention. Removed with `checkpoints/` after settlement unless `--keep-recovery-state`. |
+| `checkpoints/` | `ageval.checkpoint/1` | Content-addressed snapshots of `box/{workspace,home,artifacts}`. Keyless auth files are not copied into `blobs/`. Part of the recovery bundle with `activity.jsonl`. |
 | `evaluation/observation.jsonl` | `ageval.trajectory.event/1` | Optional `evaluate`-phase `judge` trajectory (`user` prompt rows omitted to protect `gold`). |
 | `evaluation/checks.json` | `ageval.evaluation.checks/1` | Optional step-by-step grading breakdown returned by `evaluator.py`. |
 | `summary.json` | `Summary` schema | Phase wall-clock durations (`phase_timing`), lifecycle `facts[]`, and optional plugin namespace `extra`. |
@@ -51,7 +51,37 @@ extra: { ... }                                                       # Vendor-sp
 - **`terminal.elapsed_ms`**: Wall-clock invocation latency (`latency_ms`) is copied onto `terminal.elapsed_ms` during sealing.
 
 ### 2.3 Post-seal pruning (`slim_sealed_attempt`)
-Once `trajectory_seal` succeeds in `record`, `slim_sealed_attempt` removes intermediate scratch directories (`agent/invocations/`, `evaluation/invocations/`, `backend_raw/`) by default, retaining only `lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, `task-artifacts/**`, `verifier-collect/**`, `evaluation/observation.jsonl`, and `evaluation/checks.json`. Operators may pass `--keep-vendor-raw` to retain `backend_raw/` and per-invocation scratch files, or `--keep-workspace` to retain the host workspace directory (`box/`). Once `result.json` and `trajectory.jsonl` both exist, Core also deletes `checkpoints/` and `<attempt>/state` unless `--keep-workspace` is set. `local` and `docker` remove `<attempt>/state` when `stop(delete=True)` deletes `box/`.
+Once `trajectory_seal` succeeds in `record`, `slim_sealed_attempt` removes intermediate scratch directories (`agent/invocations/`, `evaluation/invocations/`, `backend_raw/`) by default, retaining only `lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, `task-artifacts/**`, `verifier-collect/**`, `evaluation/observation.jsonl`, and `evaluation/checks.json`. Operators may pass `--keep-vendor-raw` to retain `backend_raw/` and per-invocation scratch files, or `--keep-workspace` to retain the host workspace directory (`box/`).
+
+Recovery-state retention is a separate policy. The recovery bundle is `activity.jsonl` plus `checkpoints/` (manifests and blobs). Core records it during execution whether or not it will be kept. An Attempt that has not sealed both `result.json` and `trajectory.jsonl` always keeps the bundle, so `--resume` does not require a retention flag. After both files exist, Core deletes the bundle unless `--keep-recovery-state` is set. The CLI flag wins over `AGEVAL_KEEP_RECOVERY_STATE`; an unset or false env value means delete. `--no-keep-recovery-state` forces deletion even when the env value is true. `--keep-workspace` does not retain the bundle and is not required to retain it.
+
+`<attempt>/state` is environment probe state (nonce, cursor, inflight), not part of the recovery bundle. `local` and `docker` remove it when `stop(delete=True)` deletes `box/`. A sealed Attempt also drops it unless `--keep-workspace` is set.
+
+### 2.4 Checkpoint listing
+
+`ageval checkpoints <dataset> --run <attempt_id>` reads a retained recovery bundle and does not start an environment. Each row is one `checkpoints/seq_<N>.json` or an activity `checkpoint_seq` with no manifest. The row records `seq`, the lifecycle phase at that seq, whether the blobs are `available`, `incomplete`, or `missing`, and `forkable`. A non-forkable row includes `reason`:
+
+| Reason | Meaning |
+| --- | --- |
+| `not_run_phase` | The cut is not inside `run` (environment, evaluate, record, or unknown). |
+| `solver_sealed` | The cut is at or after the completed `seal_run` line. |
+| `gold_exposed` | The cut is at or after `evaluate` started. Gold may already be on the box. |
+| `multi_session` | The prefix contains more than one completed session. |
+| `continuation_unsupported` | The single session executor is not `miniswe`, `terminus-2`, `openai-http`, or `anthropic-http`. |
+| `not_a_completed_cut` | No completed activity line owns this seq. |
+| `inconsistent` | The owner seq, manifest seq, or an open in-flight effect does not match the cut. |
+| `checkpoint_incomplete` | The manifest file is missing. |
+| `state_not_restorable` | The manifest exists but a blob or the solver session cannot be restored. |
+
+A forkable cut is a completed `run`-phase snapshot before `seal_run` and before gold upload, with one restorable session of a supported executor and a complete manifest. Exit 2 when the Attempt directory is missing, the recovery bundle is gone (`recovery_state_missing`), or `activity.jsonl` is corrupt. A retained bundle with no forkable cut still exits 0.
+
+### 2.5 Checkpoint fork
+
+`ageval run <dataset> --task <id> --fork <source_attempt_id> --checkpoint <seq> --model <id>` mints a new Attempt and a fresh environment. It does not attach, roll back, or write the parent environment. `--fork` and `--resume` are mutually exclusive. `--agent` and `--profiles` are rejected because the harness stays fixed. Core re-locks from the source job overlay and applies only the model override. `--model` sets `/agent_profiles/<source role>/model/id` and does not require `--agent`.
+
+Before the environment starts, Core rejects a cut that `ageval checkpoints` would mark non-forkable, an unsupported continuation executor, and any lock difference other than the solver model's `id`, `api`, `timeout`, `watchdog`, or `reasoning/effort`. The child copies the activity prefix through the selected seq, marks those payloads `inherited`, and copies the selected checkpoint blobs into its own directory. Later parent events are not copied. Inherited events are evidence, not new child calls: they do not restore invocation quota and they do not charge the parent's phase elapsed into the child clock. Replayed model steps report no inherited cost. Shared-prefix usage is summed separately on `fork.shared_prefix_usage`.
+
+`result.json` and `summary.json` include `fork` (`ageval.fork/1`) when the Attempt is a fork: parent Attempt, checkpoint seq, source and child lock digests, model changes (`from` / `to`), the continuation model, and whether that model was the locked model. The field is omitted otherwise. Default pass@k and from-scratch rollups skip rows that carry `fork`.
 
 ---
 

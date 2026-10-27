@@ -312,6 +312,7 @@ async def _run_one(
     run_fn: Callable[..., Awaitable[Any]],
     profiles_path: Path | str | None = None,
     keep_workspace: bool = False,
+    keep_recovery_state: bool = False,
     keep_vendor_raw: bool = False,
     on_phase: PhaseObserver | None = None,
     on_progress: ProgressCallback | None = None,
@@ -330,6 +331,7 @@ async def _run_one(
             overrides=overrides,
             profiles_path=profiles_path,
             keep_workspace=keep_workspace,
+            keep_recovery_state=keep_recovery_state,
             keep_vendor_raw=keep_vendor_raw,
             on_phase=on_phase,
             on_progress=on_progress,
@@ -357,6 +359,7 @@ async def _run_one(
             "run_id": run_id,
             "error": None if code != 2 else _copy_error(getattr(result, "error", None)),
             "phase": "terminal",
+            "fork": bool(getattr(result, "fork", None)),
         }
     except (ConfigError, ModelConfigError, PluginContractError) as exc:
         return {
@@ -810,6 +813,7 @@ async def execute_suite_run(
     retry_errors: bool = False,
     on_progress: ProgressCallback | None = None,
     keep_workspace: bool = False,
+    keep_recovery_state: bool = False,
     keep_vendor_raw: bool = False,
     allow_prepare: bool = False,
 ) -> dict[str, Any]:
@@ -834,6 +838,7 @@ async def execute_suite_run(
             retry_errors=retry_errors,
             on_progress=on_progress,
             keep_workspace=keep_workspace,
+            keep_recovery_state=keep_recovery_state,
             keep_vendor_raw=keep_vendor_raw,
             allow_prepare=allow_prepare,
         )
@@ -858,6 +863,7 @@ async def _execute_suite_run(
     retry_errors: bool = False,
     on_progress: ProgressCallback | None = None,
     keep_workspace: bool = False,
+    keep_recovery_state: bool = False,
     keep_vendor_raw: bool = False,
     allow_prepare: bool = False,
 ) -> dict[str, Any]:
@@ -1084,6 +1090,7 @@ async def _execute_suite_run(
                 run_fn=runner,
                 profiles_path=profiles_path,
                 keep_workspace=keep_workspace,
+                keep_recovery_state=keep_recovery_state,
                 keep_vendor_raw=keep_vendor_raw,
                 allow_prepare=allow_prepare,
                 recover_unsealed=resume,

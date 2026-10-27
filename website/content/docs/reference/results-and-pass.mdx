@@ -30,6 +30,8 @@ After Always-k (`-k` / `--n-attempts`), the whole-dataset `summary.json` → `me
 | `per_task` | Per-task `n` / `c` and per-k maps (audit) |
 | Whole-dataset score | **Mean over tasks** for that metric (omit tasks with too few samples) |
 
+Attempts that carry `fork` stay out of the default pass@k and pass^k counts. They remain visible as their own rows.
+
 ### Contract: `metrics.pass_at_k` / `pass_power_k`
 
 Each key is a **stringified k** (`"1"`, `"2"`, `"5"`, …). Value shape:

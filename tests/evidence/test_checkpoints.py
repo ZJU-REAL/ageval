@@ -10,6 +10,7 @@ from ageval.evidence.checkpoints import (
     CHECKPOINT_FORMAT,
     CheckpointStore,
     prune_checkpoints,
+    prune_recovery_bundle,
     prune_recovery_state,
 )
 
@@ -146,3 +147,23 @@ def test_prune_removes_checkpoint_dir(tmp_path: Path) -> None:
     assert not (tmp_path / "checkpoints").exists()
     assert not state.exists()
     assert (box / "workspace" / "note.txt").is_file()
+
+
+def test_prune_recovery_bundle_keeps_state_and_box(tmp_path: Path) -> None:
+    box = _box(tmp_path)
+    (box / "workspace" / "note.txt").write_text("x", encoding="utf-8")
+    CheckpointStore(tmp_path, box).capture(1)
+    (tmp_path / "activity.jsonl").write_text("{}\n", encoding="utf-8")
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "nonce").write_text("n", encoding="utf-8")
+    (tmp_path / "result.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "trajectory.jsonl").write_text("{}\n", encoding="utf-8")
+
+    prune_recovery_bundle(tmp_path)
+
+    assert not (tmp_path / "checkpoints").exists()
+    assert not (tmp_path / "activity.jsonl").exists()
+    assert state.is_dir()
+    assert (box / "workspace" / "note.txt").is_file()
+    assert (tmp_path / "result.json").is_file()

@@ -763,6 +763,7 @@ export function JobsPage() {
                         className="max-w-full"
                         value={job.model_label}
                         effort={job.reasoning_effort}
+                        fork={job.fork}
                       />
                     </TableCell>
                     <TableCell className="tabular-nums">

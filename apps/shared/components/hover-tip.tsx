@@ -22,10 +22,12 @@ export function HoverTip({
   content,
   children,
   side = "top",
+  contentClassName,
 }: {
   content?: ReactNode;
   children: ReactElement;
   side?: "top" | "right" | "bottom" | "left";
+  contentClassName?: string;
 }) {
   const enabled = content != null && content !== "";
   return (
@@ -35,7 +37,10 @@ export function HoverTip({
         {enabled ? (
           <TooltipContent
             side={side}
-            className="max-w-sm px-3 py-2 text-sm leading-5 break-all"
+            className={cn(
+              "max-w-sm px-3 py-2 text-sm leading-5 break-all",
+              contentClassName,
+            )}
           >
             {content}
           </TooltipContent>

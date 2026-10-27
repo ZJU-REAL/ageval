@@ -326,10 +326,18 @@ def default_k_values(n_samples: int) -> list[int]:
     return sorted(ks)
 
 
+def from_scratch_attempts(
+    attempt_rows: Sequence[Mapping[str, Any]],
+) -> list[Mapping[str, Any]]:
+    """Drop fork rows from default pass@k / from-scratch samples."""
+    return [row for row in attempt_rows if not row.get("fork")]
+
+
 def count_passes(attempt_rows: Sequence[Mapping[str, Any]]) -> tuple[int, int]:
-    """Return ``(n, c)`` where *c* counts attempts with status PASS."""
-    n = len(attempt_rows)
-    c = sum(1 for row in attempt_rows if _normalize_status(row.get("status")) == "PASS")
+    """Return ``(n, c)`` where *c* counts from-scratch attempts with status PASS."""
+    rows = from_scratch_attempts(attempt_rows)
+    n = len(rows)
+    c = sum(1 for row in rows if _normalize_status(row.get("status")) == "PASS")
     return n, c
 
 
@@ -368,7 +376,7 @@ def rollup_task_from_attempts(
 ) -> dict[str, Any]:
     """Collapse attempt samples for one task into a summary row + k-metrics."""
     ordered = sorted(
-        attempt_rows,
+        from_scratch_attempts(attempt_rows),
         key=lambda r: (
             int(r["attempt_index"])
             if isinstance(r.get("attempt_index"), int)

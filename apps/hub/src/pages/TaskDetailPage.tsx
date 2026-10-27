@@ -82,6 +82,12 @@ type TaskJobRow = {
   score?: number | null;
   agent_label?: string;
   model_label?: string;
+  fork?: {
+    parent_attempt_id?: string;
+    checkpoint_seq?: number | null;
+    source_model?: string;
+    continuation_model?: string;
+  } | null;
   reasoning_effort?: string;
   environment?: string | null;
   created_at?: number | string;
@@ -356,6 +362,7 @@ export function TaskDetailPage() {
             score: a.score ?? null,
             agent_label: a.agent_label,
             model_label: a.model_label,
+            fork: a.fork,
             environment: a.environment || null,
             created_at: a.created_at,
             run_id: a.run_id,
@@ -805,6 +812,7 @@ export function TaskDetailPage() {
                             value={j.model_label}
                             effort={j.reasoning_effort}
                             to={modelCatalogHref(j.model_label)}
+                            fork={j.fork}
                           />
                         </TableCell>
                         {jobColumns.includes("environment") ? (

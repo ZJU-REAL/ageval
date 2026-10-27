@@ -381,6 +381,8 @@ class ActivityLog:
                 continue
             if seal_seq is not None and record.seq > seal_seq:
                 continue
+            if record.payload.get("inherited") is True:
+                continue
             seen.add(record.request_id)
         return len(seen)
 
@@ -394,6 +396,8 @@ class ActivityLog:
         best = 0.0
         in_phase = False
         for record in self.records:
+            if record.payload.get("inherited") is True:
+                continue
             if record.kind == "phase" and record.payload.get("phase") == phase:
                 if record.status == "in_flight":
                     in_phase = True

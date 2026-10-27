@@ -17,6 +17,8 @@ ageval run official/demo@0.1.0 --dir tmp --task <id>
 ageval run <dataset> --max-concurrent-tasks 2
 ageval run <dataset> -k 5                    # Always-k（每题 k 次）
 ageval run <dataset> --task <id> --resume <attempt_id>
+ageval checkpoints <dataset> --run <attempt_id>
+ageval run <dataset> --task <id> --fork <attempt_id> --checkpoint <seq> --model <model_id>
 ageval run <dataset> --resume-suite <suite_run_id> --task <id> -k 5
 ageval run <dataset> --resume-suite <suite_run_id> --retry-errors
 ageval results regrade <dataset> --run <attempt_id>
@@ -70,11 +72,14 @@ ageval results revoke-snapshot <token-or-url>
 | `--retry-errors` | 配合 `--resume-suite`：重跑本次过滤里的 ERROR 格。PASS / FAIL 仍跳过。新的一次运行；旧行进 `previous[]` |
 | `--replace-slot` | 配合 `--resume-suite --task`：重跑那一行；新的一次运行；旧行进 `previous[]` |
 | `--attempt-index N` | Always-k 要换的格（默认 0）。只与 `--replace-slot` 一起用 |
-| `--keep-workspace` | 清理后保留环境工作根（默认删除）。 |
+| `--keep-workspace` | 清理后保留环境工作根（默认删除）。不保留 `activity.jsonl` 或 `checkpoints/`。 |
+| `--keep-recovery-state` / `--no-keep-recovery-state` | `result.json` 和 `trajectory.jsonl` 都写出之后，保留或删除 `activity.jsonl` 与 `checkpoints/`。默认删除。中断的 Attempt 始终保留这两份文件，`--resume` 不依赖这个开关。未显式指定时回退到 `AGEVAL_KEEP_RECOVERY_STATE`。与 `--keep-workspace` 独立 |
 | `--keep-vendor-raw` | 封存后保留 vendor raw 与中间调用事件文件；默认丢掉。`task-artifacts/` 两种情况下都保留。与 `--keep-workspace` 独立 |
 | `--dir <path>` | 只配合 Hub ref：在 `<path>/<dataset_id>/` 找包；已匹配则复用 |
 | `--agent` | 绑定 `ageval.agent/1` Agent 包（`pi`、`org/name@version` 或本地路径）；与 `--profiles` 互斥 |
-| `--model` | 改这次 run 已绑角色的 `model.id`；须配合 `--agent`。不是 `results upload-suite --model`。`results analyze --model` 是另一条参数，同样必须配合 `--agent` |
+| `--fork <attempt_id>` | 从该次 Attempt 保留的检查点新开一次 Attempt。必须配合 `--checkpoint` 和 `--model`。与 `--resume` 互斥。拒绝 `--agent` 和 `--profiles` |
+| `--checkpoint <seq>` | 要分叉的活动序号。该切点必须是 solver 封存前已完成的 run 阶段快照 |
+| `--model` | 改这次 run 已绑角色的 `model.id`；须配合 `--agent`。`--fork` 时它只改续跑模型，不换 harness，也不要求 `--agent`。不是 `results upload-suite --model`。`results analyze --model` 是另一条参数，同样必须配合 `--agent` |
 | `--set` / `--profiles` | 覆盖项 / 换一份配置文件 |
 | `--probe` | 只做可行性：按绑定 / `environment` 打印 plan + readiness。不 invoke Agent、不写入镜像、不改 lock digest。选中路径不满足则 exit 1。 |
 | `--json` | stdout 打完整结果文档。TTY 默认是短 recap（整份跑完时含 `summary` 路径与 `ageval view` / `upload-suite`）；管道默认仍是 JSON。 |

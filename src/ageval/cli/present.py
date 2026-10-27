@@ -131,6 +131,8 @@ def humanize(payload: Mapping[str, Any], *, width: int | None = None) -> str:
         payload.get("ok") and payload.get("run_id") and "status" in payload
     ):
         return _status_block(payload)
+    if payload.get("format") == "ageval.checkpoints/1":
+        return _checkpoints_block(payload)
     if payload.get("export_path") is not None:
         return _kv("export", str(payload.get("export_path") or "")) + "\n"
     if payload.get("cancel_requested") is not None or payload.get("status") == "cancelled":
@@ -209,6 +211,30 @@ def _regrade_block(results: Sequence[Any]) -> str:
         if isinstance(err, Mapping) and err.get("title"):
             lines.append(_kv("error", str(err.get("title"))))
     return ("\n".join(lines) + "\n") if lines else ""
+
+
+def _checkpoints_block(payload: Mapping[str, Any]) -> str:
+    lines = [_kv("attempt", str(payload.get("attempt_id") or ""))]
+    rows = payload.get("checkpoints")
+    cells: list[list[str]] = []
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            cells.append(
+                [
+                    str(row.get("seq") or ""),
+                    str(row.get("phase") or ""),
+                    str(row.get("state") or ""),
+                    "yes" if row.get("forkable") else "no",
+                    str(row.get("reason") or ""),
+                ]
+            )
+    if cells:
+        lines.extend(_align_cells(cells))
+    else:
+        lines.append(_kv("checkpoints", "none"))
+    return "\n".join(lines) + "\n"
 
 
 def _error_block(payload: Mapping[str, Any]) -> str:

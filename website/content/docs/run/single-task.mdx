@@ -37,6 +37,16 @@ Use this when the parent process stopped before `result.json` was written. ageva
 
 The command exits 2 and does not write `result.json` when that file already exists, the locked configuration digest does not match, or the environment is still running this Attempt.
 
+## Fork a retained checkpoint
+
+```bash
+ageval run <dataset> --task <task_id> --keep-recovery-state
+ageval checkpoints <dataset> --run <attempt_id>
+ageval run <dataset> --task <task_id> --fork <attempt_id> --checkpoint <seq> --model <model_id>
+```
+
+`--keep-recovery-state` keeps `activity.jsonl` and `checkpoints/` after the source has sealed. `ageval checkpoints` lists the cuts. `--fork` starts a new Attempt from one completed run-phase cut, on a fresh environment, with the source harness and the model you pass. The parent Attempt stays sealed. Default pass@k skips the child.
+
 <Callout type="info" title="The whole dataset">
 
 Omit `--task` to run every member in one job. `ageval status <suite_run_id> --dataset <dataset>` shows progress; `ageval cancel <suite_run_id> --dataset <dataset>` stops it.

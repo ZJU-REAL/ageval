@@ -11,16 +11,37 @@ import {
 } from "@ageval/shared/components/ui/table";
 import type { Trial } from "@ageval/shared/lib/trial-types";
 
+function actorGetsFork(
+  actors: NonNullable<Trial["actors"]>,
+  actor: NonNullable<Trial["actors"]>[number],
+  index: number,
+  fork: Trial["fork"],
+): boolean {
+  if (!fork?.parent_attempt_id) return false;
+  const matched = actors.some(
+    (row) =>
+      row.role === "solver" ||
+      (fork.continuation_model != null && row.model === fork.continuation_model),
+  );
+  if (!matched) return index === 0;
+  return (
+    actor.role === "solver" ||
+    (fork.continuation_model != null && actor.model === fork.continuation_model)
+  );
+}
+
 /** Actors: Role | Harness | Model | Time | Usage — observational ≠ PASS */
 export function ActorsTable({
   actors,
   harnessTo,
   modelTo,
+  fork,
 }: {
   actors: NonNullable<Trial["actors"]>;
   /** Hub catalog jump. Viewer omits this (icons only). */
   harnessTo?: (agent: string) => string | undefined;
   modelTo?: (model: string | null | undefined) => string | undefined;
+  fork?: Trial["fork"];
 }) {
   if (actors.length === 0) return null;
 
@@ -38,7 +59,7 @@ export function ActorsTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {actors.map((a) => (
+            {actors.map((a, index) => (
               <TableRow key={a.profile_id || `${a.role}-${a.agent}`}>
                 <TableCell className="font-medium">
                   {a.role}
@@ -51,6 +72,7 @@ export function ActorsTable({
                     value={a.model}
                     effort={a.reasoning_effort}
                     to={modelTo?.(a.model)}
+                    fork={actorGetsFork(actors, a, index, fork) ? fork : null}
                   />
                 </TableCell>
                 <TableCell className="tabular-nums text-body">

@@ -9,6 +9,7 @@ import typer
 
 from ageval.cli.cmd_agent import AGENT_OPTION_HELP, MODEL_OPTION_HELP, resolve_agent_option
 from ageval.cli.present import emit
+from ageval.cli.recovery_state import resolve_keep_recovery_state
 from ageval.cli.run_output import (
     AttemptSpinner,
     RunProgress,
@@ -155,6 +156,24 @@ def register(app: typer.Typer) -> None:
                 ),
             ),
         ] = None,
+        fork_attempt: Annotated[
+            str | None,
+            typer.Option(
+                "--fork",
+                help=(
+                    "Start a new Attempt from a retained checkpoint of this source attempt. "
+                    "Requires --checkpoint and --model. Cannot be combined with --resume, "
+                    "--agent, or --profiles."
+                ),
+            ),
+        ] = None,
+        checkpoint: Annotated[
+            int | None,
+            typer.Option(
+                "--checkpoint",
+                help="Activity seq of the retained checkpoint to fork. Requires --fork.",
+            ),
+        ] = None,
         resume_suite: Annotated[
             str | None,
             typer.Option(
@@ -270,10 +289,23 @@ def register(app: typer.Typer) -> None:
                 help=(
                     "Keep the box work root after cleanup "
                     "(default: delete; debug only — never required for Hub upload). "
-                    "Docker volumes and env containers are still removed."
+                    "Docker volumes and env containers are still removed. "
+                    "Does not retain activity.jsonl or checkpoints/."
                 ),
             ),
         ] = False,
+        keep_recovery_state: Annotated[
+            bool | None,
+            typer.Option(
+                "--keep-recovery-state/--no-keep-recovery-state",
+                help=(
+                    "After result.json and trajectory.jsonl exist, keep activity.jsonl "
+                    "and checkpoints/ (default: delete). Interrupted Attempts always "
+                    "keep them. Unset falls back to AGEVAL_KEEP_RECOVERY_STATE. "
+                    "Independent of --keep-workspace."
+                ),
+            ),
+        ] = None,
         keep_vendor_raw: Annotated[
             bool,
             typer.Option(
@@ -327,7 +359,19 @@ def register(app: typer.Typer) -> None:
             build_suite_runner,
         )
 
-        profiles = resolve_agent_option(agent, profiles, model=model)
+        fork_request = _fork_request(
+            fork_attempt,
+            checkpoint,
+            model=model,
+            agent=agent,
+            profiles=profiles,
+            resume_attempt=resume_attempt,
+            resume_suite=resume_suite,
+        )
+        if fork_request is None:
+            profiles = resolve_agent_option(agent, profiles, model=model)
+        else:
+            profiles = None
         if install_dir is not None:
             from ageval.config.errors import ConfigError as DirConfigError
 
@@ -363,6 +407,7 @@ def register(app: typer.Typer) -> None:
         from ageval.plugins.errors import PluginContractError
 
         try:
+            retain_recovery = resolve_keep_recovery_state(keep_recovery_state)
             overrides: dict[str, object] = {}
             for raw in set_overrides or ():
                 pointer, value = parse_set_override(raw)
@@ -402,6 +447,12 @@ def register(app: typer.Typer) -> None:
                     "invalid_override",
                     "--resume runs one Attempt",
                     location="--resume",
+                )
+            if fork_request is not None and (len(task_values) != 1 or k != 1 or probe):
+                raise ConfigError(
+                    "fork_requires_one_task",
+                    "--fork runs one task once and does not probe",
+                    location="--fork",
                 )
             replace_keys: set[tuple[str, int]] | None = None
             if replace_slot:
@@ -467,10 +518,12 @@ def register(app: typer.Typer) -> None:
                             overrides=overrides or None,
                             profiles_path=profiles,
                             keep_workspace=keep_workspace,
+                            keep_recovery_state=retain_recovery,
                             keep_vendor_raw=keep_vendor_raw,
                             allow_prepare=allow_prepare,
                             layout=chosen_layout,
                             resume_attempt_id=resume_one,
+                            fork=fork_request,
                             on_phase=spinner.phase,
                             on_progress=spinner.stall,
                         )
@@ -533,6 +586,7 @@ def register(app: typer.Typer) -> None:
                         retry_errors=retry_errors,
                         on_progress=progress.handle,
                         keep_workspace=keep_workspace,
+                        keep_recovery_state=retain_recovery,
                         keep_vendor_raw=keep_vendor_raw,
                         allow_prepare=allow_prepare,
                     )
@@ -579,6 +633,46 @@ def register(app: typer.Typer) -> None:
         except Exception as exc:  # noqa: BLE001
             typer.echo(f"runtime_error: {type(exc).__name__}: {exc}", err=True)
             raise typer.Exit(code=2) from exc
+
+
+def _fork_request(
+    fork_attempt: str | None,
+    checkpoint: int | None,
+    *,
+    model: str | None,
+    agent: list[str] | None,
+    profiles: Path | None,
+    resume_attempt: str | None,
+    resume_suite: str | None,
+) -> Any:
+    if fork_attempt is None and checkpoint is None:
+        return None
+    model_text = model.strip() if isinstance(model, str) else ""
+    if not fork_attempt or checkpoint is None or not model_text:
+        typer.echo(
+            "invalid_override: --fork requires --checkpoint and --model (--fork)",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    if resume_attempt or resume_suite:
+        typer.echo(
+            "fork_resume_exclusive: --fork cannot be combined with --resume (--fork)",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    if agent or profiles is not None:
+        typer.echo(
+            "fork_harness_fixed: --fork cannot change --agent or --profiles (--fork)",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    from ageval.application.composition import build_fork_request
+
+    return build_fork_request(
+        fork_attempt.strip(),
+        checkpoint,
+        model_text,
+    )
 
 
 def _probe_one(

@@ -123,7 +123,7 @@ export function TrialDetailPage() {
             />
 
             {trial.actors && trial.actors.length > 0 ? (
-              <ActorsTable actors={trial.actors} />
+              <ActorsTable actors={trial.actors} fork={trial.fork} />
             ) : null}
 
             <EvidenceTabs
@@ -154,6 +154,7 @@ export function TrialDetailPage() {
               fileNote={fileNote}
               treeGroups={treeGroups}
               emptyNote="No evidence files found for this run under the Dataset root."
+              fork={trial.fork}
             />
 
             <p className="text-xs text-mute">

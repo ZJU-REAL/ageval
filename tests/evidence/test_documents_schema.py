@@ -109,7 +109,10 @@ def _result() -> AttemptResult:
 def test_result_json_keeps_nulls_and_omits_facts() -> None:
     defs = _defs()
     doc = _result().as_dict()
-    assert set(doc) == set(defs["AttemptResultDocument"]["properties"])
+    props = set(defs["AttemptResultDocument"]["properties"])
+    required = set(defs["AttemptResultDocument"]["required"])
+    assert required <= set(doc) <= props
+    assert "fork" not in doc
     assert "facts" not in doc
     assert doc["score"] is None
     assert doc["cleanup_warning"] is None

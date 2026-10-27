@@ -15,12 +15,35 @@ export interface AttemptResultDocument {
   metrics: Record<string, unknown>;
   score: number | null;
   status: "PASS" | "FAIL" | "ERROR";
+  fork?: ForkProvenance;
 }
 
 export interface FactDocument {
   phase: string;
   name: string;
   detail?: Record<string, unknown>;
+}
+
+export interface ForkChange {
+  role: string;
+  path: string;
+  from: string;
+  to: string;
+}
+
+export interface ForkProvenance {
+  format: "ageval.fork/1";
+  parent_attempt_id: string;
+  checkpoint_seq: number;
+  source_locked_config_digest: string;
+  child_locked_config_digest: string;
+  source_model: string;
+  continuation_model: string;
+  continuation_model_verified: boolean;
+  context_conversion: string;
+  executor_kind: string;
+  changes: ForkChange[];
+  shared_prefix_usage?: MeasuredUsage;
 }
 
 export interface MeasuredUsage {
@@ -60,6 +83,7 @@ export interface SummaryDocument {
   phase_timing: PhaseTimingDocument;
   keep_vendor_raw: boolean;
   extra?: Record<string, unknown>;
+  fork?: ForkProvenance;
 }
 
 export interface TerminalRow {
@@ -124,6 +148,9 @@ export const evidenceJsonSchema = {
         },
         "evidence_path": {
           "type": "string"
+        },
+        "fork": {
+          "$ref": "#/$defs/ForkProvenance"
         },
         "gold_materialized_at": {
           "type": "string"
@@ -199,6 +226,88 @@ export const evidenceJsonSchema = {
       "required": [
         "phase",
         "name"
+      ],
+      "type": "object"
+    },
+    "ForkChange": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "path",
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "ForkProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/ForkChange"
+          },
+          "type": "array"
+        },
+        "checkpoint_seq": {
+          "type": "integer"
+        },
+        "child_locked_config_digest": {
+          "type": "string"
+        },
+        "context_conversion": {
+          "type": "string"
+        },
+        "continuation_model": {
+          "type": "string"
+        },
+        "continuation_model_verified": {
+          "type": "boolean"
+        },
+        "executor_kind": {
+          "type": "string"
+        },
+        "format": {
+          "const": "ageval.fork/1"
+        },
+        "parent_attempt_id": {
+          "type": "string"
+        },
+        "shared_prefix_usage": {
+          "$ref": "#/$defs/MeasuredUsage"
+        },
+        "source_locked_config_digest": {
+          "type": "string"
+        },
+        "source_model": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "format",
+        "parent_attempt_id",
+        "checkpoint_seq",
+        "source_locked_config_digest",
+        "child_locked_config_digest",
+        "source_model",
+        "continuation_model",
+        "continuation_model_verified",
+        "context_conversion",
+        "executor_kind",
+        "changes"
       ],
       "type": "object"
     },
@@ -316,6 +425,9 @@ export const evidenceJsonSchema = {
             "$ref": "#/$defs/FactDocument"
           },
           "type": "array"
+        },
+        "fork": {
+          "$ref": "#/$defs/ForkProvenance"
         },
         "keep_vendor_raw": {
           "type": "boolean"

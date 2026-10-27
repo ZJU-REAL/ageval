@@ -38,9 +38,10 @@ class AttemptResult:
     # Run-phase limits key that was enforced, or None.
     limit: str | None = None
     facts: tuple[Mapping[str, Any], ...] = field(default_factory=tuple)
+    fork: Mapping[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "agent_invocations": self.agent_invocations,
             "capabilities_used": list(self.capabilities_used),
             "cleanup_warning": self.cleanup_warning,
@@ -54,6 +55,9 @@ class AttemptResult:
             "score": self.score,
             "status": self.status,
         }
+        if self.fork:
+            payload["fork"] = dict(self.fork)
+        return payload
 
 
 def bind_result(
@@ -68,6 +72,7 @@ def bind_result(
     limit: str | None = None,
     logs: str | None = None,
     facts: Sequence[Mapping[str, Any]] = (),
+    fork: Mapping[str, Any] | None = None,
 ) -> AttemptResult:
     """Turn an evaluator verdict or a phase failure into the Attempt result.
 
@@ -83,6 +88,7 @@ def bind_result(
         "logs": logs if logs is not None else evidence_path,
         "limit": limit,
         "facts": tuple(facts),
+        "fork": fork,
     }
     if error is not None:
         return AttemptResult(

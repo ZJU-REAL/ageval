@@ -85,6 +85,9 @@ class AttemptCtx:
     checkpoints: Any = None
     recovery_attached: bool = False
     recovery_rebuild: bool = False
+    # Selected parent cut restored onto this Attempt's fresh box. Not an attach.
+    fork_checkpoint_seq: int | None = None
+    fork_provenance: Any = None
     _budget_seconds: float | None = None
     _spent_offset: float = 0.0
     _writers_stopped: bool = False
