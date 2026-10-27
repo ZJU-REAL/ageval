@@ -89,11 +89,16 @@ type TaskJobRow = {
     continuation_model?: string;
   } | null;
   replay?: {
-    parent_attempt_id?: string;
+    parent_attempt_id: string;
     status?: string | null;
     field?: string | null;
     ordinal?: number | null;
     artifact_id?: string | null;
+    first_divergence?: {
+      field?: string | null;
+      ordinal?: number | null;
+      artifact_id?: string | null;
+    } | null;
   } | null;
   reasoning_effort?: string;
   environment?: string | null;

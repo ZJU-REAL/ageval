@@ -34,9 +34,10 @@ export function ReplayMark({
   replay?: ReplayMarkData | null;
   className?: string;
 }) {
-  const parent = replay?.parent_attempt_id?.trim();
+  if (!replay) return null;
+  const parent = replay.parent_attempt_id?.trim();
   if (!parent) return null;
-  const status = replay?.status?.trim() || "replay";
+  const status = replay.status?.trim() || "replay";
   return (
     <HoverTip
       content={
