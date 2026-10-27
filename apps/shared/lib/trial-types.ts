@@ -52,6 +52,13 @@ export type Trial = {
   model_label?: string | null;
   executor_kind?: string | null;
   provenance?: Record<string, unknown> | null;
+  /** Child-only fork provenance. Absent when this Attempt is not a fork. */
+  fork?: {
+    parent_attempt_id: string;
+    checkpoint_seq?: number | null;
+    source_model?: string;
+    continuation_model?: string;
+  } | null;
   upstream_url?: string | null;
   upstream_name?: string | null;
   upstream_ref?: string | null;

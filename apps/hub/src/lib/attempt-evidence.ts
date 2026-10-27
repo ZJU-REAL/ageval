@@ -517,6 +517,27 @@ function formatLatencyMs(
   return nInv > 0 ? `${label} (${nInv})` : label;
 }
 
+function forkFromDocs(
+  result: Record<string, unknown>,
+  summary: Record<string, unknown>,
+): Trial["fork"] {
+  const raw =
+    (result.fork && typeof result.fork === "object" ? result.fork : null) ||
+    (summary.fork && typeof summary.fork === "object" ? summary.fork : null);
+  if (!raw || Array.isArray(raw)) return null;
+  const doc = raw as Record<string, unknown>;
+  const parent = doc.parent_attempt_id;
+  if (typeof parent !== "string" || !parent.trim()) return null;
+  const seq = doc.checkpoint_seq;
+  return {
+    parent_attempt_id: parent,
+    checkpoint_seq: typeof seq === "number" ? seq : null,
+    source_model: typeof doc.source_model === "string" ? doc.source_model : "",
+    continuation_model:
+      typeof doc.continuation_model === "string" ? doc.continuation_model : "",
+  };
+}
+
 export function buildTrialMeta(opts: {
   runId: string;
   taskId: string;
@@ -769,6 +790,7 @@ export function buildTrialMeta(opts: {
     actors,
     agent_label: actors.length === 1 ? actors[0].role : null,
     model_label: actors.length === 1 ? actors[0].model ?? null : null,
+    fork: forkFromDocs(result, summary),
     executor_kind: executors[0] || null,
     provenance: prov,
     upstream_url:

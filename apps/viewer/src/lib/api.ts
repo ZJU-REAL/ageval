@@ -12,6 +12,12 @@ export type Job = {
   dataset_ref?: string | null;
   agent_label?: string;
   model_label?: string;
+  fork?: {
+    parent_attempt_id?: string;
+    checkpoint_seq?: number | null;
+    source_model?: string;
+    continuation_model?: string;
+  } | null;
   reasoning_effort?: string;
   overlays?: string[];
   provider_label?: string;

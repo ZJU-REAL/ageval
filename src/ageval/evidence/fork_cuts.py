@@ -66,6 +66,36 @@ class CheckpointListing:
         return payload
 
 
+def fork_marker(result: object, summary: object) -> dict[str, object] | None:
+    """Projection for list and detail views. Uses the child document only."""
+    raw = _fork_doc(result) or _fork_doc(summary)
+    if raw is None and isinstance(summary, dict):
+        raw = _fork_doc(summary.get("result"))
+    if raw is None:
+        return None
+    parent = raw.get("parent_attempt_id")
+    if not isinstance(parent, str) or not parent.strip():
+        return None
+    seq = raw.get("checkpoint_seq")
+    source = raw.get("source_model")
+    continuation = raw.get("continuation_model")
+    return {
+        "parent_attempt_id": parent,
+        "checkpoint_seq": seq if isinstance(seq, int) and not isinstance(seq, bool) else None,
+        "source_model": source if isinstance(source, str) else "",
+        "continuation_model": continuation if isinstance(continuation, str) else "",
+    }
+
+
+def _fork_doc(value: object) -> dict[str, object] | None:
+    if not isinstance(value, dict):
+        return None
+    fork = value.get("fork")
+    if isinstance(fork, dict) and fork.get("parent_attempt_id"):
+        return fork
+    return None
+
+
 def list_fork_cuts(attempt_dir: Path, *, attempt_id: str) -> CheckpointListing:
     """Classify manifests under one Attempt. Does not start an environment."""
     activity_path = attempt_dir / ACTIVITY_LOG_REL

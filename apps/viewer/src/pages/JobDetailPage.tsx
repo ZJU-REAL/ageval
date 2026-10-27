@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 
 import { BreadcrumbNav } from "@ageval/shared/components/breadcrumb";
+import { ForkMark } from "@ageval/shared/components/trial/fork-mark";
 import { LoadingState } from "@ageval/shared/components/empty-state";
 import { Shell } from "@/components/layout";
 import { SuitePaceBoard } from "@/components/suite-pace-board";
@@ -263,6 +264,7 @@ export function JobDetailPage() {
                     value={job.model_label}
                     effort={job.reasoning_effort}
                   />
+                  <ForkMark fork={job.fork} />
                 </>
               ) : null}
               {job.dataset_ref ? (
