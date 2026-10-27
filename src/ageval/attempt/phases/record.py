@@ -17,8 +17,13 @@ from typing import Any
 from ageval.attempt.ctx import AttemptCtx
 from ageval.attempt.emit import emit
 from ageval.evidence.invocation import read_invocation_payload
+from ageval.evidence.locators import default_runs_root
 from ageval.evidence.slim import slim_sealed_attempt
-from ageval.evidence.trajectory import turn_rows, write_evaluation_observation
+from ageval.evidence.trajectory import (
+    TRAJECTORY_FILENAME,
+    turn_rows,
+    write_evaluation_observation,
+)
 from ageval.plugins.binding import bind_winner
 from ageval.plugins.slots import (
     SUMMARY_ENRICH,
@@ -114,7 +119,7 @@ async def _fold_invocations(
     return turns
 
 
-def inherited_display_rows(ctx: AttemptCtx) -> list[dict[str, Any]]:
+def inherited_display_rows(ctx: AttemptCtx) -> list[dict[str, object]]:
     """Parent display trajectory for a fork that replayed a finished invoke.
 
     A completed invoke returns the old result and writes no new events. The
@@ -141,10 +146,10 @@ def inherited_display_rows(ctx: AttemptCtx) -> list[dict[str, Any]]:
     parent = prov.get("parent_attempt_id") if isinstance(prov, dict) else None
     if not isinstance(parent, str) or not parent or parent in {".", ".."} or "/" in parent:
         return []
-    path = Path(ctx.dataset_root) / ".ageval" / "runs" / parent / "trajectory.jsonl"
+    path = default_runs_root(ctx.dataset_root) / parent / TRAJECTORY_FILENAME
     if not path.is_file():
         return []
-    rows: list[dict[str, Any]] = []
+    rows: list[dict[str, object]] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue

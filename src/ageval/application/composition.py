@@ -73,6 +73,17 @@ def build_list_checkpoints() -> Callable[..., Any]:
     return list_checkpoints
 
 
+def build_fork_request(source_attempt_id: str, checkpoint_seq: int, model: str) -> Any:
+    """Wire one fork request from CLI flags. The harness stays the source harness."""
+    from ageval.application.fork import ForkRequest
+
+    return ForkRequest(
+        source_attempt_id=source_attempt_id,
+        checkpoint_seq=checkpoint_seq,
+        model=model,
+    )
+
+
 def build_probe_attempt() -> Callable[..., Any]:
     """Wire ``ageval run --probe``: lock plus preflight, and nothing else."""
     from ageval.application.run import probe_attempt

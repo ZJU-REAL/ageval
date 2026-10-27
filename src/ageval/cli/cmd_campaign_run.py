@@ -666,12 +666,12 @@ def _fork_request(
             err=True,
         )
         raise typer.Exit(code=2)
-    from ageval.application.fork import ForkRequest
+    from ageval.application.composition import build_fork_request
 
-    return ForkRequest(
-        source_attempt_id=fork_attempt.strip(),
-        checkpoint_seq=checkpoint,
-        model=model_text,
+    return build_fork_request(
+        fork_attempt.strip(),
+        checkpoint,
+        model_text,
     )
 
 

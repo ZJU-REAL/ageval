@@ -16,7 +16,9 @@ def test_run_registers_recovery_flag() -> None:
 
     from ageval.cli.main import app
 
-    command = typer.main.get_command(app).commands["run"]
+    commands = getattr(typer.main.get_command(app), "commands", None)
+    assert isinstance(commands, dict)
+    command = commands["run"]
     names = {
         opt
         for param in command.params
