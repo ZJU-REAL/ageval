@@ -420,12 +420,37 @@ async def run_attempt(
         summary["fork"] = fork_doc
     evidence.write_summary(summary)
     _write_result(evidence, result)
+    _persist_replay_input(evidence.root, activity, locked.summary(), graph)
     _prune_settled_recovery(
         evidence.root,
         keep_workspace=keep_workspace,
         keep_recovery_state=keep_recovery_state,
     )
     return _exit_code(result), result
+
+
+def _persist_replay_input(
+    attempt_dir: Path, activity: Any, lock_doc: Mapping[str, object], graph: Any
+) -> None:
+    """Write the replay input next to activity. Prune deletes both together."""
+    from ageval.evidence.replay_input import (
+        build_replay_input,
+        identities_from_lock,
+        write_replay_input,
+    )
+    from ageval.plugins.base import BaseExecutor
+    from ageval.plugins.slots import EXECUTOR
+
+    records = getattr(activity, "records", None)
+    if not isinstance(records, list):
+        return
+    winner = graph.winners.get(EXECUTOR) if graph is not None else None
+    impl = getattr(winner, "impl", None) or BaseExecutor
+    classify = getattr(impl, "classify_replay_actions", BaseExecutor.classify_replay_actions)
+    write_replay_input(
+        attempt_dir,
+        build_replay_input(records, identities_from_lock(lock_doc), classify),
+    )
 
 
 def _prune_settled_recovery(
