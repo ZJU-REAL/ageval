@@ -926,6 +926,7 @@ export function parseTrajectoryJsonl(text: string): TrajectoryStep[] {
         typeof rec.function_name === "string" ? rec.function_name : null,
       kind: typeof rec.kind === "string" ? rec.kind : null,
       status: typeof rec.status === "string" ? rec.status : null,
+      inherited: rec.inherited === true,
       args: (args as TrajectoryStep["args"]) ?? null,
       raw_output: (rawOutput as TrajectoryStep["raw_output"]) ?? null,
       elapsed_ms:

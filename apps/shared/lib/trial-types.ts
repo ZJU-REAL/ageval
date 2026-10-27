@@ -122,6 +122,8 @@ export type TrajectoryStep = {
   /** Observational tool duration; omit when the sealed step has none. */
   elapsed_ms?: number | null;
   started_at?: string | null;
+  /** Copied from the parent display trajectory. The fork cut is after these steps. */
+  inherited?: boolean | null;
   ended_at?: string | null;
   outcome?: string | null;
   option_id?: string | null;

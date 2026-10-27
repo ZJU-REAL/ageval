@@ -282,6 +282,7 @@ def _parse_trajectory_jsonl(path: Path) -> list[dict[str, Any]]:
                         "function_name": obj.get("function_name"),
                         "kind": obj.get("kind"),
                         "status": obj.get("status"),
+                        "inherited": obj.get("inherited") is True,
                         "args": args if isinstance(args, (dict, list, str)) else None,
                         "raw_output": raw_output
                         if isinstance(raw_output, (dict, list, str))
