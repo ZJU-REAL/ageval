@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Mapping
 
+from ageval.config.env_refs import keep_recovery_state_raw
 from ageval.config.errors import ConfigError
 
 _TRUE = frozenset({"1", "true", "yes", "on"})
@@ -23,8 +23,7 @@ def resolve_keep_recovery_state(
     """
     if flag is not None:
         return flag
-    source = os.environ if env is None else env
-    raw = source.get("AGEVAL_KEEP_RECOVERY_STATE", "").strip().lower()
+    raw = keep_recovery_state_raw(env).strip().lower()
     if raw == "" or raw in _FALSE:
         return False
     if raw in _TRUE:

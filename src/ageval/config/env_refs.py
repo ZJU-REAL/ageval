@@ -19,6 +19,17 @@ _LOCATOR_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 PREPARE_TRUST_ENV = "AGEVAL_PREPARE_TRUST"
+KEEP_RECOVERY_STATE_ENV = "AGEVAL_KEEP_RECOVERY_STATE"
+
+
+def keep_recovery_state_raw(env: Mapping[str, str] | None = None) -> str:
+    """Raw ``AGEVAL_KEEP_RECOVERY_STATE`` value. Empty means unset."""
+    if env is not None:
+        return env.get(KEEP_RECOVERY_STATE_ENV, "")
+    return expand_embedded_env(
+        "${AGEVAL_KEEP_RECOVERY_STATE:-}",
+        location=KEEP_RECOVERY_STATE_ENV,
+    )
 
 
 def prepare_trust_entries() -> frozenset[str]:
