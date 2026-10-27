@@ -89,6 +89,7 @@ sets ``AGEVAL_REGISTRY_URL=http://127.0.0.1:8080``.
 | `ageval executors` | Host executor / ACP entry inventory |
 | `ageval plugin install\|list\|uninstall` | Local `ageval.plugin/1` cache (`$AGEVAL_HOME/plugins`); never rewrites profiles |
 | `ageval plugin publish` | Upload a plugin package (`package_kind=plugin`); optional `--replace` |
+| `ageval checkpoints` | List retained checkpoints for one Attempt and whether each cut can start a fork |
 | `ageval evidence` | Export sealed trajectory copy (does not change score) |
 | `ageval submit` / `status` / `cancel` | Durable Run / suite job control (suite id + optional `--dataset`) |
 | `ageval login` | GitHub **Device Flow** → write credentials (Hub uses browser OAuth instead) |

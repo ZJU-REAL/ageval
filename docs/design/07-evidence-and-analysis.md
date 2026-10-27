@@ -57,6 +57,24 @@ Recovery-state retention is a separate policy. The recovery bundle is `activity.
 
 `<attempt>/state` is environment probe state (nonce, cursor, inflight), not part of the recovery bundle. `local` and `docker` remove it when `stop(delete=True)` deletes `box/`. A sealed Attempt also drops it unless `--keep-workspace` is set.
 
+### 2.4 Checkpoint listing
+
+`ageval checkpoints <dataset> --run <attempt_id>` reads a retained recovery bundle and does not start an environment. Each row is one `checkpoints/seq_<N>.json` or an activity `checkpoint_seq` with no manifest. The row records `seq`, the lifecycle phase at that seq, whether the blobs are `available`, `incomplete`, or `missing`, and `forkable`. A non-forkable row includes `reason`:
+
+| Reason | Meaning |
+| --- | --- |
+| `not_run_phase` | The cut is not inside `run` (environment, evaluate, record, or unknown). |
+| `solver_sealed` | The cut is at or after the completed `seal_run` line. |
+| `gold_exposed` | The cut is at or after `evaluate` started. Gold may already be on the box. |
+| `multi_session` | The prefix contains more than one completed session. |
+| `continuation_unsupported` | The single session executor is not `miniswe`, `terminus-2`, `openai-http`, or `anthropic-http`. |
+| `not_a_completed_cut` | No completed activity line owns this seq. |
+| `inconsistent` | The owner seq, manifest seq, or an open in-flight effect does not match the cut. |
+| `checkpoint_incomplete` | The manifest file is missing. |
+| `state_not_restorable` | The manifest exists but a blob or the solver session cannot be restored. |
+
+A forkable cut is a completed `run`-phase snapshot before `seal_run` and before gold upload, with one restorable session of a supported executor and a complete manifest. Exit 2 when the Attempt directory is missing, the recovery bundle is gone (`recovery_state_missing`), or `activity.jsonl` is corrupt. A retained bundle with no forkable cut still exits 0.
+
 ---
 
 ## 3. Suite Execution, Always-k (`-k`), and Campaigns

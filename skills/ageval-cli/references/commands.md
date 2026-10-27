@@ -60,6 +60,13 @@ Stdout JSON (high level):
 - Per invocation: Core writes `trajectory.jsonl` (`ageval.trajectory.event/1`) for **run-phase** Agent turns. Evaluate-phase SDK invoke (LLM-as-judge) writes `evaluation/observation.jsonl` instead. Neither file is PASS.
 - Docker kind uses the docker environment plugin + `attach_stdio`; coding entries stay on the parent ACP client.
 
+## `ageval checkpoints`
+
+- `ageval checkpoints <dataset> --run <attempt_id>` lists retained `checkpoints/seq_N.json` cuts. It does not start an environment and does not fork.
+- Exit 2 when the Attempt directory is missing, `activity.jsonl` or `checkpoints/` is gone, or the activity log is corrupt.
+- A row is forkable only when it is a completed `run`-phase cut before `seal_run` and before evaluate starts, the prefix has one session, that session's executor is `miniswe`, `terminus-2`, `openai-http`, or `anthropic-http`, and the manifest blobs are present. Otherwise `reason` says why.
+- Requires the recovery bundle. Settled Attempts keep it only with `--keep-recovery-state`.
+
 ## `ageval evidence`
 
 - Read-only export of **sealed** invocations.

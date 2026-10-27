@@ -66,6 +66,13 @@ def build_regrade_attempts() -> Callable[..., Any]:
     return regrade_attempts
 
 
+def build_list_checkpoints() -> Callable[..., Any]:
+    """Wire ``ageval checkpoints``: classify retained cuts, start nothing."""
+    from ageval.application.checkpoints import list_checkpoints
+
+    return list_checkpoints
+
+
 def build_probe_attempt() -> Callable[..., Any]:
     """Wire ``ageval run --probe``: lock plus preflight, and nothing else."""
     from ageval.application.run import probe_attempt
