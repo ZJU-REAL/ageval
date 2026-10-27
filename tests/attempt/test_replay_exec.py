@@ -132,6 +132,70 @@ def test_timing_text_is_not_a_divergence(tmp_path: Path) -> None:
     assert "first_divergence" not in ctx.replay_provenance
 
 
+def test_changed_declared_artifact_is_the_first_divergence(tmp_path: Path) -> None:
+    ctx = _ctx(
+        tmp_path,
+        [
+            {
+                "ordinal": 1,
+                "tool_call_id": "bash_1",
+                "executable": True,
+                "arguments": {"command": "printf live > out.txt", "cwd": None},
+                "timeout_sec": 30,
+                "recorded_exit_code": 0,
+                "recorded_output": "",
+            }
+        ],
+    )
+    ctx.lock.resolved_references = {
+        "artifacts": [{"id": "out", "path": "artifacts/out.txt", "kind": "file"}]
+    }
+    source = tmp_path / "source" / "task-artifacts"
+    child = tmp_path / "child" / "task-artifacts"
+    source.mkdir(parents=True)
+    child.mkdir(parents=True)
+    (source / "out.txt").write_text("recorded\n", encoding="utf-8")
+    (child / "out.txt").write_text("live\n", encoding="utf-8")
+    from ageval.attempt.replay_exec import execute_recorded_actions, note_artifact_divergence
+
+    asyncio.run(execute_recorded_actions(ctx))
+    assert ctx.replay_provenance["status"] == "matched"
+    note_artifact_divergence(ctx)
+    assert ctx.replay_provenance["status"] == "diverged"
+    assert ctx.replay_provenance["first_divergence"]["field"] == "artifact"
+    assert ctx.replay_provenance["first_divergence"]["artifact_id"] == "out"
+    wrote = ctx.host.host_path(f"{WORKSPACE_PATH}/out.txt")
+    assert wrote.read_text(encoding="utf-8") == "live"
+
+
+def test_missing_child_artifact_is_a_divergence(tmp_path: Path) -> None:
+    ctx = _ctx(
+        tmp_path,
+        [
+            {
+                "ordinal": 1,
+                "tool_call_id": "bash_1",
+                "executable": True,
+                "arguments": {"command": "true", "cwd": None},
+                "timeout_sec": 30,
+                "recorded_exit_code": 0,
+                "recorded_output": "",
+            }
+        ],
+    )
+    ctx.lock.resolved_references = {
+        "artifacts": [{"id": "out", "path": "artifacts/out.txt", "kind": "file"}]
+    }
+    source = tmp_path / "source" / "task-artifacts"
+    source.mkdir(parents=True)
+    (source / "out.txt").write_text("recorded\n", encoding="utf-8")
+    from ageval.attempt.replay_exec import execute_recorded_actions, note_artifact_divergence
+
+    asyncio.run(execute_recorded_actions(ctx))
+    note_artifact_divergence(ctx)
+    assert ctx.replay_provenance["first_divergence"]["field"] == "artifact"
+
+
 def test_reproduced_nonzero_exit_is_a_match(tmp_path: Path) -> None:
     ctx = _ctx(
         tmp_path,

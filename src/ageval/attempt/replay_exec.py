@@ -207,9 +207,9 @@ def _artifact_divergence(ctx: Any, source: Path) -> dict[str, object] | None:
         name = aid if str(item.get("kind") or "file") == "tree" else f"{aid}{suffix}"
         source_file = source_root / name
         child_file = child_root / name
-        if not source_file.is_file() or not child_file.is_file():
+        if not source_file.is_file():
             continue
-        if source_file.read_bytes() != child_file.read_bytes():
+        if not child_file.is_file() or source_file.read_bytes() != child_file.read_bytes():
             return {
                 "ordinal": None,
                 "tool_call_id": "",
