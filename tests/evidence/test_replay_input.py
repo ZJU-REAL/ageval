@@ -143,7 +143,9 @@ def test_redacted_command_is_not_replayable(tmp_path: Path) -> None:
     _bash(log, "bash_1", "echo [REDACTED:secret]")
     document = build_replay_input(log.records, _ids(), _bash_classifier)
     assert document["replayable"] is False
-    assert "command_redacted" in document["missing"]
+    missing = document["missing"]
+    assert isinstance(missing, list)
+    assert "command_redacted" in missing
 
 
 def test_unsupported_action_is_not_skipped(tmp_path: Path) -> None:
@@ -183,7 +185,9 @@ def test_unsupported_action_is_not_skipped(tmp_path: Path) -> None:
     )
     document = build_replay_input(log.records, _ids(), _bash_classifier)
     assert document["replayable"] is False
-    assert "unsupported_action" in document["missing"]
+    missing = document["missing"]
+    assert isinstance(missing, list)
+    assert "unsupported_action" in missing
 
 
 def test_executor_without_adapter_states_the_gap(tmp_path: Path) -> None:

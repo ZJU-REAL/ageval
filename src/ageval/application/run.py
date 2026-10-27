@@ -212,7 +212,6 @@ async def run_attempt(
     replay_source = None
     if replay is not None:
         from ageval.application.replay import ReplayRejection, load_replay_plan, source_attempt_dir
-        from ageval.plugins.bootstrap import ensure_bootstrapped
 
         try:
             replay_source = source_attempt_dir(dataset_root, replay.source_attempt_id)

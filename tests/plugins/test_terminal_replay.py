@@ -31,9 +31,12 @@ def test_redacted_and_foreign_tools_are_explicit() -> None:
         ]
     )
     assert document["tool_semantics_version"] == "miniswe.bash/1"
-    assert "command_redacted" in document["missing"]
-    assert "unsupported_action" in document["missing"]
+    missing = document["missing"]
     actions = document["actions"]
+    assert isinstance(missing, list)
+    assert isinstance(actions, list)
+    assert "command_redacted" in missing
+    assert "unsupported_action" in missing
     assert actions[0]["executable"] is False
     assert actions[1]["executable"] is False
 
