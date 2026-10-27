@@ -764,6 +764,7 @@ export function JobsPage() {
                         value={job.model_label}
                         effort={job.reasoning_effort}
                         fork={job.fork}
+                        replay={job.replay}
                       />
                     </TableCell>
                     <TableCell className="tabular-nums">

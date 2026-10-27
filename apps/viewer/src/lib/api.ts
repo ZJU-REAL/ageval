@@ -18,6 +18,18 @@ export type Job = {
     source_model?: string;
     continuation_model?: string;
   } | null;
+  replay?: {
+    parent_attempt_id: string;
+    status?: string | null;
+    field?: string | null;
+    ordinal?: number | null;
+    artifact_id?: string | null;
+    first_divergence?: {
+      field?: string | null;
+      ordinal?: number | null;
+      artifact_id?: string | null;
+    } | null;
+  } | null;
   reasoning_effort?: string;
   overlays?: string[];
   provider_label?: string;
@@ -148,6 +160,18 @@ export type Trial = {
     checkpoint_seq?: number | null;
     source_model?: string;
     continuation_model?: string;
+  } | null;
+  replay?: {
+    parent_attempt_id: string;
+    status?: string | null;
+    field?: string | null;
+    ordinal?: number | null;
+    artifact_id?: string | null;
+    first_divergence?: {
+      field?: string | null;
+      ordinal?: number | null;
+      artifact_id?: string | null;
+    } | null;
   } | null;
   /** lock.provenance.upstream.url for top-bar link */
   upstream_url?: string | null;

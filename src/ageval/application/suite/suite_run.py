@@ -360,6 +360,7 @@ async def _run_one(
             "error": None if code != 2 else _copy_error(getattr(result, "error", None)),
             "phase": "terminal",
             "fork": bool(getattr(result, "fork", None)),
+            "replay": bool(getattr(result, "replay", None)),
         }
     except (ConfigError, ModelConfigError, PluginContractError) as exc:
         return {

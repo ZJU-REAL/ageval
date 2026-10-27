@@ -47,6 +47,16 @@ ageval run <dataset> --task <task_id> --fork <attempt_id> --checkpoint <seq> --m
 
 `--keep-recovery-state` 在源 Attempt 封存后仍保留 `activity.jsonl` 和 `checkpoints/`。`ageval checkpoints` 列出切点。`--fork` 从一次已完成的 run 阶段切点新开 Attempt，使用新的环境、源 harness，以及你传入的模型。父 Attempt 保持封存。默认 pass@k 不计入这次子 Attempt。
 
+## 重放已记录的终端动作
+
+```bash
+ageval run <dataset> --task <task_id> --keep-recovery-state
+ageval replay <dataset> --run <attempt_id>
+ageval replay <dataset> --run <attempt_id> --evaluate
+```
+
+`ageval replay` 新开一次 Attempt，并按任务初始配置启动一个新环境。它按顺序重新执行保留下来的终端动作，不调用求解模型。报告给出源 Attempt、回放状态、第一处分歧和新的证据路径。`--evaluate` 用 `evaluator.py` 给新产物打分。不带这个开关时，回放完成不是 PASS 或 FAIL。默认 pass@k 不计入这次子 Attempt。源 Attempt 保持不变。
+
 <Callout type="info" title="整份 dataset 跑一遍">
 
 不加 `--task` 就会整份跑，所有成员进同一个 job。`ageval status <suite_run_id> --dataset <dataset>` 看 progress，`ageval cancel <suite_run_id> --dataset <dataset>` 叫停。

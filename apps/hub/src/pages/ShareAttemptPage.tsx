@@ -162,6 +162,7 @@ export function ShareAttemptPage() {
                 harnessTo={harnessHref}
                 modelTo={modelCatalogHref}
                 fork={trial.fork}
+                replay={trial.replay}
               />
             ) : null}
             <EvidenceTabs

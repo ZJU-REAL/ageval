@@ -24,10 +24,12 @@ whatever that client routes: an OpenAI-compatible `base_url`, or a LiteLLM
 prefix (`openai/`, `openrouter/`, `anthropic/`, …). Credentials are locators
 projected into the parent HTTP client; they never enter the lock.
 
-A resumed attempt replays completed model queries and bash commands from the
-attempt activity log. The agent loop still runs, and those steps do not call
-the model or the shell again. mini-swe-agent does not compact its own message
-list, so there is no summary record to project.
+A resumed attempt returns completed model queries and bash results from the
+attempt activity log so the agent loop can continue. Those steps do not call
+the model or the shell again. That is not `ageval replay`. `ageval replay`
+starts a new Attempt and runs the recorded bash commands again through
+`environment.exec`. mini-swe-agent does not compact its own message list, so
+there is no summary record to project.
 
 ## Capabilities
 

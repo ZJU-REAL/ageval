@@ -29,6 +29,7 @@ class AttemptResultRow:
     error_json: str | None = None
     limit_name: str | None = None
     fork_json: str = ""
+    replay_json: str = ""
 
 
 @dataclass(frozen=True, slots=True)

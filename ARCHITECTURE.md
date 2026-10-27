@@ -68,7 +68,7 @@ dataset root (ageval.yaml / ageval.dataset/1)
 
 | Item | Value |
 | --- | --- |
-| Public entrypoint | `ageval lock` / `run` (including `--probe`) / `tasks` / `campaign` / `view` / `plugin` / `evidence` / `status` / `cancel` / `executors` / `jobs` / `results` / `publish` / `release` / `agent` / `registry` |
+| Public entrypoint | `ageval lock` / `run` (including `--probe`) / `replay` / `checkpoints` / `tasks` / `campaign` / `view` / `plugin` / `evidence` / `status` / `cancel` / `executors` / `jobs` / `results` / `publish` / `release` / `agent` / `registry` |
 | Production composition root | `src/ageval/application/composition.py` |
 | Smoke lock | `uv run ageval lock examples/datasets/minimal-demo --task terminal-jsonl-agg` (exit 0; summary has `dataset_id`) |
 | Smoke docker ACP | `uv run ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg` (default `minimal-demo` environment is `docker`) |
@@ -222,7 +222,7 @@ During a production Attempt, `application/run.py` mints run identity once and in
 | `plugins/defaults/` | `environment_setup` (`setup.sh`), default `evaluation_runtime` and `trajectory_seal` implementations | Issuing `PASS` directly |
 | `runtime/` | Run identity, parent Agent Service, subprocess worker launchers, clocks/quotas | Environment plugin internals, scoring criteria |
 | `evaluation/` | Phase barrier, subprocess evaluator execution, `bind_evaluation` | Task-specific scoring formulas |
-| `evidence/` | Evidence directory layout, secret redaction, `activity.jsonl`, `checkpoints/`, `trajectory.jsonl` sealing, document schemas | Vendor protocol parsing, `PASS` verdicts |
+| `evidence/` | Evidence directory layout, secret redaction, `activity.jsonl`, `replay-input.json`, `checkpoints/`, `trajectory.jsonl` sealing, document schemas | Vendor protocol parsing, `PASS` verdicts |
 | `registry/` + `services/registry/` | Package and result HTTP client/server | Issuing `PASS`; exposing storage credentials to clients |
 | `ageval_sdk` | Task-script types and session/tool helpers | Control-plane internals, `PASS` verdicts |
 | `examples/` | Reference datasets and agent packages for smoke/regression checks | Full upstream benchmark distributions |

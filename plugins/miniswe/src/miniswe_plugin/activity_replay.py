@@ -81,11 +81,14 @@ def install_activity(model: Any, env: Any, executor: Any) -> None:
         command = str(action.get("command") or "")
         from ageval.evidence.system_effect import command_system_effect
 
+        arguments = {"command": command}
+        if cwd:
+            arguments["cwd"] = cwd
         scope.record_tool_call_in_flight(
             call_id,
             "bash",
             "execute",
-            {"command": command},
+            arguments,
             replay_safe=False,
             system_effect=command_system_effect(command, cwd or None),
             timeout_sec=float(timeout or getattr(env, "timeout", 30)),

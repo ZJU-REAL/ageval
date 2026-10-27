@@ -148,6 +148,7 @@ async def run_attempt(
     suite_run_id: str | None = None,
     recover_unsealed: bool = False,
     fork: Any = None,
+    replay: Any = None,
 ) -> tuple[int, AttemptResult]:
     """Run one foreground Attempt and return its exit code and result."""
     from ageval.application.composition import build_lock_command
@@ -207,6 +208,27 @@ async def run_attempt(
     lock = locked.lock
     dataset_root = locked.resolved.dataset_root
     task_root = locked.resolved.task_dir
+    replay_plan = None
+    replay_source = None
+    if replay is not None:
+        from ageval.application.replay import ReplayRejection, load_replay_plan, source_attempt_dir
+
+        try:
+            replay_source = source_attempt_dir(dataset_root, replay.source_attempt_id)
+            replay_plan = load_replay_plan(
+                dataset_root,
+                replay,
+                lock_summary=locked.summary(),
+                registry=ensure_bootstrapped(),
+                executor_id=_executor_id(lock, _selected_profile_id(lock)),
+            )
+        except ReplayRejection as exc:
+            return _refused_plain(
+                kind=str(lock.environment),
+                evidence_path="",
+                title=exc.error_code,
+                message=exc.message,
+            )
     fork_plan = None
     if fork is not None:
         try:
@@ -357,6 +379,10 @@ async def run_attempt(
         fork_provenance=None
         if fork_plan is None
         else fork_plan.provenance(child_digest=lock.digest, verified=True),
+        replay_plan=replay_plan,
+        replay_source_id="" if replay is None else str(replay.source_attempt_id),
+        replay_source_dir=replay_source,
+        replay_evaluate=bool(getattr(replay, "evaluate", False)),
     )
     _bind_evaluate_session_target(ctx, agent_service)
     parent = agent_service.service
@@ -394,6 +420,15 @@ async def run_attempt(
         agent_service.stop()
 
     fork_doc = ctx.fork_provenance if isinstance(ctx.fork_provenance, dict) else None
+    replay_doc = ctx.replay_provenance if isinstance(ctx.replay_provenance, dict) else None
+    if replay_doc is not None:
+        replay_doc["evaluated"] = ctx.evaluation_result is not None
+    unevaluated = (
+        replay_plan is not None
+        and not ctx.replay_evaluate
+        and ctx.evaluation_result is None
+        and _error_fact(ctx) is None
+    )
     result = bind_result(
         evaluator_raw=ctx.evaluation_result,
         kind=host.kind,
@@ -405,6 +440,8 @@ async def run_attempt(
         limit=_fact_detail(ctx, "limit_reached", "name"),
         facts=tuple(ctx.facts_as_list()),
         fork=fork_doc,
+        replay=replay_doc,
+        unevaluated=unevaluated,
     )
     facts = ctx.facts_as_list()
     summary: dict[str, Any] = {
@@ -418,14 +455,41 @@ async def run_attempt(
         summary["extra"] = extra
     if fork_doc:
         summary["fork"] = fork_doc
+    if replay_doc:
+        summary["replay"] = replay_doc
     evidence.write_summary(summary)
     _write_result(evidence, result)
+    _persist_replay_input(evidence.root, activity, locked.summary(), graph)
     _prune_settled_recovery(
         evidence.root,
         keep_workspace=keep_workspace,
         keep_recovery_state=keep_recovery_state,
     )
     return _exit_code(result), result
+
+
+def _persist_replay_input(
+    attempt_dir: Path, activity: Any, lock_doc: Mapping[str, object], graph: Any
+) -> None:
+    """Write the replay input next to activity. Prune deletes both together."""
+    from ageval.evidence.replay_input import (
+        build_replay_input,
+        identities_from_lock,
+        write_replay_input,
+    )
+    from ageval.plugins.base import BaseExecutor
+    from ageval.plugins.slots import EXECUTOR
+
+    records = getattr(activity, "records", None)
+    if not isinstance(records, list):
+        return
+    winner = graph.winners.get(EXECUTOR) if graph is not None else None
+    impl = getattr(winner, "impl", None) or BaseExecutor
+    classify = getattr(impl, "classify_replay_actions", BaseExecutor.classify_replay_actions)
+    write_replay_input(
+        attempt_dir,
+        build_replay_input(records, identities_from_lock(lock_doc), classify),
+    )
 
 
 def _prune_settled_recovery(
@@ -664,6 +728,14 @@ def _http_credentials_missing(lock: LockedTaskConfig) -> bool:
         if names and not http_key_present(names):
             return True
     return False
+
+
+def _executor_id(lock: LockedTaskConfig, profile_id: str) -> str:
+    row = lock.profile_row(profile_id)
+    if row is None:
+        return ""
+    executor = row.get("executor")
+    return executor.strip() if isinstance(executor, str) else ""
 
 
 def _selected_profile_id(lock: LockedTaskConfig) -> str:

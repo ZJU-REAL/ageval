@@ -306,6 +306,7 @@ class ResultsCommands:
                     error=meta.get("error"),
                     limit=meta.get("limit") if isinstance(meta.get("limit"), str) else None,
                     fork=meta.get("fork") if isinstance(meta.get("fork"), dict) else None,
+                    replay=meta.get("replay") if isinstance(meta.get("replay"), dict) else None,
                 )
             except RegistryError as exc:
                 if allow_existing and (

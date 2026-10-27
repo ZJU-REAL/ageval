@@ -39,6 +39,7 @@ class AttemptResult:
     limit: str | None = None
     facts: tuple[Mapping[str, Any], ...] = field(default_factory=tuple)
     fork: Mapping[str, Any] | None = None
+    replay: Mapping[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         payload = {
@@ -57,6 +58,8 @@ class AttemptResult:
         }
         if self.fork:
             payload["fork"] = dict(self.fork)
+        if self.replay:
+            payload["replay"] = dict(self.replay)
         return payload
 
 
@@ -73,6 +76,8 @@ def bind_result(
     logs: str | None = None,
     facts: Sequence[Mapping[str, Any]] = (),
     fork: Mapping[str, Any] | None = None,
+    replay: Mapping[str, Any] | None = None,
+    unevaluated: bool = False,
 ) -> AttemptResult:
     """Turn an evaluator verdict or a phase failure into the Attempt result.
 
@@ -89,6 +94,7 @@ def bind_result(
         "limit": limit,
         "facts": tuple(facts),
         "fork": fork,
+        "replay": replay,
     }
     if error is not None:
         return AttemptResult(
@@ -96,6 +102,18 @@ def bind_result(
             score=None,
             metrics={},
             error=_stored_error(error),
+            **common,
+        )
+    if unevaluated:
+        return AttemptResult(
+            status=STATUS_ERROR,
+            score=None,
+            metrics={},
+            error=error_record(
+                phase="replay",
+                title="not_evaluated",
+                message="replay completion is not a verdict",
+            ),
             **common,
         )
     if evaluator_raw is None:

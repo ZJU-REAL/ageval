@@ -517,6 +517,43 @@ function formatLatencyMs(
   return nInv > 0 ? `${label} (${nInv})` : label;
 }
 
+function replayFromDocs(
+  result: Record<string, unknown>,
+  summary: Record<string, unknown>,
+): Trial["replay"] {
+  const raw =
+    (result.replay && typeof result.replay === "object" ? result.replay : null) ||
+    (summary.replay && typeof summary.replay === "object" ? summary.replay : null);
+  if (!raw || Array.isArray(raw)) return null;
+  const doc = raw as Record<string, unknown>;
+  const parent = doc.parent_attempt_id;
+  if (typeof parent !== "string" || !parent.trim()) return null;
+  const point =
+    doc.first_divergence && typeof doc.first_divergence === "object"
+      ? (doc.first_divergence as Record<string, unknown>)
+      : null;
+  const ordinal = doc.ordinal ?? point?.ordinal;
+  return {
+    parent_attempt_id: parent,
+    status: typeof doc.status === "string" ? doc.status : null,
+    field: typeof doc.field === "string" ? doc.field : typeof point?.field === "string" ? point.field : null,
+    ordinal: typeof ordinal === "number" ? ordinal : null,
+    artifact_id:
+      typeof doc.artifact_id === "string"
+        ? doc.artifact_id
+        : typeof point?.artifact_id === "string"
+          ? point.artifact_id
+          : null,
+    first_divergence: point
+      ? {
+          field: typeof point.field === "string" ? point.field : null,
+          ordinal: typeof point.ordinal === "number" ? point.ordinal : null,
+          artifact_id: typeof point.artifact_id === "string" ? point.artifact_id : null,
+        }
+      : null,
+  };
+}
+
 function forkFromDocs(
   result: Record<string, unknown>,
   summary: Record<string, unknown>,
@@ -791,6 +828,7 @@ export function buildTrialMeta(opts: {
     agent_label: actors.length === 1 ? actors[0].role : null,
     model_label: actors.length === 1 ? actors[0].model ?? null : null,
     fork: forkFromDocs(result, summary),
+    replay: replayFromDocs(result, summary),
     executor_kind: executors[0] || null,
     provenance: prov,
     upstream_url:

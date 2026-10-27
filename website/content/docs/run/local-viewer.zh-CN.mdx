@@ -47,7 +47,7 @@ Datasets、Jobs、Agents、Plugins 上，搜索和筛选停在滚动列顶部。
 | --- | --- |
 | Jobs | 本地整份 dataset 的运行结果，以及只跑一题的结果（Kind：suite / single）。Kind / Source 是过滤器；suite 的 Source 只列 task id。分数列是 Pass rate 和 Mean score；数据集是你已经选中的那一份。Kind 为 suite 时可以换 Table / Pareto / Waffle。Pareto 横轴是花费、token 或时间。Waffle 一格是一次 trial。图是观测，不算 PASS |
 | Tasks | 每题状态 / 分数，以及各次 attempt 的 phase timing 平均时长。还没跑的题，时长留空。整份跑完且一题只有一次运行时，点进后直接打开那一次 |
-| Attempt | 结果条、**Timing**（有数据时还有 **Tokens**）、角色、证据页签（Trajectory / Agent / …）。fork 的 Attempt 在模型名后有 `fork` 标签；轨迹在继承前缀之后画一条切线 |
+| Attempt | 结果条、**Timing**（有数据时还有 **Tokens**）、角色、证据页签（Trajectory / Agent / …）。fork 的 Attempt 在模型名后有 `fork` 标签；轨迹在继承前缀之后画一条切线。replay 的 Attempt 在模型名后有 `replay` 标签；轨迹是源任务原文加上在新环境里重新执行的动作和这次的观察 |
 
 数据集、Kind、Source、harness、模型和图表选项写在地址里。浏览器返回会回到刚才的选择。Kind 为 suite 时，数量是已结束的 job / 当前列出的 job，Trials 列保持可见。
 

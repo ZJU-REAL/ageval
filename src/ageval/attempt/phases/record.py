@@ -57,6 +57,12 @@ async def run(ctx: AttemptCtx) -> None:
             inherited = inherited_display_rows(ctx)
             if inherited:
                 turns = [inherited]
+            else:
+                from ageval.attempt.replay_exec import replay_display_rows
+
+                replayed = replay_display_rows(ctx)
+                if replayed:
+                    turns = [replayed]
 
     async def seal() -> None:
         impl = bind_winner(ctx.registry, ctx.bindings, TRAJECTORY_SEAL)

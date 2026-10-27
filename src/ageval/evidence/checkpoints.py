@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from ageval.config.errors import ERROR_INVALID_FORMAT, ConfigError
-from ageval.evidence.store import ACTIVITY_LOG_REL, CHECKPOINTS_DIR_REL
+from ageval.evidence.store import ACTIVITY_LOG_REL, CHECKPOINTS_DIR_REL, REPLAY_INPUT_REL
 
 CHECKPOINT_FORMAT = "ageval.checkpoint/1"
 
@@ -70,15 +70,23 @@ def prune_activity_log(attempt_dir: Path) -> None:
         path.unlink()
 
 
-def prune_recovery_bundle(attempt_dir: Path) -> None:
-    """Remove checkpoints and ``activity.jsonl`` together.
+def prune_replay_input(attempt_dir: Path) -> None:
+    """Remove the replay input manifest with the recovery bundle."""
+    path = attempt_dir / REPLAY_INPUT_REL
+    if path.is_file():
+        path.unlink()
 
-    Unsealed Attempts keep both so ``--resume`` can continue. Call this only
-    after ``result.json`` and ``trajectory.jsonl`` exist, and only when recovery
-    state is not retained.
+
+def prune_recovery_bundle(attempt_dir: Path) -> None:
+    """Remove checkpoints, ``activity.jsonl``, and ``replay-input.json`` together.
+
+    Unsealed Attempts keep the bundle so ``--resume`` can continue. Call this
+    only after ``result.json`` and ``trajectory.jsonl`` exist, and only when
+    recovery state is not retained.
     """
     prune_checkpoints(attempt_dir)
     prune_activity_log(attempt_dir)
+    prune_replay_input(attempt_dir)
 
 
 def prune_recovery_state(attempt_dir: Path) -> None:

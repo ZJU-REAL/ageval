@@ -86,6 +86,14 @@ def _dump_error(value: object) -> str | None:
 
 
 def _dump_fork(value: object) -> str:
+    return _dump_parent_doc(value)
+
+
+def _dump_replay(value: object) -> str:
+    return _dump_parent_doc(value)
+
+
+def _dump_parent_doc(value: object) -> str:
     if not isinstance(value, dict) or not value.get("parent_attempt_id"):
         return ""
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
@@ -224,6 +232,7 @@ class ResultService:
             error_json=error_json,
             limit_name=limit_name,
             fork_json=_dump_fork(meta.get("fork")),
+            replay_json=_dump_replay(meta.get("replay")),
         )
         try:
             self.blobs.put_if_absent(blob_digest, archive, prefix="results")

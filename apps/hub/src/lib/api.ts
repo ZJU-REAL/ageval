@@ -481,6 +481,18 @@ export type AttemptMeta = {
     source_model?: string;
     continuation_model?: string;
   } | null;
+  replay?: {
+    parent_attempt_id: string;
+    status?: string | null;
+    field?: string | null;
+    ordinal?: number | null;
+    artifact_id?: string | null;
+    first_divergence?: {
+      field?: string | null;
+      ordinal?: number | null;
+      artifact_id?: string | null;
+    } | null;
+  } | null;
 };
 
 export async function listAttempts(

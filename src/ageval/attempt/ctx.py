@@ -88,6 +88,12 @@ class AttemptCtx:
     # Selected parent cut restored onto this Attempt's fresh box. Not an attach.
     fork_checkpoint_seq: int | None = None
     fork_provenance: Any = None
+    # Diagnosed terminal-action program. None means a normal solver run.
+    replay_plan: Any = None
+    replay_source_id: str = ""
+    replay_source_dir: Any = None
+    replay_evaluate: bool = False
+    replay_provenance: Any = None
     _budget_seconds: float | None = None
     _spent_offset: float = 0.0
     _writers_stopped: bool = False

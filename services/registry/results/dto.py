@@ -42,6 +42,9 @@ def attempt_to_dict(row: AttemptResultRow) -> dict[str, Any]:
     fork = _load_error_json(row.fork_json)
     if isinstance(fork, dict) and fork.get("parent_attempt_id"):
         out["fork"] = fork
+    replay = _load_error_json(row.replay_json)
+    if isinstance(replay, dict) and replay.get("parent_attempt_id"):
+        out["replay"] = replay
     return out
 
 

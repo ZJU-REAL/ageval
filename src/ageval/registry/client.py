@@ -436,6 +436,7 @@ class RegistryClient:
         error: Any = None,
         limit: str | None = None,
         fork: Mapping[str, object] | None = None,
+        replay: Mapping[str, object] | None = None,
     ) -> dict[str, Any]:
         meta: dict[str, Any] = {
             "run_id": run_id,
@@ -465,6 +466,8 @@ class RegistryClient:
             meta["limit"] = limit.strip()
         if isinstance(fork, dict) and fork.get("parent_attempt_id"):
             meta["fork"] = fork
+        if isinstance(replay, dict) and replay.get("parent_attempt_id"):
+            meta["replay"] = replay
         http_status, raw, _ = self._put_multipart(
             "/v1/results/attempts",
             meta=meta,

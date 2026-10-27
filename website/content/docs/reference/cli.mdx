@@ -18,6 +18,7 @@ ageval run <dataset> --max-concurrent-tasks 2
 ageval run <dataset> -k 5
 ageval run <dataset> --task <id> --resume <attempt_id>
 ageval checkpoints <dataset> --run <attempt_id>
+ageval replay <dataset> --run <attempt_id> [--evaluate]
 ageval run <dataset> --task <id> --fork <attempt_id> --checkpoint <seq> --model <model_id>
 ageval run <dataset> --resume-suite <suite_run_id> --task <id> -k 5
 ageval run <dataset> --resume-suite <suite_run_id> --retry-errors
@@ -73,11 +74,13 @@ With `--layout harbor`, the built-in run sends `instruction.md` once to role `so
 | `--replace-slot` | With `--resume-suite --task`: re-run that finished slot; new Attempt; old row stays in `previous[]` |
 | `--attempt-index N` | Always-k slot to replace (default 0). Only with `--replace-slot` |
 | `--keep-workspace` | Keep the environment work root after cleanup (default: delete). Uploads never pack it. Docker volumes are still removed. Does not keep `activity.jsonl` or `checkpoints/` |
-| `--keep-recovery-state` / `--no-keep-recovery-state` | After `result.json` and `trajectory.jsonl` exist, keep or delete `activity.jsonl` and `checkpoints/`. Default: delete. An interrupted Attempt always keeps them, so `--resume` does not need this flag. Unset falls back to `AGEVAL_KEEP_RECOVERY_STATE`. Independent of `--keep-workspace` |
+| `--keep-recovery-state` / `--no-keep-recovery-state` | After `result.json` and `trajectory.jsonl` exist, keep or delete `activity.jsonl`, `checkpoints/`, and `replay-input.json`. Default: delete. An interrupted Attempt always keeps them, so `--resume` does not need this flag. Unset falls back to `AGEVAL_KEEP_RECOVERY_STATE`. Independent of `--keep-workspace` |
 | `--keep-vendor-raw` | After seal, keep vendor raw and intermediate invocation event files. Default: drop. `task-artifacts/` stays either way. Independent of `--keep-workspace` |
 | `--dir <path>` | Hub ref only. Looks at `<path>/<dataset_id>/`; reuses a matching child |
 | `--agent` | Bind an `ageval.agent/1` Agent package (`pi`, `org/name@version`, or a local path); mutually exclusive with `--profiles` |
 | `--fork <attempt_id>` | Start a new Attempt from a retained checkpoint of that source. Requires `--checkpoint` and `--model`. Mutually exclusive with `--resume`. Rejects `--agent` and `--profiles` |
+
+`ageval replay <dataset> --run <attempt_id>` re-executes retained terminal actions in a new environment. It does not call the solver model. `--evaluate` grades the new artifacts. Without it, completion is not PASS or FAIL. The source Attempt is unchanged. Default pass@k skips the child.
 | `--checkpoint <seq>` | Activity seq to fork. The cut must be a completed run-phase snapshot before solver sealing |
 | `--model` | Override `model.id` on roles `--agent` bound. Requires `--agent`, except with `--fork`, where it sets the continuation model and does not replace the harness. Not `results upload-suite --model`. `results analyze --model` is a separate flag and still requires `--agent` |
 | `--set` / `--profiles` | Overrides / alternate job binding |

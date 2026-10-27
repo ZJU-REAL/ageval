@@ -84,12 +84,13 @@ sets ``AGEVAL_REGISTRY_URL=http://127.0.0.1:8080``.
 | --- | --- |
 | `ageval tasks` | List member task ids in a Dataset |
 | `ageval lock` | Lock config (no Agent) |
-| `ageval run` | Run one member or a full suite (Always-k via `-k` / `--n-attempts`; TTY recap, `--json` for the full document; `--keep-workspace` keeps the host work root; `--keep-recovery-state` keeps `activity.jsonl` and `checkpoints/` after seal; `--keep-vendor-raw` keeps invocation dumps after seal) |
+| `ageval run` | Run one member or a full suite (Always-k via `-k` / `--n-attempts`; TTY recap, `--json` for the full document; `--keep-workspace` keeps the host work root; `--keep-recovery-state` keeps `activity.jsonl`, `checkpoints/`, and `replay-input.json` after seal; `--keep-vendor-raw` keeps invocation dumps after seal) |
 | `ageval campaign` | Serial parameter-matrix campaign (matrix axis ≠ k-attempt) |
 | `ageval executors` | Host executor / ACP entry inventory |
 | `ageval plugin install\|list\|uninstall` | Local `ageval.plugin/1` cache (`$AGEVAL_HOME/plugins`); never rewrites profiles |
 | `ageval plugin publish` | Upload a plugin package (`package_kind=plugin`); optional `--replace` |
 | `ageval checkpoints` | List retained checkpoints for one Attempt and whether each cut can start a fork |
+| `ageval replay` | Re-execute retained terminal actions in a new environment (`--run` source Attempt; `--evaluate` grades new artifacts). Does not call the solver model. Exit 0 matched, 1 diverged, 2 refused or failed |
 | `ageval evidence` | Export sealed trajectory copy (does not change score) |
 | `ageval submit` / `status` / `cancel` | Durable Run / suite job control (suite id + optional `--dataset`) |
 | `ageval login` | GitHub **Device Flow** → write credentials (Hub uses browser OAuth instead) |

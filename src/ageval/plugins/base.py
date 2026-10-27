@@ -126,3 +126,21 @@ class BaseExecutor(ABC):
     def bind_activity(self, scope: Any) -> None:
         """Remember the parent activity scope for this executor. Default stores it."""
         self.activity = scope
+
+    @classmethod
+    def classify_replay_actions(cls, pairs: Sequence[Mapping[str, object]]) -> Mapping[str, object]:
+        """Describe recorded terminal actions, or say this executor cannot replay them."""
+        from ageval.evidence.replay_input import unsupported_classification
+
+        return unsupported_classification(pairs)
+
+    @classmethod
+    async def dispatch_terminal_action(
+        cls,
+        host: Any,
+        action: Mapping[str, object],
+        placement: Any,
+    ) -> Mapping[str, object]:
+        """Re-execute one recorded terminal action. The default refuses."""
+        del host, action, placement
+        raise RuntimeError("terminal_replay_unsupported")

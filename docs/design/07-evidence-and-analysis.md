@@ -83,6 +83,16 @@ Before the environment starts, Core rejects a cut that `ageval checkpoints` woul
 
 `result.json` and `summary.json` include `fork` (`ageval.fork/1`) when the Attempt is a fork: parent Attempt, checkpoint seq, source and child lock digests, model changes (`from` / `to`), the continuation model, and whether that model was the locked model. The field is omitted otherwise. Default pass@k and from-scratch rollups skip rows that carry `fork`.
 
+### 2.6 Terminal action replay input
+
+A settled Attempt writes `replay-input.json` (`ageval.replay.input/1`) next to `activity.jsonl`. The same retention policy owns both files: they are recorded during the run, kept while the Attempt is unsealed, and deleted together after `result.json` and `trajectory.jsonl` exist unless `--keep-recovery-state` / `AGEVAL_KEEP_RECOVERY_STATE` retains the bundle. There is no second retention flag.
+
+The manifest records task, dataset, environment, image, and `eval_digest` identity, the tool semantics version, and the ordered action arguments. `replayable` is false when a command is missing, redacted, incomplete, concurrent with another open action, or outside the bound executor's terminal adapter. Redaction does not become an empty successful program. An executor with no terminal adapter writes `terminal_replay_unsupported` instead of a bash program.
+
+`ageval replay <dataset> --run <attempt_id>` reads that manifest, or builds the same document from retained activity when the file is absent. It refuses before starting an environment when the bundle is missing, the activity is corrupt, an action is not executable, or task / dataset / environment / image / `eval_digest` / tool-semantics identity does not match the current lock. A missing source `eval_digest` is a warning, not a match claim.
+
+The child `result.json` and `summary.json` include `replay` (`ageval.replay/1`): parent Attempt, lock digests, tool semantics, execution status (`matched`, `diverged`, or `error`), the comparator, and `first_divergence` when one exists. The field is omitted otherwise. Upload stores that object on the attempt row, so a missing parent archive does not erase it. Default pass@k and from-scratch rollups skip rows that carry `replay`, the same way they skip `fork`. Viewer and Hub show a replay marker and the divergence location. Replay completion is not a model-evaluation sample. The child ``trajectory.jsonl`` is the task text from the source trajectory plus each action executed in the fresh environment, with that execution's observation. It is not an empty file, and it does not copy the source model's usage. The terminal records `usage.unavailable: not_reported`.
+
 ---
 
 ## 3. Suite Execution, Always-k (`-k`), and Campaigns

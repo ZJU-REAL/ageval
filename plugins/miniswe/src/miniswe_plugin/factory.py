@@ -218,6 +218,18 @@ class MinisweExecutorSPI(BaseExecutor):
     def close(self) -> None:
         self._ready = False
 
+    @classmethod
+    def classify_replay_actions(cls, pairs):  # type: ignore[no-untyped-def]
+        from miniswe_plugin.terminal_replay import classify_actions
+
+        return classify_actions(pairs)
+
+    @classmethod
+    async def dispatch_terminal_action(cls, host, action, placement):  # type: ignore[no-untyped-def]
+        from miniswe_plugin.terminal_replay import dispatch_bash
+
+        return await dispatch_bash(host, action, placement)
+
     def invoke(
         self,
         prompt: str,
