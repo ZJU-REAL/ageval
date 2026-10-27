@@ -60,6 +60,14 @@ Stdout JSON (high level):
 - Per invocation: Core writes `trajectory.jsonl` (`ageval.trajectory.event/1`) for **run-phase** Agent turns. Evaluate-phase SDK invoke (LLM-as-judge) writes `evaluation/observation.jsonl` instead. Neither file is PASS.
 - Docker kind uses the docker environment plugin + `attach_stdio`; coding entries stay on the parent ACP client.
 
+## `ageval replay`
+
+- `ageval replay <dataset> --run <attempt_id> [--evaluate]` mints a new Attempt and re-executes retained terminal actions from task initial state. It does not call the solver model and does not restore a source checkpoint.
+- Requires the recovery bundle (`--keep-recovery-state` on the source run). Exit 2 before any environment starts when the bundle, arguments, or initial task/image identity cannot be reconstructed.
+- Exit 0 when the new observations match. Exit 1 on the first meaningful divergence (exit status, normalized output, or a declared artifact). Timing, pid, and duration text alone do not count.
+- `--evaluate` runs `evaluator.py` on the new artifacts. Without it, `result.status` is `ERROR` / `not_evaluated`; replay completion is not PASS. The `replay` field on `result.json` is the execution outcome.
+- Default pass@k skips the child. The source Attempt is not modified.
+
 ## `ageval checkpoints`
 
 - `ageval checkpoints <dataset> --run <attempt_id>` lists retained `checkpoints/seq_N.json` cuts. It does not start an environment and does not fork.

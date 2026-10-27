@@ -330,7 +330,7 @@ def from_scratch_attempts(
     attempt_rows: Sequence[Mapping[str, Any]],
 ) -> list[Mapping[str, Any]]:
     """Drop fork rows from default pass@k / from-scratch samples."""
-    return [row for row in attempt_rows if not row.get("fork")]
+    return [row for row in attempt_rows if not row.get("fork") and not row.get("replay")]
 
 
 def count_passes(attempt_rows: Sequence[Mapping[str, Any]]) -> tuple[int, int]:

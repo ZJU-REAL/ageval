@@ -43,6 +43,38 @@ def _archive(tmp_path: Path, name: str) -> tuple[Path, str, int]:
     return path, "sha256:" + hashlib.sha256(raw).hexdigest(), len(raw)
 
 
+def test_upload_keeps_replay_provenance_without_the_parent(tmp_path: Path) -> None:
+    results = _service(tmp_path)
+    auth = TokenInfo(scopes=frozenset({"results:read", "results:upload"}), user_id="alice")
+    archive, digest, size = _archive(tmp_path, "run_replay")
+    replay = {
+        "format": "ageval.replay/1",
+        "parent_attempt_id": "attempt-parent",
+        "status": "diverged",
+        "first_divergence": {"field": "exit_code", "ordinal": 2},
+    }
+    results.upload_attempt(
+        meta={
+            "run_id": "run_replay",
+            "dataset_id": "test/replay",
+            "dataset_version": "0.1.0",
+            "task_id": "hello",
+            "lock_digest": "sha256:abc",
+            "status": "ERROR",
+            "visibility": "public",
+            "blob_digest": digest,
+            "size": size,
+            "replay": replay,
+        },
+        archive=archive,
+        auth=auth,
+    )
+    detail = results.serve_attempt_meta(run_id="run_replay", auth=auth)
+    assert detail["replay"]["parent_attempt_id"] == "attempt-parent"
+    assert detail["replay"]["status"] == "diverged"
+    assert detail["replay"]["first_divergence"]["ordinal"] == 2
+
+
 def test_upload_list_and_detail_carry_error_and_limit(tmp_path: Path) -> None:
     results = _service(tmp_path)
     auth = TokenInfo(scopes=frozenset({"results:read", "results:upload"}), user_id="alice")

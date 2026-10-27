@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { HoverTip, TruncateTip } from "@ageval/shared/components/hover-tip";
 import { ForkMark, type ForkMarkData } from "@ageval/shared/components/trial/fork-mark";
+import { ReplayMark, type ReplayMarkData } from "@ageval/shared/components/trial/replay-mark";
 import { LabMark } from "@ageval/shared/components/lab-mark";
 import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 import { loadModelPin, overlayLab } from "@ageval/shared/lib/model-pin";
@@ -19,6 +20,7 @@ export function ModelLabel({
   clip = true,
   tip = true,
   fork,
+  replay,
 }: {
   value?: string | null;
   effort?: string | null;
@@ -38,6 +40,8 @@ export function ModelLabel({
   tip?: boolean;
   /** Small tag after the model name. Hover names the source Attempt. */
   fork?: ForkMarkData | null;
+  /** Replay chip after the model name. Hover names the source Attempt and divergence. */
+  replay?: ReplayMarkData | null;
 }) {
   const { text, title } = formatModelLabel(value);
   const extra = (effort || "").trim();
@@ -92,6 +96,7 @@ export function ModelLabel({
       </span>
       {extra ? <span className="shrink-0 text-mute">[{extra}]</span> : null}
       <ForkMark fork={fork} className="ml-1.5" />
+      <ReplayMark replay={replay} className="ml-1.5" />
     </span>
   );
 }

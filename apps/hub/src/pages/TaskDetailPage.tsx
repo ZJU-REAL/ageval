@@ -88,6 +88,13 @@ type TaskJobRow = {
     source_model?: string;
     continuation_model?: string;
   } | null;
+  replay?: {
+    parent_attempt_id?: string;
+    status?: string | null;
+    field?: string | null;
+    ordinal?: number | null;
+    artifact_id?: string | null;
+  } | null;
   reasoning_effort?: string;
   environment?: string | null;
   created_at?: number | string;
@@ -363,6 +370,7 @@ export function TaskDetailPage() {
             agent_label: a.agent_label,
             model_label: a.model_label,
             fork: a.fork,
+            replay: a.replay,
             environment: a.environment || null,
             created_at: a.created_at,
             run_id: a.run_id,
@@ -813,6 +821,7 @@ export function TaskDetailPage() {
                             effort={j.reasoning_effort}
                             to={modelCatalogHref(j.model_label)}
                             fork={j.fork}
+                            replay={j.replay}
                           />
                         </TableCell>
                         {jobColumns.includes("environment") ? (

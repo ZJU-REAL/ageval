@@ -755,6 +755,7 @@ def _single_job_row(
     from ageval.config.overlay_files import overlay_paths_from_job_overlay
     from ageval.config.profiles import reasoning_effort_from_overlay
     from ageval.evidence.fork_cuts import fork_marker
+    from ageval.evidence.replay_input import replay_marker
 
     overlay = lock.get("job_overlay") if isinstance(lock.get("job_overlay"), dict) else None
     del manifest
@@ -771,6 +772,7 @@ def _single_job_row(
         "agent_label": agent_label,
         "model_label": model_label,
         "fork": fork_marker(result, summary),
+        "replay": replay_marker(result, summary),
         "reasoning_effort": reasoning_effort_from_overlay(overlay),
         "overlays": overlay_paths_from_job_overlay(overlay) if overlay else [],
         "provider_label": str(lock.get("provider_label") or result.get("provider_label") or ""),

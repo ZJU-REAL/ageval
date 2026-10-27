@@ -36,12 +36,14 @@ export function ActorsTable({
   harnessTo,
   modelTo,
   fork,
+  replay,
 }: {
   actors: NonNullable<Trial["actors"]>;
   /** Hub catalog jump. Viewer omits this (icons only). */
   harnessTo?: (agent: string) => string | undefined;
   modelTo?: (model: string | null | undefined) => string | undefined;
   fork?: Trial["fork"];
+  replay?: Trial["replay"];
 }) {
   if (actors.length === 0) return null;
 
@@ -73,6 +75,7 @@ export function ActorsTable({
                     effort={a.reasoning_effort}
                     to={modelTo?.(a.model)}
                     fork={actorGetsFork(actors, a, index, fork) ? fork : null}
+                    replay={index === 0 ? replay : null}
                   />
                 </TableCell>
                 <TableCell className="tabular-nums text-body">

@@ -389,3 +389,34 @@ def _text(value: object) -> str:
 
 def command_redacted(command: str) -> bool:
     return REDACTED_MARK in command
+
+
+def replay_marker(result: object, summary: object) -> dict[str, object] | None:
+    """Projection for list and detail views. Uses the child document only."""
+    raw = _replay_doc(result) or _replay_doc(summary)
+    if raw is None and isinstance(summary, Mapping):
+        raw = _replay_doc(summary.get("result"))
+    if raw is None:
+        return None
+    parent = raw.get("parent_attempt_id")
+    if not isinstance(parent, str) or not parent.strip():
+        return None
+    divergence = raw.get("first_divergence")
+    point = divergence if isinstance(divergence, Mapping) else {}
+    ordinal = point.get("ordinal")
+    return {
+        "parent_attempt_id": parent,
+        "status": _text(raw.get("status")),
+        "field": _text(point.get("field")),
+        "ordinal": ordinal if isinstance(ordinal, int) and not isinstance(ordinal, bool) else None,
+        "artifact_id": _text(point.get("artifact_id")),
+    }
+
+
+def _replay_doc(value: object) -> Mapping[str, object] | None:
+    if not isinstance(value, Mapping):
+        return None
+    replay = value.get("replay")
+    if isinstance(replay, Mapping) and replay.get("parent_attempt_id"):
+        return replay
+    return None

@@ -59,6 +59,19 @@ export type Trial = {
     source_model?: string;
     continuation_model?: string;
   } | null;
+  /** Child-only replay provenance. Absent when this Attempt is not a replay. */
+  replay?: {
+    parent_attempt_id: string;
+    status?: string | null;
+    field?: string | null;
+    ordinal?: number | null;
+    artifact_id?: string | null;
+    first_divergence?: {
+      field?: string | null;
+      ordinal?: number | null;
+      artifact_id?: string | null;
+    } | null;
+  } | null;
   upstream_url?: string | null;
   upstream_name?: string | null;
   upstream_ref?: string | null;

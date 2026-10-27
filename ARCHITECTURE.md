@@ -68,7 +68,7 @@ dataset root (ageval.yaml / ageval.dataset/1)
 
 | Item | Value |
 | --- | --- |
-| Public entrypoint | `ageval lock` / `run` (including `--probe`) / `tasks` / `campaign` / `view` / `plugin` / `evidence` / `status` / `cancel` / `executors` / `jobs` / `results` / `publish` / `release` / `agent` / `registry` |
+| Public entrypoint | `ageval lock` / `run` (including `--probe`) / `replay` / `checkpoints` / `tasks` / `campaign` / `view` / `plugin` / `evidence` / `status` / `cancel` / `executors` / `jobs` / `results` / `publish` / `release` / `agent` / `registry` |
 | Production composition root | `src/ageval/application/composition.py` |
 | Smoke lock | `uv run ageval lock examples/datasets/minimal-demo --task terminal-jsonl-agg` (exit 0; summary has `dataset_id`) |
 | Smoke docker ACP | `uv run ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg` (default `minimal-demo` environment is `docker`) |

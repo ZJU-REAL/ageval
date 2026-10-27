@@ -47,6 +47,16 @@ ageval run <dataset> --task <task_id> --fork <attempt_id> --checkpoint <seq> --m
 
 `--keep-recovery-state` keeps `activity.jsonl` and `checkpoints/` after the source has sealed. `ageval checkpoints` lists the cuts. `--fork` starts a new Attempt from one completed run-phase cut, on a fresh environment, with the source harness and the model you pass. The parent Attempt stays sealed. Default pass@k skips the child.
 
+## Replay recorded terminal actions
+
+```bash
+ageval run <dataset> --task <task_id> --keep-recovery-state
+ageval replay <dataset> --run <attempt_id>
+ageval replay <dataset> --run <attempt_id> --evaluate
+```
+
+`ageval replay` starts a new Attempt and a fresh environment from the task's initial setup. It re-executes the retained terminal actions in order and does not call the solver model. The report names the source Attempt, the replay status, the first divergence, and the new evidence path. `--evaluate` grades the new artifacts with `evaluator.py`. Without it, replay completion is not PASS or FAIL. Default pass@k skips the child. The source Attempt is left unchanged.
+
 <Callout type="info" title="The whole dataset">
 
 Omit `--task` to run every member in one job. `ageval status <suite_run_id> --dataset <dataset>` shows progress; `ageval cancel <suite_run_id> --dataset <dataset>` stops it.

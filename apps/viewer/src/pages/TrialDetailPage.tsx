@@ -123,7 +123,7 @@ export function TrialDetailPage() {
             />
 
             {trial.actors && trial.actors.length > 0 ? (
-              <ActorsTable actors={trial.actors} fork={trial.fork} />
+              <ActorsTable actors={trial.actors} fork={trial.fork} replay={trial.replay} />
             ) : null}
 
             <EvidenceTabs

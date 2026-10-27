@@ -263,6 +263,7 @@ export function JobDetailPage() {
                     value={job.model_label}
                     effort={job.reasoning_effort}
                     fork={job.fork}
+                    replay={job.replay}
                   />
                 </>
               ) : null}
@@ -403,6 +404,7 @@ export function JobDetailPage() {
                             isPlaceholder ? null : t.reasoning_effort || job?.reasoning_effort
                           }
                           fork={isPlaceholder ? null : job?.fork}
+                          replay={isPlaceholder ? null : job?.replay}
                         />
                       </TableCell>
                       <TableCell className="tabular">

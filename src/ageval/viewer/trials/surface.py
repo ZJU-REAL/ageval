@@ -152,6 +152,12 @@ def _fork_marker(result: object, summary: object) -> dict[str, object] | None:
     return fork_marker(result, summary)
 
 
+def _replay_marker(result: object, summary: object) -> dict[str, object] | None:
+    from ageval.evidence.replay_input import replay_marker
+
+    return replay_marker(result, summary)
+
+
 def _provenance_surface(lock: dict[str, Any]) -> dict[str, Any]:
     """Project lock provenance for Attempt top bar (url only when present)."""
     prov = lock.get("provenance")
@@ -405,6 +411,7 @@ def _trial_meta_from_evidence(
         "agent_label": surface.get("agent_label"),
         "model_label": surface.get("model_label"),
         "fork": _fork_marker(result, summary),
+        "replay": _replay_marker(result, summary),
         "executor_kind": surface.get("executor_kind"),
         "profiles": surface.get("profiles") or [],
         "provenance": surface.get("provenance"),
