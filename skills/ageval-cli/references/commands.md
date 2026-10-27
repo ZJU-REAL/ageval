@@ -65,7 +65,7 @@ Stdout JSON (high level):
 - `ageval replay <dataset> --run <attempt_id> [--evaluate]` mints a new Attempt and re-executes retained terminal actions from task initial state. It does not call the solver model and does not restore a source checkpoint.
 - Requires the recovery bundle (`--keep-recovery-state` on the source run). Exit 2 before any environment starts when the bundle, arguments, or initial task/image identity cannot be reconstructed.
 - Exit 0 when the new observations match. Exit 1 on the first meaningful divergence (exit status, normalized output, or a declared artifact). Timing, pid, and duration text alone do not count.
-- `--evaluate` runs `evaluator.py` on the new artifacts. Without it, `result.status` is `ERROR` / `not_evaluated`; replay completion is not PASS. The `replay` field on `result.json` is the execution outcome. The child `trajectory.jsonl` records the source task text and each re-executed action with the new observation. It does not copy the source model's usage.
+- `--evaluate` runs `evaluator.py` on the new artifacts. Without it, `result.status` is `ERROR` / `not_evaluated`; replay completion is not PASS. The `replay` field on `result.json` is the execution outcome. The child `trajectory.jsonl` records the source task text and each re-executed action with the new observation. It does not copy the source model's usage. The terminal records `usage.unavailable: not_reported`.
 - Default pass@k skips the child. The source Attempt is not modified.
 
 ## `ageval checkpoints`

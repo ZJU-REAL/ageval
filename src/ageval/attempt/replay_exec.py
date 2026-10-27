@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from ageval.evidence.locators import default_runs_root
 from ageval.evidence.redaction import redact_value
 from ageval.evidence.replay_input import (
     COMPARATOR_ID,
@@ -196,7 +197,8 @@ def replay_display_rows(ctx: Any) -> list[dict[str, object]]:
     The page reads ``trajectory.jsonl``. Replay has no invocation archive, so
     the fold would otherwise seal an empty file. These rows are the task text
     from the source trajectory plus each action actually executed here, with
-    the new observation. Model usage is not copied.
+    the new observation. Model usage is not copied. The terminal records
+    ``unavailable: not_reported`` so the seal accepts the file.
     """
     plan = ctx.replay_plan if isinstance(getattr(ctx, "replay_plan", None), Mapping) else None
     if plan is None:
@@ -226,7 +228,8 @@ def replay_display_rows(ctx: Any) -> list[dict[str, object]]:
         if action.get("executable") is not True:
             continue
         call_id = str(action.get("tool_call_id") or "")
-        arguments = action.get("arguments") if isinstance(action.get("arguments"), Mapping) else {}
+        raw_args = action.get("arguments")
+        arguments = raw_args if isinstance(raw_args, Mapping) else {}
         command = str(arguments.get("command") or "")
         observed = by_id.get(call_id, {})
         exit_code = observed.get("exit_code")
@@ -275,6 +278,7 @@ def replay_display_rows(ctx: Any) -> list[dict[str, object]]:
             "session_id": session_id,
             "source": "ageval",
             "profile_id": profile_id,
+            "usage": {"unavailable": "not_reported"},
             "metadata": {
                 "executor_kind": "miniswe",
                 "profile_id": profile_id,
@@ -315,7 +319,7 @@ def _source_prompt(ctx: Any) -> tuple[str, str]:
     dataset = getattr(ctx, "dataset_root", None)
     if not parent or not isinstance(dataset, Path) or parent in {".", ".."} or "/" in parent:
         return "", "solver"
-    path = dataset / ".ageval" / "runs" / parent / TRAJECTORY_FILENAME
+    path = default_runs_root(dataset) / parent / TRAJECTORY_FILENAME
     if not path.is_file():
         return "", "solver"
     prompt = ""

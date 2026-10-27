@@ -139,7 +139,7 @@ def test_replay_display_rows_include_the_source_prompt_and_new_observation(tmp_p
     assert rows[1]["args"] == {"command": "cp note.txt out.txt"}
     assert rows[2]["type"] == "observation"
     assert rows[-1]["type"] == "terminal"
-    assert "usage" not in rows[-1]
+    assert rows[-1]["usage"] == {"unavailable": "not_reported"}
 
 
 def test_replay_executes_and_ignores_recorded_stdout(tmp_path: Path) -> None:
