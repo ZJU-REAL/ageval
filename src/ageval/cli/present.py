@@ -133,6 +133,8 @@ def humanize(payload: Mapping[str, Any], *, width: int | None = None) -> str:
         return _status_block(payload)
     if payload.get("format") == "ageval.checkpoints/1":
         return _checkpoints_block(payload)
+    if payload.get("format") == "ageval.replay.report/1":
+        return _replay_block(payload)
     if payload.get("export_path") is not None:
         return _kv("export", str(payload.get("export_path") or "")) + "\n"
     if payload.get("cancel_requested") is not None or payload.get("status") == "cancelled":
@@ -176,7 +178,7 @@ def _ellipsis(text: str, width: int) -> str:
     return text[: width - 3] + "..."
 
 
-def _kv(label: str, value: str) -> str:
+def _kv(label: str, value: object) -> str:
     return f"{label:<{_LABEL_W}}{value}"
 
 
@@ -211,6 +213,32 @@ def _regrade_block(results: Sequence[Any]) -> str:
         if isinstance(err, Mapping) and err.get("title"):
             lines.append(_kv("error", str(err.get("title"))))
     return ("\n".join(lines) + "\n") if lines else ""
+
+
+def _replay_block(payload: Mapping[str, Any]) -> str:
+    lines = [
+        _kv("source", payload.get("source_attempt_id")),
+        _kv("status", payload.get("status")),
+        _kv("evidence", payload.get("evidence_path") or "none"),
+    ]
+    divergence = payload.get("first_divergence")
+    if isinstance(divergence, Mapping):
+        field = divergence.get("field") or "unknown"
+        ordinal = divergence.get("ordinal")
+        where = f"{field} at {ordinal}" if ordinal is not None else str(field)
+        artifact = divergence.get("artifact_id")
+        if artifact:
+            where = f"{where} {artifact}"
+        lines.append(_kv("divergence", where))
+    else:
+        lines.append(_kv("divergence", "none"))
+    evaluator = payload.get("evaluator_status")
+    if evaluator:
+        lines.append(_kv("evaluator", evaluator))
+    error = payload.get("error")
+    if isinstance(error, Mapping) and error.get("title"):
+        lines.append(_kv("error", error.get("title")))
+    return "\n".join(lines) + "\n"
 
 
 def _checkpoints_block(payload: Mapping[str, Any]) -> str:

@@ -142,7 +142,9 @@ def pair_tool_calls(
                 "recorded_exit_code": exit_code
                 if isinstance(exit_code, int) and not isinstance(exit_code, bool)
                 else None,
-                "recorded_output": _text(done.get("content")) if isinstance(done, Mapping) else "",
+                "recorded_output": done.get("content")
+                if isinstance(done, Mapping) and isinstance(done.get("content"), str)
+                else "",
             }
         )
     return pairs, tuple(dict.fromkeys(missing))

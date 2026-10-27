@@ -33,6 +33,10 @@ async def run(ctx: AttemptCtx) -> None:
         try:
             if ctx.phase_budget_exhausted() and ctx.limit_name() == "wall_time_seconds":
                 outcome = {"ok": False, "error": "wall_time_exceeded"}
+            elif ctx.replay_plan is not None:
+                from ageval.attempt.replay_exec import execute_recorded_actions
+
+                outcome = await execute_recorded_actions(ctx)
             else:
                 outcome = await _run_task_entry(ctx)
         except Exception as exc:
@@ -56,6 +60,10 @@ async def run(ctx: AttemptCtx) -> None:
         # seal_run is recorded only after that copy succeeds.
         ctx.mark_writers_stopped()
     await harvest_workspace_artifacts(ctx)
+    if ctx.replay_plan is not None:
+        from ageval.attempt.replay_exec import note_artifact_divergence
+
+        note_artifact_divergence(ctx)
     _log_seal_run(ctx)
     await emit(ctx, AFTER_RUN)
     _raise_fatal_recovery(ctx)

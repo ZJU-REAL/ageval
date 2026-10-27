@@ -24,6 +24,7 @@ from ageval.cli import (
     cmd_jobs,
     cmd_plugin,
     cmd_registry,
+    cmd_replay,
     cmd_results,
     cmd_view_tasks_lock,
 )
@@ -62,6 +63,7 @@ def _root(
 
 cmd_campaign_run.register(app)
 cmd_checkpoints.register(app)
+cmd_replay.register(app)
 cmd_evidence_status.register(app)
 cmd_cancel.register(app)
 cmd_executors_publish_login.register(app)

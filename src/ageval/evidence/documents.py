@@ -69,6 +69,37 @@ class ForkProvenance:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class ReplayDivergence:
+    """First meaningful difference between a recorded action and the new observation."""
+
+    ordinal: int | None = _null()
+    tool_call_id: str
+    field: Literal["exit_code", "output", "artifact"]
+    recorded_exit_code: int | None = _null()
+    observed_exit_code: int | None = _null()
+    artifact_id: str | None = _omit()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ReplayProvenance:
+    """``result.replay`` and ``summary.replay``. Absent when the Attempt is not a replay."""
+
+    format: Literal["ageval.replay/1"]
+    parent_attempt_id: str
+    source_locked_config_digest: str
+    child_locked_config_digest: str
+    tool_semantics: str
+    tool_semantics_version: str
+    status: Literal["matched", "diverged", "error"]
+    comparator: str
+    actions_executed: int
+    actions_planned: int
+    evaluated: bool
+    reproduced_failure: bool
+    first_divergence: ReplayDivergence | None = _omit()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class AttemptResultDocument:
     """``result.json`` and ``summary.result``. ``facts`` is not on this object."""
 
@@ -85,6 +116,7 @@ class AttemptResultDocument:
     score: float | None = _null()
     status: ResultStatus
     fork: ForkProvenance | None = _omit()
+    replay: ReplayProvenance | None = _omit()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -128,6 +160,7 @@ class SummaryDocument:
     keep_vendor_raw: bool
     extra: dict[str, Any] | None = _omit()
     fork: ForkProvenance | None = _omit()
+    replay: ReplayProvenance | None = _omit()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

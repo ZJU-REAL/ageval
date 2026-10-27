@@ -16,6 +16,7 @@ export interface AttemptResultDocument {
   score: number | null;
   status: "PASS" | "FAIL" | "ERROR";
   fork?: ForkProvenance;
+  replay?: ReplayProvenance;
 }
 
 export interface FactDocument {
@@ -67,6 +68,31 @@ export interface PhaseTimingPhase {
   duration_ms: number;
 }
 
+export interface ReplayDivergence {
+  ordinal: number | null;
+  tool_call_id: string;
+  field: "exit_code" | "output" | "artifact";
+  recorded_exit_code: number | null;
+  observed_exit_code: number | null;
+  artifact_id?: string;
+}
+
+export interface ReplayProvenance {
+  format: "ageval.replay/1";
+  parent_attempt_id: string;
+  source_locked_config_digest: string;
+  child_locked_config_digest: string;
+  tool_semantics: string;
+  tool_semantics_version: string;
+  status: "matched" | "diverged" | "error";
+  comparator: string;
+  actions_executed: number;
+  actions_planned: number;
+  evaluated: boolean;
+  reproduced_failure: boolean;
+  first_divergence?: ReplayDivergence;
+}
+
 export interface ResultError {
   phase: string | null;
   title: string;
@@ -84,6 +110,7 @@ export interface SummaryDocument {
   keep_vendor_raw: boolean;
   extra?: Record<string, unknown>;
   fork?: ForkProvenance;
+  replay?: ReplayProvenance;
 }
 
 export interface TerminalRow {
@@ -174,6 +201,9 @@ export const evidenceJsonSchema = {
         "metrics": {
           "additionalProperties": true,
           "type": "object"
+        },
+        "replay": {
+          "$ref": "#/$defs/ReplayProvenance"
         },
         "score": {
           "anyOf": [
@@ -380,6 +410,125 @@ export const evidenceJsonSchema = {
       ],
       "type": "object"
     },
+    "ReplayDivergence": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string"
+        },
+        "field": {
+          "enum": [
+            "exit_code",
+            "output",
+            "artifact"
+          ]
+        },
+        "observed_exit_code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ordinal": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recorded_exit_code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tool_call_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ordinal",
+        "tool_call_id",
+        "field",
+        "recorded_exit_code",
+        "observed_exit_code"
+      ],
+      "type": "object"
+    },
+    "ReplayProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "actions_executed": {
+          "type": "integer"
+        },
+        "actions_planned": {
+          "type": "integer"
+        },
+        "child_locked_config_digest": {
+          "type": "string"
+        },
+        "comparator": {
+          "type": "string"
+        },
+        "evaluated": {
+          "type": "boolean"
+        },
+        "first_divergence": {
+          "$ref": "#/$defs/ReplayDivergence"
+        },
+        "format": {
+          "const": "ageval.replay/1"
+        },
+        "parent_attempt_id": {
+          "type": "string"
+        },
+        "reproduced_failure": {
+          "type": "boolean"
+        },
+        "source_locked_config_digest": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "matched",
+            "diverged",
+            "error"
+          ]
+        },
+        "tool_semantics": {
+          "type": "string"
+        },
+        "tool_semantics_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "format",
+        "parent_attempt_id",
+        "source_locked_config_digest",
+        "child_locked_config_digest",
+        "tool_semantics",
+        "tool_semantics_version",
+        "status",
+        "comparator",
+        "actions_executed",
+        "actions_planned",
+        "evaluated",
+        "reproduced_failure"
+      ],
+      "type": "object"
+    },
     "ResultError": {
       "additionalProperties": false,
       "properties": {
@@ -434,6 +583,9 @@ export const evidenceJsonSchema = {
         },
         "phase_timing": {
           "$ref": "#/$defs/PhaseTimingDocument"
+        },
+        "replay": {
+          "$ref": "#/$defs/ReplayProvenance"
         },
         "result": {
           "$ref": "#/$defs/AttemptResultDocument"

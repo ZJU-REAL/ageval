@@ -65,6 +65,8 @@ async def run_attempt(ctx: AttemptCtx) -> None:
         try:
             if _phase_done(ctx, evaluate.PHASE):
                 _restore_verdict(ctx)
+            elif ctx.replay_plan is not None and not ctx.replay_evaluate:
+                ctx.record_fact("replay_unevaluated", {"reason": "not_requested"})
             else:
                 await _timed(ctx, evaluate.PHASE, evaluate.run)
         except Exception as exc:  # noqa: BLE001 — evaluate ERROR still seals

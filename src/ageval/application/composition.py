@@ -73,6 +73,13 @@ def build_list_checkpoints() -> Callable[..., Any]:
     return list_checkpoints
 
 
+def build_replay_attempt() -> Callable[..., Any]:
+    """Wire ``ageval replay``: a new Attempt that re-executes retained terminal actions."""
+    from ageval.application.replay import run_replay
+
+    return run_replay
+
+
 def build_fork_request(source_attempt_id: str, checkpoint_seq: int, model: str) -> Any:
     """Wire one fork request from CLI flags. The harness stays the source harness."""
     from ageval.application.fork import ForkRequest
