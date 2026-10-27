@@ -956,6 +956,7 @@ class ParentAgentService:
         inv = payload.get("invocation_id")
         if isinstance(inv, str):
             self._reopen_logged_invocation_id(session_id, inv)
+        inherited = payload.get("inherited") is True
         text = payload.get("text") if isinstance(payload.get("text"), str) else ""
         structured = payload.get("structured")
         calls = payload.get("tool_calls")
@@ -963,7 +964,11 @@ class ParentAgentService:
             "ok": bool(payload.get("ok")),
             "error": payload.get("error"),
             "model": str(payload.get("model") or ""),
-            "usage": payload.get("usage") if isinstance(payload.get("usage"), dict) else None,
+            "usage": None
+            if inherited
+            else payload.get("usage")
+            if isinstance(payload.get("usage"), dict)
+            else None,
             "text": text[-4000:],
             "structured": structured if isinstance(structured, dict) else None,
             "provider_session_handle": None,

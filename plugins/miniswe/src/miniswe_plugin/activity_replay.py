@@ -27,13 +27,15 @@ def install_activity(model: Any, env: Any, executor: Any) -> None:
             usage = (
                 cached.payload.get("usage") if isinstance(cached.payload.get("usage"), dict) else {}
             )
-            cost = usage.get("cost_usd") if isinstance(usage, dict) else 0.0
+            inherited = cached.payload.get("inherited") is True
+            cost = 0.0 if inherited else usage.get("cost_usd") if isinstance(usage, dict) else 0.0
             return {
                 "role": "assistant",
                 "content": cached.payload.get("assistant_text") or "",
                 "extra": {
                     "actions": list(cached.payload.get("tool_calls") or []),
-                    "cost": cost or 0.0,
+                    "cost": 0.0 if inherited else (cost or 0.0),
+                    "inherited": inherited,
                 },
             }
         step = next_step(scope)

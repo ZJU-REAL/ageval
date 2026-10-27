@@ -25,6 +25,30 @@ from ageval.plugins.slots import (
 PHASE = "environment"
 
 
+async def _restore_fork_cut(ctx: AttemptCtx) -> None:
+    """Restore the selected checkpoint onto the new box. Do not replay parent effects."""
+    from ageval.attempt.recover import restore_checkpoint
+    from ageval.environments.box_state import write_cursor
+    from ageval.evaluation.error_record import RecordedError
+    from ageval.evidence.store import AGENT_BOX_REL
+
+    seq = ctx.fork_checkpoint_seq
+    if not isinstance(seq, int):
+        return
+    try:
+        restore_checkpoint(ctx, seq)
+        from ageval.attempt.recover import attempt_state_dir
+
+        write_cursor(attempt_state_dir(ctx), seq=seq, request_id=f"seq_{seq}")
+        push = getattr(ctx.host, "push_restored_box", None)
+        if callable(push):
+            await cast(Callable[..., Awaitable[object]], push)(ctx.evidence.path(AGENT_BOX_REL))
+    except RecordedError:
+        raise
+    except Exception as exc:  # noqa: BLE001 — a bad cut must not continue into run
+        raise RecordedError("fork_restore_failed", str(exc)) from exc
+
+
 async def _finish_rebuild(ctx: AttemptCtx) -> None:
     """Replay system effects, then restore the latest checkpoint onto the new box."""
     from ageval.attempt.recover import restore_checkpoint
@@ -109,7 +133,9 @@ async def run(ctx: AttemptCtx) -> None:
     ctx.assert_deadline()
     await emit(ctx, ENVIRONMENT_SETUP)
     ctx.assert_deadline()
-    if ctx.recovery_rebuild:
+    if ctx.fork_checkpoint_seq is not None:
+        await _restore_fork_cut(ctx)
+    elif ctx.recovery_rebuild:
         await _finish_rebuild(ctx)
     await emit(ctx, AFTER_ENVIRONMENT)
     if ctx.activity is not None:

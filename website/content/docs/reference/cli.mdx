@@ -18,6 +18,7 @@ ageval run <dataset> --max-concurrent-tasks 2
 ageval run <dataset> -k 5
 ageval run <dataset> --task <id> --resume <attempt_id>
 ageval checkpoints <dataset> --run <attempt_id>
+ageval run <dataset> --task <id> --fork <attempt_id> --checkpoint <seq> --model <model_id>
 ageval run <dataset> --resume-suite <suite_run_id> --task <id> -k 5
 ageval run <dataset> --resume-suite <suite_run_id> --retry-errors
 ageval results regrade <dataset> --run <attempt_id>
@@ -76,7 +77,9 @@ With `--layout harbor`, the built-in run sends `instruction.md` once to role `so
 | `--keep-vendor-raw` | After seal, keep vendor raw and intermediate invocation event files. Default: drop. `task-artifacts/` stays either way. Independent of `--keep-workspace` |
 | `--dir <path>` | Hub ref only. Looks at `<path>/<dataset_id>/`; reuses a matching child |
 | `--agent` | Bind an `ageval.agent/1` Agent package (`pi`, `org/name@version`, or a local path); mutually exclusive with `--profiles` |
-| `--model` | Override `model.id` on roles `--agent` bound. Requires `--agent`. Not `results upload-suite --model`. `results analyze --model` is a separate flag and still requires `--agent` |
+| `--fork <attempt_id>` | Start a new Attempt from a retained checkpoint of that source. Requires `--checkpoint` and `--model`. Mutually exclusive with `--resume`. Rejects `--agent` and `--profiles` |
+| `--checkpoint <seq>` | Activity seq to fork. The cut must be a completed run-phase snapshot before solver sealing |
+| `--model` | Override `model.id` on roles `--agent` bound. Requires `--agent`, except with `--fork`, where it sets the continuation model and does not replace the harness. Not `results upload-suite --model`. `results analyze --model` is a separate flag and still requires `--agent` |
 | `--set` / `--profiles` | Overrides / alternate job binding |
 | `--probe` | Feasibility only: plan + readiness for this binding/`environment`. No Agent, no image write, no lock digest change. Exit 1 if the selected path is unsatisfied. |
 | `--json` | Write the full result document on stdout. A TTY defaults to a short recap (suite: `summary` path plus `ageval view` / `upload-suite`); a pipe still defaults to JSON. |
