@@ -156,6 +156,7 @@ async def run_attempt(
         model_override,
         prepare_fork,
         solver_role_from_source,
+        source_profiles_file,
     )
 
     if fork is not None and (resume_attempt_id or recover_unsealed or suite_run_id):
@@ -181,21 +182,26 @@ async def run_attempt(
                 message=exc.message,
             )
         fork_overrides.update(model_override(role, fork.model))
+        profiles_path = source_profiles_file(Path(dataset), fork.source_attempt_id)
 
     # Lock and preflight run before AttemptCtx exists; notify the observer
     # directly so the live label covers the whole Attempt, not just the phases.
     if on_phase is not None:
         on_phase("started", "lock")
-    locked = build_lock_command().lock(
-        dataset,
-        task,
-        profile=profile,
-        profiles_path=profiles_path,
-        overrides=fork_overrides or None,
-        force_build=force_build,
-        allow_prepare=allow_prepare,
-        layout=layout,
-    )
+    try:
+        locked = build_lock_command().lock(
+            dataset,
+            task,
+            profile=profile,
+            profiles_path=profiles_path,
+            overrides=fork_overrides or None,
+            force_build=force_build,
+            allow_prepare=allow_prepare,
+            layout=layout,
+        )
+    finally:
+        if fork is not None and profiles_path is not None:
+            Path(profiles_path).unlink(missing_ok=True)
     if on_phase is not None:
         on_phase("finished", "lock")
     lock = locked.lock

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -147,6 +148,35 @@ def prepare_fork(
 
 def model_override(role: str, model: str) -> dict[str, str]:
     return {f"/agent_profiles/{role}/model/id": model}
+
+
+def source_profiles_file(dataset: Path, attempt_id: str) -> Path:
+    """Write the source job overlay as a profiles file for the child lock.
+
+    The operator does not pass ``--profiles``. The file keeps the source
+    harness and environment so the child lock can change only the model.
+    """
+    source = _source_dir(dataset, attempt_id)
+    lock = _read_json(source / "lock.json")
+    overlay = lock.get("job_overlay")
+    if not isinstance(overlay, dict):
+        raise ForkRejection(
+            "fork_source_invalid",
+            "source lock has no job_overlay",
+            location="--fork",
+        )
+    from ageval.config.profiles import job_overlay_to_profiles_document
+
+    document = job_overlay_to_profiles_document(overlay)
+    fd, name = tempfile.mkstemp(prefix="ageval-fork-profiles-", suffix=".yaml")
+    path = Path(name)
+    import os
+
+    os.close(fd)
+    import yaml
+
+    path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    return path
 
 
 def solver_role_from_source(dataset: Path, attempt_id: str, seq: int) -> str:

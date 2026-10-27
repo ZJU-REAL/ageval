@@ -77,7 +77,7 @@ A forkable cut is a completed `run`-phase snapshot before `seal_run` and before 
 
 ### 2.5 Checkpoint fork
 
-`ageval run <dataset> --task <id> --fork <source_attempt_id> --checkpoint <seq> --model <id>` mints a new Attempt and a fresh environment. It does not attach, roll back, or write the parent environment. `--fork` and `--resume` are mutually exclusive. `--agent` and `--profiles` are rejected because the harness stays fixed. `--model` sets `/agent_profiles/<source role>/model/id` and does not require `--agent`.
+`ageval run <dataset> --task <id> --fork <source_attempt_id> --checkpoint <seq> --model <id>` mints a new Attempt and a fresh environment. It does not attach, roll back, or write the parent environment. `--fork` and `--resume` are mutually exclusive. `--agent` and `--profiles` are rejected because the harness stays fixed. Core re-locks from the source job overlay and applies only the model override. `--model` sets `/agent_profiles/<source role>/model/id` and does not require `--agent`.
 
 Before the environment starts, Core rejects a cut that `ageval checkpoints` would mark non-forkable, an unsupported continuation executor, and any lock difference other than the solver model's `id`, `api`, `timeout`, `watchdog`, or `reasoning/effort`. The child copies the activity prefix through the selected seq, marks those payloads `inherited`, and copies the selected checkpoint blobs into its own directory. Later parent events are not copied. Inherited events are evidence, not new child calls: they do not restore invocation quota and they do not charge the parent's phase elapsed into the child clock. Replayed model steps report no inherited cost. Shared-prefix usage is summed separately on `fork.shared_prefix_usage`.
 
