@@ -34,7 +34,7 @@ from ageval.config.model import LockedTaskConfig, thaw
 from ageval.config.resources import resource_options
 from ageval.environments.protocol import BoxSpec
 from ageval.evaluation.bind import AttemptResult, bind_result
-from ageval.evidence.checkpoints import prune_checkpoints, prune_recovery_state
+from ageval.evidence.checkpoints import prune_recovery_bundle, prune_recovery_state
 from ageval.evidence.locators import default_runs_root
 from ageval.evidence.store import (
     ACTIVITY_LOG_REL,
@@ -135,6 +135,7 @@ async def run_attempt(
     profiles_path: Path | str | None = None,
     overrides: dict[str, Any] | None = None,
     keep_workspace: bool = False,
+    keep_recovery_state: bool = False,
     keep_vendor_raw: bool = False,
     force_build: bool = False,
     identity_factory: IdentityFactory | None = None,
@@ -350,14 +351,35 @@ async def run_attempt(
         summary["extra"] = extra
     evidence.write_summary(summary)
     _write_result(evidence, result)
-    if (
-        not keep_workspace
-        and (evidence.root / TRAJECTORY_FILENAME).is_file()
-        and (evidence.root / "result.json").is_file()
-    ):
-        prune_checkpoints(evidence.root)
-        prune_recovery_state(evidence.root)
+    _prune_settled_recovery(
+        evidence.root,
+        keep_workspace=keep_workspace,
+        keep_recovery_state=keep_recovery_state,
+    )
     return _exit_code(result), result
+
+
+def _prune_settled_recovery(
+    attempt_dir: Path,
+    *,
+    keep_workspace: bool,
+    keep_recovery_state: bool,
+) -> None:
+    """Drop recovery files only after the display archive is sealed.
+
+    Interrupted Attempts keep ``activity.jsonl`` and ``checkpoints/`` so
+    ``--resume`` works without ``--keep-recovery-state``. ``state/`` is
+    environment probe state and follows ``--keep-workspace``.
+    """
+    settled = (attempt_dir / TRAJECTORY_FILENAME).is_file() and (
+        attempt_dir / "result.json"
+    ).is_file()
+    if not settled:
+        return
+    if not keep_recovery_state:
+        prune_recovery_bundle(attempt_dir)
+    if not keep_workspace:
+        prune_recovery_state(attempt_dir)
 
 
 @dataclass

@@ -1,8 +1,10 @@
 """Content-addressed workspace, home, and artifacts checkpoints.
 
 ``local`` and ``docker`` scan the host bind root. Remote kinds upload a delta
-into the same layout. Settled Attempts drop ``checkpoints/`` unless the run
-asked to keep the workspace.
+into the same layout. After ``result.json`` and ``trajectory.jsonl`` both exist,
+the recovery bundle (``checkpoints/`` and ``activity.jsonl``) is removed unless
+the run asked to keep recovery state. ``<attempt>/state`` follows workspace
+retention, not that flag.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from ageval.config.errors import ERROR_INVALID_FORMAT, ConfigError
-from ageval.evidence.store import CHECKPOINTS_DIR_REL
+from ageval.evidence.store import ACTIVITY_LOG_REL, CHECKPOINTS_DIR_REL
 
 CHECKPOINT_FORMAT = "ageval.checkpoint/1"
 
@@ -55,17 +57,37 @@ def exclude_keyless_rels(home_rels: Iterable[str]) -> frozenset[str]:
 
 
 def prune_checkpoints(attempt_dir: Path) -> None:
-    """Remove the checkpoint store after ``result.json`` is sealed."""
+    """Remove the checkpoint store after the Attempt is settled."""
     root = attempt_dir / CHECKPOINTS_DIR_REL
     if root.is_dir():
         shutil.rmtree(root)
 
 
+def prune_activity_log(attempt_dir: Path) -> None:
+    """Remove ``activity.jsonl`` after the display trajectory is sealed."""
+    path = attempt_dir / ACTIVITY_LOG_REL
+    if path.is_file():
+        path.unlink()
+
+
+def prune_recovery_bundle(attempt_dir: Path) -> None:
+    """Remove checkpoints and ``activity.jsonl`` together.
+
+    Unsealed Attempts keep both so ``--resume`` can continue. Call this only
+    after ``result.json`` and ``trajectory.jsonl`` exist, and only when recovery
+    state is not retained.
+    """
+    prune_checkpoints(attempt_dir)
+    prune_activity_log(attempt_dir)
+
+
 def prune_recovery_state(attempt_dir: Path) -> None:
     """Remove ``<attempt>/state`` once the Attempt is settled.
 
-    ``local`` and ``docker`` also delete this directory in ``stop(delete=True)``.
+    This directory is environment probe state, not the fork bundle.
+    ``local`` and ``docker`` also delete it in ``stop(delete=True)``.
     Remote kinds leave the host copy beside ``box/`` until seal.
+    ``--keep-workspace`` retains it; ``--keep-recovery-state`` does not.
     """
     root = attempt_dir / "state"
     if root.is_dir():

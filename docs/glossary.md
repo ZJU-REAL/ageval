@@ -59,8 +59,8 @@ Machine verification for public surfaces is enforced by `python3 scripts/check_p
 | **reference materials** (`gold`) | 参考材料 / 参考答案 / `gold` | both | Grading assets under `tasks/<id>/evaluation/`, uploaded only during `evaluate`. | `金标` |
 | **evidence** | 执行证据 / evidence | both | Secret-redacted Attempt archive under `.ageval/runs/<attempt_id>/`. | `证据包`, `存证` |
 | **trajectory** | 轨迹 (`trajectory.jsonl`) | both | Normalized interaction event log sealed during `record`; observational only, never decides `PASS`. | `密封轨迹`, `layer-B`, `layer-C`, `层 B`, `层 C` |
-| **activity log** (`activity.jsonl`) | 活动日志 / `activity.jsonl` | both | Append-only step log (`ageval.activity/1`) for an unsealed Attempt. `--resume` and `--resume-suite` continue from it when `result.json` is absent. | — |
-| **checkpoint** (`checkpoints/`) | 检查点 / `checkpoints/` | both | Content-addressed snapshot of the attempt workspace and agent home (`ageval.checkpoint/1`), written when a step settles. Removed after the Attempt settles unless `--keep-workspace`. | — |
+| **activity log** (`activity.jsonl`) | 活动日志 / `activity.jsonl` | both | Append-only step log (`ageval.activity/1`). `--resume` and `--resume-suite` continue from it when `result.json` is absent. Removed with `checkpoints/` after settlement unless `--keep-recovery-state`. | — |
+| **checkpoint** (`checkpoints/`) | 检查点 / `checkpoints/` | both | Content-addressed snapshot of the attempt workspace and agent home (`ageval.checkpoint/1`), written when a step settles. Removed with `activity.jsonl` after settlement unless `--keep-recovery-state`. `--keep-workspace` does not retain it. | — |
 | **`extra` field** | 扩展字段 / `extra` | both | Structured extension object on `terminal.extra` or `summary.extra`. | `观察袋`, `插件袋`, `袋子` |
 | **analyzer** | 分析器 / analyzer | both | Post-run read-only diagnostics (`stats`, `hack`, `review`) over sealed evidence. | — |
 | **checks** (`evaluation/checks.json`) | 检查项 / `checks` | both | Optional step-level grading breakdown returned by `evaluator.py` (`ageval.evaluation.checks/1`). | `勾选机` |

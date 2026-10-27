@@ -70,7 +70,8 @@ ageval results revoke-snapshot <token-or-url>
 | `--retry-errors` | 配合 `--resume-suite`：重跑本次过滤里的 ERROR 格。PASS / FAIL 仍跳过。新的一次运行；旧行进 `previous[]` |
 | `--replace-slot` | 配合 `--resume-suite --task`：重跑那一行；新的一次运行；旧行进 `previous[]` |
 | `--attempt-index N` | Always-k 要换的格（默认 0）。只与 `--replace-slot` 一起用 |
-| `--keep-workspace` | 清理后保留环境工作根（默认删除）。 |
+| `--keep-workspace` | 清理后保留环境工作根（默认删除）。不保留 `activity.jsonl` 或 `checkpoints/`。 |
+| `--keep-recovery-state` / `--no-keep-recovery-state` | `result.json` 和 `trajectory.jsonl` 都写出之后，保留或删除 `activity.jsonl` 与 `checkpoints/`。默认删除。中断的 Attempt 始终保留这两份文件，`--resume` 不依赖这个开关。未显式指定时回退到 `AGEVAL_KEEP_RECOVERY_STATE`。与 `--keep-workspace` 独立 |
 | `--keep-vendor-raw` | 封存后保留 vendor raw 与中间调用事件文件；默认丢掉。`task-artifacts/` 两种情况下都保留。与 `--keep-workspace` 独立 |
 | `--dir <path>` | 只配合 Hub ref：在 `<path>/<dataset_id>/` 找包；已匹配则复用 |
 | `--agent` | 绑定 `ageval.agent/1` Agent 包（`pi`、`org/name@version` 或本地路径）；与 `--profiles` 互斥 |

@@ -3,7 +3,7 @@ title: 导出证据
 description: 打包并导出单次运行的归档证据。
 ---
 
-单次运行的证据归档默认位于 `.ageval/runs/<id>/`。尚未写出 `result.json` 的 Attempt 还会保留 `activity.jsonl` 和 `checkpoints/`，供 `--resume` 继续。`result.json` 和 `trajectory.jsonl` 都写好之后，除非加了 `--keep-workspace`，`checkpoints/` 会被删掉。`activity.jsonl` 仍留在目录里。轨迹封存完成后，默认归档目录保留 `lock.json`、`result.json`、`trajectory.jsonl`、`summary.json` 与 `task-artifacts/**`（以及存在时的 `verifier-collect/**`、`evaluation/observation.jsonl` 与 `evaluation/checks.json`）。传入 `--keep-vendor-raw`（默认关闭）会额外保留单次调用的 `backend_raw/` 原始响应、中间调用事件文件与 `evaluator_raw.json`。`--keep-workspace` 仅保留宿主工作区临时目录，与 `--keep-vendor-raw` 相互独立。
+单次运行的证据归档默认位于 `.ageval/runs/<id>/`。尚未同时写出 `result.json` 和 `trajectory.jsonl` 的 Attempt 会保留 `activity.jsonl` 和 `checkpoints/`，供 `--resume` 继续。两份文件都写出之后，除非指定 `--keep-recovery-state`（或未指定该开关且 `AGEVAL_KEEP_RECOVERY_STATE` 为真），这两份恢复文件会被删掉。`--keep-workspace` 不保留它们。轨迹封存完成后，默认归档目录保留 `lock.json`、`result.json`、`trajectory.jsonl`、`summary.json` 与 `task-artifacts/**`（以及存在时的 `verifier-collect/**`、`evaluation/observation.jsonl` 与 `evaluation/checks.json`）。传入 `--keep-vendor-raw`（默认关闭）会额外保留单次调用的 `backend_raw/` 原始响应、中间调用事件文件与 `evaluator_raw.json`。`--keep-workspace` 仅保留宿主工作区目录，与 `--keep-vendor-raw`、`--keep-recovery-state` 相互独立。
 
 ```bash
 ageval evidence --help

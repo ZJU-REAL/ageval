@@ -13,8 +13,8 @@ All `.ageval/runs` and `.ageval/suite-runs` path constants live exclusively in `
 | `lock.json` | Canonical lock JSON | Redacted `LockedTaskConfig` snapshot (retains credential env var locator names only). |
 | `result.json` | `Result` schema | Final verdict (`status`, `score`, `kind`, `error`, `limit`, `logs`). Presence of `result.json` marks the Attempt as settled and immutable. |
 | `trajectory.jsonl` | `ageval.trajectory.event/1` | Normalized `run`-phase interaction trajectory written by the `trajectory_seal` exclusive slot during `record`. |
-| `activity.jsonl` | `ageval.activity/1` | Append-only pre-effect log (`attempt`, `session`, `invoke`, `model_turn`, `tool_call`, `compaction`, `phase`). A truncated final line is dropped. A broken non-final line seals `activity_log_corrupt`. |
-| `checkpoints/` | `ageval.checkpoint/1` | Content-addressed snapshots of `box/{workspace,home,artifacts}`. Keyless auth files are not copied into `blobs/`. |
+| `activity.jsonl` | `ageval.activity/1` | Append-only pre-effect log (`attempt`, `session`, `invoke`, `model_turn`, `tool_call`, `compaction`, `phase`). A truncated final line is dropped. A broken non-final line seals `activity_log_corrupt`. Written during execution regardless of retention. Removed with `checkpoints/` after settlement unless `--keep-recovery-state`. |
+| `checkpoints/` | `ageval.checkpoint/1` | Content-addressed snapshots of `box/{workspace,home,artifacts}`. Keyless auth files are not copied into `blobs/`. Part of the recovery bundle with `activity.jsonl`. |
 | `evaluation/observation.jsonl` | `ageval.trajectory.event/1` | Optional `evaluate`-phase `judge` trajectory (`user` prompt rows omitted to protect `gold`). |
 | `evaluation/checks.json` | `ageval.evaluation.checks/1` | Optional step-by-step grading breakdown returned by `evaluator.py`. |
 | `summary.json` | `Summary` schema | Phase wall-clock durations (`phase_timing`), lifecycle `facts[]`, and optional plugin namespace `extra`. |
@@ -51,7 +51,11 @@ extra: { ... }                                                       # Vendor-sp
 - **`terminal.elapsed_ms`**: Wall-clock invocation latency (`latency_ms`) is copied onto `terminal.elapsed_ms` during sealing.
 
 ### 2.3 Post-seal pruning (`slim_sealed_attempt`)
-Once `trajectory_seal` succeeds in `record`, `slim_sealed_attempt` removes intermediate scratch directories (`agent/invocations/`, `evaluation/invocations/`, `backend_raw/`) by default, retaining only `lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, `task-artifacts/**`, `verifier-collect/**`, `evaluation/observation.jsonl`, and `evaluation/checks.json`. Operators may pass `--keep-vendor-raw` to retain `backend_raw/` and per-invocation scratch files, or `--keep-workspace` to retain the host workspace directory (`box/`). Once `result.json` and `trajectory.jsonl` both exist, Core also deletes `checkpoints/` and `<attempt>/state` unless `--keep-workspace` is set. `local` and `docker` remove `<attempt>/state` when `stop(delete=True)` deletes `box/`.
+Once `trajectory_seal` succeeds in `record`, `slim_sealed_attempt` removes intermediate scratch directories (`agent/invocations/`, `evaluation/invocations/`, `backend_raw/`) by default, retaining only `lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, `task-artifacts/**`, `verifier-collect/**`, `evaluation/observation.jsonl`, and `evaluation/checks.json`. Operators may pass `--keep-vendor-raw` to retain `backend_raw/` and per-invocation scratch files, or `--keep-workspace` to retain the host workspace directory (`box/`).
+
+Recovery-state retention is a separate policy. The recovery bundle is `activity.jsonl` plus `checkpoints/` (manifests and blobs). Core records it during execution whether or not it will be kept. An Attempt that has not sealed both `result.json` and `trajectory.jsonl` always keeps the bundle, so `--resume` does not require a retention flag. After both files exist, Core deletes the bundle unless `--keep-recovery-state` is set. The CLI flag wins over `AGEVAL_KEEP_RECOVERY_STATE`; an unset or false env value means delete. `--no-keep-recovery-state` forces deletion even when the env value is true. `--keep-workspace` does not retain the bundle and is not required to retain it.
+
+`<attempt>/state` is environment probe state (nonce, cursor, inflight), not part of the recovery bundle. `local` and `docker` remove it when `stop(delete=True)` deletes `box/`. A sealed Attempt also drops it unless `--keep-workspace` is set.
 
 ---
 

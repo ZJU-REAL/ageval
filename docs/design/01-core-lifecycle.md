@@ -147,7 +147,7 @@ When `executor.invoke` encounters a retryable transport failure (`TransportStall
 
 ## 5. Suite Resumption, Slot Replacement, and Regrade
 
-All settled Attempt directories (`.ageval/runs/<attempt_id>/` containing `result.json`) are immutable (for recovery of unsealed Attempts lacking `result.json`, see [RFC 0001](../RFCs/0001-attempt-activity-recovery.md)):
+All settled Attempt directories (`.ageval/runs/<attempt_id>/` containing `result.json`) are immutable (for recovery of unsealed Attempts lacking `result.json`, see [RFC 0001](../RFCs/0001-attempt-activity-recovery.md)). An unsealed Attempt keeps `activity.jsonl` and `checkpoints/` without `--keep-recovery-state`. After `result.json` and `trajectory.jsonl` both exist, that bundle is removed unless the flag or `AGEVAL_KEEP_RECOVERY_STATE` retains it. `--keep-workspace` retains the box work root and `<attempt>/state` only.
 
 | Operation | CLI Invocation | Identity Behavior | Execution Semantics |
 | --- | --- | --- | --- |

@@ -9,6 +9,7 @@ import typer
 
 from ageval.cli.cmd_agent import AGENT_OPTION_HELP, MODEL_OPTION_HELP, resolve_agent_option
 from ageval.cli.present import emit
+from ageval.cli.recovery_state import resolve_keep_recovery_state
 from ageval.cli.run_output import (
     AttemptSpinner,
     RunProgress,
@@ -270,10 +271,23 @@ def register(app: typer.Typer) -> None:
                 help=(
                     "Keep the box work root after cleanup "
                     "(default: delete; debug only — never required for Hub upload). "
-                    "Docker volumes and env containers are still removed."
+                    "Docker volumes and env containers are still removed. "
+                    "Does not retain activity.jsonl or checkpoints/."
                 ),
             ),
         ] = False,
+        keep_recovery_state: Annotated[
+            bool | None,
+            typer.Option(
+                "--keep-recovery-state/--no-keep-recovery-state",
+                help=(
+                    "After result.json and trajectory.jsonl exist, keep activity.jsonl "
+                    "and checkpoints/ (default: delete). Interrupted Attempts always "
+                    "keep them. Unset falls back to AGEVAL_KEEP_RECOVERY_STATE. "
+                    "Independent of --keep-workspace."
+                ),
+            ),
+        ] = None,
         keep_vendor_raw: Annotated[
             bool,
             typer.Option(
@@ -363,6 +377,7 @@ def register(app: typer.Typer) -> None:
         from ageval.plugins.errors import PluginContractError
 
         try:
+            retain_recovery = resolve_keep_recovery_state(keep_recovery_state)
             overrides: dict[str, object] = {}
             for raw in set_overrides or ():
                 pointer, value = parse_set_override(raw)
@@ -467,6 +482,7 @@ def register(app: typer.Typer) -> None:
                             overrides=overrides or None,
                             profiles_path=profiles,
                             keep_workspace=keep_workspace,
+                            keep_recovery_state=retain_recovery,
                             keep_vendor_raw=keep_vendor_raw,
                             allow_prepare=allow_prepare,
                             layout=chosen_layout,
@@ -533,6 +549,7 @@ def register(app: typer.Typer) -> None:
                         retry_errors=retry_errors,
                         on_progress=progress.handle,
                         keep_workspace=keep_workspace,
+                        keep_recovery_state=retain_recovery,
                         keep_vendor_raw=keep_vendor_raw,
                         allow_prepare=allow_prepare,
                     )
