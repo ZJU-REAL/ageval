@@ -161,6 +161,7 @@ export function ShareAttemptPage() {
                 actors={trial.actors}
                 harnessTo={harnessHref}
                 modelTo={modelCatalogHref}
+                fork={trial.fork}
               />
             ) : null}
             <EvidenceTabs
@@ -180,6 +181,7 @@ export function ShareAttemptPage() {
               })}
               result={result}
               actors={trial.actors || []}
+              fork={trial.fork}
               tree={tree}
               treeLoading={treeLoading}
               selectedPath={selectedPath}

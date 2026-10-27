@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { CatalogHead } from "@/components/page-head";
-import { ForkMark } from "@ageval/shared/components/trial/fork-mark";
 import { ListPager } from "@/components/list-pager";
 import { UnderlineTabs } from "@ageval/shared/components/underline-tabs";
 import { CommandStrip } from "@ageval/shared/components/command-strip";
@@ -809,14 +808,12 @@ export function TaskDetailPage() {
                           />
                         </TableCell>
                         <TableCell>
-                          <div className="flex min-w-0 flex-col items-start gap-1">
-                            <ModelLabel
-                              value={j.model_label}
-                              effort={j.reasoning_effort}
-                              to={modelCatalogHref(j.model_label)}
-                            />
-                            <ForkMark fork={j.fork} />
-                          </div>
+                          <ModelLabel
+                            value={j.model_label}
+                            effort={j.reasoning_effort}
+                            to={modelCatalogHref(j.model_label)}
+                            fork={j.fork}
+                          />
                         </TableCell>
                         {jobColumns.includes("environment") ? (
                           <TableCell>

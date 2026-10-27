@@ -142,6 +142,13 @@ export type Trial = {
   executor_kind?: string | null;
   /** Full lock provenance when present */
   provenance?: Record<string, unknown> | null;
+  /** Child-only fork provenance. Absent when this Attempt is not a fork. */
+  fork?: {
+    parent_attempt_id: string;
+    checkpoint_seq?: number | null;
+    source_model?: string;
+    continuation_model?: string;
+  } | null;
   /** lock.provenance.upstream.url for top-bar link */
   upstream_url?: string | null;
   upstream_name?: string | null;
@@ -209,6 +216,8 @@ export type TrajectoryStep = {
   raw_output?: Record<string, unknown> | unknown[] | string | null;
   /** Observational tool duration; omit when the sealed step has none. */
   elapsed_ms?: number | null;
+  /** Copied from the parent display trajectory. */
+  inherited?: boolean | null;
   started_at?: string | null;
   ended_at?: string | null;
   /** permission_decision (batch auto-approve evidence) */

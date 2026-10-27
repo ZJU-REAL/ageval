@@ -70,6 +70,7 @@ export function EvidenceTabs({
   treeGroups,
   emptyNote = "No evidence tabs for this uploaded Attempt archive.",
   analysisPanel = null,
+  fork = null,
 }: {
   availableTabs: TabId[];
   activeTab: TabId | null;
@@ -101,6 +102,7 @@ export function EvidenceTabs({
   emptyNote?: string;
   /** Shown when the Analysis tab is selected. The tab is omitted when there are no reports. */
   analysisPanel?: ReactNode;
+  fork?: Trial["fork"];
 }) {
   const verifierSteps = observationSteps || [];
   const verifierTab = activeTab === "verifier";
@@ -205,6 +207,7 @@ export function EvidenceTabs({
           actors={actors}
           panelRef={panelRef}
           kind={kind}
+          fork={fork}
         />
       )}
 

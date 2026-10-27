@@ -6,7 +6,6 @@ import {
   SlotHistorySelect,
   type SlotHistoryEntry,
 } from "@ageval/shared/components/trial/slot-history-select";
-import { ForkMark } from "@ageval/shared/components/trial/fork-mark";
 import { Button } from "@ageval/shared/components/ui/button";
 import { EXTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 import type { Trial } from "@ageval/shared/lib/trial-types";
@@ -101,14 +100,6 @@ export function TrialHeader({
               <span className="text-body font-medium">
                 {trial.framework}
               </span>
-            </>
-          ) : null}
-          {trial?.fork?.parent_attempt_id ? (
-            <>
-              <span className="text-mute select-none" aria-hidden>
-                ·
-              </span>
-              <ForkMark fork={trial.fork} />
             </>
           ) : null}
           {trial?.environment ? (

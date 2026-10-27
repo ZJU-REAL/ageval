@@ -257,7 +257,12 @@ export function AttemptEvidencePage() {
             />
 
             {trial.actors && trial.actors.length > 0 ? (
-              <ActorsTable actors={trial.actors} harnessTo={harnessHref} modelTo={modelCatalogHref} />
+              <ActorsTable
+                actors={trial.actors}
+                harnessTo={harnessHref}
+                modelTo={modelCatalogHref}
+                fork={trial.fork}
+              />
             ) : null}
 
             <EvidenceTabs
@@ -304,6 +309,7 @@ export function AttemptEvidencePage() {
               }}
               result={result}
               actors={trial.actors || []}
+              fork={trial.fork}
               tree={tree}
               treeLoading={treeLoading}
               selectedPath={selectedPath}

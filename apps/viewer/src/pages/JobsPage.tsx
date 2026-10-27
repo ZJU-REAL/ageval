@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { CommandStrip } from "@ageval/shared/components/command-strip";
-import { ForkMark } from "@ageval/shared/components/trial/fork-mark";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { EmptyState, LoadingState } from "@ageval/shared/components/empty-state";
 import { JobCheck } from "@/components/job-check";
@@ -760,14 +759,12 @@ export function JobsPage() {
                       <HarnessLabel className="max-w-full" value={job.agent_label} />
                     </TableCell>
                     <TableCell className="max-w-[16rem]">
-                      <div className="flex min-w-0 flex-col items-start gap-1">
-                        <ModelLabel
-                          className="max-w-full"
-                          value={job.model_label}
-                          effort={job.reasoning_effort}
-                        />
-                        <ForkMark fork={job.fork} />
-                      </div>
+                      <ModelLabel
+                        className="max-w-full"
+                        value={job.model_label}
+                        effort={job.reasoning_effort}
+                        fork={job.fork}
+                      />
                     </TableCell>
                     <TableCell className="tabular-nums">
                       <ScoreRing value={job.pass_rate}>

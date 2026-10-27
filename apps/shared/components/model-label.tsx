@@ -2,6 +2,7 @@ import type { MouseEvent } from "react";
 import { Link } from "react-router-dom";
 
 import { HoverTip, TruncateTip } from "@ageval/shared/components/hover-tip";
+import { ForkMark, type ForkMarkData } from "@ageval/shared/components/trial/fork-mark";
 import { LabMark } from "@ageval/shared/components/lab-mark";
 import { INTERNAL_LINK_CLASS } from "@ageval/shared/lib/links";
 import { loadModelPin, overlayLab } from "@ageval/shared/lib/model-pin";
@@ -17,6 +18,7 @@ export function ModelLabel({
   mark = true,
   clip = true,
   tip = true,
+  fork,
 }: {
   value?: string | null;
   effort?: string | null;
@@ -34,6 +36,8 @@ export function ModelLabel({
   clip?: boolean;
   /** False when a parent already shows the full name on hover. */
   tip?: boolean;
+  /** Small tag after the model name. Hover names the source Attempt. */
+  fork?: ForkMarkData | null;
 }) {
   const { text, title } = formatModelLabel(value);
   const extra = (effort || "").trim();
@@ -44,7 +48,9 @@ export function ModelLabel({
 
   const lab = mark ? overlayLab(value, loadModelPin()) : "";
   const clipped = clip
-    ? "inline-block w-max min-w-0 max-w-full truncate"
+    ? fork
+      ? "block min-w-0 max-w-full truncate"
+      : "inline-block w-max min-w-0 max-w-full truncate"
     : "whitespace-nowrap";
 
   const model = !tip ? (
@@ -68,21 +74,24 @@ export function ModelLabel({
       )}
     >
       {lab ? <LabMark lab={lab} size={16} className="mr-1.5 shrink-0" /> : null}
-      {to ? (
-        <Link
-          to={to}
-          onClick={(event) => {
-            event.stopPropagation();
-            onClick?.(event);
-          }}
-          className={cn(clip && "min-w-0", "inline-flex", INTERNAL_LINK_CLASS)}
-        >
-          {model}
-        </Link>
-      ) : (
-        model
-      )}
+      <span className={cn(clip && "min-w-0 overflow-hidden", fork && "flex-1")}>
+        {to ? (
+          <Link
+            to={to}
+            onClick={(event) => {
+              event.stopPropagation();
+              onClick?.(event);
+            }}
+            className={cn(clip && "min-w-0", "inline-flex", INTERNAL_LINK_CLASS)}
+          >
+            {model}
+          </Link>
+        ) : (
+          model
+        )}
+      </span>
       {extra ? <span className="shrink-0 text-mute">[{extra}]</span> : null}
+      <ForkMark fork={fork} className="ml-1.5" />
     </span>
   );
 }

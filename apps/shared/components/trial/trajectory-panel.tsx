@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 
 import { HoverTip } from "@ageval/shared/components/hover-tip";
+import { ForkCut, ForkMark, type ForkMarkData } from "@ageval/shared/components/trial/fork-mark";
 import { Button } from "@ageval/shared/components/ui/button";
 import { MarkdownBody } from "@ageval/shared/components/markdown";
 import {
@@ -700,6 +701,7 @@ export function TrajectoryPanel({
   actors,
   panelRef,
   kind = "all",
+  fork,
 }: {
   loading: boolean;
   steps: TrajectoryStep[];
@@ -708,6 +710,7 @@ export function TrajectoryPanel({
   actors: ActorRow[];
   panelRef?: RefObject<HTMLDivElement | null>;
   kind?: TrajectoryKind;
+  fork?: ForkMarkData | null;
 }) {
   const visibleSteps = useMemo(
     () => steps.filter((s) => !isBatchAutoApprovePermission(s)),
@@ -937,6 +940,7 @@ export function TrajectoryPanel({
   if (!visibleSteps.length) {
     return (
       <div className="space-y-2">
+        <ForkCut fork={fork} />
         <p className="text-sm text-mute">No trajectory.jsonl steps for this run.</p>
         {result ? (
           <pre className="text-xs font-mono bg-canvas-soft rounded-[10px] p-3 overflow-auto max-h-64">
@@ -948,19 +952,51 @@ export function TrajectoryPanel({
   }
 
   function renderSteps(list: TrajectoryStep[], hideTurnIndex = false, start = 0) {
+    let cutAt = -1;
+    if (fork?.parent_attempt_id && kind === "all") {
+      for (let i = list.length - 1; i >= 0; i -= 1) {
+        if (list[i]?.inherited === true) {
+          cutAt = i;
+          break;
+        }
+      }
+    }
+    const before = cutAt >= 0 ? list.slice(0, cutAt + 1) : list;
+    const after = cutAt >= 0 ? list.slice(cutAt + 1) : [];
+    const showCut = Boolean(fork?.parent_attempt_id) && kind === "all";
     return (
-      <ol className="space-y-2">
-        {list.map((s, i) => (
-          <StepItem
-            key={`${s.invocation || ""}-${s.line || i}-${start + i}`}
-            s={s}
-            stepId={`traj-step-${start + i}`}
-            hideTurnIndex={hideTurnIndex}
-            allExpanded={allExpanded}
-            expandGen={expandGen}
-          />
-        ))}
-      </ol>
+      <div className="space-y-2">
+        {showCut && cutAt < 0 ? <ForkCut fork={fork} /> : null}
+        {before.length ? (
+          <ol className="space-y-2">
+            {before.map((s, i) => (
+              <StepItem
+                key={`${s.invocation || ""}-${s.line || i}-${start + i}`}
+                s={s}
+                stepId={`traj-step-${start + i}`}
+                hideTurnIndex={hideTurnIndex}
+                allExpanded={allExpanded}
+                expandGen={expandGen}
+              />
+            ))}
+          </ol>
+        ) : null}
+        {showCut && cutAt >= 0 ? <ForkCut fork={fork} /> : null}
+        {after.length ? (
+          <ol className="space-y-2">
+            {after.map((s, i) => (
+              <StepItem
+                key={`${s.invocation || ""}-${s.line || i}-${start + cutAt + 1 + i}`}
+                s={s}
+                stepId={`traj-step-${start + cutAt + 1 + i}`}
+                hideTurnIndex={hideTurnIndex}
+                allExpanded={allExpanded}
+                expandGen={expandGen}
+              />
+            ))}
+          </ol>
+        ) : null}
+      </div>
     );
   }
 
@@ -968,8 +1004,9 @@ export function TrajectoryPanel({
     <div className="space-y-3">
       {note ? <p className="text-xs text-mute">{note}</p> : null}
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-mute">
-          Trajectory is observational only; independent evaluator owns PASS.
+        <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-mute">
+          <span>Trajectory is observational only; independent evaluator owns PASS.</span>
+          <ForkMark fork={fork} />
         </p>
         <HoverTip content={allExpanded ? "Collapse all" : "Expand all"}>
         <Button
