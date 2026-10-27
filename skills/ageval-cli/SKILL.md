@@ -14,7 +14,7 @@ uv sync --frozen --all-packages
 uv run ageval --help
 ```
 
-Public commands: `ageval lock` `ageval run` `ageval campaign` `tasks` `jobs` `view` `plugin` `evidence` `ageval status` `ageval cancel` `executors` `publish` `release` `login` `agent` `registry` `cache` `results`. No `submit`. Path arguments are **dataset** roots. `ageval view` also accepts a directory of dataset roots.
+Public commands: `ageval lock` `ageval run` `ageval replay` `ageval checkpoints` `ageval campaign` `tasks` `jobs` `view` `plugin` `evidence` `ageval status` `ageval cancel` `executors` `publish` `release` `login` `agent` `registry` `cache` `results`. No `submit`. Path arguments are **dataset** roots. `ageval view` also accepts a directory of dataset roots.
 
 ```bash
 uv run ageval lock examples/core --task config-minimal
@@ -41,6 +41,8 @@ Single Attempt evidence: `<dataset>/.ageval/runs/<id>/` (`lock.json`, `result.js
 Offline: `AGEVAL_OFFLINE_AGENT=1` must not PASS agent tasks.
 
 Hub Leaderboard needs suite upload (`ageval results upload-suite`), not a lone `results upload`.
+
+`ageval replay <dataset> --run <attempt_id> [--evaluate]` re-executes retained terminal actions in a new environment. It does not call the solver model. Exit 0 when the new observations match, 1 on the first meaningful divergence, 2 when the command refuses or the replay fails. `--evaluate` is the only way that Attempt gets PASS or FAIL. Detail: [references/commands.md](references/commands.md).
 
 `ageval run <dataset> --task <id> --resume <attempt_id>` continues one unsealed Attempt in place. Exit 2, and no new `result.json`, when `result.json` already exists, the lock digest does not match, or the environment is still busy. `--resume-suite` skips settled PASS / FAIL / ERROR and continues a matching unsealed slot in place; a slot with no matching activity header starts a new Attempt. `ageval results regrade <dataset> --run <attempt_id>` scores a finished Attempt again from `task-artifacts/` and `verifier-collect/` (new Attempt, no agent run, collect commands are not re-run). Default `--resume-suite` skips ERROR; `--retry-errors` re-runs those slots. `--replace-slot` still replaces one named slot.
 

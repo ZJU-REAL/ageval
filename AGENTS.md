@@ -50,7 +50,7 @@ apps/* / services/* README  ← SPA / service development detail
 | --- | --- |
 | Design | `docs/` (PRD + design 01–09 + glossary) is self-contained |
 | Production pipeline | Config locking → four Attempt execution phases (`environment → run → evaluate → record`, with `cleanup` in `finally`) → environment plugin → ACP `attach_stdio` or worker/HTTP executor → isolated evaluation → evidence archive |
-| Public entrypoints | `ageval lock` / `run` / `campaign` / `view` / `evidence` / `plugin` / `jobs` / `results` and the rest of `ageval --help` |
+| Public entrypoints | `ageval lock` / `run` / `replay` / `checkpoints` / `campaign` / `view` / `evidence` / `plugin` / `jobs` / `results` and the rest of `ageval --help` |
 | Environments | `local` and `docker` have verified public runs; `e2b`, `ssh`, and `daytona` implementations exist and fail preflight (`--probe`) when credentials are absent |
 | Evidence grade | **`runnable-mvp`** (core local/docker ACP and named `minimal-demo` tasks; see [examples/README.md](examples/README.md)) |
 | Delivery tracking | **GitHub Issues** (do not create in-repo `specs/` or `ROADMAP.md` trackers) |
