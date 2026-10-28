@@ -24,5 +24,10 @@
 | Environment clock | ERROR, phase `environment`, token `environment_timeout`. Run does not start |
 | Evaluate clock | ERROR, phase `evaluate`, token `evaluate_timeout` |
 | Evaluator status other than PASS / FAIL | ERROR, phase `evaluate`, token `evaluator_invalid_status` |
+| `environment_image_unresolved` / bake failure before the agent starts | Dead local HTTP_PROXY; APT mirror / fake-ip; task Dockerfile. See `$eval-ops-pitfalls` |
+| `acp_timeout` while wall time remains | Effective invocation timeout and the task's invocation pattern. See `$eval-ops-pitfalls` |
+| API 400 / no healthy deployments | Model id, required provider prefix, gateway routing, and deployment health. See `$eval-ops-pitfalls` |
+| Nearly all FAIL with empty patches / widespread image resolution failures | Inspect representative evidence for a shared setup failure, fix and verify it, then start a fresh suite. See `$eval-ops-pitfalls` |
+| PEP668 / `externally-managed-environment` during scoring setup | Check the failing install's execution location, interpreter, and virtual environment. See `$eval-ops-pitfalls` |
 
 Design: `docs/design/07-evidence-and-analysis.md`, `docs/design/01-core-lifecycle.md`.

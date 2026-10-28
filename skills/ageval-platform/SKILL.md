@@ -45,6 +45,7 @@ Core owns configuration locking (`lock`), the Attempt phase pipeline, the `Envir
 | Task | Load |
 | --- | --- |
 | CLI operations | `$ageval-cli` |
+| Pre-run environment checks and suite troubleshooting | `$eval-ops-pitfalls` |
 | `ageval.yaml` / `task.yaml` / `profiles.yaml` | `$ageval-config-package` |
 | `run.py` / `AgentSession` / `ageval_sdk` | `$ageval-sdk-harness` |
 | `ageval.plugin/1` authoring | `$ageval-plugin` |

@@ -41,6 +41,7 @@ Job knobs are `environment_options` (not `extensions[].options`).
 | `environment_options.egress` | omitted | Omit = today's `bridge` (no proxy). `llm` (docker only): in-container HTTP(S) is forced through a parent allowlist proxy (`HTTP_PROXY` / `HTTPS_PROXY`). ACP stdio does not go through it. A kind that cannot enforce this fails lock. |
 | `environment_options.egress_allow` | omitted | Extra hostnames on the **same map** as `egress: llm` (lowercase, no scheme / path / port). Omit = bound profile `base_url` hosts only. Empty list = no extras. Effective list = those `base_url` hosts ∪ this list, written to internal `egress_allowlist`. Present without `egress: llm`, or on a non-docker kind, fails lock. Scoring-container extras are a nested `evaluate_host.environment_options.egress_allow` and do not inherit from the agent container. |
 | `AGEVAL_PIP_INDEX` (host env) | unset | When set, plugin bake layers pass it as `PIP_INDEX_URL` so image-build pip uses that index. Unset / blank = pip default. Same knob as the official Attempt image build. |
+| `AGEVAL_APT_MIRROR` (host env) | unset | Replaces Debian package sources during Attempt image builds and plugin bake. With Clash/Tailscale **fake-ip**, mirrors such as `aliyun` can be unreachable, causing apt to stall or return 404 during bake. Prefer an explicitly reachable CDN in the task Dockerfile; verify mirror connectivity before batch image builds. |
 
 ## Task resource parameters
 
