@@ -383,6 +383,8 @@ Detailed phase rules: [docs/design/01-core-lifecycle.md](docs/design/01-core-lif
 | Official Attempt image | `plugins/contrib/docker/attempt/` | Pulls `ghcr.io/zju-real/ageval-attempt:<cli-ver>` as `ageval-attempt:base` or builds from packaged Dockerfile |
 | Registry HTTP service | `services/registry/` | Six aggregate stores (`packages`, `results`, `shares`, `orgs`, `inbox`, `hosted`) behind service classes; hosted worker runs `e2b` and `daytona` jobs ([docs/design/08](docs/design/08-hub-registry-and-agents.md#5-cloud-hosted-evaluation-jobs-servicesregistryhosted)) |
 
+`anthropic_http/messages_stream.py` owns opt-in Messages SSE framing, indexed provider block assembly, clock/cancellation observation, and throttled partial activity snapshots. It preserves normal `AgentResult` and task artifact boundaries. Shared HTTP model-turn helpers retain ownership of non-streaming completion; no benchmark-specific behavior enters Core.
+
 ## Failure and Privacy Boundaries
 
 When an Attempt terminates with `ERROR`, `result.json` records `error` as `{phase, title, message}`. `PASS` and `FAIL` leave `error` as `null` (including when `limit` records a `run`-phase quota such as `wall_time_seconds` or `agent_invocations`).

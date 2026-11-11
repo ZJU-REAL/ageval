@@ -33,6 +33,10 @@ SDK `tools=` / `messages=` remain OpenAI-shaped. Translation to
 | --- | --- | --- |
 | `options.max_tokens` | 4096 | Required Messages max_tokens. Positive int. Non-int values are rejected. |
 | `options.anthropic_version` | 2023-06-01 | anthropic-version request header. Non-string values are rejected. |
+| `options.omit_temperature` | false | Omit temperature for providers requiring their default. |
+| `options.stream` | false | Opt-in native Messages SSE; false retains a single JSON response. |
+| `options.stream_first_event_timeout_seconds` | unset | First SSE data deadline; None disables. |
+| `options.stream_idle_timeout_seconds` | unset | Semantic output idle deadline; pings do not reset it. |
 | `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
 <!-- /ageval:param-table -->
 
@@ -67,3 +71,53 @@ and `thinking` (thought events). The raw HTTP body stays under
 
 Not a Hub install. `ageval plugin install anthropic-http` is rejected: the
 id is reserved.
+
+## Native Messages streaming
+
+Enable SSE with `options.stream: true`; the default remains `false`. Both modes
+return the same SDK response and native tool-call fields. Text, thinking,
+signatures, redacted thinking, and fragmented tool arguments are assembled by
+block index. Signatures and redacted blocks are not answer text. Initial usage
+and cumulative final usage are merged without counting tokens twice.
+
+```yaml
+options:
+  stream: true
+  stream_first_event_timeout_seconds: 25
+  stream_idle_timeout_seconds: 25
+  upstream_stall_seconds: 0
+  # Only for an endpoint that rejects an explicit temperature:
+  omit_temperature: true
+```
+
+The optional positive first-event and meaningful-output idle limits do not reset
+the overall invocation/watchdog or task `limits`. The idle clock starts when
+response headers arrive. Pings and comments do not reset it. `omit_temperature` defaults to `false` and
+preserves `temperature: 0` unless explicitly enabled. A third-party Messages
+endpoint uses `base_url` ending in `/v1`; the executor appends `/messages`.
+
+While receiving output, the executor records redacted partial model-turn
+snapshots in `activity.jsonl` at most four times per second. Only the completed
+turn is projected into subsequent conversation history; an interrupted turn
+remains aborted with partial text/thinking.
+Tool-use snapshots retain the block index, tool id/name and redacted unfinished
+JSON arguments in `partial_tool_calls`, including a final snapshot on abort.
+The standard `trajectory.jsonl` is
+sealed after invocation, with separate thinking and answer content. Use
+`--keep-recovery-state` to retain activity after settlement and
+`--keep-vendor-raw` to retain the counts/timings-only
+`backend_raw/stream-progress.jsonl` diagnostic journal.
+
+A complete stream requires closed blocks, a usable text/tool response, a valid
+stop reason, and `message_stop`. Premature EOF, malformed tool JSON, provider
+error events, thinking-only responses, and `max_tokens` truncation fail explicitly;
+partial text is never published as a successful answer. Provider error details
+are bounded and redacted. Received usage on failure is marked partial, not billed
+as a finished turn. Stream completion is not benchmark `PASS`.
+
+Cancellation shuts down established local sockets even while waiting for response
+headers. DNS resolution, TCP connection and TLS setup still depend on their HTTP
+socket timeout; `reader_stopped: false` is reported if such a reader has not
+finished within the cleanup grace period. Closing a local connection does not
+prove remote provider computation stopped. Streaming exposes progress; it does
+not guarantee faster or successful completion of a long task.

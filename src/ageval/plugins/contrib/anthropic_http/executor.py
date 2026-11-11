@@ -12,8 +12,8 @@ import os
 import threading
 import urllib.error
 import urllib.request
-from collections.abc import Mapping, Sequence
-from typing import Any
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, cast
 
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
 from ageval.model.errors import (
@@ -25,6 +25,12 @@ from ageval.model.errors import (
 from ageval.model.usage import LOST_ON_TIMEOUT, adopt_usage
 from ageval.plugins.agent_result import AgentResult
 from ageval.plugins.base import BaseExecutor
+from ageval.plugins.contrib.anthropic_http.messages_stream import (
+    StreamMeta,
+    StreamOutcome,
+    TextEvent,
+    exchange_messages_stream,
+)
 from ageval.plugins.contrib.anthropic_http.options import AnthropicHTTPOptions
 from ageval.plugins.contrib.anthropic_http.usage import normalize_anthropic_http_usage
 from ageval.plugins.decorators import executor_plugin
@@ -284,9 +290,15 @@ class AnthropicHTTPExecutor(BaseExecutor):
             if isinstance(options, AnthropicHTTPOptions)
             else coerce_options(AnthropicHTTPOptions, raw)
         )
-        self.options = parsed
+        self.options = cast(AnthropicHTTPOptions, parsed)
         self.max_tokens = parsed.max_tokens
         self.anthropic_version = parsed.anthropic_version
+        self._stream_events: list[TextEvent] = []
+        self._stream_meta: StreamMeta = {}
+        self._stream_partial_usage: dict[str, object] = {}
+        self._stream_abort: Callable[[], None] | None = None
+        self._activity_step: int | None = None
+        self._invoke_cancel = threading.Event()
 
     @classmethod
     def supports_model(cls, spec: ModelSpec) -> None:
@@ -305,12 +317,56 @@ class AnthropicHTTPExecutor(BaseExecutor):
         self.extra = dict(spec.extra)
 
     def close(self) -> None:
-        return None
+        self.cancel_invoke()
+
+    def prepare_invoke(self) -> None:
+        self._invoke_cancel.clear()
+
+    def cancel_invoke(self) -> None:
+        self._invoke_cancel.set()
+        if self._stream_abort is not None:
+            self._stream_abort()
 
     def _seal_turn(self, **kwargs: Any) -> AgentResult:
+        if self.options.stream:
+            metadata = dict(kwargs.get("metadata") or {})
+            metadata.update(self._stream_meta)
+            if metadata:
+                kwargs["metadata"] = metadata
+            if not kwargs.get("ok") and self._stream_partial_usage:
+                partial_usage, _ = normalize_anthropic_http_usage(self._stream_partial_usage)
+                kwargs["usage"] = adopt_usage(partial_usage, partial=True)
+            kwargs["events"] = tuple(self._stream_events) + tuple(kwargs.get("events") or ())
         result = AgentResult(**kwargs)
         step = getattr(self, "_activity_step", None)
         self._activity_step = None
+        scope = getattr(self, "activity", None)
+        if self.options.stream and scope is not None and isinstance(step, int):
+            thought = "".join(
+                e["text"] for e in self._stream_events if e.get("channel") == "thought"
+            )
+            assistant = "".join(
+                e["text"] for e in self._stream_events if e.get("channel") == "assistant"
+            )
+            if result.ok:
+                from ageval.plugins.http_activity import _usage_dict
+
+                scope.record_model_turn_completed(
+                    step,
+                    assistant_text=result.text,
+                    thought=thought,
+                    tool_calls=list(result.tool_calls),
+                    usage=_usage_dict(result.usage),
+                    stop_reason=self._stream_meta.get("stop_reason"),
+                )
+            else:
+                scope.record_model_turn_aborted(
+                    step,
+                    partial_text=assistant,
+                    partial_thought=thought,
+                    reason=str(result.error or "stream_failed"),
+                )
+            return result
         return finish_model_turn(self, step if isinstance(step, int) else None, result)
 
     def invoke(
@@ -323,7 +379,18 @@ class AnthropicHTTPExecutor(BaseExecutor):
         tools: Sequence[Mapping[str, Any]] | None = None,
         messages: Sequence[Mapping[str, Any]] | None = None,
     ) -> AgentResult:
-        del redaction_sentinels
+        self._stream_events = []
+        self._stream_meta = {}
+        self._stream_partial_usage = {}
+        if self.options.stream and self._invoke_cancel.is_set():
+            return self._seal_turn(
+                model=self.model,
+                text="",
+                structured=None,
+                ok=False,
+                error="invoke_cancelled",
+                repeatable=False,
+            )
         messages = messages_for_turn(self, prompt, messages)
         key_env = self.api_key_env or _DEFAULT_KEY_ENV
         key = os.environ.get(key_env, "")
@@ -355,6 +422,8 @@ class AnthropicHTTPExecutor(BaseExecutor):
             "messages": chat,
             "temperature": 0,
         }
+        if self.options.omit_temperature:
+            payload.pop("temperature", None)
         if system:
             payload["system"] = system
         catalog = anthropic_tools(tools)
@@ -362,6 +431,8 @@ class AnthropicHTTPExecutor(BaseExecutor):
             payload["tools"] = catalog
         if self.extra:
             payload.update(copy.deepcopy(self.extra))
+        if self.options.stream:
+            payload["stream"] = True
         body = json.dumps(payload).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
@@ -371,17 +442,45 @@ class AnthropicHTTPExecutor(BaseExecutor):
             headers["x-api-key"] = key
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
         self._activity_step = begin_model_turn(self, prompt, messages)
+        stream_outcome: StreamOutcome | None = None
         try:
-            kind, found = _exchange(
-                req,
-                http_timeout=self.http_timeout,
-                watchdog=self.watchdog,
-                invoke_timeout=timeout,
-            )
+            if self.options.stream:
+                stream_outcome = exchange_messages_stream(
+                    self,
+                    req,
+                    timeout=timeout,
+                    collect_dir=collect_dir,
+                    redaction_sentinels=redaction_sentinels,
+                )
+                kind = stream_outcome.kind
+                found: Any = stream_outcome.raw
+                if kind == "http":
+                    found = {
+                        "http_code": stream_outcome.http_code,
+                        "http_body": stream_outcome.http_body,
+                    }
+                elif kind in {"protocol", "transport"}:
+                    found = stream_outcome.message or "stream_unknown_failure"
+            else:
+                kind, found = _exchange(
+                    req,
+                    http_timeout=self.http_timeout,
+                    watchdog=self.watchdog,
+                    invoke_timeout=timeout,
+                )
         except Exception:  # noqa: BLE001 — a transport crash still closes the model turn
             abort_model_turn(self, self._activity_step, reason="process_interrupted")
             self._activity_step = None
             raise
+        if kind == "cancelled":
+            return self._seal_turn(
+                model=self.model,
+                text="",
+                structured=None,
+                ok=False,
+                error="invoke_cancelled",
+                repeatable=False,
+            )
         if kind == "watchdog":
             message = f"TimeoutError:anthropic_http_watchdog:{self.watchdog:g}"
             return self._seal_turn(
@@ -466,7 +565,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
         except json.JSONDecodeError:
             structured = None
         events: list[dict[str, Any]] = []
-        if thought:
+        if thought and not self.options.stream:
             events.append(
                 {
                     "kind": "text",

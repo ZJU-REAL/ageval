@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -36,6 +37,37 @@ def parse_version(raw: Any) -> str:
     return raw.strip()
 
 
+def parse_stream(value: Any) -> bool:
+    if not isinstance(value, bool):
+        raise ConfigError(ERROR_INVALID_SCHEMA, "stream_requires_bool", location="options/stream")
+    return value
+
+
+def parse_omit_temperature(value: Any) -> bool:
+    if not isinstance(value, bool):
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA,
+            "omit_temperature_requires_bool",
+            location="options/omit_temperature",
+        )
+    return value
+
+
+def parse_stream_timeout(value: Any) -> float | None:
+    if value is None:
+        return None
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value <= 0
+    ):
+        raise ConfigError(
+            ERROR_INVALID_SCHEMA, "stream_timeout_requires_positive_seconds", location="options"
+        )
+    return float(value)
+
+
 @dataclass(frozen=True, slots=True)
 class AnthropicHTTPOptions:
     """Profile ``options`` for ``executor: anthropic-http``."""
@@ -56,6 +88,38 @@ class AnthropicHTTPOptions:
             "type_name": "str",
             "parse": parse_version,
             "description": "anthropic-version request header. Non-string values are rejected.",
+        },
+    )
+    omit_temperature: bool = field(
+        default=False,
+        metadata={
+            "parse": parse_omit_temperature,
+            "type_name": "bool",
+            "description": "Omit temperature for providers requiring their default.",
+        },
+    )
+    stream: bool = field(
+        default=False,
+        metadata={
+            "parse": parse_stream,
+            "type_name": "bool",
+            "description": "Opt-in native Messages SSE; false retains a single JSON response.",
+        },
+    )
+    stream_first_event_timeout_seconds: float | None = field(
+        default=None,
+        metadata={
+            "parse": parse_stream_timeout,
+            "type_name": "float | None",
+            "description": "First SSE data deadline; None disables.",
+        },
+    )
+    stream_idle_timeout_seconds: float | None = field(
+        default=None,
+        metadata={
+            "parse": parse_stream_timeout,
+            "type_name": "float | None",
+            "description": "Semantic output idle deadline; pings do not reset it.",
         },
     )
     upstream_stall_seconds: int = stall_field()
