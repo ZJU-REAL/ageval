@@ -41,6 +41,8 @@ During an Attempt, interaction events pass through three stages:
 | Judge Trajectory | `evaluation/observation.jsonl` | `evaluate` phase SDK invocations | **Verifier** tab (`Trajectory` toggle) |
 | Deterministic Checks | `evaluation/checks.json` | `evaluator.py` `checks` list | **Verifier** tab (`Files` toggle) |
 
+Streaming Anthropic HTTP turns may append repeated `model_turn/in_flight` snapshots with the same request id. These cumulative, redacted partial snapshots are observational; only the completed terminal record contributes assistant history. An aborted snapshot never becomes a completed answer. Counts/timings in `backend_raw/stream-progress.jsonl` survive only with `--keep-vendor-raw`; activity retention remains governed by `--keep-recovery-state`.
+
 ### 2.2 `terminal.usage`, `terminal.elapsed_ms`, and `extra` extension fields
 ```text
 usage: { prompt_tokens, completion_tokens, cached_tokens, cost_usd }  # Canonical fields; omitted when unreported

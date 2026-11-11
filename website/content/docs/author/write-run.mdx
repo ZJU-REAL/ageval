@@ -39,3 +39,11 @@ async def run(ctx: RunContext) -> RunTerminal:
 and stays on text invoke. Omit both for prompt-only.
 
 Files present are recognized. Do not declare a harness entrypoint.
+
+For native Anthropic Messages SSE, set `options.stream: true` in the role profile
+(default `false`). Optional `stream_first_event_timeout_seconds` and
+`stream_idle_timeout_seconds` report first-event/idle failures without extending
+invocation or task limits; pings are not answer progress. Partial output is visible
+in activity and is not a completed response. Set `omit_temperature: true` only
+when the provider requires its default temperature. SDK task code and evaluator
+ownership are unchanged.

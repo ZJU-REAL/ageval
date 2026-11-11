@@ -37,3 +37,9 @@ async def run(ctx: RunContext) -> RunTerminal:
 `session.invoke` 可传 `tools` 与 `messages`。`openai-http` / `anthropic-http` 返回结构化 `tool_calls`；ACP 忽略工具目录，仍走文本 invoke。省略这两项就是 prompt-only。
 
 有文件就认，不必再写 `harness.entrypoint`。
+
+Anthropic Messages 原生流式通过角色 profile 的 `options.stream: true` 开启，默认
+`false`。可选的 `stream_first_event_timeout_seconds` 与
+`stream_idle_timeout_seconds` 区分首事件与空闲失败，不延长调用或任务的资源上限；
+ping 不算答案进展。部分输出写入活动日志，但不作为已完成回答。只有供应商要求默认
+温度时才显式设置 `omit_temperature: true`。SDK 任务代码和 evaluator 的评分职责不变。
