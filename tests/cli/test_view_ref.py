@@ -27,7 +27,7 @@ def _plant_cache(cache_root: Path) -> Path:
     cache = PackageCache(cache_root)
     dest = cache.entry_dir("test/suite-min", DIGEST)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(SUITE, dest)
+    shutil.copytree(SUITE, dest, ignore=shutil.ignore_patterns(".ageval"))
     (dest / ".ageval-verified").write_text(
         json.dumps(
             {
@@ -73,7 +73,7 @@ def test_lookup_version_none_when_ambiguous(tmp_path: Path) -> None:
     other = DIGEST[:-1] + "b"
     dest = PackageCache(cache_root).entry_dir("test/suite-min", other)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(SUITE, dest)
+    shutil.copytree(SUITE, dest, ignore=shutil.ignore_patterns(".ageval"))
     (dest / ".ageval-verified").write_text(
         json.dumps(
             {

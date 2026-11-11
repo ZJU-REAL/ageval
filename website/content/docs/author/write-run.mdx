@@ -42,5 +42,7 @@ For `openai-http`, set `options.stream: true` in the profile to consume native
 SSE for Chat Completions and Responses. The task still receives the same
 `invoke` result; streaming changes transport and progress evidence, not the
 task contract or PASS. A failed or incomplete stream is an `ok: false` result.
+Live activity holds unfinished tokens and credential prefixes until they can be
+redacted safely, then publishes safe text without waiting for the whole response.
 
 Files present are recognized. Do not declare a harness entrypoint.

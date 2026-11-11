@@ -79,9 +79,12 @@ timing; it never contains provider bodies, messages, URLs, or call ids. A
 length-limited or provider-incomplete ending keeps its partial text but is not
 a successful completion. Provider usage is adopted only when reported; otherwise
 it is explicitly unavailable, never zero. Live fragments appear as redacted
-`model_turn/delta` activity rows, and timing/count diagnostics land in
+`model_turn/delta` activity rows. An unfinished token or credential prefix stays
+buffered until it can be redacted safely across stream and flush boundaries;
+ordinary completed text is still published live. Timing/count diagnostics land in
 `backend_raw/stream-progress.jsonl`. Streaming starts showing progress earlier;
 it does not guarantee a shorter generation time, and completion is not `PASS`.
+Sealed invocation text events use the same incremental redaction context.
 
 ## Bind
 

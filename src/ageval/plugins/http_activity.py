@@ -7,6 +7,7 @@ import time
 from typing import Any
 
 from ageval.evidence.activity import ActivityScope
+from ageval.evidence.redaction import IncrementalTextRedactor
 from ageval.plugins.agent_result import AgentResult
 
 _DELTA_CHANNELS = frozenset({"assistant", "thought", "tool"})
@@ -116,6 +117,7 @@ class ModelTurnDeltaWriter:
         self._pending: dict[tuple[str, int | None, str | None], list[str]] = {}
         self._characters = 0
         self._last_flush = 0.0
+        self._redactors: dict[tuple[str, int | None, str | None], IncrementalTextRedactor] = {}
 
     def append(
         self,
@@ -147,9 +149,10 @@ class ModelTurnDeltaWriter:
             self._flush_locked()
 
     def close(self) -> None:
-        self.flush()
+        with self._lock:
+            self._flush_locked(final=True)
 
-    def _flush_locked(self) -> None:
+    def _flush_locked(self, *, final: bool = False) -> None:
         pending = self._pending
         self._pending = {}
         self._characters = 0
@@ -158,8 +161,13 @@ class ModelTurnDeltaWriter:
         step = self._step
         if scope is None or step is None:
             return
-        for (channel, tool_index, tool_call_id), parts in pending.items():
-            text = "".join(parts)
+        keys = self._redactors.keys() | pending.keys() if final else pending.keys()
+        for channel, tool_index, tool_call_id in keys:
+            key = (channel, tool_index, tool_call_id)
+            redactor = self._redactors.setdefault(
+                key, IncrementalTextRedactor(extra_sentinels=scope.log.sentinels)
+            )
+            text = redactor.feed("".join(pending.get(key, ())), final=final)
             for start in range(0, len(text), _DELTA_CHUNK):
                 scope.record_model_turn_delta(
                     step,

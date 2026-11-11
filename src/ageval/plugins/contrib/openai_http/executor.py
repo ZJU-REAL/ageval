@@ -14,8 +14,10 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from typing import Any
 
+from ageval.evidence.redaction import IncrementalTextRedactor
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
 from ageval.model.errors import (
     ModelConfigError,
@@ -255,7 +257,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
         tools: Sequence[Mapping[str, Any]] | None = None,
         messages: Sequence[Mapping[str, Any]] | None = None,
     ) -> AgentResult:
-        del redaction_sentinels
+        self._stream_sentinels = tuple(redaction_sentinels or ())
         messages = messages_for_turn(self, prompt, messages)
         self._stream_meta = {}
         self._delta_writer = None
@@ -578,7 +580,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
                 exchange_id=journal.exchange_id,
             )
         finally:
-            writer.flush()
+            writer.close()
             journal.close()
             self._delta_writer = None
 
@@ -626,6 +628,10 @@ class OpenAIHTTPExecutor(BaseExecutor):
         thought: str | None = None,
         stop_reason: str | None = None,
     ) -> AgentResult:
+        if self.options.stream:
+            result = replace(
+                result, events=_redact_stream_events(result.events, self._stream_sentinels)
+            )
         step = getattr(self, "_activity_step", None)
         self._activity_step = None
         return finish_model_turn(
@@ -666,6 +672,29 @@ class OpenAIHTTPExecutor(BaseExecutor):
         if extra:
             meta.update(extra)
         return meta
+
+
+def _redact_stream_events(
+    events: Sequence[dict[str, Any]], sentinels: tuple[str, ...]
+) -> tuple[dict[str, Any], ...]:
+    """Keep fragment context when invocation events are sealed after transport."""
+    redactors: dict[str, IncrementalTextRedactor] = {}
+    last: dict[str, int] = {}
+    output: list[dict[str, Any]] = []
+    for event in events:
+        if event.get("kind") != "text" or not isinstance(event.get("text"), str):
+            output.append(dict(event))
+            continue
+        channel = str(event.get("channel") or "assistant")
+        last[channel] = len(output)
+        redactor = redactors.setdefault(channel, IncrementalTextRedactor(extra_sentinels=sentinels))
+        text = redactor.feed(event["text"])
+        output.append({**event, "text": text})
+    for channel, redactor in redactors.items():
+        text = redactor.feed("", final=True)
+        if text:
+            output[last[channel]]["text"] += text
+    return tuple(output)
 
 
 def _stream_error_metadata(snapshot: Any, *, fallback: str) -> dict[str, object]:

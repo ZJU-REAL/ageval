@@ -913,7 +913,7 @@ def test_live_activity_delta_before_completion_and_single_seal(tmp_path: Path) -
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
             try:
-                self.wfile.write(_sse(_chat_frame({"content": "first"})))
+                self.wfile.write(_sse(_chat_frame({"content": "first "})))
                 self.wfile.flush()
                 sent.set()
                 release.wait(2)
@@ -942,7 +942,7 @@ def test_live_activity_delta_before_completion_and_single_seal(tmp_path: Path) -
                 break
             time.sleep(0.01)
         assert any(
-            record.status == "delta" and record.payload.get("text") == "first"
+            record.status == "delta" and record.payload.get("text") == "first "
             for record in log.records
         )
         assert worker.is_alive()
@@ -957,7 +957,7 @@ def test_live_activity_delta_before_completion_and_single_seal(tmp_path: Path) -
 
     result = box["result"]
     assert result.ok is True
-    assert result.text == "firstsecond"
+    assert result.text == "first second"
     deltas = [record for record in log.records if record.kind == "model_turn"]
     assert [record.status for record in deltas].count("completed") == 1
     assert not any(record.status == "aborted" for record in deltas)
@@ -965,7 +965,7 @@ def test_live_activity_delta_before_completion_and_single_seal(tmp_path: Path) -
         "".join(
             str(record.payload.get("text") or "") for record in deltas if record.status == "delta"
         )
-        == "firstsecond"
+        == "first second"
     )
 
 
