@@ -21,10 +21,13 @@ keep-alives and ``client=`` injection mis-routes). POST directly to
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import inspect
+import itertools
 import json
 import sys
 import threading
+from collections.abc import Iterator
 from typing import Any, NoReturn
 
 from ageval.model.errors import (
@@ -34,13 +37,34 @@ from ageval.model.errors import (
     http_status_is_config_error,
 )
 
-# Ephemeral OpenAI/httpx clients live only in the query thread's locals. When the
-# stall watchdog fires ``Future.result(timeout=…)``, ``recycle_llm_clients`` only
-# clears LiteLLM's cache — it never sees the in-flight ``client=`` — so the hung
-# ``_receive_response_headers`` socket stays ESTAB and can wedge the gateway for
-# every retry. Track in-flight clients and close them on recycle/timeout.
+# Ephemeral OpenAI/httpx clients must be tracked per query, not process-wide.
+# A global in-flight set meant any task's recycle/start/finally would
+# ``SHUT_RDWR`` every other task's live stream (EBADF / incomplete chunked read).
 _IN_FLIGHT_LOCK = threading.Lock()
-_IN_FLIGHT_CLIENTS: set[Any] = set()
+_IN_FLIGHT_CLIENTS_BY_SCOPE: dict[int, set[Any]] = {}
+_IN_FLIGHT_SCOPE: contextvars.ContextVar[int | None] = contextvars.ContextVar(
+    "miniswe_in_flight_scope", default=None
+)
+_IN_FLIGHT_SCOPE_SEQ = itertools.count(1)
+
+
+def current_inflight_scope() -> int | None:
+    return _IN_FLIGHT_SCOPE.get()
+
+
+@contextlib.contextmanager
+def inflight_scope() -> Iterator[int]:
+    """Isolate in-flight HTTP clients for one query and its stall retries."""
+    token = next(_IN_FLIGHT_SCOPE_SEQ)
+    reset = _IN_FLIGHT_SCOPE.set(token)
+    try:
+        yield token
+    finally:
+        _IN_FLIGHT_SCOPE.reset(reset)
+        with _IN_FLIGHT_LOCK:
+            leftover = _IN_FLIGHT_CLIENTS_BY_SCOPE.get(token)
+            if leftover is not None and not leftover:
+                _IN_FLIGHT_CLIENTS_BY_SCOPE.pop(token, None)
 
 
 def _iter_httpx_pools(client: Any) -> list[Any]:
@@ -156,41 +180,68 @@ def register_in_flight_client(client: Any) -> None:
     """Remember an ephemeral client so a watchdog timeout can close its socket."""
     if client is None:
         return
+    scope = _IN_FLIGHT_SCOPE.get()
+    if scope is None:
+        # Direct call without wrap_model_query: give this context its own scope
+        # so a later recycle cannot treat it as a process-global set.
+        scope = next(_IN_FLIGHT_SCOPE_SEQ)
+        _IN_FLIGHT_SCOPE.set(scope)
     with _IN_FLIGHT_LOCK:
-        _IN_FLIGHT_CLIENTS.add(client)
+        _IN_FLIGHT_CLIENTS_BY_SCOPE.setdefault(scope, set()).add(client)
 
 
 def unregister_in_flight_client(client: Any) -> None:
     if client is None:
         return
     with _IN_FLIGHT_LOCK:
-        _IN_FLIGHT_CLIENTS.discard(client)
+        scope = _IN_FLIGHT_SCOPE.get()
+        if scope is not None:
+            bucket = _IN_FLIGHT_CLIENTS_BY_SCOPE.get(scope)
+            if bucket is not None:
+                bucket.discard(client)
+                if not bucket:
+                    _IN_FLIGHT_CLIENTS_BY_SCOPE.pop(scope, None)
+            return
+        empty: list[int] = []
+        for key, bucket in _IN_FLIGHT_CLIENTS_BY_SCOPE.items():
+            bucket.discard(client)
+            if not bucket:
+                empty.append(key)
+        for key in empty:
+            _IN_FLIGHT_CLIENTS_BY_SCOPE.pop(key, None)
 
 
-def kill_in_flight_llm_clients() -> None:
-    """Close every registered in-flight ephemeral client (watchdog / recycle).
+def kill_in_flight_llm_clients(scope: int | None = None) -> None:
+    """Close in-flight ephemeral clients for one query scope only.
 
-    Unblocks orphan threads stuck in ``httpcore._receive_response_headers`` by
-    closing their httpx transport; safe to call from another thread.
+    ``scope=None`` uses the current context scope. If there is no current
+    scope, this is a no-op for ephemeral clients — it must not close every
+    in-flight socket in the process. Safe to call from another thread when
+    the target ``scope`` is passed explicitly (watchdog / async recycle).
     """
+    if scope is None:
+        scope = _IN_FLIGHT_SCOPE.get()
+    if scope is None:
+        return
     with _IN_FLIGHT_LOCK:
-        clients = list(_IN_FLIGHT_CLIENTS)
-        _IN_FLIGHT_CLIENTS.clear()
+        clients = list(_IN_FLIGHT_CLIENTS_BY_SCOPE.pop(scope, set()))
     for client in clients:
         close_llm_client(client)
 
 
-def recycle_llm_clients() -> None:
-    """Drop cached litellm HTTP clients so the next query opens a fresh connection.
+def recycle_llm_clients(scope: int | None = None) -> None:
+    """Drop this query's in-flight sockets, then flush LiteLLM's client cache.
 
     Gateway hangs often leave a keep-alive socket ESTAB / CLOSE-WAIT with no
     response bytes (large Send-Q). Retrying on the same client reuses that
     sticky connection; closing + flushing forces a new TCP handshake.
 
-    Also closes in-flight ephemeral ``client=`` instances (not in the LiteLLM
-    cache) so a stall watchdog timeout actually tears down the hung socket.
+    In-flight ephemeral ``client=`` instances are closed only for ``scope``
+    (or the current context scope). Concurrent queries keep their sockets.
+    The LiteLLM cache flush stays process-wide; the suite chat path uses
+    ephemeral httpx and does not share those cached sockets.
     """
-    kill_in_flight_llm_clients()
+    kill_in_flight_llm_clients(scope=scope)
     try:
         import litellm
     except ImportError:
@@ -233,6 +284,11 @@ def raise_for_http_status(
     if status is not None and http_status_is_config_error(status):
         raise ModelConfigError(message) from cause
     raise TransportStall(message, kind="http") from cause
+
+
+def _incomplete_chat_stream() -> NoReturn:
+    """A chat SSE body ended before ``data: [DONE]``."""
+    raise TransportStall("chat_http_stream_incomplete", kind="transport")
 
 
 def _reraise_transport(exc: BaseException) -> NoReturn:
@@ -852,6 +908,7 @@ def post_chat_completions(
         t0 = time.perf_counter()
         ttfb: float | None = None
         chunks: list[dict[str, Any]] = []
+        saw_done = False
         with client.stream("POST", url, headers=headers, content=body_bytes) as response:
             if response.status_code >= 400:
                 err_body = (response.read() or b"").decode("utf-8", "replace")[:800]
@@ -873,6 +930,7 @@ def post_chat_completions(
                 if not data_s:
                     continue
                 if data_s == "[DONE]":
+                    saw_done = True
                     break
                 try:
                     obj = json.loads(data_s)
@@ -884,6 +942,10 @@ def post_chat_completions(
 
         if not chunks:
             _bad_payload("chat_http_stream_empty")
+        # EOF without the SSE terminator is a cut socket (macOS often reports
+        # that as a clean end, Linux as EBADF). It is not a finished completion.
+        if not saw_done:
+            _incomplete_chat_stream()
         data = assemble_chat_completion_from_stream(chunks)
         return ChatCompletion.model_validate(data)
     except Exception as exc:  # noqa: BLE001 — _reraise_transport always raises

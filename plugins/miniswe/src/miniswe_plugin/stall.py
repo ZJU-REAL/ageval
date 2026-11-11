@@ -33,20 +33,22 @@ class StallExhausted(Exception):
     """The parent stall budget was spent on this model query."""
 
 
-def recycle_llm_clients() -> None:
-    """Drop cached litellm HTTP clients so the next query opens a fresh connection.
+def recycle_llm_clients(scope: int | None = None) -> None:
+    """Drop this query's in-flight sockets so the next attempt opens a fresh connection.
 
     Gateway hangs often leave a keep-alive socket ESTAB / CLOSE-WAIT with a
     large Send-Q and no response bytes. Retrying on the same client reuses that
     sticky connection; closing nested httpx pools + flushing the LiteLLM cache
     forces a new TCP handshake. Implementation lives in ``llm_client``.
+    ``scope`` limits in-flight teardown to one query; omit it to use the
+    current context scope (never every client in the process).
     """
     from miniswe_plugin.llm_client import recycle_llm_clients as _recycle
 
-    _recycle()
+    _recycle(scope=scope)
 
 
-def _recycle_async() -> None:
+def _recycle_async(scope: int | None = None) -> None:
     """Fire-and-forget recycle so abandon never blocks on ``close()``.
 
     Suite hang attempt_1c23ff53: Future timeout + kill_in_flight were present
@@ -54,11 +56,17 @@ def _recycle_async() -> None:
     does not reliably wake ``_receive_response_headers``; if recycle ever blocks
     on a wedged transport, the TimeoutError never reaches ``wrap_model_query``.
     Run recycle on a daemon thread; ``SHUT_RDWR`` in ``close_llm_client`` does
-    the real unblock.
+    the real unblock. Pass ``scope`` so the daemon thread does not close
+    another query's sockets.
     """
     import threading
 
-    threading.Thread(target=recycle_llm_clients, name="miniswe-recycle", daemon=True).start()
+    threading.Thread(
+        target=recycle_llm_clients,
+        kwargs={"scope": scope},
+        name="miniswe-recycle",
+        daemon=True,
+    ).start()
 
 
 def _require_watchdog(watchdog: float | None) -> float:
@@ -94,13 +102,21 @@ def _call_with_watchdog(
     letting ``close()`` wedge the abandon path.
     """
     cap = _require_watchdog(watchdog)
+    import contextvars
+
+    from miniswe_plugin.llm_client import current_inflight_scope
+
+    scope = current_inflight_scope()
+    ctx = contextvars.copy_context()
     pool = ThreadPoolExecutor(max_workers=1)
     try:
-        fut = pool.submit(query, messages, **kwargs)
+        # Run the query in a copy of this context so in-flight registration
+        # stays on the same scope as wrap_model_query / recycle.
+        fut = pool.submit(ctx.run, query, messages, **kwargs)
         try:
             return fut.result(timeout=cap)
         except FutureTimeout as exc:
-            _recycle_async()
+            _recycle_async(scope=scope)
             # stderr only: attempt stdout is the agent transcript.
             print(f"miniswe_watchdog:{cap}", file=sys.stderr, flush=True)
             raise TimeoutError(f"miniswe_watchdog:{cap}") from exc
@@ -143,36 +159,39 @@ def wrap_model_query(
 
     def wrapped(messages: Any, **kwargs: Any) -> Any:
         disable_package_model_retry()
-        if stall is None or stall.disabled:
-            recycle_llm_clients()
-            return _call_with_watchdog(query, messages, kwargs, cap)
-        while True:
-            # Fresh sockets every attempt — mid-episode keep-alive stickiness
-            # (turn2+ ESTAB + large Send-Q) is the observed hang mode.
-            recycle_llm_clients()
-            try:
-                result = _call_with_watchdog(query, messages, kwargs, cap)
-            except Exception as exc:
-                # A read timeout arrives as TimeoutError. Classify it here so
-                # the retry decision stays isinstance(TransportStall).
-                if isinstance(exc, TimeoutError):
-                    exc = TransportStall(f"TimeoutError:{exc}", kind="timeout")
-                if not isinstance(exc, TransportStall):
-                    stall.end_resumed()
-                    raise
-                reason = f"{type(exc).__name__}:{exc}"
-                # Fire-and-forget: sync recycle here re-introduced the boa hang
-                # (attempt_06c64f5f) — FutureTimeout had fired but close() on a
-                # sticky responses recv could delay TimeoutError reaching
-                # note_failure / upstream_stall for many minutes. Daemon +
-                # SHUT_RDWR matches _call_with_watchdog abandon.
-                _recycle_async()
-                if stall.note_failure(reason):
-                    stall.wait()
-                    continue
-                raise StallExhausted(reason) from exc
-            stall.end_resumed()
-            return result
+        from miniswe_plugin.llm_client import inflight_scope
+
+        with inflight_scope() as scope:
+            if stall is None or stall.disabled:
+                recycle_llm_clients(scope=scope)
+                return _call_with_watchdog(query, messages, kwargs, cap)
+            while True:
+                # Fresh sockets every attempt — mid-episode keep-alive stickiness
+                # (turn2+ ESTAB + large Send-Q) is the observed hang mode.
+                recycle_llm_clients(scope=scope)
+                try:
+                    result = _call_with_watchdog(query, messages, kwargs, cap)
+                except Exception as exc:
+                    # A read timeout arrives as TimeoutError. Classify it here so
+                    # the retry decision stays isinstance(TransportStall).
+                    if isinstance(exc, TimeoutError):
+                        exc = TransportStall(f"TimeoutError:{exc}", kind="timeout")
+                    if not isinstance(exc, TransportStall):
+                        stall.end_resumed()
+                        raise
+                    reason = f"{type(exc).__name__}:{exc}"
+                    # Fire-and-forget: sync recycle here re-introduced the boa hang
+                    # (attempt_06c64f5f) — FutureTimeout had fired but close() on a
+                    # sticky responses recv could delay TimeoutError reaching
+                    # note_failure / upstream_stall for many minutes. Daemon +
+                    # SHUT_RDWR matches _call_with_watchdog abandon.
+                    _recycle_async(scope=scope)
+                    if stall.note_failure(reason):
+                        stall.wait()
+                        continue
+                    raise StallExhausted(reason) from exc
+                stall.end_resumed()
+                return result
 
     return wrapped
 
