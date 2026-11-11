@@ -15,6 +15,7 @@ import json
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
+from dataclasses import replace as replace_plan
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -66,6 +67,7 @@ class SuitePlan:
     # System id: 8 hex (local job locator only; not package identity). No suite_ prefix.
     suite_run_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
     layout: str = "ageval"
+    max_tasks: int | None = None
 
 
 def plan_suite_run(
@@ -74,6 +76,7 @@ def plan_suite_run(
     task_id: str | None = None,
     task_ids: list[str] | None = None,
     max_concurrent_tasks: int | None = None,
+    max_tasks: int | None = None,
     n_attempts: int | None = None,
     suite_run_id: str | None = None,
     layout: str = "ageval",
@@ -96,6 +99,14 @@ def plan_suite_run(
     )
 
     layout = require_layout(layout)
+    if max_tasks is not None and (
+        not isinstance(max_tasks, int) or isinstance(max_tasks, bool) or max_tasks < 1
+    ):
+        raise ConfigError(
+            "invalid_override",
+            "max_tasks must be an integer ≥ 1",
+            location="--max-tasks",
+        )
     selected = [item.strip() for item in (task_ids or []) if item and str(item).strip()]
     if task_id and str(task_id).strip():
         one = str(task_id).strip()
@@ -155,6 +166,7 @@ def plan_suite_run(
         max_concurrent_tasks=n,
         n_attempts=k,
         layout=layout,
+        max_tasks=max_tasks,
     )
     if suite_run_id is not None and str(suite_run_id).strip():
         plan.suite_run_id = str(suite_run_id).strip()
@@ -467,6 +479,7 @@ def _write_suite_progress(
         "retried": retried,
         "n_attempts": plan.n_attempts,
         "max_concurrent_tasks": plan.max_concurrent_tasks,
+        "max_tasks": plan.max_tasks,
         # The full planned axis so the viewer can mark unrun tasks as pending.
         "task_ids": list(plan.task_ids),
         "running": running,
@@ -649,6 +662,7 @@ def _build_summary(
         "dataset_id": plan.dataset_id,
         "dataset_version": plan.dataset_version,
         "max_concurrent_tasks": plan.max_concurrent_tasks,
+        "max_tasks": plan.max_tasks,
         "n_attempts": plan.n_attempts,
         "task_ids": list(plan.task_ids),
         "attempts": list(attempts),
@@ -728,6 +742,7 @@ def _live_summary(
         "dataset_id": plan.dataset_id,
         "dataset_version": plan.dataset_version,
         "max_concurrent_tasks": plan.max_concurrent_tasks,
+        "max_tasks": plan.max_tasks,
         "n_attempts": plan.n_attempts,
         "task_ids": settled_ids,
         "attempts": list(attempts),
@@ -889,6 +904,12 @@ async def _execute_suite_run(
     Resume without replace-slot clears a prior cancel request so scheduling can
     proceed. Replace-slot refuses an unsettled suite.
     """
+    if replace_slots and plan.max_tasks is not None:
+        raise ConfigError(
+            "invalid_override",
+            "--max-tasks cannot be combined with --replace-slot",
+            location="--max-tasks",
+        )
     reset_inflight_metrics()
     runner = run_fn or build_run_attempt()
     suite_dir_for(plan).mkdir(parents=True, exist_ok=True)
@@ -946,6 +967,16 @@ async def _execute_suite_run(
         retried_keys = _error_attempt_keys(existing) & set(units)
         done_keys -= retried_keys
     todo = [(tid, idx) for tid, idx in units if (tid, idx) not in done_keys]
+    candidate_ids = list(plan.task_ids)
+    if plan.max_tasks is not None:
+        # Select distinct unfinished tasks before workers claim any slots. A
+        # partially settled task keeps every remaining Always-k slot in scope.
+        selected_ids = list(dict.fromkeys(tid for tid, _ in todo))[: plan.max_tasks]
+        selected_set = set(selected_ids)
+        todo = [slot for slot in todo if slot[0] in selected_set]
+        units = [slot for slot in units if slot[0] in selected_set]
+        retried_keys.intersection_update(todo)
+        plan = replace_plan(plan, task_ids=selected_ids)
     total_units = max(len(units), len(todo) + len(done_keys & set(units)))
     # Progress: completed existing + in-flight bookkeeping.
     completed_count = len(done_keys & set(units)) if resume else 0
@@ -1194,10 +1225,13 @@ async def _execute_suite_run(
         attempts = [a for a in existing if _keep_existing_row(a)] + new_results
 
     # Union task_ids for summary when resume brings siblings.
-    if resume:
+    if resume or plan.max_tasks is not None:
         all_ids: list[str] = []
         seen: set[str] = set()
-        for tid in plan.task_ids:
+        recorded_ids = {str(a.get("task_id") or "") for a in attempts}
+        for tid in candidate_ids:
+            if plan.max_tasks is not None and tid not in recorded_ids:
+                continue
             if tid not in seen:
                 all_ids.append(tid)
                 seen.add(tid)
@@ -1207,15 +1241,7 @@ async def _execute_suite_run(
                 all_ids.append(tid)
                 seen.add(tid)
         # Mutate a shallow copy of plan fields for summary only.
-        summary_plan = SuitePlan(
-            dataset_id=plan.dataset_id,
-            dataset_version=plan.dataset_version,
-            dataset_root=plan.dataset_root,
-            task_ids=all_ids,
-            max_concurrent_tasks=plan.max_concurrent_tasks,
-            n_attempts=plan.n_attempts,
-            suite_run_id=plan.suite_run_id,
-        )
+        summary_plan = replace_plan(plan, task_ids=all_ids)
         # If other tasks had more samples, take max n_attempts for display budget.
         max_n = plan.n_attempts
         by_t: dict[str, int] = {}

@@ -114,6 +114,16 @@ The child `result.json` and `summary.json` include `replay` (`ageval.replay/1`):
 
 While a suite is running, Core updates `summary.json` after each Attempt settles (`status: "running"` or `"cancelling"`) and writes the final settled summary when all slots finish or cancel. `ageval results upload-suite` accepts only terminal, complete suites. Suite resumption (`--resume-suite`, `--retry-errors`, `--replace-slot`) and `ageval results regrade` are specified in [01-core-lifecycle.md](01-core-lifecycle.md#5-suite-resumption-slot-replacement-and-regrade).
 
+With `--max-tasks N`, normal slice completion writes `status: "complete"`
+and retains the usual result-derived exit code. The summary records the current
+invocation's `max_tasks` (`null` when omitted). Its task axis and metrics cover
+previously recorded tasks plus the newly settled slice. Tasks beyond the cap
+remain unscheduled with no result or suite-cancel placeholder. Progress covers
+only the selected work for this invocation, including its already-settled slots.
+Later `--resume-suite` calls preserve prior results and continue eligible tasks.
+The cumulative summary can therefore contain more than N tasks. Completing a
+slice does not change the Hub's bound-version task completeness gate.
+
 ---
 
 ## 4. Post-Run Read-Only Analyzers (`stats`, `hack`, `review`)

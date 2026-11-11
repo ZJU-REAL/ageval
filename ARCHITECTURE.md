@@ -210,6 +210,7 @@ During a production Attempt, `application/run.py` mints run identity once and in
 | --- | --- | --- |
 | `cli/` | CLI argument parsing, help text, exit codes | Task business logic, starting containers, constructing evidence paths |
 | `application/` | Use-case orchestration (`lock`, `run`, `campaign`, `suite`, `registry`, `plugin`, `agent`, `jobs`, `analysis`) | Global mutable singletons outside bootstrap |
+| `application/suite/suite_run.py` | Ordered task/slot planning; optional per-invocation task budget after resume/retry selection; worker dispatch and cumulative slice summaries | Dataset defaults for task budgets; changing Attempt verdicts or Hub completeness gates |
 | `application/analysis/` | Post-run read-only `stats` / `hack` / `review` over sealed evidence | `PASS` verdicts, `checks.json`, Hub uploads |
 | `application/composition.py` | Sole production `build_*` wiring | Task or scoring algorithms |
 | `config/` | Dataset resolution, `task.yaml` / `profiles.yaml` validation, lock digest, Harbor `task.toml` intake | Executing `run.py` or `evaluator.py` |

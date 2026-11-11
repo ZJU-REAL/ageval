@@ -147,6 +147,21 @@ When `executor.invoke` encounters a retryable transport failure (`TransportStall
 
 ## 5. Suite Resumption, Slot Replacement, and Regrade
 
+Suite dispatch accepts an optional CLI/job-only `--max-tasks N` (integer ≥ 1).
+After the task filter and the existing resume/retry slot rules, select the first
+N distinct tasks with pending work in plan order, then dispatch all remaining
+Always-k slots of those tasks. Settled tasks consume no budget on ordinary
+resume; ERROR slots become eligible with `--retry-errors`. A partially settled
+task consumes one task budget and keeps all its remaining slots. A process
+interruption leaves unfinished slots eligible for recovery. Workers receive
+the capped queue before claiming any work, so concurrency cannot exceed the
+task selection. `--max-tasks` and `--replace-slot` are mutually exclusive.
+
+Omitting the cap runs every eligible task; a cap at least as large as the
+eligible task count has the same execution behavior. The cap is not a Dataset
+default, task field, package identity, or `config_fingerprint` input. Each
+invocation supplies its own cap, including when continuing an existing suite.
+
 All settled Attempt directories (`.ageval/runs/<attempt_id>/` containing `result.json`) are immutable (for recovery of unsealed Attempts lacking `result.json`, see [RFC 0001](../RFCs/0001-attempt-activity-recovery.md)). An unsealed Attempt keeps `activity.jsonl` and `checkpoints/` without `--keep-recovery-state`. After `result.json` and `trajectory.jsonl` both exist, that bundle is removed unless the flag or `AGEVAL_KEEP_RECOVERY_STATE` retains it. `--keep-workspace` retains the box work root and `<attempt>/state` only.
 
 | Operation | CLI Invocation | Identity Behavior | Execution Semantics |
