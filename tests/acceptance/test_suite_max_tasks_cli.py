@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from ageval.control.store import ControlStore
+
 REPO = Path(__file__).resolve().parents[2]
 FIXTURE = REPO / "tests/fixtures/datasets/suite-min"
 IDS = ["alpha", "beta", "delta-fail", "gamma"]
@@ -59,6 +61,10 @@ def test_capped_suite_and_resume_keep_real_evidence(dataset: Path) -> None:
     original_results = {p: p.read_bytes() for p in evidence.glob("*/result.json")}
     assert len(original_results) == 4
     sid = first["suite_run_id"]
+    job = ControlStore(dataset.parent / ".ageval/control.db").get(sid)
+    assert job is not None
+    assert job["status"] == "completed"
+    assert job["payload"]["max_tasks"] == 2
 
     second_run = run_cli(dataset, "--resume-suite", sid, "--max-tasks", "1", "-k", "2")
     assert second_run.returncode == 1, second_run.stderr
@@ -71,6 +77,10 @@ def test_capped_suite_and_resume_keep_real_evidence(dataset: Path) -> None:
     assert second["counts"]["error"] == 0
     assert second["attempts"][:4] == first["attempts"]
     assert not second.get("cancelled")
+    job = ControlStore(dataset.parent / ".ageval/control.db").get(sid)
+    assert job is not None
+    assert job["status"] == "failed"  # A settled FAIL is terminal, without cancellation.
+    assert job["payload"]["cancelled"] is False
 
     final_run = run_cli(dataset, "--resume-suite", sid, "-k", "2")
     assert final_run.returncode == 1, final_run.stderr
@@ -130,5 +140,14 @@ def test_retry_errors_cap_preserves_other_errors(dataset: Path) -> None:
 def test_invalid_budget_is_rejected_without_attempts(dataset: Path, args: tuple[str, ...]) -> None:
     result = run_cli(dataset, "--max-tasks", *args)
     assert result.returncode == 2
+    assert "--max-tasks" in result.stderr
+    assert not (dataset / ".ageval/runs").exists()
+
+
+@pytest.mark.parametrize("args", [("0",), ("1", "--replace-slot")])
+def test_probe_validates_budget_before_preflight(dataset: Path, args: tuple[str, ...]) -> None:
+    result = run_cli(dataset, "--task", "alpha", "--probe", "--max-tasks", *args)
+    assert result.returncode == 2
+    assert "invalid_override" in result.stderr
     assert "--max-tasks" in result.stderr
     assert not (dataset / ".ageval/runs").exists()

@@ -392,6 +392,14 @@ def register(app: typer.Typer) -> None:
                 typer.echo(str(exc), err=True)
                 raise typer.Exit(code=2) from exc
         task_values = [item.strip() for item in (task or []) if str(item).strip()]
+        _suite = build_suite_runner()
+        from ageval.config.errors import ConfigError
+
+        try:
+            _suite.validate_task_budget(max_tasks, replace_slot=replace_slot)
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
         if probe:
             from ageval.config.errors import ConfigError
             from ageval.config.harbor_layout import task_for_probe
@@ -409,7 +417,6 @@ def register(app: typer.Typer) -> None:
                 set_overrides,
                 layout=layout,
             )
-        _suite = build_suite_runner()
         execute_suite_run = _suite.execute_suite_run
         plan_suite_run = _suite.plan_suite_run
         from ageval.config.errors import ConfigError
@@ -466,12 +473,6 @@ def register(app: typer.Typer) -> None:
                     location="--fork",
                 )
             replace_keys: set[tuple[str, int]] | None = None
-            if max_tasks is not None and replace_slot:
-                raise ConfigError(
-                    "invalid_override",
-                    "--max-tasks cannot be combined with --replace-slot",
-                    location="--max-tasks",
-                )
             if replace_slot:
                 if resume_id is None:
                     raise ConfigError(

@@ -70,6 +70,24 @@ class SuitePlan:
     max_tasks: int | None = None
 
 
+def validate_task_budget(max_tasks: int | None, *, replace_slot: bool = False) -> None:
+    """Validate the per-invocation budget before planning or probing."""
+    if max_tasks is not None and (
+        not isinstance(max_tasks, int) or isinstance(max_tasks, bool) or max_tasks < 1
+    ):
+        raise ConfigError(
+            "invalid_override",
+            "max_tasks must be an integer ≥ 1",
+            location="--max-tasks",
+        )
+    if max_tasks is not None and replace_slot:
+        raise ConfigError(
+            "invalid_override",
+            "--max-tasks cannot be combined with --replace-slot",
+            location="--max-tasks",
+        )
+
+
 def plan_suite_run(
     dataset_ref: str | Path,
     *,
@@ -99,14 +117,7 @@ def plan_suite_run(
     )
 
     layout = require_layout(layout)
-    if max_tasks is not None and (
-        not isinstance(max_tasks, int) or isinstance(max_tasks, bool) or max_tasks < 1
-    ):
-        raise ConfigError(
-            "invalid_override",
-            "max_tasks must be an integer ≥ 1",
-            location="--max-tasks",
-        )
+    validate_task_budget(max_tasks)
     selected = [item.strip() for item in (task_ids or []) if item and str(item).strip()]
     if task_id and str(task_id).strip():
         one = str(task_id).strip()
@@ -904,12 +915,7 @@ async def _execute_suite_run(
     Resume without replace-slot clears a prior cancel request so scheduling can
     proceed. Replace-slot refuses an unsettled suite.
     """
-    if replace_slots and plan.max_tasks is not None:
-        raise ConfigError(
-            "invalid_override",
-            "--max-tasks cannot be combined with --replace-slot",
-            location="--max-tasks",
-        )
+    validate_task_budget(plan.max_tasks, replace_slot=bool(replace_slots))
     reset_inflight_metrics()
     runner = run_fn or build_run_attempt()
     suite_dir_for(plan).mkdir(parents=True, exist_ok=True)
