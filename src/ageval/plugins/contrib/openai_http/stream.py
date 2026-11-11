@@ -13,7 +13,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from ageval.evidence.redaction import redact_text
 from ageval.plugins.contrib.openai_http.parse import responses_text_and_calls
 from ageval.plugins.http_stream import (
     MAX_BUFFER,
@@ -21,6 +20,7 @@ from ageval.plugins.http_stream import (
     DeltaSink,
     StreamProtocolError,
     StreamSnapshot,
+    redact_provider_text,
 )
 
 _SOURCE = "openai-http"
@@ -74,8 +74,8 @@ class ChatAssembler:
             raise StreamProtocolError("stream_bad_json") from exc
         if not isinstance(obj, dict):
             raise StreamProtocolError("stream_not_object")
-        if "error" in obj:
-            details = _provider_error(obj, terminal="error_event")
+        if obj.get("error") is not None:
+            details = provider_error_details(obj, terminal="error_event")
             self._error_details = details
             raise StreamProtocolError("stream_upstream_error", details=details)
         for key in ("id", "model", "created", "system_fingerprint"):
@@ -339,7 +339,7 @@ class ResponsesAssembler:
         if not isinstance(kind, str) or not kind:
             raise StreamProtocolError("stream_event_type_invalid")
         if kind == "error":
-            details = _provider_error(obj, terminal="error_event")
+            details = provider_error_details(obj, terminal="error_event")
             self._error_details = details
             raise StreamProtocolError("stream_upstream_error", details=details)
         response = obj.get("response")
@@ -608,7 +608,7 @@ class ResponsesAssembler:
                 "reason": self._terminal_reason,
             }
         elif terminal == "failed":
-            self._error_details = _provider_error(source, terminal="failed")
+            self._error_details = provider_error_details(source, terminal="failed")
         elif terminal == "cancelled":
             self._error_details = {"origin": "cancelled", "terminal": "cancelled"}
         self._terminal = terminal
@@ -742,29 +742,78 @@ class ResponsesAssembler:
         }
 
 
-def _bounded_redacted(value: Any, limit: int) -> str | None:
-    if not isinstance(value, str) or not value:
-        return None
-    return redact_text(value)[:limit]
+def _bounded_provider(value: Any, limit: int) -> str | None:
+    return redact_provider_text(value, limit=limit)
 
 
-def _provider_error(event: Mapping[str, Any], *, terminal: str) -> dict[str, object]:
-    """Provider-reported type/code/message, redacted before sealing.
+def provider_error_details(payload: Mapping[str, Any], *, terminal: str) -> dict[str, object]:
+    """Bounded provider error allowlist, redacted before sealing.
 
     ``origin`` keeps an upstream provider error distinct from a local SSE/JSON
-    parse failure even when both surface as ``ProtocolError``.
+    parse failure even when both surface as ``ProtocolError``. Only
+    ``type``/``code``/``status_code``/``request_id``/``message`` are retained;
+    arbitrary provider bodies never enter metadata or the journal.
     """
-    nested = event.get("error")
-    sources: list[Mapping[str, Any]] = [event]
+    nested = payload.get("error")
+    sources: list[Mapping[str, Any]] = [payload]
     if isinstance(nested, Mapping):
         sources.insert(0, nested)
     details: dict[str, object] = {"origin": "upstream", "terminal": terminal}
-    for key, limit in (("type", 128), ("code", 128), ("param", 128), ("message", 2000)):
+    for key, limit in (
+        ("type", 128),
+        ("code", 128),
+        ("status_code", 64),
+        ("request_id", 256),
+        ("message", 2000),
+    ):
         for source in sources:
-            value = _bounded_redacted(source.get(key), limit)
+            raw = source.get(key)
+            if key == "status_code":
+                if isinstance(raw, int) and not isinstance(raw, bool):
+                    details[key] = raw
+                    break
+                if isinstance(raw, str) and raw.strip().isdigit():
+                    details[key] = int(raw.strip())
+                    break
+                continue
+            if key in {"type", "code"} and isinstance(raw, int) and not isinstance(raw, bool):
+                details[key] = sanitize_code(str(raw))
+                break
+            if key == "request_id" and isinstance(raw, int) and not isinstance(raw, bool):
+                details[key] = str(raw)
+                break
+            value = _bounded_provider(raw, limit)
             if value is not None:
                 details[key] = sanitize_code(value) if key in {"type", "code"} else value
                 break
+    return details
+
+
+def provider_error_from_body(
+    body: Any,
+    *,
+    status_code: int,
+    terminal: str = "http_rejection",
+) -> dict[str, object]:
+    """HTTP rejection body to the same bounded allowlist.
+
+    Non-JSON bodies retain only the HTTP status. Provider HTML/JSON bodies are
+    never copied into executor metadata or the progress journal.
+    """
+    payload: Mapping[str, Any] = {}
+    if isinstance(body, Mapping):
+        payload = body
+    elif isinstance(body, str) and body.strip():
+        try:
+            loaded = json.loads(body)
+        except json.JSONDecodeError:
+            loaded = None
+        if isinstance(loaded, Mapping):
+            payload = loaded
+    details = provider_error_details(payload, terminal=terminal)
+    details["origin"] = "http"
+    if "status_code" not in details:
+        details["status_code"] = status_code
     return details
 
 
@@ -924,5 +973,7 @@ def _output_text(output: Sequence[Mapping[str, Any]]) -> str:
 __all__ = [
     "ChatAssembler",
     "ResponsesAssembler",
+    "provider_error_details",
+    "provider_error_from_body",
     "sanitize_code",
 ]

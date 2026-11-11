@@ -32,7 +32,11 @@ from ageval.plugins.contrib.openai_http.parse import (
     chat_text_and_calls,
     responses_text_and_calls,
 )
-from ageval.plugins.contrib.openai_http.stream import ChatAssembler, ResponsesAssembler
+from ageval.plugins.contrib.openai_http.stream import (
+    ChatAssembler,
+    ResponsesAssembler,
+    provider_error_from_body,
+)
 from ageval.plugins.contrib.openai_http.usage import normalize_openai_http_usage
 from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.http_activity import (
@@ -344,10 +348,13 @@ class OpenAIHTTPExecutor(BaseExecutor):
         if kind == "http":
             assert isinstance(found, dict)
             code = int(found["http_code"])
-            meta: dict[str, Any] = {"http_error_body": found.get("http_body")}
+            http_error = provider_error_from_body(found.get("http_body"), status_code=code)
+            meta: dict[str, Any] = {
+                "http_error": http_error,
+                "error_origin": "http",
+            }
             if streamed:
                 meta["answer_complete"] = False
-                meta["error_origin"] = "http"
             if http_status_is_config_error(code):
                 # The gateway rejected the request itself; resending cannot help.
                 meta["error_kind"] = ModelConfigError.kind
@@ -568,6 +575,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
                 first_event_timeout=self.options.stream_first_event_timeout_seconds,
                 idle_timeout=self.options.stream_idle_timeout_seconds,
                 on_event=journal,
+                exchange_id=journal.exchange_id,
             )
         finally:
             writer.flush()
@@ -643,6 +651,18 @@ class OpenAIHTTPExecutor(BaseExecutor):
         }
         if self._stream_meta:
             meta.update(self._stream_meta)
+            correlation = {
+                key: meta.pop(key)
+                for key in (
+                    "exchange_id",
+                    "x_client_request_id",
+                    "x_litellm_call_id",
+                    "x_request_id",
+                )
+                if isinstance(meta.get(key), str) and meta.get(key)
+            }
+            if correlation:
+                meta["stream_correlation"] = correlation
         if extra:
             meta.update(extra)
         return meta

@@ -67,9 +67,15 @@ byte. Cancellation closes the local socket even before response headers.
 
 A malformed stream, missing terminal, unfinished tool JSON, or empty answer is
 a non-retryable parse `ProtocolError`. An in-stream provider error event or a
-failed provider terminal is `ProtocolError:stream_upstream_error`; its redacted
-`type` / `code` / `message` stays under `metadata.stream_error`, and
-`metadata.error_origin` separates upstream failures from parse failures. A
+failed provider terminal is `ProtocolError:stream_upstream_error`; only
+`type`, `code`, `status_code`, `request_id`, and `message` are retained under
+`metadata.stream_error`, with credentials and whole URLs redacted. HTTP
+rejections use the same allowlist under `metadata.http_error`, not the raw body.
+`metadata.error_origin` separates upstream failures from parse failures.
+`metadata.stream_correlation` carries the exchange id plus the request
+`x-client-request-id` and response `x-litellm-call-id` / `x-request-id` when
+present. `stream-progress.jsonl` records only classification, counts, and
+timing; it never contains provider bodies, messages, URLs, or call ids. A
 length-limited or provider-incomplete ending keeps its partial text but is not
 a successful completion. Provider usage is adopted only when reported; otherwise
 it is explicitly unavailable, never zero. Live fragments appear as redacted

@@ -79,6 +79,8 @@ class _Recorder:
         self.body: dict[str, Any] = {}
         self.path = ""
         self.authorization: str | None = None
+        self.headers: dict[str, str] = {}
+        self.response_headers: dict[str, str] = {}
 
 
 def _stream_success_handler(
@@ -86,7 +88,10 @@ def _stream_success_handler(
     recorder: _Recorder,
     *,
     content_type: str = "text/event-stream",
+    response_headers: dict[str, str] | None = None,
 ) -> type[BaseHTTPRequestHandler]:
+    recorder.response_headers = dict(response_headers or {})
+
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: object) -> None:  # noqa: A003
             del format, args
@@ -94,9 +99,12 @@ def _stream_success_handler(
         def do_POST(self) -> None:  # noqa: N802
             recorder.path = self.path
             recorder.authorization = self.headers.get("Authorization")
+            recorder.headers = {str(key).lower(): str(value) for key, value in self.headers.items()}
             recorder.body = _read_body(self)
             self.send_response(200)
             self.send_header("Content-Type", content_type)
+            for name, value in recorder.response_headers.items():
+                self.send_header(name, value)
             self.end_headers()
             try:
                 self.wfile.write(frames)
@@ -995,7 +1003,9 @@ def test_chat_stream_malformed_frame_is_a_protocol_error() -> None:
     assert result.ok is False
     assert result.error == "ProtocolError:stream_bad_json"
     assert result.text == "partial"
-    assert (result.metadata or {})["error_origin"] == "parse"
+    metadata = result.metadata or {}
+    assert metadata["error_origin"] == "parse"
+    assert "stream_error" not in metadata
 
 
 def test_chat_stream_tool_calls_finish_without_tools_is_incomplete() -> None:
@@ -1038,3 +1048,181 @@ def test_responses_stream_error_event_is_a_protocol_error() -> None:
     assert metadata["error_origin"] == "upstream"
     assert metadata["stream_error"]["code"] == "server_error"
     assert metadata["stream_error"]["message"] == "do-not-log"
+
+
+def test_chat_stream_correlation_headers_and_exchange_id(tmp_path: Path) -> None:
+    recorder = _Recorder()
+    frames = _sse(_chat_frame({"content": "ok"}, finish="stop"), "[DONE]")
+    server, base = _serve(
+        _stream_success_handler(
+            frames,
+            recorder,
+            response_headers={
+                "x-litellm-call-id": "call_abc123",
+                "x-request-id": "req_abc123",
+            },
+        )
+    )
+    try:
+        result = _executor(base).invoke("hi", collect_dir=str(tmp_path))
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result.ok is True
+    correlation = (result.metadata or {})["stream_correlation"]
+    assert correlation["exchange_id"] == recorder.headers["x-client-request-id"]
+    assert correlation["x_client_request_id"] == correlation["exchange_id"]
+    assert correlation["x_litellm_call_id"] == "call_abc123"
+    assert correlation["x_request_id"] == "req_abc123"
+    journal = [
+        json.loads(line) for line in (tmp_path / "stream-progress.jsonl").read_text().splitlines()
+    ]
+    assert journal
+    assert {row["exchange_id"] for row in journal} == {correlation["exchange_id"]}
+    text = (tmp_path / "stream-progress.jsonl").read_text(encoding="utf-8")
+    assert "call_abc123" not in text
+    assert "req_abc123" not in text
+
+
+def test_chat_stream_provider_error_allowlist_redacts_credentials_and_urls(
+    tmp_path: Path,
+) -> None:
+    recorder = _Recorder()
+    frames = _sse(
+        _chat_frame({"content": "partial"}),
+        json.dumps(
+            {
+                "type": "error",
+                "error": {
+                    "type": "invalid_request_error",
+                    "code": "context_length_exceeded",
+                    "status_code": 413,
+                    "request_id": "req_provider_123",
+                    "message": (
+                        "POST https://gateway.internal/v1/chat?api_key=sk-abcdefgh12345678 "
+                        "Authorization: Bearer sk-abcdefgh12345678"
+                    ),
+                },
+            }
+        ),
+    )
+    server, base = _serve(_stream_success_handler(frames, recorder))
+    try:
+        result = _executor(base).invoke("hi", collect_dir=str(tmp_path))
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result.ok is False
+    assert result.error == "ProtocolError:stream_upstream_error"
+    metadata = result.metadata or {}
+    assert metadata["error_origin"] == "upstream"
+    details = metadata["stream_error"]
+    assert details["type"] == "invalid_request_error"
+    assert details["code"] == "context_length_exceeded"
+    assert details["status_code"] == 413
+    assert details["request_id"] == "req_provider_123"
+    assert "[REDACTED:url]" in details["message"]
+    assert "[REDACTED:secret]" in details["message"]
+    assert "gateway.internal" not in details["message"]
+    assert "sk-abcdefgh12345678" not in details["message"]
+    journal = (tmp_path / "stream-progress.jsonl").read_text(encoding="utf-8")
+    for leaked in (
+        "gateway.internal",
+        "sk-abcdefgh12345678",
+        "context_length_exceeded",
+        "req_provider_123",
+        "Authorization",
+    ):
+        assert leaked not in journal
+    assert '"error_origin": "upstream"' in journal
+
+
+def test_chat_stream_http_rejection_body_uses_the_same_allowlist(tmp_path: Path) -> None:
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+        def do_POST(self) -> None:  # noqa: N802
+            _read_body(self)
+            raw = json.dumps(
+                {
+                    "error": {
+                        "type": "invalid_request_error",
+                        "code": "invalid_api_key",
+                        "status_code": 401,
+                        "request_id": "req_http_123",
+                        "message": "GET https://gateway.internal/v1/chat?token=sk-secret123",
+                    }
+                }
+            ).encode("utf-8")
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("x-litellm-call-id", "call_http_123")
+            self.send_header("x-request-id", "req_header_123")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+    server, base = _serve(Handler)
+    try:
+        result = _executor(base).invoke("hi", collect_dir=str(tmp_path))
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result.ok is False
+    metadata = result.metadata or {}
+    assert metadata["error_origin"] == "http"
+    details = metadata["http_error"]
+    assert details["type"] == "invalid_request_error"
+    assert details["code"] == "invalid_api_key"
+    assert details["status_code"] == 401
+    assert details["request_id"] == "req_http_123"
+    assert "[REDACTED:url]" in details["message"]
+    assert "gateway.internal" not in details["message"]
+    assert "sk-secret123" not in details["message"]
+    assert "http_error_body" not in metadata
+    correlation = metadata["stream_correlation"]
+    assert correlation["x_litellm_call_id"] == "call_http_123"
+    assert correlation["x_request_id"] == "req_header_123"
+    journal = (tmp_path / "stream-progress.jsonl").read_text(encoding="utf-8")
+    for leaked in ("gateway.internal", "sk-secret123", "req_http_123", "invalid_api_key"):
+        assert leaked not in journal
+    assert '"error_origin": "http"' in journal
+
+
+def test_chat_stream_http_rejection_non_json_body_is_not_copied(tmp_path: Path) -> None:
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+        def do_POST(self) -> None:  # noqa: N802
+            _read_body(self)
+            raw = (
+                b"<html>provider body with sk-should-not-appear and https://gateway.internal</html>"
+            )
+            self.send_response(502)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+    server, base = _serve(Handler)
+    try:
+        result = _executor(base).invoke("hi", collect_dir=str(tmp_path))
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    metadata = result.metadata or {}
+    assert result.ok is False
+    assert metadata["http_error"] == {
+        "origin": "http",
+        "terminal": "http_rejection",
+        "status_code": 502,
+    }
+    journal = (tmp_path / "stream-progress.jsonl").read_text(encoding="utf-8")
+    assert "provider body" not in journal
+    assert "gateway.internal" not in journal

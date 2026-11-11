@@ -35,6 +35,7 @@ import codecs
 import contextlib
 import http.client
 import json
+import re
 import socket
 import threading
 import time
@@ -47,6 +48,8 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
+from ageval.evidence.redaction import redact_text
+
 MAX_BUFFER = 8 * 1024 * 1024
 MAX_EVENTS = 100_000
 POLL_SECONDS = 0.02
@@ -54,6 +57,20 @@ READ_SIZE = 4096
 JOIN_GRACE_SECONDS = 1.0
 
 EventHook = Callable[[str, Mapping[str, Any]], None]
+
+_URL_PATTERN = re.compile(r"(?i)\bhttps?://[^\s\"'<>]+")
+
+
+def redact_provider_text(value: Any, *, limit: int = 2000) -> str | None:
+    """Credential and URL redaction for provider-reported error detail.
+
+    Provider messages can echo request URLs with query credentials. Redact the
+    URL as a whole after the shared secret patterns, then bound the result.
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    redacted = _URL_PATTERN.sub("[REDACTED:url]", redact_text(value))
+    return redacted[:limit]
 
 
 def utc_at() -> str:
@@ -178,6 +195,7 @@ __all__ = [
     "StreamProtocolError",
     "StreamSnapshot",
     "exchange_sse",
+    "redact_provider_text",
     "utc_at",
 ]
 
@@ -250,6 +268,7 @@ def exchange_sse(
     first_event_timeout: float | None,
     idle_timeout: float | None,
     on_event: EventHook | None = None,
+    exchange_id: str | None = None,
 ) -> StreamOutcome:
     """POST ``req`` and consume SSE frames until terminal, deadline, or cancel.
 
@@ -269,8 +288,10 @@ def exchange_sse(
     deadline = start + total_timeout
     abort = _Abort()
     box = _Box()
-    metrics = _Metrics(start)
+    exchange_key = exchange_id or uuid4().hex
+    metrics = _Metrics(start, exchange_key)
     decoder = SSEDecoder()
+    req.add_header("x-client-request-id", exchange_key)
 
     def record(event: str, **fields: Any) -> None:
         if on_event is not None:
@@ -298,7 +319,7 @@ def exchange_sse(
                 _attach_response(abort, resp)
                 if abort.stop.is_set():
                     return
-                headers_ms = metrics.headers()
+                headers_ms = metrics.headers(getattr(resp, "headers", None))
                 record("headers", http_status=status, headers_ms=headers_ms)
                 if status != 200:
                     box.set_http(status, _read_status_body(resp))
@@ -323,6 +344,7 @@ def exchange_sse(
                 box.set_raw(consumer.finish())
         except urllib.error.HTTPError as exc:
             body = _http_error_body(exc)
+            metrics.headers(getattr(exc, "headers", None))
             box.set_http(exc.code, body)
             exc.close()
         except StreamProtocolError as exc:
@@ -368,13 +390,15 @@ def exchange_sse(
         elif kind is None:
             kind, detail = box.outcome()
         metrics.set_outcome(kind)
+        final_snapshot = consumer.snapshot()
         final_metrics = metrics.snapshot(reader_stopped=not worker.is_alive())
-        record("finished", **final_metrics)
+        final_metrics["error_origin"] = _origin_for(kind, detail, final_snapshot)
+        record("finished", **_journal_fields(final_metrics))
         return StreamOutcome(
             kind=kind,
             detail=detail,
             metrics=final_metrics,
-            snapshot=consumer.snapshot(),
+            snapshot=final_snapshot,
         )
     finally:
         abort.stop.set()
@@ -430,12 +454,42 @@ class _Box:
         return "transport", "stream_unknown_failure"
 
 
-class _Metrics:
-    """Monotonic stream timing; counts only, never fragments."""
+_CORRELATION_HEADERS = {
+    "x-client-request-id": "x_client_request_id",
+    "x-litellm-call-id": "x_litellm_call_id",
+    "x-request-id": "x_request_id",
+}
 
-    def __init__(self, start: float) -> None:
+_JOURNAL_KEYS = frozenset(
+    {
+        "stream",
+        "sse_events",
+        "heartbeat_events",
+        "assistant_chars",
+        "thought_chars",
+        "tool_chars",
+        "parsed_frames",
+        "headers_ms",
+        "first_event_ms",
+        "first_output_ms",
+        "last_output_ms",
+        "max_idle_ms",
+        "duration_ms",
+        "reader_stopped",
+        "stream_outcome",
+        "error_origin",
+    }
+)
+
+
+class _Metrics:
+    """Monotonic stream timing; counts and correlation IDs, never fragments."""
+
+    def __init__(self, start: float, exchange_id: str) -> None:
         self._lock = threading.Lock()
         self._start = start
+        self._exchange_id = exchange_id
+        self._correlation: dict[str, str] = {"x_client_request_id": exchange_id}
         self._first_event_ms: float | None = None
         self._first_output_ms: float | None = None
         self._last_output_at = start
@@ -451,9 +505,17 @@ class _Metrics:
         self._headers_ms: float | None = None
         self._outcome = "unknown"
 
-    def headers(self) -> float:
+    def headers(self, headers: Any = None) -> float:
         with self._lock:
             self._headers_ms = _ms(self._start)
+            if headers is not None:
+                for header, key in _CORRELATION_HEADERS.items():
+                    raw = headers.get(header)
+                    if not isinstance(raw, str) or not raw.strip():
+                        continue
+                    value = redact_provider_text(raw.strip(), limit=256)
+                    if value is not None:
+                        self._correlation[key] = value
             return self._headers_ms
 
     def frame(
@@ -521,6 +583,8 @@ class _Metrics:
                 "duration_ms": round((now - self._start) * 1000, 3),
                 "reader_stopped": reader_stopped,
                 "stream_outcome": _protocol_outcome(self._outcome),
+                "exchange_id": self._exchange_id,
+                **self._correlation,
             }
 
 
@@ -657,6 +721,33 @@ def _close_socket(sock: socket.socket | None) -> None:
         sock.shutdown(socket.SHUT_RDWR)
     with contextlib.suppress(OSError):
         sock.close()
+
+
+def _origin_for(kind: str, detail: Any, snapshot: StreamSnapshot) -> str:
+    if snapshot.error_details is not None:
+        origin = snapshot.error_details.get("origin")
+        if isinstance(origin, str) and origin:
+            return origin
+    if kind == "http":
+        return "http"
+    if kind == "protocol":
+        return "parse"
+    if kind == "cancelled":
+        return "cancelled"
+    if kind == "transport":
+        return (
+            "timeout"
+            if detail in {"TimeoutError", "stream_first_event_timeout", "stream_idle_timeout"}
+            else "transport"
+        )
+    if kind == "watchdog":
+        return "timeout"
+    return "none"
+
+
+def _journal_fields(metrics: Mapping[str, Any]) -> dict[str, Any]:
+    """Journal classification/counts only; no provider body, text, or IDs."""
+    return {key: value for key, value in metrics.items() if key in _JOURNAL_KEYS}
 
 
 def _ms(start: float) -> float:
