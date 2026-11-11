@@ -54,7 +54,11 @@ def current_inflight_scope() -> int | None:
 
 @contextlib.contextmanager
 def inflight_scope() -> Iterator[int]:
-    """Isolate in-flight HTTP clients for one query and its stall retries."""
+    """Isolate in-flight HTTP clients for one attempt.
+
+    A stall retry enters a new scope. A closer that still holds the previous
+    scope id must not see the next attempt's client.
+    """
     token = next(_IN_FLIGHT_SCOPE_SEQ)
     reset = _IN_FLIGHT_SCOPE.set(token)
     try:
@@ -211,21 +215,31 @@ def unregister_in_flight_client(client: Any) -> None:
             _IN_FLIGHT_CLIENTS_BY_SCOPE.pop(key, None)
 
 
+def pop_in_flight_clients(scope: int | None = None) -> list[Any]:
+    """Take this scope's in-flight clients now.
+
+    A later pop of the same scope does not see clients registered after this
+    call. The abandoning thread must pop before a daemon closes anything.
+    """
+    if scope is None:
+        scope = _IN_FLIGHT_SCOPE.get()
+    if scope is None:
+        return []
+    with _IN_FLIGHT_LOCK:
+        return list(_IN_FLIGHT_CLIENTS_BY_SCOPE.pop(scope, set()))
+
+
 def kill_in_flight_llm_clients(scope: int | None = None) -> None:
     """Close in-flight ephemeral clients for one query scope only.
 
     ``scope=None`` uses the current context scope. If there is no current
     scope, this is a no-op for ephemeral clients — it must not close every
     in-flight socket in the process. Safe to call from another thread when
-    the target ``scope`` is passed explicitly (watchdog / async recycle).
+    the target ``scope`` is passed explicitly, but a delayed caller should
+    ``pop_in_flight_clients`` on the requesting thread and close only that
+    snapshot. A late pop can close a newer retry client.
     """
-    if scope is None:
-        scope = _IN_FLIGHT_SCOPE.get()
-    if scope is None:
-        return
-    with _IN_FLIGHT_LOCK:
-        clients = list(_IN_FLIGHT_CLIENTS_BY_SCOPE.pop(scope, set()))
-    for client in clients:
+    for client in pop_in_flight_clients(scope=scope):
         close_llm_client(client)
 
 
@@ -238,8 +252,12 @@ def recycle_llm_clients(scope: int | None = None) -> None:
 
     In-flight ephemeral ``client=`` instances are closed only for ``scope``
     (or the current context scope). Concurrent queries keep their sockets.
-    The LiteLLM cache flush stays process-wide; the suite chat path uses
-    ephemeral httpx and does not share those cached sockets.
+    The LiteLLM cache flush stays process-wide and runs only on this
+    synchronous path, before a retry opens a new client. The delayed
+    ``_recycle_async`` path must not call this function: closing cached
+    sessions later can shut a socket the next attempt just opened.
+    The suite chat path uses ephemeral httpx and does not share those
+    cached sockets.
     """
     kill_in_flight_llm_clients(scope=scope)
     try:

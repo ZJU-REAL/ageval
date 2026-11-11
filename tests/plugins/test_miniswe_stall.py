@@ -109,11 +109,9 @@ def test_timeout_recycles_clients_before_stall_wait(monkeypatch: pytest.MonkeyPa
 
     result = wrap_model_query(query, stall)([{"role": "user", "content": "x"}])
     assert result["content"] == "ok"
-    # before-attempt + before-retry are sync; on-failure is _recycle_async (daemon).
-    deadline = time.monotonic() + 1.0
-    while recycled["n"] < 3 and time.monotonic() < deadline:
-        time.sleep(0.01)
-    assert recycled["n"] >= 3
+    # One synchronous flush before each attempt. The failure path only closes
+    # the popped snapshot; it does not call recycle_llm_clients again.
+    assert recycled["n"] == 2
     assert calls["n"] == 2
     assert clock.sleeps == [60.0]
     assert [event["outcome"] for event in events] == ["started", "wait", "resumed"]
@@ -140,7 +138,7 @@ def test_watchdog_times_out_a_pure_hang(monkeypatch: pytest.MonkeyPatch) -> None
     elapsed = time.monotonic() - started
     assert result["content"] == "ok"
     assert calls["n"] == 2
-    assert recycled["n"] >= 3
+    assert recycled["n"] == 2
     # Must NOT block on the hung orphan thread (executor shutdown wait=False).
     assert elapsed < 1.0, elapsed
     assert clock.sleeps == [60.0]
@@ -215,7 +213,7 @@ def test_any_failure_recycles_clients_before_stall_wait(monkeypatch: pytest.Monk
         return {"role": "assistant", "content": "ok"}
 
     wrap_model_query(query, stall)([])
-    assert recycled["n"] == 3
+    assert recycled["n"] == 2
     assert clock.sleeps == [60.0]
 
 

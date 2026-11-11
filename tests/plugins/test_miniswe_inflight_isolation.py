@@ -1,6 +1,9 @@
 """One query's recycle must not close another query's chat stream.
 
 Local fake SSE only. No live model API.
+
+A delayed recycle closes only the clients popped on the abandoning thread.
+A client registered in that same scope afterwards stays open.
 """
 
 from __future__ import annotations
@@ -202,3 +205,79 @@ def test_recycle_without_scope_leaves_concurrent_streams() -> None:
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_pop_snapshot_ignores_later_register() -> None:
+    httpx = pytest.importorskip("httpx")
+    from miniswe_plugin.llm_client import (
+        inflight_scope,
+        pop_in_flight_clients,
+        register_in_flight_client,
+    )
+
+    with inflight_scope() as scope:
+        first = httpx.Client()
+        second = httpx.Client()
+        try:
+            register_in_flight_client(first)
+            popped = pop_in_flight_clients(scope)
+            register_in_flight_client(second)
+            later = pop_in_flight_clients(scope)
+        finally:
+            first.close()
+            second.close()
+    assert {id(client) for client in popped} == {id(first)}
+    assert {id(client) for client in later} == {id(second)}
+
+
+def test_delayed_recycle_does_not_close_later_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The daemon closes the popped snapshot, not a client registered after it.
+
+    Same-task EBADF: ``_recycle_async`` used to call ``recycle_llm_clients``
+    on the shared scope after the retry had already registered a new client.
+    """
+    httpx = pytest.importorskip("httpx")
+    from miniswe_plugin import llm_client
+    from miniswe_plugin.stall import _recycle_async
+
+    closed: list[int] = []
+    real_close = llm_client.close_llm_client
+
+    def tracking_close(client: Any) -> None:
+        closed.append(id(client))
+        real_close(client)
+
+    recycle_calls = {"n": 0}
+
+    def forbid_recycle(*_args: object, **_kwargs: object) -> None:
+        recycle_calls["n"] += 1
+
+    monkeypatch.setattr(llm_client, "close_llm_client", tracking_close)
+    monkeypatch.setattr(llm_client, "recycle_llm_clients", forbid_recycle)
+    monkeypatch.setattr("miniswe_plugin.stall.recycle_llm_clients", forbid_recycle)
+
+    held: list[threading.Thread] = []
+
+    def hold_start(self: threading.Thread) -> None:
+        held.append(self)
+
+    monkeypatch.setattr(threading.Thread, "start", hold_start)
+
+    earlier = httpx.Client()
+    later = httpx.Client()
+    try:
+        with llm_client.inflight_scope() as scope:
+            llm_client.register_in_flight_client(earlier)
+            _recycle_async(scope=scope)
+            llm_client.register_in_flight_client(later)
+            assert len(held) == 1
+            assert held[0].daemon is True
+            held[0].run()
+            assert recycle_calls["n"] == 0
+            assert id(earlier) in closed
+            assert id(later) not in closed
+            remaining = llm_client.pop_in_flight_clients(scope)
+            assert {id(client) for client in remaining} == {id(later)}
+    finally:
+        earlier.close()
+        later.close()
