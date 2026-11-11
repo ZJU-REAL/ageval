@@ -28,6 +28,7 @@ import json
 import sys
 import threading
 from collections.abc import Iterator
+from dataclasses import dataclass, field
 from typing import Any, NoReturn
 
 from ageval.model.errors import (
@@ -41,15 +42,26 @@ from ageval.model.errors import (
 # A global in-flight set meant any task's recycle/start/finally would
 # ``SHUT_RDWR`` every other task's live stream (EBADF / incomplete chunked read).
 _IN_FLIGHT_LOCK = threading.Lock()
-_IN_FLIGHT_CLIENTS_BY_SCOPE: dict[int, set[Any]] = {}
-_IN_FLIGHT_SCOPE: contextvars.ContextVar[int | None] = contextvars.ContextVar(
-    "miniswe_in_flight_scope", default=None
-)
 _IN_FLIGHT_SCOPE_SEQ = itertools.count(1)
 
 
+@dataclass
+class _InFlightScope:
+    ident: int = field(default_factory=lambda: next(_IN_FLIGHT_SCOPE_SEQ))
+    clients: set[Any] = field(default_factory=set)
+    abandoned: bool = False
+    implicit: bool = False
+
+
+_IN_FLIGHT_SCOPES: dict[int, _InFlightScope] = {}
+_IN_FLIGHT_SCOPE: contextvars.ContextVar[_InFlightScope | None] = contextvars.ContextVar(
+    "miniswe_in_flight_scope", default=None
+)
+
+
 def current_inflight_scope() -> int | None:
-    return _IN_FLIGHT_SCOPE.get()
+    scope = _IN_FLIGHT_SCOPE.get()
+    return scope.ident if scope is not None else None
 
 
 @contextlib.contextmanager
@@ -59,16 +71,18 @@ def inflight_scope() -> Iterator[int]:
     A stall retry enters a new scope. A closer that still holds the previous
     scope id must not see the next attempt's client.
     """
-    token = next(_IN_FLIGHT_SCOPE_SEQ)
-    reset = _IN_FLIGHT_SCOPE.set(token)
+    scope = _InFlightScope()
+    reset = _IN_FLIGHT_SCOPE.set(scope)
+    with _IN_FLIGHT_LOCK:
+        _IN_FLIGHT_SCOPES[scope.ident] = scope
     try:
-        yield token
+        yield scope.ident
     finally:
         _IN_FLIGHT_SCOPE.reset(reset)
         with _IN_FLIGHT_LOCK:
-            leftover = _IN_FLIGHT_CLIENTS_BY_SCOPE.get(token)
-            if leftover is not None and not leftover:
-                _IN_FLIGHT_CLIENTS_BY_SCOPE.pop(token, None)
+            scope.abandoned = True
+            if not scope.clients:
+                _IN_FLIGHT_SCOPES.pop(scope.ident, None)
 
 
 def _iter_httpx_pools(client: Any) -> list[Any]:
@@ -188,10 +202,16 @@ def register_in_flight_client(client: Any) -> None:
     if scope is None:
         # Direct call without wrap_model_query: give this context its own scope
         # so a later recycle cannot treat it as a process-global set.
-        scope = next(_IN_FLIGHT_SCOPE_SEQ)
+        scope = _InFlightScope(implicit=True)
         _IN_FLIGHT_SCOPE.set(scope)
     with _IN_FLIGHT_LOCK:
-        _IN_FLIGHT_CLIENTS_BY_SCOPE.setdefault(scope, set()).add(client)
+        abandoned = scope.abandoned
+        if not abandoned:
+            scope.clients.add(client)
+            _IN_FLIGHT_SCOPES[scope.ident] = scope
+    if abandoned:
+        close_llm_client(client)
+        raise TransportStall("miniswe_query_abandoned", kind="transport")
 
 
 def unregister_in_flight_client(client: Any) -> None:
@@ -200,33 +220,46 @@ def unregister_in_flight_client(client: Any) -> None:
     with _IN_FLIGHT_LOCK:
         scope = _IN_FLIGHT_SCOPE.get()
         if scope is not None:
-            bucket = _IN_FLIGHT_CLIENTS_BY_SCOPE.get(scope)
-            if bucket is not None:
-                bucket.discard(client)
-                if not bucket:
-                    _IN_FLIGHT_CLIENTS_BY_SCOPE.pop(scope, None)
+            scope.clients.discard(client)
+            if not scope.clients:
+                _IN_FLIGHT_SCOPES.pop(scope.ident, None)
+                if scope.implicit:
+                    _IN_FLIGHT_SCOPE.set(None)
             return
         empty: list[int] = []
-        for key, bucket in _IN_FLIGHT_CLIENTS_BY_SCOPE.items():
-            bucket.discard(client)
-            if not bucket:
+        for key, state in _IN_FLIGHT_SCOPES.items():
+            state.clients.discard(client)
+            if not state.clients:
                 empty.append(key)
         for key in empty:
-            _IN_FLIGHT_CLIENTS_BY_SCOPE.pop(key, None)
+            _IN_FLIGHT_SCOPES.pop(key, None)
 
 
-def pop_in_flight_clients(scope: int | None = None) -> list[Any]:
+def pop_in_flight_clients(scope: int | None = None, *, abandon: bool = False) -> list[Any]:
     """Take this scope's in-flight clients now.
 
     A later pop of the same scope does not see clients registered after this
-    call. The abandoning thread must pop before a daemon closes anything.
+    call. ``abandon=True`` also rejects later registration in this scope,
+    including in a worker that has not finished creating its client yet.
+    The shared scope state stays in that worker's copied context.
     """
-    if scope is None:
-        scope = _IN_FLIGHT_SCOPE.get()
-    if scope is None:
-        return []
+    current = _IN_FLIGHT_SCOPE.get()
     with _IN_FLIGHT_LOCK:
-        return list(_IN_FLIGHT_CLIENTS_BY_SCOPE.pop(scope, set()))
+        state = current
+        if scope is not None and (state is None or state.ident != scope):
+            state = _IN_FLIGHT_SCOPES.get(scope)
+        if state is None:
+            return []
+        if abandon:
+            state.abandoned = True
+            if state is current and state.implicit:
+                # Direct callers can start another query; a copied worker context
+                # still holds this abandoned state and rejects late registration.
+                _IN_FLIGHT_SCOPE.set(None)
+        clients = list(state.clients)
+        state.clients.clear()
+        _IN_FLIGHT_SCOPES.pop(state.ident, None)
+        return clients
 
 
 def kill_in_flight_llm_clients(scope: int | None = None) -> None:

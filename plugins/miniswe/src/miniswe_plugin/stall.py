@@ -56,8 +56,9 @@ def _recycle_async(scope: int | None = None) -> None:
     does not reliably wake ``_receive_response_headers``; if recycle ever blocks
     on a wedged transport, the TimeoutError never reaches ``wrap_model_query``.
 
-    Pop the in-flight set on this thread, then close only those objects on a
-    daemon thread. The daemon must not call ``kill_in_flight_llm_clients`` or
+    Mark the scope abandoned and pop its in-flight set on this thread, then
+    close only those objects on a daemon thread. Late registration closes
+    the client before sending. The daemon must not call ``kill_in_flight_llm_clients`` or
     ``recycle_llm_clients`` later: a late pop closes the next attempt's client
     (ReadError EBADF) when that client was registered under the same scope.
     Do not flush LiteLLM's process-wide cache from this delayed thread either.
@@ -67,7 +68,7 @@ def _recycle_async(scope: int | None = None) -> None:
 
     from miniswe_plugin.llm_client import close_llm_client, pop_in_flight_clients
 
-    clients = pop_in_flight_clients(scope)
+    clients = pop_in_flight_clients(scope, abandon=True)
 
     def _close_snapshot() -> None:
         for client in clients:

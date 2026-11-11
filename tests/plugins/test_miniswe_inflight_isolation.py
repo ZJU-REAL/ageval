@@ -3,7 +3,7 @@
 Local fake SSE only. No live model API.
 
 A delayed recycle closes only the clients popped on the abandoning thread.
-A client registered in that same scope afterwards stays open.
+A later attempt stays open; late registration in the abandoned attempt fails.
 """
 
 from __future__ import annotations
@@ -231,11 +231,7 @@ def test_pop_snapshot_ignores_later_register() -> None:
 
 
 def test_delayed_recycle_does_not_close_later_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The daemon closes the popped snapshot, not a client registered after it.
-
-    Same-task EBADF: ``_recycle_async`` used to call ``recycle_llm_clients``
-    on the shared scope after the retry had already registered a new client.
-    """
+    """A delayed daemon closes the abandoned attempt, leaving the retry open."""
     httpx = pytest.importorskip("httpx")
     from miniswe_plugin import llm_client
     from miniswe_plugin.stall import _recycle_async
@@ -269,6 +265,7 @@ def test_delayed_recycle_does_not_close_later_client(monkeypatch: pytest.MonkeyP
         with llm_client.inflight_scope() as scope:
             llm_client.register_in_flight_client(earlier)
             _recycle_async(scope=scope)
+        with llm_client.inflight_scope() as retry_scope:
             llm_client.register_in_flight_client(later)
             assert len(held) == 1
             assert held[0].daemon is True
@@ -276,8 +273,108 @@ def test_delayed_recycle_does_not_close_later_client(monkeypatch: pytest.MonkeyP
             assert recycle_calls["n"] == 0
             assert id(earlier) in closed
             assert id(later) not in closed
-            remaining = llm_client.pop_in_flight_clients(scope)
+            remaining = llm_client.pop_in_flight_clients(retry_scope)
             assert {id(client) for client in remaining} == {id(later)}
     finally:
         earlier.close()
         later.close()
+
+
+@pytest.mark.parametrize("budget", [None, 0, 30, 3600])
+def test_watchdog_rejects_late_client_before_sending(
+    monkeypatch: pytest.MonkeyPatch, budget: int | None
+) -> None:
+    """A timed-out worker cannot open a request during a retry or after scope exit."""
+    pytest.importorskip("httpx")
+    pytest.importorskip("openai")
+    from datetime import UTC, datetime
+
+    from miniswe_plugin import llm_client
+    from miniswe_plugin.stall import StallExhausted, wrap_model_query
+
+    from ageval.model.errors import TransportStall
+    from ageval.runtime.upstream_stall import UpstreamStall
+
+    gate = _Gate()
+    httpd, base = _start(_handler(gate, ["ok"], 0))
+    registration_entered = threading.Event()
+    release_registration = threading.Event()
+    worker_finished = threading.Event()
+    clients: list[Any] = []
+    errors: list[TransportStall] = []
+    scopes: list[int | None] = []
+    original_register = llm_client.register_in_flight_client
+
+    def delayed_register(client: Any) -> None:
+        clients.append(client)
+        if len(clients) == 1:
+            registration_entered.set()
+            assert release_registration.wait(5)
+        original_register(client)
+
+    monkeypatch.setattr(llm_client, "register_in_flight_client", delayed_register)
+
+    def query(_messages: Any) -> Any:
+        scopes.append(llm_client.current_inflight_scope())
+        first = len(scopes) == 1
+        try:
+            return llm_client.post_chat_completions(
+                api_base=base,
+                api_key=None,
+                model="dummy",
+                messages=[],
+                stream=True,
+                timeout=1,
+            )
+        except TransportStall as exc:
+            if first:
+                errors.append(exc)
+            raise
+        finally:
+            if first:
+                worker_finished.set()
+
+    def release_worker(_seconds: float) -> None:
+        release_registration.set()
+        assert worker_finished.wait(5)
+
+    stall = (
+        UpstreamStall(
+            budget_seconds=budget,
+            phase="run",
+            monotonic=time.monotonic,
+            sleep=release_worker,
+            now=lambda: datetime.now(UTC),
+            on_event=lambda _event: None,
+            on_freeze=lambda: None,
+            on_thaw=lambda: None,
+            on_fact=lambda _name, _detail: None,
+        )
+        if budget is not None
+        else None
+    )
+    try:
+        wrapped = wrap_model_query(query, stall, watchdog=0.3)
+        if budget == 3600:
+            completion = wrapped([])
+            assert completion.choices[0].message.content == "ok"
+            assert len(scopes) == 2 and scopes[0] != scopes[1]
+        else:
+            expected = StallExhausted if budget == 30 else TimeoutError
+            with pytest.raises(expected):
+                wrapped([])
+            # The copied worker context must retain cancellation after scope exit.
+            release_registration.set()
+            assert worker_finished.wait(5)
+        assert registration_entered.is_set()
+        assert len(errors) == 1 and str(errors[0]) == "miniswe_query_abandoned"
+        assert clients[0].is_closed
+        assert gate.n == (1 if budget == 3600 else 0)
+        assert llm_client.current_inflight_scope() is None
+    finally:
+        release_registration.set()
+        assert worker_finished.wait(5)
+        for client in clients:
+            llm_client.close_llm_client(client)
+        httpd.shutdown()
+        httpd.server_close()
