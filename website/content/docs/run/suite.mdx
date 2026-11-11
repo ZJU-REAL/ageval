@@ -49,25 +49,11 @@ ageval run <dataset> --resume-suite <suite_run_id> --max-tasks 5 -k 2
 ageval run <dataset> --resume-suite <suite_run_id> -k 2
 ```
 
-`--max-tasks N` requires an integer ≥ 1 and counts distinct tasks. Each selected
-task runs all its remaining Always-k slots. Resume skips settled PASS / FAIL /
-ERROR slots before selecting the next N unfinished tasks. A partially finished
-task uses one task budget. `--retry-errors` makes ERROR slots eligible again;
-the cap applies to the resulting pending work in plan order.
+`--max-tasks N` requires an integer ≥ 1 and counts distinct tasks. Each selected task runs all its remaining Always-k slots. Resume skips settled PASS / FAIL / ERROR slots before selecting the next N unfinished tasks. A partially finished task uses one task budget. `--retry-errors` makes ERROR slots eligible again; the cap applies to the resulting pending work in plan order.
 
-The slice is selected before concurrent workers start. Tasks beyond it remain
-unscheduled, with no result rows or cancellation placeholders. Finishing the
-slice writes a normal `complete` summary and preserves the usual result-derived
-exit code. The summary records this invocation's `max_tasks`; its `task_ids`
-and metrics include earlier recorded tasks plus the newly settled slice.
-The cumulative task count can exceed N after resume. The Hub still checks
-coverage against every task in the bound dataset version for public Leaderboards.
+The slice is selected before concurrent workers start. Tasks beyond it remain unscheduled, with no result rows or cancellation placeholders. Finishing the slice writes a normal `complete` summary and preserves the usual result-derived exit code. The summary records this invocation's `max_tasks`; its `task_ids` and metrics include earlier recorded tasks plus the newly settled slice. The cumulative task count can exceed N after resume. The Hub still checks coverage against every task in the bound dataset version for public Leaderboards.
 
-Omitting the cap runs all eligible tasks; a cap at least as large as the
-remaining task count has the same effect. The cap is CLI/job only, excluded
-from `config_fingerprint`, and is not a `task.yaml` or Dataset `defaults` field.
-It cannot be combined with `--replace-slot`. With Harbor, apply it after the
-explicit task filter, preserving the filter order:
+Omitting the cap runs all eligible tasks; a cap at least as large as the remaining task count has the same effect. The cap is CLI/job only, excluded from `config_fingerprint`, and is not a `task.yaml` or Dataset `defaults` field. It cannot be combined with `--replace-slot`. With Harbor, apply it after the explicit task filter, preserving the filter order:
 
 ```bash
 ageval run <harbor-set> --layout harbor --task a --task b --task c --max-tasks 2
