@@ -99,7 +99,10 @@ endpoint uses `base_url` ending in `/v1`; the executor appends `/messages`.
 While receiving output, the executor records redacted partial model-turn
 snapshots in `activity.jsonl` at most four times per second. Only the completed
 turn is projected into subsequent conversation history; an interrupted turn
-remains aborted with partial text/thinking. The standard `trajectory.jsonl` is
+remains aborted with partial text/thinking.
+Tool-use snapshots retain the block index, tool id/name and redacted unfinished
+JSON arguments in `partial_tool_calls`, including a final snapshot on abort.
+The standard `trajectory.jsonl` is
 sealed after invocation, with separate thinking and answer content. Use
 `--keep-recovery-state` to retain activity after settlement and
 `--keep-vendor-raw` to retain the counts/timings-only

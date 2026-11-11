@@ -731,3 +731,133 @@ def test_idle_timeout_starts_at_headers_not_connect(tmp_path):
         ex.close()
         server.shutdown()
         server.server_close()
+
+
+@pytest.mark.parametrize("comments", [False, True])
+def test_idle_timeout_applies_before_first_data_event(comments):
+    release = threading.Event()
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, format, *args):
+            del format, args
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            self.wfile.flush()
+            try:
+                while not release.wait(0.02):
+                    if comments:
+                        self.wfile.write(b": heartbeat\n\n")
+                        self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    ex = AnthropicHTTPExecutor(
+        model={"id": "test", "timeout": 3, "watchdog": 3},
+        base_url=f"http://127.0.0.1:{server.server_port}/v1",
+        options={"stream": True, "stream_idle_timeout_seconds": 0.12},
+    )
+    try:
+        result = ex.invoke("hi", timeout=2)
+        assert result.error == "stream_idle_timeout"
+        assert result.metadata is not None
+        assert result.metadata["sse_events"] == 0
+        assert result.metadata["duration_ms"] < 1000
+        assert result.metadata["reader_stopped"] is True
+    finally:
+        release.set()
+        ex.close()
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.parametrize("ending", ["cancel", "malformed"])
+def test_interrupted_tool_arguments_remain_in_activity(tmp_path, ending):
+    sent = threading.Event()
+    release = threading.Event()
+    secret = "synthetic-tool-credential"
+    fragment = '{"query":"visible","credential":"' + secret
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, format, *args):
+            del format, args
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            frames = text_events()[:1] + [
+                event(
+                    "content_block_start",
+                    index=0,
+                    content_block={
+                        "type": "tool_use",
+                        "id": "call_t",
+                        "name": "lookup",
+                        "input": {},
+                    },
+                ),
+                event(
+                    "content_block_delta",
+                    index=0,
+                    delta={"type": "input_json_delta", "partial_json": fragment},
+                ),
+            ]
+            for frame in frames:
+                self.wfile.write(("data: " + frame + "\n\n").encode())
+            self.wfile.flush()
+            sent.set()
+            release.wait(2)
+            if ending == "malformed":
+                self.wfile.write(b"data: {\n\n")
+                self.wfile.flush()
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    ex = AnthropicHTTPExecutor(
+        model={"id": "test", "timeout": 3, "watchdog": 3},
+        base_url=f"http://127.0.0.1:{server.server_port}/v1",
+        options={"stream": True},
+    )
+    log = ActivityLog.open(tmp_path / "activity.jsonl", sentinels=(secret,))
+    scope = ActivityScope(log, session_id="s", invoke_request_id="i")
+    ex.bind_activity(scope)
+    box = {}
+    worker = threading.Thread(target=lambda: box.setdefault("r", ex.invoke("hi", timeout=3)))
+    try:
+        worker.start()
+        assert sent.wait(1)
+        deadline = time.monotonic() + 1
+        while not any(row.payload.get("partial_tool_calls") for row in log.records):
+            assert time.monotonic() < deadline
+            time.sleep(0.005)
+        if ending == "cancel":
+            ex.cancel_invoke()
+        else:
+            release.set()
+        worker.join(2)
+        assert not worker.is_alive()
+        assert box["r"].ok is False
+        snapshots = [row for row in log.records if row.payload.get("partial_tool_calls")]
+        call = snapshots[-1].payload["partial_tool_calls"][0]
+        assert call["id"] == "call_t"
+        assert call["index"] == 0
+        assert "visible" in call["partial_json"]
+        assert secret not in log.path.read_text()
+        assert "REDACTED" in call["partial_json"]
+        assert len([row for row in log.records if row.status == "aborted"]) == 1
+        assert scope.project_messages() == []
+    finally:
+        release.set()
+        ex.close()
+        worker.join(2)
+        server.shutdown()
+        server.server_close()

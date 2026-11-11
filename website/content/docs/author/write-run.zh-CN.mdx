@@ -43,3 +43,5 @@ Anthropic Messages 原生流式通过角色 profile 的 `options.stream: true` �
 `stream_idle_timeout_seconds` 区分首事件与空闲失败，不延长调用或任务的资源上限；
 ping 不算答案进展。部分输出写入活动日志，但不作为已完成回答。只有供应商要求默认
 温度时才显式设置 `omit_temperature: true`。SDK 任务代码和 evaluator 的评分职责不变。
+工具活动快照会保留脱敏后的部分参数，流取消或格式错误时仍可查看。空闲上限从响应头
+到达时开始计时，也覆盖首个 SSE 数据事件之前的等待时间。

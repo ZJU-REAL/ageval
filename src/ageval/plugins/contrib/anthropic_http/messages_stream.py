@@ -482,10 +482,10 @@ def exchange_messages_stream(
             )
             journal.flush()
 
-    def activity_progress() -> None:
+    def activity_progress(*, force: bool = False) -> None:
         nonlocal last_activity_write
         stamp = time.monotonic()
-        if stamp - last_activity_write < 0.25:
+        if not force and stamp - last_activity_write < 0.25:
             return
         last_activity_write = stamp
         scope = getattr(executor, "activity", None)
@@ -513,6 +513,16 @@ def exchange_messages_stream(
             event["text"] for event in assembler.events if event["channel"] == "thought"
         )
         payload["stream_event_count"] = meta["sse_events"]
+        payload["partial_tool_calls"] = [
+            {
+                "index": index,
+                "id": block.get("id"),
+                "name": block.get("name"),
+                "partial_json": assembler.fragments.get(index, ""),
+            }
+            for index, block in sorted(assembler.blocks.items())
+            if block.get("type") == "tool_use"
+        ]
         scope.log.append(
             request_id=identity, kind="model_turn", status="in_flight", payload=payload
         )
@@ -647,6 +657,7 @@ def exchange_messages_stream(
             now = time.monotonic()
             with lock:
                 first = meta.get("first_event_ms")
+                headers_received = "headers_ms" in meta
                 idle = now - idle_since
             if executor._invoke_cancel.is_set():
                 outcome = StreamOutcome("cancelled")
@@ -669,7 +680,7 @@ def exchange_messages_stream(
                 abort()
                 break
             if (
-                first is not None
+                headers_received
                 and executor.options.stream_idle_timeout_seconds
                 and idle >= executor.options.stream_idle_timeout_seconds
             ):
@@ -702,6 +713,7 @@ def exchange_messages_stream(
             executor._stream_events = list(assembler.events)
             executor._stream_meta = meta
             executor._stream_partial_usage = dict(assembler.usage)
+            activity_progress(force=True)
             record(
                 "stream_finished",
                 outcome=outcome.kind,
