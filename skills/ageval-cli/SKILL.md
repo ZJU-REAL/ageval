@@ -48,4 +48,12 @@ Hub Leaderboard needs suite upload (`ageval results upload-suite`), not a lone `
 
 Flags: `uv run ageval <cmd> --help`. Source: `src/ageval/cli/main.py`.
 
+`ageval run <dataset> --max-tasks N` runs at most N distinct eligible tasks in
+plan order (integer ≥ 1), including every remaining Always-k slot of each.
+`--resume-suite <id> --max-tasks N` skips settled slots first and preserves
+earlier rows. `--retry-errors` makes ERROR slots eligible. The cap is CLI/job
+only, excluded from Dataset defaults and config fingerprint, and incompatible
+with `--replace-slot`. Unscheduled tasks get no result/cancel placeholders.
+The slice finishes normally; Hub still checks full bound-version coverage.
+
 Detail: [references/commands.md](references/commands.md), [references/failures.md](references/failures.md).

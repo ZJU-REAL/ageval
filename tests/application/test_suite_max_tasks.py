@@ -130,3 +130,35 @@ async def test_budget_rejects_slot_replacement(dataset: Path) -> None:
     plan = plan_suite_run(dataset, max_tasks=1)
     with pytest.raises(ConfigError, match="cannot be combined"):
         await execute_suite_run(plan, resume=True, replace_slots={("alpha", 0)})
+
+
+@pytest.mark.asyncio
+async def test_harbor_budget_preserves_explicit_filter_order(tmp_path: Path) -> None:
+    for tid in ("a", "b", "c"):
+        task = tmp_path / tid
+        task.mkdir()
+        (task / "task.toml").write_text("", encoding="utf-8")
+        (task / "instruction.md").write_text("instruction\n", encoding="utf-8")
+        (task / "tests").mkdir()
+        (task / "tests/test.sh").write_text("exit 0\n", encoding="utf-8")
+    calls: list[str] = []
+
+    async def runner(root, task_id, **kwargs):  # noqa: ANN001
+        calls.append(task_id)
+        return 0, SimpleNamespace(status="PASS", score=1.0, evidence_path=None, logs=None)
+
+    plan = plan_suite_run(tmp_path, layout="harbor", task_ids=["c", "a", "b"], max_tasks=2)
+    first = await execute_suite_run(plan, run_fn=runner)
+    assert calls == ["c", "a"]
+    assert first["task_ids"] == ["c", "a"]
+    calls.clear()
+    plan = plan_suite_run(
+        tmp_path,
+        layout="harbor",
+        task_ids=["c", "a", "b"],
+        max_tasks=1,
+        suite_run_id=plan.suite_run_id,
+    )
+    resumed = await execute_suite_run(plan, run_fn=runner, resume=True)
+    assert calls == ["b"]
+    assert resumed["task_ids"] == ["c", "a", "b"]

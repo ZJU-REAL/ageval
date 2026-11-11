@@ -140,6 +140,10 @@ uv run ageval run examples/core
 
 # Always-k (#47): k independent Attempts per task — CLI/job only (not task.yaml)
 uv run ageval run examples/core -k 5 --max-concurrent-tasks 2
+
+# Settle an ordered slice; continue the next unfinished tasks under the same suite id
+ageval run <dataset> --max-tasks 5 -k 2 --max-concurrent-tasks 3
+ageval run <dataset> --resume-suite <suite_run_id> --max-tasks 5 -k 2
 uv run ageval run examples/core --task sdk-agent-session -k 5
 # Continue one unsealed Attempt in place (exit 2 when result.json exists, the digest mismatches, or the environment is still busy)
 # uv run ageval run examples/core --task sdk-agent-session --resume <attempt_id>
@@ -202,6 +206,8 @@ After `-k` / full suite, read:
 
 - **pass@k** / **pass^k** are **job** aggregates (mean over tasks); not package identity  
 - `--max-concurrent-tasks` only speeds scheduling; does not change k or PASS  
+- `--max-tasks N` (integer ≥ 1) selects distinct tasks after resume/retry slot filtering, before worker dispatch. Each selected task keeps all remaining Always-k slots. Omit to run all eligible tasks; a larger cap has the same effect. It is CLI/job only, excluded from Dataset defaults, `task.yaml`, and `config_fingerprint`, and rejected with `--replace-slot`.
+- A capped suite finishes normally with the usual result-derived exit code. Its summary records `max_tasks` and aggregates previously recorded plus newly settled tasks. Unscheduled remainder tasks get no result or cancel placeholders; later `--resume-suite` can continue them. Hub completeness still checks the bound version's entire task set.
 - Single-task `k=1` without `--resume-suite` still prints the historical Attempt document when stdout is not a TTY (or with `--json`)  
 
 ### Campaign / control plane (brief)

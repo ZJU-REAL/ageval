@@ -133,6 +133,17 @@ def register(app: typer.Typer) -> None:
                 ),
             ),
         ] = None,
+        max_tasks: Annotated[
+            int | None,
+            typer.Option(
+                "--max-tasks",
+                help=(
+                    "Run at most N distinct unfinished tasks in plan order (integer ≥1). "
+                    "Each task keeps its remaining Always-k slots. CLI/job only; "
+                    "omitting runs all eligible tasks. Cannot combine with --replace-slot."
+                ),
+            ),
+        ] = None,
         n_attempts: Annotated[
             int | None,
             typer.Option(
@@ -455,6 +466,12 @@ def register(app: typer.Typer) -> None:
                     location="--fork",
                 )
             replace_keys: set[tuple[str, int]] | None = None
+            if max_tasks is not None and replace_slot:
+                raise ConfigError(
+                    "invalid_override",
+                    "--max-tasks cannot be combined with --replace-slot",
+                    location="--max-tasks",
+                )
             if replace_slot:
                 if resume_id is None:
                     raise ConfigError(
@@ -494,6 +511,7 @@ def register(app: typer.Typer) -> None:
                 package,
                 task_ids=task_values,
                 max_concurrent_tasks=max_concurrent_tasks,
+                max_tasks=max_tasks,
                 n_attempts=k,
                 suite_run_id=resume_id,
                 layout=chosen_layout,
@@ -565,6 +583,7 @@ def register(app: typer.Typer) -> None:
                     "n_attempts": plan.n_attempts,
                     "task_ids": list(plan.task_ids),
                     "max_concurrent_tasks": plan.max_concurrent_tasks,
+                    "max_tasks": plan.max_tasks,
                 },
             )
 
@@ -610,6 +629,7 @@ def register(app: typer.Typer) -> None:
                     "summary_path": suite_summary.get("summary_path"),
                     "n_attempts": plan.n_attempts,
                     "cancelled": bool(suite_summary.get("cancelled")),
+                    "max_tasks": plan.max_tasks,
                 },
             )
             if result_file is not None:

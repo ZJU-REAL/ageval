@@ -3,17 +3,18 @@ title: 整份 dataset 一次跑完
 description: 一次跑完 dataset 里所有 task；可 Always-k 与 pass@k。
 ---
 
-省略 `--task` 时，`ageval run` 把 dataset 里每一个 task 都跑一遍，各自独立 lock / 执行 / 评测：
+省略 `--task` 时，`ageval run` 默认把 dataset 里每一个 task 都跑一遍，各自独立 lock / 执行 / 评测：
 
 ```bash
 ageval run examples/datasets/minimal-demo
 ageval run examples/datasets/minimal-demo --max-concurrent-tasks 2
 ```
 
-## 两轴别混
+## 任务数量、并发与 Always-k
 
 | 轴 | 干什么 | 不干什么 |
 | --- | --- | --- |
+| **任务额度** `--max-tasks N` | 按计划顺序运行前 N 个符合条件的任务 | 不限制每个任务的 Attempt 数量 |
 | **并发** `--max-concurrent-tasks` | **少等一会儿**：多开几路压总耗时 | 不改 k，也不改 PASS/FAIL |
 | **Always-k** `--n-attempts` / `-k` | 每题固定跑满 k 次独立运行，给 **pass@k / pass^k** 攒样本 | 不是「失败再试」的条件 retry；**不进** `task.yaml` / fingerprint |
 
@@ -37,6 +38,35 @@ ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --retry-
 
 # 用已收获的 task-artifacts 再评分：新的一次运行，不跑 agent
 ageval results regrade examples/datasets/minimal-demo --run <attempt_id>
+```
+
+## 分批运行
+
+```bash
+ageval run <dataset> --max-tasks 5 -k 2 --max-concurrent-tasks 3
+ageval run <dataset> --resume-suite <suite_run_id> --max-tasks 5 -k 2
+# 省略额度，完成全部剩余任务
+ageval run <dataset> --resume-suite <suite_run_id> -k 2
+```
+
+`--max-tasks N` 要求整数 ≥ 1，按不同任务计数。选中的任务会执行全部剩余
+Always-k 槽位。续跑先跳过已结算为 PASS / FAIL / ERROR 的槽位，再取后续 N 个
+未完成任务；部分完成的任务占一个任务额度。`--retry-errors` 让 ERROR 槽位重新
+进入待执行集合，再按计划顺序应用额度。
+
+并发 worker 启动前就确定本轮任务集合。额度外的任务保持未调度，不生成结果行或
+取消占位。本轮完成后写出正常的 `complete` 摘要，退出码继续由任务结果决定。
+摘要记录本轮的 `max_tasks`；`task_ids` 和指标覆盖历史已记录任务及本轮新结算
+任务，连续续跑后的累计任务数可以超过 N。Hub 的公开排行榜继续检查结果是否覆盖
+所绑定 dataset 版本的全部任务。
+
+省略额度时执行全部符合条件的任务；额度大于等于剩余任务数时效果相同。该参数只写在
+CLI / job 上，不进入 `config_fingerprint`，也不属于 `task.yaml` 或 Dataset
+`defaults` 字段。它与 `--replace-slot` 互斥。Harbor 先应用显式任务过滤，再按
+过滤顺序取前 N 个任务：
+
+```bash
+ageval run <harbor-set> --layout harbor --task a --task b --task c --max-tasks 2
 ```
 
 规则：
