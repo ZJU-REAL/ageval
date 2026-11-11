@@ -97,7 +97,7 @@ def test_timeout_recycles_clients_before_stall_wait(monkeypatch: pytest.MonkeyPa
     recycled = {"n": 0}
     monkeypatch.setattr(
         "miniswe_plugin.stall.recycle_llm_clients",
-        lambda: recycled.__setitem__("n", recycled["n"] + 1),
+        lambda *_args, **_kwargs: recycled.__setitem__("n", recycled["n"] + 1),
     )
     calls = {"n": 0}
 
@@ -109,11 +109,9 @@ def test_timeout_recycles_clients_before_stall_wait(monkeypatch: pytest.MonkeyPa
 
     result = wrap_model_query(query, stall)([{"role": "user", "content": "x"}])
     assert result["content"] == "ok"
-    # before-attempt + before-retry are sync; on-failure is _recycle_async (daemon).
-    deadline = time.monotonic() + 1.0
-    while recycled["n"] < 3 and time.monotonic() < deadline:
-        time.sleep(0.01)
-    assert recycled["n"] >= 3
+    # One synchronous flush before each attempt. The failure path only closes
+    # the popped snapshot; it does not call recycle_llm_clients again.
+    assert recycled["n"] == 2
     assert calls["n"] == 2
     assert clock.sleeps == [60.0]
     assert [event["outcome"] for event in events] == ["started", "wait", "resumed"]
@@ -124,7 +122,7 @@ def test_watchdog_times_out_a_pure_hang(monkeypatch: pytest.MonkeyPatch) -> None
     recycled = {"n": 0}
     monkeypatch.setattr(
         "miniswe_plugin.stall.recycle_llm_clients",
-        lambda: recycled.__setitem__("n", recycled["n"] + 1),
+        lambda *_args, **_kwargs: recycled.__setitem__("n", recycled["n"] + 1),
     )
     calls = {"n": 0}
 
@@ -140,7 +138,7 @@ def test_watchdog_times_out_a_pure_hang(monkeypatch: pytest.MonkeyPatch) -> None
     elapsed = time.monotonic() - started
     assert result["content"] == "ok"
     assert calls["n"] == 2
-    assert recycled["n"] >= 3
+    assert recycled["n"] == 2
     # Must NOT block on the hung orphan thread (executor shutdown wait=False).
     assert elapsed < 1.0, elapsed
     assert clock.sleeps == [60.0]
@@ -204,7 +202,7 @@ def test_any_failure_recycles_clients_before_stall_wait(monkeypatch: pytest.Monk
     recycled = {"n": 0}
     monkeypatch.setattr(
         "miniswe_plugin.stall.recycle_llm_clients",
-        lambda: recycled.__setitem__("n", recycled["n"] + 1),
+        lambda *_args, **_kwargs: recycled.__setitem__("n", recycled["n"] + 1),
     )
     calls = {"n": 0}
 
@@ -215,7 +213,7 @@ def test_any_failure_recycles_clients_before_stall_wait(monkeypatch: pytest.Monk
         return {"role": "assistant", "content": "ok"}
 
     wrap_model_query(query, stall)([])
-    assert recycled["n"] == 3
+    assert recycled["n"] == 2
     assert clock.sleeps == [60.0]
 
 
@@ -881,13 +879,14 @@ def test_future_timeout_surfaces_when_recycle_wedges(monkeypatch: pytest.MonkeyP
         while not gate["released"] and time.monotonic() < deadline:
             time.sleep(0.05)
 
-    def tracking_async() -> None:
+    def tracking_async(scope: int | None = None) -> None:
+        del scope
         async_started["n"] += 1
         threading = __import__("threading")
         threading.Thread(target=wedging_recycle, name="miniswe-recycle", daemon=True).start()
 
     # Pre-attempt sync recycle must stay fast; only abandon uses wedging daemon.
-    monkeypatch.setattr(stall_mod, "recycle_llm_clients", lambda: None)
+    monkeypatch.setattr(stall_mod, "recycle_llm_clients", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(stall_mod, "_recycle_async", tracking_async)
 
     calls = {"n": 0}
