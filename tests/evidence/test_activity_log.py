@@ -298,3 +298,48 @@ def test_step_elapsed_ms_counts_without_an_invoke_completed_line(tmp_path: Path)
     opened = ActivityLog.open(path)
     assert opened.corrupt is None
     assert opened.phase_elapsed_ms("run") == 25000.0
+
+
+def test_model_turn_delta_rows_are_valid_and_projection_ignores_them(tmp_path: Path) -> None:
+    path = tmp_path / "activity.jsonl"
+    log = ActivityLog.open(path, sentinels=("SECRET_VALUE",))
+    scope = ActivityScope(log, session_id="sess_a", invoke_request_id="req_a")
+    scope.record_model_turn_in_flight(1, [{"role": "user", "content": "hi"}])
+    delta = scope.record_model_turn_delta(
+        1,
+        channel="assistant",
+        text="prefix SECRET_VALUE suffix",
+    )
+    scope.record_model_turn_delta(
+        1,
+        channel="tool",
+        text='{"q":',
+        tool_index=0,
+        tool_call_id="call_1",
+    )
+    assert delta.status == "delta"
+    assert "SECRET_VALUE" not in delta.payload["text"]
+    assert "[REDACTED:secret]" in delta.payload["text"]
+    assert scope.project_messages() == []
+    scope.record_model_turn_completed(1, assistant_text="answer")
+    reopened = ActivityLog.open(path, sentinels=("SECRET_VALUE",))
+    assert reopened.corrupt is None
+    assert [record.status for record in reopened.records] == [
+        "in_flight",
+        "delta",
+        "delta",
+        "completed",
+    ]
+    assert reopened.latest_status(kind="model_turn", request_id="mt_req_a_1") == "completed"
+
+
+def test_mark_aborted_keeps_live_delta_text(tmp_path: Path) -> None:
+    log = ActivityLog.open(tmp_path / "activity.jsonl")
+    scope = ActivityScope(log, session_id="sess_a", invoke_request_id="req_a")
+    scope.record_model_turn_in_flight(1, [{"role": "user", "content": "hi"}])
+    scope.record_model_turn_delta(1, channel="assistant", text="partial ")
+    scope.record_model_turn_delta(1, channel="thought", text="thinking")
+    aborted = scope.mark_aborted("mt_req_a_1", reason="process_interrupted")
+    assert aborted.status == "aborted"
+    assert aborted.payload["partial_text"] == "partial "
+    assert aborted.payload["partial_thought"] == "thinking"

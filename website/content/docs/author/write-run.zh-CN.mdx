@@ -36,4 +36,7 @@ async def run(ctx: RunContext) -> RunTerminal:
 
 `session.invoke` 可传 `tools` 与 `messages`。`openai-http` / `anthropic-http` 返回结构化 `tool_calls`；ACP 忽略工具目录，仍走文本 invoke。省略这两项就是 prompt-only。
 
+`openai-http` 可在 profile 里设置 `options.stream: true`，为 Chat Completions 与 Responses 打开原生 SSE。任务拿到的 `invoke` 结果契约不变；流式只改变传输和进度证据，不改变任务契约或 PASS。流失败或未完整结束时是 `ok: false`。
+实时活动会暂存未结束的词和凭证前缀，完成安全脱敏后继续显示文本，无需等待整个回答结束。
+
 有文件就认，不必再写 `harness.entrypoint`。

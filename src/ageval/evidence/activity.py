@@ -34,14 +34,14 @@ KINDS = frozenset(
         "phase",
     }
 )
-STATUSES = frozenset({"in_flight", "completed", "aborted"})
+STATUSES = frozenset({"in_flight", "delta", "completed", "aborted"})
 
 # ``tool_call`` may be ``aborted`` when a replay-safe call is sent again.
 _ALLOWED_STATUS: dict[str, frozenset[str]] = {
     "attempt": frozenset({"completed"}),
     "session": frozenset({"completed"}),
     "invoke": frozenset({"in_flight", "completed"}),
-    "model_turn": frozenset({"in_flight", "completed", "aborted"}),
+    "model_turn": frozenset({"in_flight", "delta", "completed", "aborted"}),
     "tool_call": frozenset({"in_flight", "completed", "aborted"}),
     "compaction": frozenset({"in_flight", "completed"}),
     "phase": frozenset({"in_flight", "completed"}),
@@ -102,6 +102,15 @@ _REQUIRED: dict[tuple[str, str], frozenset[str]] = {
             "step_index",
             "delta_messages",
             "system_section_deltas",
+        }
+    ),
+    ("model_turn", "delta"): frozenset(
+        {
+            "session_id",
+            "invoke_request_id",
+            "step_index",
+            "channel",
+            "text",
         }
     ),
     ("model_turn", "completed"): frozenset(
@@ -723,6 +732,36 @@ class ActivityScope:
             },
         )
 
+    def record_model_turn_delta(
+        self,
+        step_index: int,
+        *,
+        channel: str,
+        text: str,
+        tool_index: int | None = None,
+        tool_call_id: str | None = None,
+    ) -> ActivityRecord:
+        """Append one live fragment. The terminal line still seals the turn once."""
+        payload = self._with_elapsed(
+            {
+                "session_id": self.session_id,
+                "invoke_request_id": self.invoke_request_id,
+                "step_index": step_index,
+                "channel": channel,
+                "text": text,
+            }
+        )
+        if tool_index is not None:
+            payload["tool_index"] = tool_index
+        if tool_call_id is not None:
+            payload["tool_call_id"] = tool_call_id
+        return self.log.append(
+            request_id=f"mt_{self.invoke_request_id}_{step_index}",
+            kind="model_turn",
+            status="delta",
+            payload=payload,
+        )
+
     def record_model_turn_completed(
         self,
         step_index: int,
@@ -921,12 +960,23 @@ class ActivityScope:
         if inflight is None:
             _invalid(f"no in-flight activity record {request_id}")
         if inflight.kind == "model_turn":
+            partial_text = str(inflight.payload.get("partial_text") or "")
+            partial_thought = inflight.payload.get("partial_thought")
+            thought = partial_thought if isinstance(partial_thought, str) else ""
+            for record in self.log.records:
+                if record.request_id != request_id or record.status != "delta":
+                    continue
+                text = record.payload.get("text")
+                if not isinstance(text, str):
+                    continue
+                if record.payload.get("channel") == "assistant":
+                    partial_text += text
+                elif record.payload.get("channel") == "thought":
+                    thought += text
             return self.record_model_turn_aborted(
                 int(inflight.payload.get("step_index") or 0),
-                partial_text=str(inflight.payload.get("partial_text") or ""),
-                partial_thought=inflight.payload.get("partial_thought")
-                if isinstance(inflight.payload.get("partial_thought"), str)
-                else None,
+                partial_text=partial_text,
+                partial_thought=thought or None,
                 reason=reason,
             )
         if inflight.kind == "tool_call":

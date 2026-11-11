@@ -517,6 +517,11 @@ def test_cancel_stops_the_local_wait(monkeypatch: pytest.MonkeyPatch) -> None:
             time.sleep(30)
             return self
 
+        def read(self, *_args: object) -> bytes:
+            # The worker wakes after the main thread already returned. Raise a
+            # transport error instead of leaking an AttributeError warning.
+            raise TimeoutError("hung")
+
         def __exit__(self, *_args: object) -> bool:
             return False
 
@@ -584,8 +589,13 @@ def test_http_4xx_is_a_model_config_error(code: int) -> None:
     assert isinstance(result.failure, ModelConfigError)
     assert isinstance(result.usage, UsageUnavailable)
     assert result.usage.reason == "not_reported"
-    assert (result.metadata or {}).get("error_kind") == "model_config"
-    assert "nope" in str((result.metadata or {}).get("http_error_body"))
+    metadata = result.metadata or {}
+    assert metadata.get("error_kind") == "model_config"
+    assert metadata["error_origin"] == "http"
+    assert metadata["http_error"]["message"] == "nope"
+    assert metadata["http_error"]["code"] == str(code)
+    assert metadata["http_error"]["status_code"] == code
+    assert "http_error_body" not in metadata
 
 
 @pytest.mark.parametrize("code", [408, 429, 500, 502, 503])
