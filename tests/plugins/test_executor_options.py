@@ -35,3 +35,47 @@ def test_typo_profile_fails_lock_and_names_the_field() -> None:
     with pytest.raises(ConfigError, match="idle_timeout_secnds") as raised:
         lock_task(CONFIG_MIN, "minimal", job=job)
     assert "did you mean 'idle_timeout_seconds'" in str(raised.value)
+
+
+def test_openai_http_stream_options_lock() -> None:
+    good = job_document(
+        {
+            "solver": {
+                "executor": "openai-http",
+                "model": {"id": "mock", "api": "chat"},
+                "options": {
+                    "stream": True,
+                    "stream_first_event_timeout_seconds": 1.5,
+                    "stream_idle_timeout_seconds": 2,
+                },
+                "extensions": [{"plugin": "openai-http"}],
+            }
+        }
+    )
+    lock_task(CONFIG_MIN, "minimal", job=good)
+
+    bad_bool = job_document(
+        {
+            "solver": {
+                "executor": "openai-http",
+                "model": {"id": "mock"},
+                "options": {"stream": "yes"},
+                "extensions": [{"plugin": "openai-http"}],
+            }
+        }
+    )
+    with pytest.raises(ConfigError, match="stream_requires_bool"):
+        lock_task(CONFIG_MIN, "minimal", job=bad_bool)
+
+    bad_seconds = job_document(
+        {
+            "solver": {
+                "executor": "openai-http",
+                "model": {"id": "mock", "api": "responses"},
+                "options": {"stream": True, "stream_idle_timeout_seconds": 0},
+                "extensions": [{"plugin": "openai-http"}],
+            }
+        }
+    )
+    with pytest.raises(ConfigError, match="stream_timeout_requires_positive_seconds"):
+        lock_task(CONFIG_MIN, "minimal", job=bad_seconds)

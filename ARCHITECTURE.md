@@ -131,6 +131,7 @@ ageval/                              # GitHub: ZJU-REAL/ageval
 │   │   ├── decorators.py            # @environment_plugin / @executor_plugin
 │   │   ├── slots.py                 # exclusive / chain slot identifiers
 │   │   ├── registry.py / resolve.py / bootstrap.py / builtin.py
+│   │   ├── http_stream.py           # shared incremental HTTP/SSE framing for API executors
 │   │   ├── defaults/                # environment_setup (setup.sh), default evaluation_runtime & trajectory_seal
 │   │   └── contrib/
 │   │       ├── acp/                 # ACP executor + attach_stdio client
@@ -219,6 +220,8 @@ During a production Attempt, `application/run.py` mints run identity once and in
 | `plugins/contrib/e2b/` | E2B SDK integration and template caching | Core-level template caching |
 | `plugins/contrib/ssh/` | SSH Modes A and B (`ssh -T` / remote `docker exec`) | In-process fake agents |
 | `plugins/contrib/acp/` | Parent ACP JSON-RPC client, entry registry, `attach_stdio` consumer | Writing `trajectory.jsonl` directly; scraping unstructured stdout |
+| `plugins/http_stream.py` | Shared incremental SSE framing, stream deadlines, cancellation, local socket cleanup | Provider payload assembly, evaluation, environment lifecycle |
+| `plugins/contrib/openai_http/` | Chat Completions / Responses wire shape, native SSE assembly, usage projection | Environment lifecycle, `PASS` |
 | `plugins/defaults/` | `environment_setup` (`setup.sh`), default `evaluation_runtime` and `trajectory_seal` implementations | Issuing `PASS` directly |
 | `runtime/` | Run identity, parent Agent Service, subprocess worker launchers, clocks/quotas | Environment plugin internals, scoring criteria |
 | `evaluation/` | Phase barrier, subprocess evaluator execution, `bind_evaluation` | Task-specific scoring formulas |

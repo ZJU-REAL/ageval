@@ -28,15 +28,22 @@ from ageval.model.wire import chat_body, responses_body
 from ageval.plugins.agent_result import AgentResult
 from ageval.plugins.base import BaseExecutor
 from ageval.plugins.contrib.openai_http.options import OpenAIHTTPOptions
+from ageval.plugins.contrib.openai_http.parse import (
+    chat_text_and_calls,
+    responses_text_and_calls,
+)
+from ageval.plugins.contrib.openai_http.stream import ChatAssembler, ResponsesAssembler
 from ageval.plugins.contrib.openai_http.usage import normalize_openai_http_usage
 from ageval.plugins.decorators import executor_plugin
 from ageval.plugins.http_activity import (
+    ModelTurnDeltaWriter,
     abort_model_turn,
     begin_model_turn,
     finish_model_turn,
     messages_for_turn,
 )
 from ageval.plugins.http_loopback import is_http_loopback
+from ageval.plugins.http_stream import StreamProgressJournal, exchange_sse
 from ageval.plugins.options import coerce_options, mapping_for_model
 from ageval.runtime.clocks import clock_seconds
 
@@ -125,41 +132,6 @@ def _responses_function_calls(raw: Any) -> list[dict[str, Any]]:
     return out
 
 
-def _parse_tool_calls(raw: Any) -> tuple[dict[str, Any], ...]:
-    if not isinstance(raw, list):
-        return ()
-    out: list[dict[str, Any]] = []
-    for item in raw:
-        if not isinstance(item, Mapping):
-            continue
-        fn = item.get("function") if isinstance(item.get("function"), Mapping) else item
-        if not isinstance(fn, Mapping):
-            continue
-        name = str(fn.get("name") or item.get("name") or "")
-        if not name:
-            continue
-        args: Any = fn.get("arguments") if "arguments" in fn else item.get("arguments")
-        if isinstance(args, str):
-            try:
-                parsed = json.loads(args)
-            except json.JSONDecodeError:
-                parsed = {}
-            args = parsed if isinstance(parsed, dict) else {}
-        elif not isinstance(args, dict):
-            args = {}
-        call_id = str(item.get("id") or "")
-        if not call_id:
-            call_id = f"call_{len(out) + 1}"
-        out.append(
-            {
-                "id": call_id,
-                "name": name,
-                "arguments": args,
-            }
-        )
-    return tuple(out)
-
-
 def _responses_input(
     prompt: str, messages: Sequence[Mapping[str, Any]] | None
 ) -> str | list[dict[str, Any]]:
@@ -201,62 +173,6 @@ def _responses_input(
     return items
 
 
-def _responses_text_and_calls(
-    raw: Mapping[str, Any],
-) -> tuple[str, str, tuple[dict[str, Any], ...]]:
-    """Read Responses ``output`` text, reasoning summary, and function calls."""
-    texts: list[str] = []
-    thoughts: list[str] = []
-    calls: list[dict[str, Any]] = []
-    output = raw.get("output")
-    if isinstance(output, list):
-        for item in output:
-            if not isinstance(item, Mapping):
-                continue
-            kind = str(item.get("type") or "")
-            if kind == "reasoning":
-                summary = item.get("summary")
-                if isinstance(summary, list):
-                    for part in summary:
-                        if isinstance(part, Mapping) and isinstance(part.get("text"), str):
-                            thoughts.append(part["text"])
-                elif isinstance(item.get("content"), str):
-                    thoughts.append(item["content"])
-                continue
-            if kind == "function_call":
-                name = str(item.get("name") or "")
-                if not name:
-                    continue
-                args: Any = item.get("arguments")
-                if isinstance(args, str):
-                    try:
-                        parsed = json.loads(args)
-                    except json.JSONDecodeError:
-                        parsed = {}
-                    args = parsed if isinstance(parsed, dict) else {}
-                elif not isinstance(args, dict):
-                    args = {}
-                call_id = (
-                    str(item.get("call_id") or item.get("id") or "") or f"call_{len(calls) + 1}"
-                )
-                calls.append({"id": call_id, "name": name, "arguments": args})
-                continue
-            content = item.get("content")
-            if isinstance(content, list):
-                for part in content:
-                    if not isinstance(part, Mapping):
-                        continue
-                    if part.get("type") in {"output_text", "text"} and isinstance(
-                        part.get("text"), str
-                    ):
-                        texts.append(part["text"])
-            elif isinstance(content, str):
-                texts.append(content)
-    if not texts and isinstance(raw.get("output_text"), str):
-        texts.append(raw["output_text"])
-    return "".join(texts), "\n".join(thoughts), tuple(calls)
-
-
 @executor_plugin(priority=120, source="first-party")
 class OpenAIHTTPExecutor(BaseExecutor):
     """HTTP executor for Chat Completions and Responses. No box."""
@@ -293,6 +209,8 @@ class OpenAIHTTPExecutor(BaseExecutor):
             if isinstance(options, OpenAIHTTPOptions)
             else coerce_options(OpenAIHTTPOptions, raw)
         )
+        self._stream_meta: dict[str, object] = {}
+        self._delta_writer: ModelTurnDeltaWriter | None = None
 
     @classmethod
     def supports_model(cls, spec: ModelSpec) -> None:
@@ -314,7 +232,7 @@ class OpenAIHTTPExecutor(BaseExecutor):
         self._invoke_cancel = threading.Event()
 
     def close(self) -> None:
-        return None
+        self.cancel_invoke()
 
     def prepare_invoke(self) -> None:
         self._invoke_cancel.clear()
@@ -335,6 +253,8 @@ class OpenAIHTTPExecutor(BaseExecutor):
     ) -> AgentResult:
         del redaction_sentinels
         messages = messages_for_turn(self, prompt, messages)
+        self._stream_meta = {}
+        self._delta_writer = None
         if self._invoke_cancel.is_set():
             return self._result(ok=False, error="invoke_cancelled", effort=self.reasoning_effort)
         key_env = self.api_key_env or _DEFAULT_KEY_ENV
@@ -357,19 +277,40 @@ class OpenAIHTTPExecutor(BaseExecutor):
         if key:
             headers["Authorization"] = f"Bearer {key}"
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        streamed = self.options.stream
         self._activity_step = begin_model_turn(self, prompt, messages)
+        outcome = None
         try:
-            kind, found = self._exchange(req, timeout=timeout)
+            if streamed:
+                outcome = self._stream_exchange(
+                    req,
+                    responses=responses,
+                    timeout=timeout,
+                    collect_dir=collect_dir,
+                )
+                kind, found = outcome.kind, outcome.detail
+                self._stream_meta = dict(outcome.metrics)
+            else:
+                kind, found = self._exchange(req, timeout=timeout)
         except Exception:  # noqa: BLE001 — a transport crash still closes the model turn
             abort_model_turn(self, self._activity_step, reason="process_interrupted")
             self._activity_step = None
             raise
+        snapshot = outcome.snapshot if outcome is not None else None
         if kind == "cancelled":
             return self._result(
                 ok=False,
                 error="invoke_cancelled",
                 effort=effort,
                 repeatable=False,
+                text=snapshot.text if snapshot is not None else "",
+                events=_stream_error_events(snapshot) if snapshot is not None else (),
+                thought=snapshot.thought if snapshot is not None else None,
+                stop_reason=snapshot.stop_reason if snapshot is not None else None,
+                usage=_partial_usage(snapshot, timeout=False) if snapshot is not None else None,
+                metadata=_stream_error_metadata(snapshot, fallback="cancelled")
+                if streamed
+                else None,
             )
         if kind == "watchdog":
             message = f"TimeoutError:openai_http_watchdog:{self.watchdog:g}"
@@ -378,6 +319,12 @@ class OpenAIHTTPExecutor(BaseExecutor):
                 error=message,
                 effort=effort,
                 failure=TransportStall(message, kind="watchdog"),
+                text=snapshot.text if snapshot is not None else "",
+                events=_stream_error_events(snapshot) if snapshot is not None else (),
+                thought=snapshot.thought if snapshot is not None else None,
+                stop_reason=snapshot.stop_reason if snapshot is not None else None,
+                usage=_partial_usage(snapshot, timeout=True) if snapshot is not None else None,
+                metadata=_stream_error_metadata(snapshot, fallback="timeout") if streamed else None,
             )
         if kind == "protocol":
             message = f"ProtocolError:{found}"
@@ -387,11 +334,20 @@ class OpenAIHTTPExecutor(BaseExecutor):
                 effort=effort,
                 failure=ProtocolError(message, kind=str(found or "bad_json")),
                 repeatable=False,
+                text=snapshot.text if snapshot is not None else "",
+                events=_stream_error_events(snapshot) if snapshot is not None else (),
+                thought=snapshot.thought if snapshot is not None else None,
+                stop_reason=snapshot.stop_reason if snapshot is not None else None,
+                usage=_partial_usage(snapshot, timeout=False) if snapshot is not None else None,
+                metadata=_stream_error_metadata(snapshot, fallback="parse") if streamed else None,
             )
         if kind == "http":
             assert isinstance(found, dict)
             code = int(found["http_code"])
             meta: dict[str, Any] = {"http_error_body": found.get("http_body")}
+            if streamed:
+                meta["answer_complete"] = False
+                meta["error_origin"] = "http"
             if http_status_is_config_error(code):
                 # The gateway rejected the request itself; resending cannot help.
                 meta["error_kind"] = ModelConfigError.kind
@@ -414,25 +370,67 @@ class OpenAIHTTPExecutor(BaseExecutor):
             )
         if kind == "transport":
             message = str(found)
+            timeout_kind = (
+                str(found)
+                if str(found) in {"stream_first_event_timeout", "stream_idle_timeout"}
+                else "transport"
+            )
             return self._result(
                 ok=False,
                 error=message,
                 effort=effort,
-                failure=TransportStall(message, kind="transport"),
+                failure=TransportStall(message, kind=timeout_kind),
+                text=snapshot.text if snapshot is not None else "",
+                events=_stream_error_events(snapshot) if snapshot is not None else (),
+                thought=snapshot.thought if snapshot is not None else None,
+                stop_reason=snapshot.stop_reason if snapshot is not None else None,
+                usage=_partial_usage(snapshot, timeout=True) if snapshot is not None else None,
+                metadata=_stream_error_metadata(
+                    snapshot,
+                    fallback="timeout"
+                    if timeout_kind in {"stream_first_event_timeout", "stream_idle_timeout"}
+                    else "transport",
+                )
+                if streamed
+                else None,
             )
         raw = found if isinstance(found, dict) else {}
         if responses:
-            text, thought, tool_calls = _responses_text_and_calls(raw)
+            text, thought, tool_calls = responses_text_and_calls(raw)
         else:
-            text, thought, tool_calls = _chat_text_and_calls(raw)
+            text, thought, tool_calls = chat_text_and_calls(raw)
+        stop_reason = _stream_stop_reason(raw, responses) if streamed else None
+        if streamed and not (text or "").strip() and not tool_calls:
+            return self._result(
+                ok=False,
+                error="ProtocolError:stream_empty_answer",
+                effort=effort,
+                failure=ProtocolError(
+                    "ProtocolError:stream_empty_answer", kind="stream_empty_answer"
+                ),
+                repeatable=False,
+                text=snapshot.text if snapshot is not None else "",
+                events=_stream_error_events(snapshot) if snapshot is not None else (),
+                thought=snapshot.thought if snapshot is not None else None,
+                stop_reason=stop_reason,
+                usage=_partial_usage(snapshot, timeout=False) if snapshot is not None else None,
+                metadata=_stream_error_metadata(snapshot, fallback="parse") if streamed else None,
+            )
         structured = _json_object(text)
-        events = _events(thought, tool_calls)
+        if streamed:
+            events = list(snapshot.events) if snapshot is not None else []
+            events.extend(_events("", tool_calls))
+        else:
+            events = _events(thought, tool_calls)
         if collect_dir:
             _write_exchange(collect_dir, payload, raw)
         usage, usage_extra = normalize_openai_http_usage(
             raw.get("usage") if isinstance(raw, dict) else None,
             response_id=raw.get("id") if isinstance(raw, dict) else None,
         )
+        meta_extra: dict[str, object] | None = None
+        if streamed:
+            meta_extra = {"stop_reason": stop_reason, "answer_complete": True}
         return self._seal_activity(
             AgentResult(
                 model=self.model,
@@ -444,8 +442,10 @@ class OpenAIHTTPExecutor(BaseExecutor):
                 tool_calls=tool_calls,
                 usage=adopt_usage(usage),
                 extra=usage_extra,
-                metadata=self._meta(effort, actual=effort),
-            )
+                metadata=self._meta(effort, actual=effort, extra=meta_extra),
+            ),
+            thought=thought or None,
+            stop_reason=stop_reason,
         )
 
     def _payload(
@@ -475,17 +475,16 @@ class OpenAIHTTPExecutor(BaseExecutor):
         # The HTTP clock is ``http_timeout``. The JSON body does not repeat it.
         wire.pop("timeout", None)
         payload.update(wire)
+        if self.options.stream:
+            payload["stream"] = True
+            if not responses:
+                # Chat Completions reports final usage on the stream.
+                payload["stream_options"] = {"include_usage": True}
         del effort
         return payload
 
-    def _exchange(self, req: urllib.request.Request, *, timeout: float) -> tuple[str, Any]:
-        """POST under the HTTP clock and the watchdog.
-
-        The watchdog is the abort ceiling unless this invoke's timeout is
-        shorter. Expiry is a repeatable transport error. HTTP and decode
-        failures stay on this thread's result, not a second stall path.
-        """
-        http_timeout = self.http_timeout
+    def _ceiling(self, timeout: float) -> tuple[float, bool]:
+        """Total exchange ceiling and whether the watchdog owns it."""
         join_for = self.watchdog
         try:
             invoke_cap = float(timeout)
@@ -495,6 +494,17 @@ class OpenAIHTTPExecutor(BaseExecutor):
         if invoke_cap > 0 and invoke_cap < self.watchdog:
             join_for = invoke_cap
             watchdog_ceiling = False
+        return join_for, watchdog_ceiling
+
+    def _exchange(self, req: urllib.request.Request, *, timeout: float) -> tuple[str, Any]:
+        """POST under the HTTP clock and the watchdog.
+
+        The watchdog is the abort ceiling unless this invoke's timeout is
+        shorter. Expiry is a repeatable transport error. HTTP and decode
+        failures stay on this thread's result, not a second stall path.
+        """
+        http_timeout = self.http_timeout
+        join_for, watchdog_ceiling = self._ceiling(timeout)
         box: dict[str, Any] = {}
 
         def _post() -> None:
@@ -533,6 +543,37 @@ class OpenAIHTTPExecutor(BaseExecutor):
             return "transport", box["transport"]
         return "ok", box.get("raw")
 
+    def _stream_exchange(
+        self,
+        req: urllib.request.Request,
+        *,
+        responses: bool,
+        timeout: float,
+        collect_dir: str | None,
+    ) -> Any:
+        """Consume one SSE turn under the outer clock. No reconnect or replay."""
+        total_timeout, watchdog_ceiling = self._ceiling(timeout)
+        writer = ModelTurnDeltaWriter(self, getattr(self, "_activity_step", None))
+        self._delta_writer = writer
+        consumer = ResponsesAssembler(writer) if responses else ChatAssembler(writer)
+        journal = StreamProgressJournal(collect_dir)
+        try:
+            return exchange_sse(
+                req,
+                consumer=consumer,
+                http_timeout=self.http_timeout,
+                total_timeout=total_timeout,
+                watchdog_ceiling=watchdog_ceiling,
+                cancel=self._invoke_cancel,
+                first_event_timeout=self.options.stream_first_event_timeout_seconds,
+                idle_timeout=self.options.stream_idle_timeout_seconds,
+                on_event=journal,
+            )
+        finally:
+            writer.flush()
+            journal.close()
+            self._delta_writer = None
+
     def _result(
         self,
         *,
@@ -542,32 +583,57 @@ class OpenAIHTTPExecutor(BaseExecutor):
         metadata: dict[str, Any] | None = None,
         repeatable: bool = True,
         failure: BaseException | None = None,
+        text: str = "",
+        events: Sequence[Mapping[str, Any]] = (),
+        thought: str | None = None,
+        stop_reason: str | None = None,
+        usage: Any = None,
     ) -> AgentResult:
+        if usage is None:
+            usage = LOST_ON_TIMEOUT if isinstance(failure, TransportStall) else NOT_REPORTED
+        extra = dict(metadata) if metadata else {}
+        if stop_reason is not None:
+            extra["stop_reason"] = stop_reason
         return self._seal_activity(
             AgentResult(
                 model=self.model,
-                text="",
+                text=text,
                 structured=None,
                 ok=ok,
                 error=error,
-                metadata=self._meta(effort, actual=None, extra=metadata),
+                events=tuple(dict(item) for item in events),
+                metadata=self._meta(effort, actual=None, extra=extra or None),
                 repeatable=repeatable,
                 failure=failure,
-                usage=LOST_ON_TIMEOUT if isinstance(failure, TransportStall) else NOT_REPORTED,
-            )
+                usage=usage,
+            ),
+            thought=thought,
+            stop_reason=stop_reason,
         )
 
-    def _seal_activity(self, result: AgentResult) -> AgentResult:
+    def _seal_activity(
+        self,
+        result: AgentResult,
+        *,
+        thought: str | None = None,
+        stop_reason: str | None = None,
+    ) -> AgentResult:
         step = getattr(self, "_activity_step", None)
         self._activity_step = None
-        return finish_model_turn(self, step if isinstance(step, int) else None, result)
+        return finish_model_turn(
+            self,
+            step if isinstance(step, int) else None,
+            result,
+            thought=thought,
+            stop_reason=stop_reason,
+        )
 
     def _meta(
         self,
         effort: str | None,
         *,
         actual: str | None,
-        extra: dict[str, Any] | None = None,
+        extra: Mapping[str, object] | None = None,
     ) -> dict[str, Any]:
         meta: dict[str, Any] = {
             "executor_kind": "openai-http",
@@ -575,32 +641,51 @@ class OpenAIHTTPExecutor(BaseExecutor):
             "locked_reasoning_effort": effort,
             "actual_reasoning_effort": actual,
         }
+        if self._stream_meta:
+            meta.update(self._stream_meta)
         if extra:
             meta.update(extra)
         return meta
 
 
-def _chat_text_and_calls(
-    raw: Mapping[str, Any],
-) -> tuple[str, str, tuple[dict[str, Any], ...]]:
-    message: Mapping[str, Any] = {}
-    try:
-        choice0 = raw["choices"][0]
-        found = choice0["message"]
-        if isinstance(found, Mapping):
-            message = found
-    except (KeyError, IndexError, TypeError):
-        message = {}
-    text = message.get("content") if isinstance(message.get("content"), str) else ""
-    if not text and not message:
-        text = json.dumps(raw)[:4000]
-    thought = ""
-    for key in ("reasoning_content", "reasoning"):
-        raw_thought = message.get(key)
-        if isinstance(raw_thought, str) and raw_thought.strip():
-            thought = raw_thought
-            break
-    return text or "", thought, _parse_tool_calls(message.get("tool_calls"))
+def _stream_error_metadata(snapshot: Any, *, fallback: str) -> dict[str, object]:
+    details = (
+        dict(snapshot.error_details) if snapshot is not None and snapshot.error_details else None
+    )
+    origin = fallback
+    if details is not None:
+        raw_origin = details.get("origin")
+        if isinstance(raw_origin, str) and raw_origin:
+            origin = raw_origin
+    meta: dict[str, object] = {"answer_complete": False, "error_origin": origin}
+    if details is not None:
+        meta["stream_error"] = details
+    return meta
+
+
+def _stream_error_events(snapshot: Any) -> tuple[Mapping[str, Any], ...]:
+    events = [dict(item) for item in snapshot.events]
+    events.extend(_events("", snapshot.tool_calls))
+    return tuple(events)
+
+
+def _partial_usage(snapshot: Any, *, timeout: bool) -> Any:
+    usage, _extra = normalize_openai_http_usage(snapshot.usage)
+    return adopt_usage(usage, timeout=timeout, partial=not timeout and usage is not None)
+
+
+def _stream_stop_reason(raw: Mapping[str, Any], responses: bool) -> str:
+    if responses:
+        status = raw.get("status")
+        return status if isinstance(status, str) and status else "completed"
+    choices = raw.get("choices")
+    if isinstance(choices, Sequence) and not isinstance(choices, (str, bytes)) and choices:
+        first = choices[0]
+        if isinstance(first, Mapping):
+            reason = first.get("finish_reason")
+            if isinstance(reason, str) and reason:
+                return reason
+    return "stop"
 
 
 def _json_object(text: str) -> dict[str, Any] | None:
