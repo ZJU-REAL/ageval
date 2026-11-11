@@ -25,6 +25,16 @@ _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
 
 _REDACTED = "[REDACTED:secret]"
 
+# Keep credential introductions with the unfinished value that follows them.
+# The final non-whitespace token is retained separately, including URL/path
+# credentials and a secret whose prefix has not reached its minimum length yet.
+_STREAM_CONTEXT = re.compile(
+    r"(?i)(?:authorization\s*:?\s*|authorization\s*:\s*"
+    r"(?:[a-z]*|bearer\s+\S*)|bearer(?:\s+[A-Za-z0-9\-._~+/=]*)?|"
+    r"(?:api[_-]?key|secret|token|password|passwd|credential|cookie)"
+    r"\s*(?:[:=]\s*\S*)?)$"
+)
+
 
 class RedactionError(Exception):
     """Raised when residual secret content is found after redaction (fail closed)."""
@@ -44,6 +54,46 @@ def redact_text(text: str, *, extra_sentinels: Iterable[str] = ()) -> str:
     for pat in _SECRET_PATTERNS:
         out = pat.sub(_REDACTED, out)
     return out
+
+
+class IncrementalTextRedactor:
+    """Release redacted text only after its credential context is complete.
+
+    A socket read, flush timer, or output chunk boundary is not a redaction
+    boundary. Retain the unfinished token, credential introduction, and any
+    explicit sentinel prefix until more text or the terminal flush arrives.
+    """
+
+    def __init__(self, *, extra_sentinels: Iterable[str] = ()) -> None:
+        self._sentinels = tuple(s for s in extra_sentinels if s)
+        self._pending = ""
+
+    def feed(self, text: str, *, final: bool = False) -> str:
+        self._pending += text
+        if final:
+            value, self._pending = self._pending, ""
+            return redact_text(value, extra_sentinels=self._sentinels)
+        boundary = re.search(r"\s+(?=\S*$)", self._pending)
+        cut = boundary.end() if boundary is not None else 0
+        context = _STREAM_CONTEXT.search(self._pending)
+        if context is not None:
+            cut = min(cut, context.start())
+        for sentinel in self._sentinels:
+            for length in range(min(len(sentinel) - 1, len(self._pending)), 0, -1):
+                if self._pending.endswith(sentinel[:length]):
+                    cut = min(cut, len(self._pending) - length)
+                    break
+            start = self._pending.find(sentinel)
+            while start >= 0:
+                if start < cut < start + len(sentinel):
+                    cut = start
+                start = self._pending.find(sentinel, start + len(sentinel))
+        for pattern in _SECRET_PATTERNS:
+            for match in pattern.finditer(self._pending):
+                if match.start() < cut < match.end():
+                    cut = match.start()
+        value, self._pending = self._pending[:cut], self._pending[cut:]
+        return redact_text(value, extra_sentinels=self._sentinels)
 
 
 def redact_value(value: Any, *, extra_sentinels: Iterable[str] = ()) -> Any:
