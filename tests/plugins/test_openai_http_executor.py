@@ -517,6 +517,11 @@ def test_cancel_stops_the_local_wait(monkeypatch: pytest.MonkeyPatch) -> None:
             time.sleep(30)
             return self
 
+        def read(self, *_args: object) -> bytes:
+            # The worker wakes after the main thread already returned. Raise a
+            # transport error instead of leaking an AttributeError warning.
+            raise TimeoutError("hung")
+
         def __exit__(self, *_args: object) -> bool:
             return False
 
