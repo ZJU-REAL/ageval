@@ -19,8 +19,6 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
-from acp.exceptions import RequestError
-
 from ageval import __version__ as AGEVAL_VERSION
 from ageval.environments.protocol import Placement, StdioTransport
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
@@ -567,6 +565,7 @@ class AcpExecutor(BaseExecutor):
     async def _await_prompt(self, prompt: str) -> Any:
         """Wait for ``session/prompt``. Optional idle stall is ACP-local."""
         import acp
+        from acp.exceptions import RequestError
 
         assert self._conn is not None
         prompt_coro = self._conn.prompt(
@@ -929,6 +928,8 @@ class AcpExecutor(BaseExecutor):
 
     async def _shutdown(self) -> None:
         """End the ACP session and leave no task behind on the private loop."""
+        from acp.exceptions import RequestError
+
         if self._conn is not None and self._acp_session_id is not None:
             with contextlib_suppress(RequestError, OSError, RuntimeError, ValueError, TypeError):
                 await self._conn.close_session(session_id=self._acp_session_id)
