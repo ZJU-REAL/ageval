@@ -15,6 +15,8 @@ ageval run <dataset> --task <id> --probe
 ageval run <dataset>                         # 整份 dataset
 ageval run official/demo@0.1.0 --dir tmp --task <id>
 ageval run <dataset> --max-concurrent-tasks 2
+ageval run <dataset> --max-tasks 5
+ageval run <dataset> --resume-suite <suite_run_id> --max-tasks 5
 ageval run <dataset> -k 5                    # Always-k（每题 k 次）
 ageval run <dataset> --task <id> --resume <attempt_id>
 ageval checkpoints <dataset> --run <attempt_id>
@@ -67,6 +69,7 @@ ageval results revoke-snapshot <token-or-url>
 | `--layout harbor` | 直接读未改过的 Harbor 任务目录，或一叠任务目录的父目录。省略则仍是 ageval 包。单个 Harbor 任务不能再写 `--task`。`registry.json` 索引会被拒绝 |
 | `--oracle` | 仅配合 `--layout harbor`：跑 `solution/solve.sh`，不再调用 Agent。省略时不使用 `solution/` |
 | `--max-concurrent-tasks N` | 并行上限；**只加速**，不改 k / PASS |
+| `--max-tasks N` | 按计划顺序最多执行 N 个符合条件的不同任务（整数 ≥ 1）。续跑先跳过已结算槽位，选中任务执行全部剩余 Always-k 槽位。未调度任务没有结果或取消占位。只属于 CLI / job，不进入配置指纹或 Dataset defaults；与 `--replace-slot` 互斥。省略时执行全部符合条件的任务 |
 | `--n-attempts` / `-k N` | Always-k：每题 N 次独立运行（默认 1）；只写在 CLI / job 上 |
 | `--resume <attempt_id>` | 原地继续这一次尚未封存的 Attempt。必须配一个 `--task`。`result.json` 已存在、锁定摘要不一致、或环境仍在跑这次 Attempt 时 exit 2，不写 `result.json` |
 | `--resume-suite <suite_run_id>` | 继续已有 suite：跳过已以 PASS / FAIL / ERROR 结束的槽位。活动日志与本次 suite、task、attempt index 匹配的未结束槽位原地继续；没有匹配日志则新开一次 Attempt。重算 pass@k / pass^k |

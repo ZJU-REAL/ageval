@@ -133,6 +133,17 @@ def register(app: typer.Typer) -> None:
                 ),
             ),
         ] = None,
+        max_tasks: Annotated[
+            int | None,
+            typer.Option(
+                "--max-tasks",
+                help=(
+                    "Run at most N distinct unfinished tasks in plan order (integer ≥1). "
+                    "Each task keeps its remaining Always-k slots. CLI/job only; "
+                    "omitting runs all eligible tasks. Cannot combine with --replace-slot."
+                ),
+            ),
+        ] = None,
         n_attempts: Annotated[
             int | None,
             typer.Option(
@@ -381,6 +392,14 @@ def register(app: typer.Typer) -> None:
                 typer.echo(str(exc), err=True)
                 raise typer.Exit(code=2) from exc
         task_values = [item.strip() for item in (task or []) if str(item).strip()]
+        _suite = build_suite_runner()
+        from ageval.config.errors import ConfigError
+
+        try:
+            _suite.validate_task_budget(max_tasks, replace_slot=replace_slot)
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
         if probe:
             from ageval.config.errors import ConfigError
             from ageval.config.harbor_layout import task_for_probe
@@ -398,7 +417,6 @@ def register(app: typer.Typer) -> None:
                 set_overrides,
                 layout=layout,
             )
-        _suite = build_suite_runner()
         execute_suite_run = _suite.execute_suite_run
         plan_suite_run = _suite.plan_suite_run
         from ageval.config.errors import ConfigError
@@ -494,6 +512,7 @@ def register(app: typer.Typer) -> None:
                 package,
                 task_ids=task_values,
                 max_concurrent_tasks=max_concurrent_tasks,
+                max_tasks=max_tasks,
                 n_attempts=k,
                 suite_run_id=resume_id,
                 layout=chosen_layout,
@@ -565,6 +584,7 @@ def register(app: typer.Typer) -> None:
                     "n_attempts": plan.n_attempts,
                     "task_ids": list(plan.task_ids),
                     "max_concurrent_tasks": plan.max_concurrent_tasks,
+                    "max_tasks": plan.max_tasks,
                 },
             )
 
@@ -610,6 +630,7 @@ def register(app: typer.Typer) -> None:
                     "summary_path": suite_summary.get("summary_path"),
                     "n_attempts": plan.n_attempts,
                     "cancelled": bool(suite_summary.get("cancelled")),
+                    "max_tasks": plan.max_tasks,
                 },
             )
             if result_file is not None:
