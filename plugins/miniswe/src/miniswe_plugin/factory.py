@@ -253,7 +253,7 @@ class MinisweExecutorSPI(BaseExecutor):
                 metadata={"plugin": PLUGIN_ID},
             )
         try:
-            extra = self._run_agent(prompt, timeout=timeout)
+            extra = self._run_agent(prompt, timeout=timeout, collect_dir=collect_dir)
         except StallExhausted as exc:
             return AgentResult(
                 model=self.model,
@@ -357,7 +357,13 @@ class MinisweExecutorSPI(BaseExecutor):
         model_kwargs["extra_headers"] = headers
         return model_kwargs
 
-    def _run_agent(self, prompt: str, *, timeout: float) -> dict[str, Any]:
+    def _run_agent(
+        self,
+        prompt: str,
+        *,
+        timeout: float,
+        collect_dir: str | None = None,
+    ) -> dict[str, Any]:
         key = resolve_api_key_value(self.api_key_env)
         base = resolve_base_url(self.base_url)
         if not key and not is_http_loopback(base):
@@ -423,6 +429,7 @@ class MinisweExecutorSPI(BaseExecutor):
                 api_base=base,
                 timeout=self.timeout,
                 stream=self.stream,
+                sse_dump_dir=collect_dir,
             )
         env = self._make_env()
         system_template = str(agent_cfg.get("system_template") or "")
