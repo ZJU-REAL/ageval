@@ -32,6 +32,33 @@ if _PLUGIN_ROOT.is_dir() and str(_PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(_PLUGIN_ROOT))
 
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+_CONFIG_EXCEPTION_NAMES = frozenset(
+    {
+        "AuthenticationError",
+        "BadRequestError",
+        "LLMAuthenticationError",
+        "LLMBadRequestError",
+        "NotFoundError",
+        "PermissionDeniedError",
+        "UnprocessableEntityError",
+    }
+)
+_TRANSPORT_EXCEPTION_NAMES = frozenset(
+    {
+        "APIConnectionError",
+        "APITimeoutError",
+        "ConnectionError",
+        "InternalServerError",
+        "LLMRateLimitError",
+        "LLMServiceUnavailableError",
+        "LLMTimeoutError",
+        "RateLimitError",
+        "ServiceUnavailableError",
+        "Timeout",
+        "TimeoutError",
+        "URLError",
+    }
+)
 
 
 def _is_http_loopback(url: str | None) -> bool:
@@ -48,6 +75,54 @@ def _is_http_loopback(url: str | None) -> bool:
         parsed = urlparse(text if "://" in text else f"http://{text}")
         host = (parsed.hostname or "").lower()
         return host in _LOOPBACK_HOSTS
+
+
+def _status_code(exc: BaseException) -> int | None:
+    for owner in (exc, getattr(exc, "response", None)):
+        for name in ("status_code", "status"):
+            value = getattr(owner, name, None)
+            if isinstance(value, int) and not isinstance(value, bool) and 100 <= value < 600:
+                return value
+    return None
+
+
+def _exception_chain(exc: BaseException) -> list[BaseException]:
+    chain: list[BaseException] = []
+    current: BaseException | None = exc
+    while current is not None and current not in chain and len(chain) < 6:
+        chain.append(current)
+        current = (
+            getattr(current, "original_exception", None) or current.__cause__ or current.__context__
+        )
+    return chain
+
+
+def _failure_from_exception(exc: BaseException) -> dict[str, str] | None:
+    for item in _exception_chain(exc):
+        name = type(item).__name__
+        message = str(item).strip()
+        if message.startswith("nooa_missing_credential"):
+            return {"kind": "ModelConfigError", "detail": message[:500]}
+        if name == "StallExhausted":
+            return {"kind": "StallExhausted", "detail": f"{name}:{item}"[:500]}
+        if name == "ModelConfigError":
+            return {"kind": "ModelConfigError", "detail": f"{name}:{item}"[:500]}
+        if name == "TransportStall":
+            return {"kind": "TransportStall", "detail": f"{name}:{item}"[:500]}
+        status = _status_code(item)
+        if status is not None:
+            if 400 <= status < 500 and status not in {408, 429}:
+                kind = "ModelConfigError"
+            elif status in {408, 429} or 500 <= status < 600:
+                kind = "TransportStall"
+            else:
+                continue
+            return {"kind": kind, "detail": f"{name}:{item}"[:500]}
+        if name in _CONFIG_EXCEPTION_NAMES:
+            return {"kind": "ModelConfigError", "detail": f"{name}:{item}"[:500]}
+        if name in _TRANSPORT_EXCEPTION_NAMES:
+            return {"kind": "TransportStall", "detail": f"{name}:{item}"[:500]}
+    return None
 
 
 def _load_agent_class(agent_ref: str, package_root: Path) -> Any:
@@ -336,24 +411,23 @@ def main() -> int:
             out["metadata"] = md
         print(json.dumps(out, ensure_ascii=False, default=str))
         return 0 if out.get("ok") else 1
-    except Exception as exc:  # noqa: BLE001
-        print(
-            json.dumps(
-                {
-                    "model": model,
-                    "text": "",
-                    "structured": None,
-                    "ok": False,
-                    "error": f"{type(exc).__name__}:{exc}",
-                    "metadata": {
-                        "plugin": "nooa",
-                        "agent": agent_ref,
-                        "execution_location": "attempt-container",
-                    },
-                },
-                ensure_ascii=False,
-            )
-        )
+    except Exception as exc:  # noqa: BLE001 — worker boundary records the failure
+        payload: dict[str, object] = {
+            "model": model,
+            "text": "",
+            "structured": None,
+            "ok": False,
+            "error": f"{type(exc).__name__}:{exc}",
+            "metadata": {
+                "plugin": "nooa",
+                "agent": agent_ref,
+                "execution_location": "attempt-container",
+            },
+        }
+        failure = _failure_from_exception(exc)
+        if failure is not None:
+            payload["fatal_invoke"] = failure
+        print(json.dumps(payload, ensure_ascii=False))
         return 1
 
 

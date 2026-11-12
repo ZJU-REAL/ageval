@@ -74,7 +74,7 @@ ageval run <org>/<name>@<version> --task <task-id>
 ageval executors -v
 ageval view <org>/<name>@<version> --no-browser
 
-# continue one Attempt that stopped before result.json
+# continue one Attempt that stopped before result.json, or a fatal Agent invoke ERROR
 ageval run <dataset> --task <id> --resume <attempt_id>
 # a suite recovers an unfinished slot in place
 ageval run <dataset> --resume-suite <suite_run_id>
@@ -133,7 +133,7 @@ With the CLI and skills installed, a coding agent can author or convert a datase
 
 **Resume a long-running Attempt from the last completed step**
 
-ageval appends each step to an activity log and checkpoints the workspace and agent home before that step's effect settles. An Attempt that never wrote `result.json` continues in place with `--resume`, or inside a suite with `--resume-suite`. A settled Attempt stays immutable. `--keep-recovery-state` keeps its activity log, checkpoints, and `replay-input.json` so `ageval run --fork` can start a new Attempt from one cut, under another model, with the source harness, and `ageval replay` can execute the recorded terminal actions again.
+ageval appends each step to an activity log and checkpoints the workspace and agent home before that step's effect settles. An Attempt that never wrote `result.json` continues in place with `--resume`, or inside a suite with `--resume-suite`. A run-phase billing, auth, or unrecovered transport failure seals as `ERROR` (`agent_invoke_failed`) without running `evaluator.py`; its recovery bundle stays, and an explicit resume rewrites that result in the same Attempt. Other settled Attempts stay immutable. `--keep-recovery-state` keeps the activity log, checkpoints, and `replay-input.json` after an ordinary settlement so `ageval run --fork` can start a new Attempt from one cut, under another model, with the source harness, and `ageval replay` can execute the recorded terminal actions again.
 
 **Isolated phase boundary and flexible grading**
 
@@ -218,15 +218,15 @@ sequenceDiagram
 
 A long task spends many model and tool turns inside one Attempt. If the parent process is killed before `result.json` is written, those completed turns and the workspace are still on disk. ageval appends every step to `.ageval/runs/<attempt_id>/activity.jsonl` and stores a checkpoint of `/attempt/workspace` and `/attempt/home` when the step settles.
 
-`--resume` continues that Attempt when `result.json` is absent and the locked configuration digest still matches. `--resume-suite` does the same for an unfinished suite slot, and still skips slots that already settled as `PASS`, `FAIL`, or `ERROR`. If the environment is still running the Attempt, the command exits without writing `result.json`.
+`--resume` continues that Attempt when `result.json` is absent and the locked configuration digest still matches. It also continues a sealed `agent_invoke_failed` ERROR whose recovery bundle was retained; `evaluate` did not run for that error, and the retry restarts the failed invoke from its beginning. `--resume-suite` does the same for an unfinished suite slot and a recoverable invoke ERROR, while still skipping slots that settled as `PASS`, `FAIL`, or another `ERROR`. If the environment is still running the Attempt, the command exits without writing `result.json`.
 
-A live environment that still matches the last completed step is reused. A lost environment is started again and restored from the latest checkpoint. `openai-http`, `anthropic-http`, `miniswe`, and `terminus-2` rebuild the next model context from the activity log. `acp`, OpenHands, and dsh resume the session stored under the attempt home. `nooa` has no native session and continues from the logged transcript. Calls that already completed are not executed again, and the wall-clock time and invocation count already spent stay charged. A settled Attempt is immutable: `--retry-errors` and `--replace-slot` allocate a new Attempt.
+A live environment that still matches the last completed step is reused. A lost environment is started again and restored from the latest checkpoint. `openai-http`, `anthropic-http`, `miniswe`, and `terminus-2` rebuild the next model context from the activity log. `acp`, OpenHands, and dsh resume the session stored under the attempt home. `nooa` has no native session and continues from the logged transcript. Calls that already completed are not executed again, and the wall-clock time already spent stays charged. A fatal invoke does not permanently consume `agent_invocations`; its retry occupies one logical slot, so repeated failed resumes do not exhaust the quota. Other settled Attempts are immutable. `--retry-errors` continues an `agent_invoke_failed` ERROR in the same Attempt and allocates a new Attempt for every other ERROR; `--replace-slot` always allocates a new Attempt. Same-Attempt continuation overwrites the current result and suite row without adding a sample or `previous[]` entry.
 
 `--keep-recovery-state` keeps `activity.jsonl`, `checkpoints/`, and `replay-input.json` after `result.json` and `trajectory.jsonl` exist. `ageval checkpoints` lists those cuts. `ageval run --fork --checkpoint --model` starts a new Attempt from one completed run-phase cut, on a fresh environment, with the source harness and a new solver model. `ageval replay` re-executes the retained terminal actions in another fresh environment and does not call the solver model. `--evaluate` grades the new artifacts. The parent Attempt stays sealed. Default pass@k skips both the fork child and the replay child.
 
 ### Core base
 
-ageval Core coordinates a fixed pipeline: `lock → environment → run → evaluate → record`, with resource `cleanup` in `finally`. During `ageval lock`, Core binds the environment plugin and per-role executor plugins and validates their contracts. At runtime, Core enforces `limits` (wall-clock timeouts, invocation quotas, and concurrency caps) prior to execution and archives structured evidence (`lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, and `task-artifacts/`). An Attempt that has not settled also keeps `activity.jsonl` and `checkpoints/` so `--resume` can continue it. After settlement, `--keep-recovery-state` keeps that bundle so a later `--fork` or `ageval replay` can read it.
+ageval Core coordinates a fixed pipeline: `lock → environment → run → evaluate → record`, with resource `cleanup` in `finally`. A fatal Agent invoke ends `run` as `ERROR` and skips `evaluate`, so provider failures are not scored as capability `FAIL`. During `ageval lock`, Core binds the environment plugin and per-role executor plugins and validates their contracts. At runtime, Core enforces `limits` (wall-clock timeouts, invocation quotas, and concurrency caps) prior to execution and archives structured evidence (`lock.json`, `result.json`, `trajectory.jsonl`, `summary.json`, and `task-artifacts/`). An Attempt that has not settled also keeps `activity.jsonl` and `checkpoints/` so `--resume` can continue it; a recoverable `agent_invoke_failed` ERROR keeps them for the same reason. After an ordinary settlement, `--keep-recovery-state` keeps that bundle so a later `--fork` or `ageval replay` can read it.
 
 <p align="center">
   <img src="docs/assets/core-base.png" alt="ageval Core base overview" width="100%">

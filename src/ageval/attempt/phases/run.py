@@ -14,6 +14,7 @@ from ageval.attempt.artifact_harvest import harvest_workspace_artifacts
 from ageval.attempt.ctx import AttemptCtx
 from ageval.attempt.emit import emit
 from ageval.evaluation.error_record import RecordedError, message_from_envelope
+from ageval.model.errors import FATAL_INVOKE_TITLE
 from ageval.plugins.slots import AFTER_RUN, BEFORE_RUN
 
 PHASE = "run"
@@ -43,6 +44,7 @@ async def run(ctx: AttemptCtx) -> None:
             # A limit already enforced ends the phase without phase_failed.
             # The worker exception stays on the task_run fact; evaluate still runs.
             if ctx.limit_name() is None:
+                _raise_fatal_invoke(ctx)
                 raise
             outcome = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
         if not isinstance(outcome, dict):
@@ -50,9 +52,11 @@ async def run(ctx: AttemptCtx) -> None:
         if outcome.get("error") == _RUN_WORKER_TIMEOUT:
             ctx.note_limit_reached("wall_time_seconds")
         ctx.record_fact("task_run", outcome)
-        if outcome.get("ok") is not True and ctx.limit_name() is None:
-            title = str(outcome.get("error") or "task_run_failed")
-            raise RecordedError(title, message_from_envelope(outcome))
+        if ctx.limit_name() is None:
+            _raise_fatal_invoke(ctx)
+            if outcome.get("ok") is not True:
+                title = str(outcome.get("error") or "task_run_failed")
+                raise RecordedError(title, message_from_envelope(outcome))
     finally:
         if ctx.agent_service is not None:
             await _seal_run_agent_service(ctx)
@@ -93,6 +97,15 @@ def _raise_fatal_recovery(ctx: AttemptCtx) -> None:
     if not isinstance(fatal, str) or not fatal:
         return
     raise RecordedError(fatal, fatal)
+
+
+def _raise_fatal_invoke(ctx: AttemptCtx) -> None:
+    service = ctx.agent_service
+    parent = getattr(service, "service", None) if service is not None else None
+    marker = getattr(parent, "fatal_invoke", None)
+    if isinstance(marker, tuple) and len(marker) == 2 and isinstance(marker[0], str) and marker[0]:
+        detail = marker[1] if isinstance(marker[1], str) and marker[1] else marker[0]
+        raise RecordedError(FATAL_INVOKE_TITLE, detail)
 
 
 async def _run_task_entry(ctx: AttemptCtx) -> dict[str, object]:

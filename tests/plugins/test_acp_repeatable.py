@@ -12,7 +12,7 @@ import pytest
 from tests.helpers.box import local_box
 
 from ageval.environments.protocol import Placement
-from ageval.model.errors import TransportStall
+from ageval.model.errors import ModelConfigError, TransportStall
 from ageval.plugins.contrib.acp.client import _AgevalAcpClient
 from ageval.plugins.contrib.acp.executor import AcpExecutor
 from ageval.runtime.parent_agent import _result_repeatable
@@ -188,6 +188,27 @@ def test_session_ensure_failure_stays_repeatable(monkeypatch: pytest.MonkeyPatch
     assert _result_repeatable(result) is True
 
 
+@pytest.mark.parametrize(
+    "error",
+    [
+        "acp_auth_required",
+        "acp_model_unavailable",
+        "acp_reasoning_effort_unavailable",
+    ],
+)
+def test_model_config_failure_is_typed_before_evaluate(
+    monkeypatch: pytest.MonkeyPatch, error: str
+) -> None:
+    ex = _executor()
+    monkeypatch.setattr(ex, "_ensure_session", lambda **_k: error)
+    monkeypatch.delenv("AGEVAL_OFFLINE_AGENT", raising=False)
+    result = ex.invoke("hi", timeout=1)
+    assert result.ok is False
+    assert result.error == error
+    assert isinstance(result.failure, ModelConfigError)
+    assert _result_repeatable(result) is False
+
+
 def test_timeout_before_a_tool_is_a_transport_stall(monkeypatch: pytest.MonkeyPatch) -> None:
     ex = _executor()
     client = _AgevalAcpClient()
@@ -243,6 +264,27 @@ class _RaiseEof:
 
     async def cancel(self, **kwargs: object) -> None:
         del kwargs
+
+
+class _RaiseAuth:
+    async def prompt(self, **kwargs: object) -> SimpleNamespace:
+        del kwargs
+        raise RuntimeError("Authentication required")
+
+
+def test_prompt_auth_failure_is_a_model_config_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ex = _executor()
+    ex._client = _AgevalAcpClient()
+    ex._acp_session_id = "s1"
+    ex._conn = _RaiseAuth()
+    monkeypatch.setattr(ex, "_ensure_session", lambda **_k: None)
+    monkeypatch.delenv("AGEVAL_OFFLINE_AGENT", raising=False)
+    result = ex.invoke("hi", timeout=5)
+    assert result.error == "acp_auth_required"
+    assert isinstance(result.failure, ModelConfigError)
+    assert _result_repeatable(result) is False
 
 
 def test_unexpected_eof_before_a_tool_is_a_transport_stall(

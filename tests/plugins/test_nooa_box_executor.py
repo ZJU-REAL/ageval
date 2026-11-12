@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -59,6 +61,62 @@ class SpyHost:
         env = kwargs.get("env")
         self.commands.append((list(command), dict(env) if env else None))
         return await self._inner.exec(command, **kwargs)
+
+
+def _load_worker() -> Any:
+    path = ROOT / "plugins" / "nooa" / "worker" / "ageval_executor_nooa.py"
+    spec = importlib.util.spec_from_file_location("ageval_executor_nooa_under_test", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_worker_classifies_provider_status_codes() -> None:
+    worker = _load_worker()
+
+    class ProviderFailure(Exception):
+        def __init__(self, status_code: int) -> None:
+            super().__init__("provider rejected the request")
+            self.status_code = status_code
+
+    assert worker._failure_from_exception(ProviderFailure(403))["kind"] == "ModelConfigError"
+    assert worker._failure_from_exception(ProviderFailure(429))["kind"] == "TransportStall"
+    assert worker._failure_from_exception(ProviderFailure(503))["kind"] == "TransportStall"
+    assert worker._failure_from_exception(RuntimeError("nooa_missing_credential")) == {
+        "kind": "ModelConfigError",
+        "detail": "nooa_missing_credential",
+    }
+
+
+def test_fatal_worker_marker_survives_container_boundary() -> None:
+    from ageval.model.errors import ModelConfigError
+
+    host = local_box("/nowhere")
+    executor = build_executor(
+        host=host,
+        placement=host.placement(),
+        options={"agent": "lib.agents:FixedAnswerAgent"},
+    )
+    payload = {
+        "model": "openai/gpt-4.1-mini",
+        "text": "",
+        "structured": None,
+        "ok": False,
+        "error": "AuthenticationError:denied",
+        "fatal_invoke": {
+            "kind": "ModelConfigError",
+            "detail": "AuthenticationError:denied",
+        },
+        "metadata": {"plugin": "nooa", "execution_location": "attempt-container"},
+    }
+    result = executor._box._result_from(
+        SimpleNamespace(stdout=json.dumps(payload), stderr="", exit_code=1),
+        collect_dir=None,
+    )
+    assert result.ok is False
+    assert isinstance(result.failure, ModelConfigError)
+    assert result.error == "ModelConfigError:AuthenticationError:denied"
 
 
 def test_manifest_injects_environment_exec_and_upload() -> None:

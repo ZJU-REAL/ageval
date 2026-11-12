@@ -19,6 +19,7 @@ from ageval.attempt.recover import (
     bind_sentinels,
     capture_box,
     classify_environment,
+    find_recoverable_invoke_attempt,
     find_unsealed_attempt,
     load_activity,
     new_nonce,
@@ -34,6 +35,7 @@ from ageval.config.model import LockedTaskConfig, thaw
 from ageval.config.resources import resource_options
 from ageval.environments.protocol import BoxSpec
 from ageval.evaluation.bind import AttemptResult, bind_result
+from ageval.evidence.attempt_record import read_attempt_result
 from ageval.evidence.checkpoints import prune_recovery_bundle, prune_recovery_state
 from ageval.evidence.locators import default_runs_root
 from ageval.evidence.store import (
@@ -42,6 +44,7 @@ from ageval.evidence.store import (
     AttemptEvidenceStore,
 )
 from ageval.evidence.trajectory import TRAJECTORY_FILENAME
+from ageval.model.errors import is_recoverable_agent_invoke_result
 from ageval.plugins.binding import bind_winner
 from ageval.plugins.bootstrap import ensure_bootstrapped
 from ageval.plugins.image_layers import layers_for_graph
@@ -147,6 +150,7 @@ async def run_attempt(
     resume_attempt_id: str | None = None,
     suite_run_id: str | None = None,
     recover_unsealed: bool = False,
+    resume_recorded_invoke_error: bool = False,
     fork: Any = None,
     replay: Any = None,
 ) -> tuple[int, AttemptResult]:
@@ -250,6 +254,7 @@ async def run_attempt(
         resume_attempt_id=resume_attempt_id,
         suite_run_id=suite_run_id,
         recover_unsealed=recover_unsealed,
+        resume_recorded_invoke_error=resume_recorded_invoke_error,
     )
     if resumed.refused is not None:
         return resumed.refused
@@ -509,10 +514,15 @@ def _prune_settled_recovery(
     ).is_file()
     if not settled:
         return
-    if not keep_recovery_state:
+    if not keep_recovery_state and not _keeps_recoverable_invoke_bundle(attempt_dir):
         prune_recovery_bundle(attempt_dir)
     if not keep_workspace:
         prune_recovery_state(attempt_dir)
+
+
+def _keeps_recoverable_invoke_bundle(attempt_dir: Path) -> bool:
+    result = read_attempt_result(attempt_dir)
+    return result is not None and is_recoverable_agent_invoke_result(result)
 
 
 @dataclass
@@ -532,6 +542,7 @@ def _locate_resume(
     resume_attempt_id: str | None,
     suite_run_id: str | None,
     recover_unsealed: bool,
+    resume_recorded_invoke_error: bool = False,
 ) -> _ResumePlan:
     if resume_attempt_id:
         attempt_dir = default_runs_root(dataset_root) / resume_attempt_id
@@ -544,13 +555,23 @@ def _locate_resume(
                     message=f"no Attempt directory {resume_attempt_id}",
                 )
             )
-        if (attempt_dir / "result.json").is_file():
+        result = read_attempt_result(attempt_dir)
+        if result is not None and not is_recoverable_agent_invoke_result(result):
             return _ResumePlan(
                 refused=_refused_plain(
                     kind="local",
                     evidence_path=f".ageval/runs/{resume_attempt_id}",
                     title="attempt_already_settled",
                     message="result.json already exists",
+                )
+            )
+        if result is not None and not (attempt_dir / ACTIVITY_LOG_REL).is_file():
+            return _ResumePlan(
+                refused=_refused_plain(
+                    kind="local",
+                    evidence_path=f".ageval/runs/{resume_attempt_id}",
+                    title="activity_log_missing",
+                    message="result.json has no recovery activity",
                 )
             )
         activity = load_activity(attempt_dir)
@@ -591,6 +612,14 @@ def _locate_resume(
             attempt_index=attempt_index,
             digest=lock_digest,
         )
+        if found is None and resume_recorded_invoke_error:
+            found = find_recoverable_invoke_attempt(
+                dataset_root,
+                suite_run_id=suite_run_id,
+                task_id=task_id,
+                attempt_index=attempt_index,
+                digest=lock_digest,
+            )
         if found is None:
             return _ResumePlan()
         activity = load_activity(found)

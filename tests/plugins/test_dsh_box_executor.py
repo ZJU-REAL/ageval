@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -53,6 +54,98 @@ class SpyHost:
         env = kwargs.get("env")
         self.commands.append((list(command), dict(env) if env else None))
         return await self._inner.exec(command, **kwargs)
+
+
+def _load_worker() -> Any:
+    path = ROOT / "plugins" / "dsh" / "worker" / "ageval_executor_dsh.py"
+    spec = importlib.util.spec_from_file_location("ageval_executor_dsh_under_test", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_worker_reads_turn_end_and_finish_chunk_failures() -> None:
+    worker = _load_worker()
+    auth = worker._failure_from_events(
+        [
+            {
+                "type": "turn/end",
+                "data": {
+                    "reason": {
+                        "kind": "error",
+                        "error": {
+                            "message": "insufficient balance",
+                            "code": "AUTH",
+                            "status": 403,
+                        },
+                    }
+                },
+            }
+        ]
+    )
+    assert auth == {
+        "kind": "ModelConfigError",
+        "detail": "AUTH:403:insufficient balance",
+    }
+
+    rate_limit = worker._failure_from_events(
+        [
+            {
+                "type": "assistant/chunk",
+                "data": {
+                    "chunk": {
+                        "type": "finish",
+                        "reason": {
+                            "kind": "error",
+                            "failure": {"message": "slow down", "code": "RATE_LIMIT"},
+                        },
+                    }
+                },
+            }
+        ]
+    )
+    assert rate_limit == {
+        "kind": "TransportStall",
+        "detail": "RATE_LIMIT:slow down",
+    }
+    assert (
+        worker._failure_from_events(
+            [
+                {
+                    "type": "turn/end",
+                    "data": {"reason": {"kind": "completed"}},
+                }
+            ]
+        )
+        is None
+    )
+
+
+def test_fatal_worker_marker_survives_container_boundary() -> None:
+    from ageval.model.errors import TransportStall
+
+    host = local_box("/nowhere")
+    executor = build_executor(host=host, placement=host.placement())
+    payload = {
+        "model": "deepseek-v4-flash",
+        "text": "",
+        "structured": None,
+        "ok": False,
+        "error": "TransportStall:TIMEOUT:upstream timed out",
+        "fatal_invoke": {
+            "kind": "TransportStall",
+            "detail": "TIMEOUT:upstream timed out",
+        },
+        "metadata": {"plugin": "dsh", "execution_location": "attempt-container"},
+    }
+    result = executor._box._result_from(
+        SimpleNamespace(stdout=json.dumps(payload), stderr="", exit_code=1),
+        collect_dir=None,
+    )
+    assert result.ok is False
+    assert isinstance(result.failure, TransportStall)
+    assert result.error == "TransportStall:TIMEOUT:upstream timed out"
 
 
 def test_manifest_injects_environment_exec_and_upload() -> None:

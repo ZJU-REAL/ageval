@@ -11,11 +11,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from ageval.model import API_CHAT, API_RESPONSES, ModelConfigError, ModelSpec
+from ageval.model.errors import TransportStall, http_status_is_config_error
 from ageval.model.wire import chat_body, responses_body
 from ageval.runtime.clocks import ClockError, clock_seconds
 from ageval.runtime.upstream_stall import current_stall
 
-_CONFIG_STATUS = frozenset({400, 401, 403, 404, 422})
 _TOKEN_KEYS = (
     ("prompt_tokens", "input_tokens"),
     ("completion_tokens", "output_tokens"),
@@ -23,11 +23,11 @@ _TOKEN_KEYS = (
 )
 
 
-class TransportFailure(Exception):
+class TransportFailure(TransportStall):
     """Retryable model HTTP failure. The code is the stable name."""
 
     def __init__(self, code: str) -> None:
-        super().__init__(code)
+        super().__init__(code, kind="transport")
         self.code = code
 
 
@@ -207,7 +207,7 @@ def _post(
         raise TransportFailure("terminus2_watchdog")
     if "http_code" in box:
         code = int(box["http_code"])
-        if code in _CONFIG_STATUS:
+        if http_status_is_config_error(code):
             raise ModelConfigError(f"terminus2_http_{code}")
         raise TransportFailure(f"terminus2_http_{code}")
     if box.get("protocol"):

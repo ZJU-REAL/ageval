@@ -33,6 +33,7 @@ from ageval.plugins.slots import (
 )
 
 PHASE = "record"
+type TrajectoryRow = dict[str, object]
 
 
 async def run(ctx: AttemptCtx) -> None:
@@ -52,7 +53,13 @@ async def run(ctx: AttemptCtx) -> None:
 
     async def fold() -> None:
         nonlocal turns
-        turns = await _fold_invocations(ctx, ctx.evidence.list_invocations(), include_user=True)
+        invocations = ctx.evidence.list_invocations()
+        live = [path for path in invocations if (path / "metadata.json").is_file()]
+        turns = await _fold_invocations(ctx, live, include_user=True)
+        if len(live) < len(invocations):
+            sealed = sealed_display_turns(ctx)
+            if sealed:
+                turns = sealed + turns
         if not any(turns):
             inherited = inherited_display_rows(ctx)
             if inherited:
@@ -153,20 +160,42 @@ def inherited_display_rows(ctx: AttemptCtx) -> list[dict[str, object]]:
     if not isinstance(parent, str) or not parent or parent in {".", ".."} or "/" in parent:
         return []
     path = default_runs_root(ctx.dataset_root) / parent / TRAJECTORY_FILENAME
+    return [{**row, "inherited": True} for row in _read_trajectory_rows(path, strict=False)]
+
+
+def sealed_display_turns(ctx: AttemptCtx) -> list[list[TrajectoryRow]]:
+    """Rows from the prior seal that still describe already-slimmed invokes."""
+    rows = _read_trajectory_rows(ctx.evidence.root / TRAJECTORY_FILENAME, strict=True)
+    turns: list[list[TrajectoryRow]] = []
+    current: list[TrajectoryRow] = []
+    for row in rows:
+        current.append(row)
+        if row.get("type") == "terminal":
+            turns.append(current)
+            current = []
+    if current:
+        turns.append(current)
+    return turns
+
+
+def _read_trajectory_rows(path: Path, *, strict: bool) -> list[TrajectoryRow]:
     if not path.is_file():
         return []
-    rows: list[dict[str, object]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    rows: list[TrajectoryRow] = []
+    for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
         try:
             row = json.loads(line)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            if strict:
+                raise ValueError(f"trajectory line {line_no} is not json") from exc
             continue
-        if isinstance(row, dict):
-            copied = dict(row)
-            copied["inherited"] = True
-            rows.append(copied)
+        if not isinstance(row, dict):
+            if strict:
+                raise TypeError(f"trajectory line {line_no} is not an object")
+            continue
+        rows.append(row)
     return rows
 
 

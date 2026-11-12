@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
+from ageval.model.errors import ModelConfigError, TransportStall
 from ageval.model.usage import LOST_ON_TIMEOUT, adopt_usage
 from ageval.plugins.agent_result import AgentResult, parse_validated_text_structured
 from ageval.plugins.base import BaseExecutor
@@ -260,6 +261,7 @@ class MinisweExecutorSPI(BaseExecutor):
                 structured=None,
                 ok=False,
                 error="stall_exhausted",
+                failure=exc,
                 usage=LOST_ON_TIMEOUT,
                 metadata={
                     "plugin": PLUGIN_ID,
@@ -294,6 +296,7 @@ class MinisweExecutorSPI(BaseExecutor):
                 structured=None,
                 ok=False,
                 error=f"{type(exc).__name__}:{exc}",
+                failure=exc if isinstance(exc, ModelConfigError | TransportStall) else None,
                 metadata={"plugin": PLUGIN_ID, "session_id": self.session_id},
             )
         messages = extra.get("messages") if isinstance(extra.get("messages"), list) else []

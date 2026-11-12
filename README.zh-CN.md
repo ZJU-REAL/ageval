@@ -74,7 +74,7 @@ ageval run <org>/<name>@<version> --task <task-id>
 ageval executors -v
 ageval view <org>/<name>@<version> --no-browser
 
-# 继续一次尚未写出 result.json 的 Attempt
+# 继续一次在 result.json 前中断、或 Agent 调用致命失败的 Attempt
 ageval run <dataset> --task <id> --resume <attempt_id>
 # suite 就地恢复尚未结束的槽位
 ageval run <dataset> --resume-suite <suite_run_id>
@@ -133,7 +133,7 @@ uv run ageval view examples/datasets/minimal-demo --no-browser
 
 **长程任务可从上次完成的步骤恢复**
 
-ageval 在每一步产生外部效果之前写入活动日志，并保存工作区与 Agent home 的检查点。尚未写出 `result.json` 的 Attempt 用 `--resume` 原地继续；suite 中用 `--resume-suite`。已经封存的 Attempt 保持不变。`--keep-recovery-state` 留下活动日志、检查点和 `replay-input.json` 后，`ageval run --fork` 可以从一个切点新开一次 Attempt，换求解模型，harness 仍是源 Attempt 锁定的那个；`ageval replay` 可以在新环境里重新执行已记录的终端动作。
+ageval 在每一步产生外部效果之前写入活动日志，并保存工作区与 Agent home 的检查点。尚未写出 `result.json` 的 Attempt 用 `--resume` 原地继续；suite 中用 `--resume-suite`。run 阶段的计费、鉴权或未恢复的传输失败会封成 `ERROR`（`agent_invoke_failed`），不再运行 `evaluator.py`；恢复文件会保留，显式续跑会在同一次 Attempt 里改写这条结果。其它已经封存的 Attempt 保持不变。`--keep-recovery-state` 在普通结算后留下活动日志、检查点和 `replay-input.json`，使 `ageval run --fork` 可以从一个切点新开一次 Attempt，换求解模型，harness 仍是源 Attempt 锁定的那个；`ageval replay` 可以在新环境里重新执行已记录的终端动作。
 
 **严格的阶段边界与双评分策略**
 
@@ -218,15 +218,15 @@ sequenceDiagram
 
 长程任务会在同一次 Attempt 里走很多轮模型调用和工具调用。父进程在写出 `result.json` 之前被杀掉时，已经完成的轮次和工作区仍留在磁盘上。ageval 把每一步追加到 `.ageval/runs/<attempt_id>/activity.jsonl`，并在该步落定时为 `/attempt/workspace` 和 `/attempt/home` 保存检查点。
 
-`--resume` 仅在 `result.json` 尚不存在、且锁定配置的摘要仍然一致时，继续这同一次 Attempt。`--resume-suite` 对 suite 里尚未结束的槽位做同样的事，已经以 `PASS`、`FAIL` 或 `ERROR` 结束的槽位仍然跳过。环境若还在跑这次 Attempt，命令直接退出，不写 `result.json`。
+`--resume` 在 `result.json` 尚不存在、且锁定配置摘要仍然一致时，继续这同一次 Attempt。它也会接续一个保留了恢复文件、已封成 `agent_invoke_failed` 的 ERROR；这类错误没有跑 `evaluate`，续跑会从头重放失败的那次调用。`--resume-suite` 对 suite 里尚未结束的槽位和可恢复的调用 ERROR 做同样的事，已以 `PASS`、`FAIL` 或其它 `ERROR` 结束的槽位仍然跳过。环境若还在跑这次 Attempt，命令直接退出，不写 `result.json`。
 
-仍与最后完成步骤对齐的环境会被原地接回。环境已经丢失时，会重新启动并从最近的检查点恢复。`openai-http`、`anthropic-http`、`miniswe` 和 `terminus-2` 从活动日志重建下一轮模型上下文。`acp`、OpenHands 和 dsh 恢复 Attempt home 里保存的会话。`nooa` 没有原生会话，从已记录的对话继续。已经完成的调用不会再执行一次，已经消耗的墙钟时间和调用次数仍然计入限额。已经封存的 Attempt 不可改写：`--retry-errors` 和 `--replace-slot` 会分配一次新的 Attempt。
+仍与最后完成步骤对齐的环境会被原地接回。环境已经丢失时，会重新启动并从最近的检查点恢复。`openai-http`、`anthropic-http`、`miniswe` 和 `terminus-2` 从活动日志重建下一轮模型上下文。`acp`、OpenHands 和 dsh 恢复 Attempt home 里保存的会话。`nooa` 没有原生会话，从已记录的对话继续。已经完成的调用不会再执行一次，已经消耗的墙钟时间仍然计入限额。一次致命调用不会永久吃掉 `agent_invocations`：它的重试占一个逻辑额度，连续失败的续跑不会把配额耗光。其它已经封存的 Attempt 不可改写。`--retry-errors` 会在同一次 Attempt 里接续 `agent_invoke_failed`，对其余 ERROR 新开 Attempt；`--replace-slot` 始终新开 Attempt。同 Attempt 续跑原地覆盖当前 result 和 suite 行，不增加样本，也不增加 `previous[]`。
 
 `--keep-recovery-state` 在 `result.json` 和 `trajectory.jsonl` 都写出之后仍保留 `activity.jsonl`、`checkpoints/` 与 `replay-input.json`。`ageval checkpoints` 列出这些切点。`ageval run --fork --checkpoint --model` 从一次已完成的 run 阶段切点新开 Attempt，使用新的环境、源 harness 和新的求解模型。`ageval replay` 在另一个新环境里重新执行保留的终端动作，不调用求解模型。`--evaluate` 给新产物打分。父 Attempt 保持封存。默认 pass@k 不计入 fork 子 Attempt，也不计入 replay 子 Attempt。
 
 ### 基座总览
 
-ageval Core 统一管理固定阶段流水线：`lock → environment → run → evaluate → record`，并在 `finally` 中无条件执行环境清理（`cleanup`）。在 `ageval lock` 阶段，系统解析环境插件与各角色的 executor 插件并校验契约；在运行阶段，Core 在调用前强制执行 `limits` 资源与配额上限，并将配置绑定、评分结果、交互轨迹与产物快照归档至 evidence 目录（`lock.json`、`result.json`、`trajectory.jsonl`、`summary.json` 及 `task-artifacts/`）。尚未封存的 Attempt 还会保留 `activity.jsonl` 和 `checkpoints/`，供 `--resume` 继续。封存之后，`--keep-recovery-state` 留下同一份恢复文件，供之后的 `--fork` 或 `ageval replay` 读取。
+ageval Core 统一管理固定阶段流水线：`lock → environment → run → evaluate → record`，并在 `finally` 中无条件执行环境清理（`cleanup`）。Agent 调用发生致命失败时，`run` 以 `ERROR` 结束并跳过 `evaluate`，上游故障不会被打成分数上的 `FAIL`。在 `ageval lock` 阶段，系统解析环境插件与各角色的 executor 插件并校验契约；在运行阶段，Core 在调用前强制执行 `limits` 资源与配额上限，并将配置绑定、评分结果、交互轨迹与产物快照归档至 evidence 目录（`lock.json`、`result.json`、`trajectory.jsonl`、`summary.json` 及 `task-artifacts/`）。尚未封存的 Attempt 还会保留 `activity.jsonl` 和 `checkpoints/`，供 `--resume` 继续；可恢复的 `agent_invoke_failed` ERROR 出于同样原因保留它们。普通结算之后，`--keep-recovery-state` 留下同一份恢复文件，供之后的 `--fork` 或 `ageval replay` 读取。
 
 <p align="center">
   <img src="docs/assets/core-base.zh-CN.png" alt="ageval Core 基座总览" width="100%">

@@ -13,7 +13,7 @@ import asyncio
 import contextlib
 import json
 import uuid
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from dataclasses import replace as replace_plan
 from datetime import UTC, datetime
@@ -36,7 +36,7 @@ from ageval.attempt.ctx import PhaseObserver
 from ageval.config.dataset import list_tasks, load_dataset_manifest
 from ageval.config.errors import ConfigError
 from ageval.evaluation.error_record import error_record_from_exception
-from ageval.model.errors import ModelConfigError
+from ageval.model.errors import ModelConfigError, is_recoverable_agent_invoke_error
 from ageval.plugins.errors import PluginContractError
 from ageval.registry.resolve import resolve_dataset_root
 
@@ -292,17 +292,35 @@ def _existing_attempt_keys(attempts: list[dict[str, Any]]) -> set[tuple[str, int
 
 
 def _error_attempt_keys(attempts: list[dict[str, Any]]) -> set[tuple[str, int]]:
-    """Finished ERROR slots. Cancel placeholders are not retries."""
+    """Ordinary finished ERROR slots. Recoverable invoke errors resume in place."""
     keys: set[tuple[str, int]] = set()
     for row in attempts:
         if _is_cancelled_placeholder(row):
             continue
         if str(row.get("status") or "").upper() != "ERROR":
             continue
+        if is_recoverable_agent_invoke_error(row.get("error")):
+            continue
         tid, idx = slot_key(row)
         if not tid:
             continue
         keys.add((tid, idx))
+    return keys
+
+
+def _recoverable_invoke_keys(attempts: Sequence[Mapping[str, Any]]) -> set[tuple[str, int]]:
+    """Fatal invoke ERROR slots that plain or retry resume attaches in place."""
+    keys: set[tuple[str, int]] = set()
+    for row in attempts:
+        if _is_cancelled_placeholder(row):
+            continue
+        if str(row.get("status") or "").upper() != "ERROR":
+            continue
+        if not is_recoverable_agent_invoke_error(row.get("error")):
+            continue
+        tid, idx = slot_key(row)
+        if tid:
+            keys.add((tid, idx))
     return keys
 
 
@@ -341,6 +359,7 @@ async def _run_one(
     on_progress: ProgressCallback | None = None,
     allow_prepare: bool = False,
     recover_unsealed: bool = False,
+    resume_recorded_invoke_error: bool = False,
 ) -> dict[str, Any]:
     """Run one (task_id, attempt_index) unit. Concurrency is owned by the claim pool."""
     global _inflight_current, _inflight_peak
@@ -360,8 +379,9 @@ async def _run_one(
             on_progress=on_progress,
             attempt_index=attempt_index,
             layout=plan.layout,
-            suite_run_id=plan.suite_run_id if recover_unsealed else None,
+            suite_run_id=plan.suite_run_id,
             recover_unsealed=recover_unsealed,
+            resume_recorded_invoke_error=resume_recorded_invoke_error,
             **({"allow_prepare": True} if allow_prepare else {}),
         )
         status = getattr(result, "status", None) or "ERROR"
@@ -968,6 +988,9 @@ async def _execute_suite_run(
     for slot in replace:
         if slot[0] in plan.task_ids and slot not in units:
             units.append(slot)
+    attach_keys = _recoverable_invoke_keys(existing) & set(units)
+    attach_keys -= replace
+    done_keys -= attach_keys
     retried_keys: set[tuple[str, int]] = set()
     if retry_errors:
         retried_keys = _error_attempt_keys(existing) & set(units)
@@ -1132,6 +1155,7 @@ async def _execute_suite_run(
                 keep_vendor_raw=keep_vendor_raw,
                 allow_prepare=allow_prepare,
                 recover_unsealed=resume,
+                resume_recorded_invoke_error=(tid, idx) in attach_keys,
                 on_phase=_phase_forwarder(on_progress, tid, idx),
                 on_progress=on_progress,
             )
@@ -1194,6 +1218,15 @@ async def _execute_suite_run(
             if old_row is None:
                 continue
             row["previous"] = extend_slot_previous(old_row, replaced_at=replaced_at)
+    if attach_keys and new_results:
+        attached = {slot_key(row): row for row in existing if slot_key(row) in attach_keys}
+        for row in new_results:
+            old_row = attached.get(slot_key(row))
+            if old_row is None:
+                continue
+            previous = old_row.get("previous")
+            if isinstance(previous, list) and previous:
+                row["previous"] = [dict(item) for item in previous if isinstance(item, Mapping)]
 
     # Merge: keep real finished rows; drop cancel placeholders for slots we
     # re-ran (or re-cancelled). Never mutate real finished attempt payloads.

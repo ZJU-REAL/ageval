@@ -9,6 +9,7 @@ import pytest
 from ageval.application.run import _prune_settled_recovery
 from ageval.cli.recovery_state import resolve_keep_recovery_state
 from ageval.config.errors import ConfigError
+from ageval.model.errors import FATAL_INVOKE_TITLE
 
 
 def test_run_registers_recovery_flag() -> None:
@@ -75,3 +76,31 @@ def test_settled_policies_are_independent(tmp_path: Path) -> None:
     assert (tmp_path / "activity.jsonl").is_file()
     assert (tmp_path / "checkpoints").is_dir()
     assert not (tmp_path / "state").exists()
+
+
+def test_recoverable_invoke_error_keeps_recovery_bundle(tmp_path: Path) -> None:
+    _settled(tmp_path)
+    (tmp_path / "replay-input.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "result.json").write_text(
+        '{"status":"ERROR","limit":null,"error":{"phase":"run",'
+        f'"title":"{FATAL_INVOKE_TITLE}",'
+        '"message":"ModelConfigError:chat_http_403:insufficient balance"}}\n',
+        encoding="utf-8",
+    )
+    _prune_settled_recovery(tmp_path, keep_workspace=False, keep_recovery_state=False)
+    assert (tmp_path / "activity.jsonl").is_file()
+    assert (tmp_path / "checkpoints").is_dir()
+    assert (tmp_path / "replay-input.json").is_file()
+    assert not (tmp_path / "state").exists()
+
+
+def test_other_sealed_errors_still_drop_the_bundle(tmp_path: Path) -> None:
+    _settled(tmp_path)
+    (tmp_path / "result.json").write_text(
+        '{"status":"ERROR","error":{"phase":"environment","title":"environment_timeout",'
+        '"message":"environment_timeout"}}\n',
+        encoding="utf-8",
+    )
+    _prune_settled_recovery(tmp_path, keep_workspace=False, keep_recovery_state=False)
+    assert not (tmp_path / "activity.jsonl").exists()
+    assert not (tmp_path / "checkpoints").exists()

@@ -21,6 +21,7 @@ from ageval.environments.protocol import (
 )
 from ageval.plugins.agent_result import (
     AgentResult,
+    fatal_failure_from_worker,
     observational_result_health,
     parse_validated_text_structured,
 )
@@ -274,6 +275,10 @@ class AcpOneshotBoxExecutor:
         ok = bool(payload.get("ok", False))
         text = str(payload.get("text") or "")
         error = str(payload["error"]) if payload.get("error") else None
+        failure, fatal_error = fatal_failure_from_worker(payload.get("fatal_invoke"))
+        if fatal_error is not None:
+            error = fatal_error
+            ok = False
         from ageval.model.usage import adopt_usage
 
         raw_usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else None
@@ -312,6 +317,7 @@ class AcpOneshotBoxExecutor:
             stderr=stderr[-2000:],
             events=events,
             usage=usage,
+            failure=failure,
             metadata=metadata,
         )
 

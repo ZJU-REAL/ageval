@@ -145,9 +145,11 @@ uv run ageval run examples/core -k 5 --max-concurrent-tasks 2
 ageval run <dataset> --max-tasks 5 -k 2 --max-concurrent-tasks 3
 ageval run <dataset> --resume-suite <suite_run_id> --max-tasks 5 -k 2
 uv run ageval run examples/core --task sdk-agent-session -k 5
-# Continue one unsealed Attempt in place (exit 2 when result.json exists, the digest mismatches, or the environment is still busy)
+# Continue one unsealed Attempt, or a retained agent_invoke_failed ERROR, in place
+# Exit 2 for any other settled result, a digest mismatch, or a busy environment
 # uv run ageval run examples/core --task sdk-agent-session --resume <attempt_id>
-# Resume suite: recover a matching unsealed slot in place; skip settled PASS / FAIL / ERROR; append missing Always-k indices
+# Resume suite: recover a matching unsealed slot or agent_invoke_failed ERROR in place;
+# skip PASS / FAIL / other ERROR; append missing Always-k indices
 # uv run ageval run examples/core --resume-suite <suite_run_id> --task sdk-agent-session -k 5
 # Replace one finished slot (new Attempt; old current → previous[]):
 # uv run ageval run examples/core --resume-suite <suite_run_id> --task sdk-agent-session --replace-slot
@@ -206,6 +208,7 @@ After `-k` / full suite, read:
 
 - **pass@k** / **pass^k** are **job** aggregates (mean over tasks); not package identity  
 - `--max-concurrent-tasks` only speeds scheduling; does not change k or PASS  
+- A run-phase `ModelConfigError`, unrecovered `TransportStall`, or `StallExhausted` seals the Attempt as `ERROR` with title `agent_invoke_failed`, skips `evaluate`, and retains its recovery bundle. Resume restarts the failed invoke in the same Attempt; `--replace-slot` still mints a new Attempt.
 - `--max-tasks N` (integer ≥ 1) selects distinct tasks after resume/retry slot filtering, before worker dispatch. Each selected task keeps all remaining Always-k slots. Omit to run all eligible tasks; a larger cap has the same effect. It is CLI/job only, excluded from Dataset defaults, `task.yaml`, and `config_fingerprint`, and rejected with `--replace-slot`.
 - A capped suite finishes normally with the usual result-derived exit code. Its summary records `max_tasks` and aggregates previously recorded plus newly settled tasks. Unscheduled remainder tasks get no result or cancel placeholders; later `--resume-suite` can continue them. Hub completeness still checks the bound version's entire task set.
 - Single-task `k=1` without `--resume-suite` still prints the historical Attempt document when stdout is not a TTY (or with `--json`)  

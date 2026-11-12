@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ageval.environments.protocol import HOME_PATH, WORKSPACE_PATH
-from ageval.plugins.agent_result import AgentResult
+from ageval.plugins.agent_result import AgentResult, fatal_failure_from_worker
 from dsh_plugin import PLUGIN_ID
 
 BOX_PLUGIN = f"{HOME_PATH}/_dsh"
@@ -215,15 +215,20 @@ class DshBoxExecutor:
 
         events = tuple(prior_activity_events(getattr(self, "activity", None), fresh))
         usage = payload.get("usage")
+        error = str(payload["error"]) if payload.get("error") else None
+        failure, fatal_error = fatal_failure_from_worker(payload.get("fatal_invoke"))
+        if fatal_error is not None:
+            error = fatal_error
         return AgentResult(
             model=str(payload.get("model") or self.model),
             text=str(payload.get("text") or ""),
             structured=structured if isinstance(structured, dict) else None,
-            ok=bool(payload.get("ok", True)),
-            error=str(payload["error"]) if payload.get("error") else None,
+            ok=bool(payload.get("ok", True)) and failure is None,
+            error=error,
             stderr=stderr[-2000:],
             events=events,
             usage=usage if isinstance(usage, dict) else None,
+            failure=failure,
             metadata=metadata,
         )
 

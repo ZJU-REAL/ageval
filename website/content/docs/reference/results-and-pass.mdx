@@ -10,6 +10,7 @@ description: How to read Result; pass@k is a job metric, not a PASS for the whol
 3. PASS / FAIL comes only from the `evaluator.py` return value  
 4. Whole-dataset / job aggregates (including pass@k) **≠** a PASS for the whole dataset  
 5. A post-run analyzer report **≠** a score, and it does not rewrite `evaluation/checks.json`  
+6. A provider failure during `run` is not a capability verdict. It skips `evaluate` and seals as `ERROR` with title `agent_invoke_failed`
 
 ## On the terminal
 
@@ -80,6 +81,7 @@ Attempt pages may show **Timing** (and **Tokens** when present). When `analysis/
 | --- | --- |
 | Config / lock | Never entered formal execution |
 | Execution ERROR | Failed inside the boundary. `error` stores phase, title, and message. A `ScriptError` keeps the title you passed; other exceptions use the class name. Viewer and Hub show that title beside ERROR. PASS and FAIL leave `error` empty |
+| Agent invoke ERROR | A run-phase `ModelConfigError`, unrecovered `TransportStall`, or `StallExhausted` from any Agent session. `evaluate` does not run; the recovery bundle is retained. An explicit resume restarts the failed invoke in the same Attempt and overwrites the stale ERROR |
 | FAIL | Evaluator says no |
 | PASS | Evaluator says yes |
 | Run-phase limit | Evaluator still scores; `limit` is `wall_time_seconds` or `agent_invocations` |

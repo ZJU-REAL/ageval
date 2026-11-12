@@ -20,6 +20,7 @@ from typing import Any, NoReturn
 
 from ageval.config.errors import ERROR_INVALID_FORMAT, ConfigError
 from ageval.evidence.redaction import redact_and_assert
+from ageval.model.errors import is_fatal_invoke_payload
 
 ACTIVITY_FORMAT = "ageval.activity/1"
 
@@ -380,9 +381,13 @@ class ActivityLog:
         return found[-1].status
 
     def admitted_run_invoke_count(self) -> int:
-        """Invokes admitted before ``seal_run`` completed. In-flight counts once."""
+        """Invokes admitted before ``seal_run`` completed. In-flight counts once.
+
+        A fatal completed invoke is the step that resume sends again. It does
+        not keep its old quota slot; the retry consumes one logical slot.
+        """
         seal_seq = self._seal_run_seq()
-        seen: set[str] = set()
+        latest: dict[str, ActivityRecord] = {}
         for record in self.records:
             if record.kind != "invoke":
                 continue
@@ -392,8 +397,12 @@ class ActivityLog:
                 continue
             if record.payload.get("inherited") is True:
                 continue
-            seen.add(record.request_id)
-        return len(seen)
+            latest[record.request_id] = record
+        return sum(
+            1
+            for record in latest.values()
+            if not (record.status == "completed" and is_fatal_invoke_payload(record.payload))
+        )
 
     def invoke_already_admitted(self, request_id: str) -> bool:
         return any(

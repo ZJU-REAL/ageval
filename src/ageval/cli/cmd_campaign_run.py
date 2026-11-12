@@ -161,9 +161,11 @@ def register(app: typer.Typer) -> None:
             typer.Option(
                 "--resume",
                 help=(
-                    "Recover one unsealed Attempt in place. Requires a single --task. "
-                    "Exit 2 when result.json already exists or the lock digest does not match. "
-                    "A live busy environment exits 2 without writing result.json."
+                    "Recover one unsealed Attempt in place, or continue an "
+                    "agent_invoke_failed ERROR with its retained recovery bundle. "
+                    "Requires a single --task. Exit 2 for any other existing result.json, "
+                    "or when the lock digest does not match. A live busy environment "
+                    "exits 2 without writing result.json."
                 ),
             ),
         ] = None,
@@ -191,11 +193,12 @@ def register(app: typer.Typer) -> None:
                 "--resume-suite",
                 help=(
                     "Resume an existing suite_run_id under .ageval/suite-runs/. "
-                    "Skips finished PASS / FAIL / ERROR units. An unfinished slot whose "
-                    "activity log matches this suite, task, and attempt index continues "
-                    "in place; otherwise a new Attempt is appended. Recomputes pass@k / "
-                    "pass^k. Combine with --task to top up one task. "
-                    "With --retry-errors, re-run ERROR slots in this filter. "
+                    "Skips PASS, FAIL, and ordinary ERROR units. An unfinished slot, or "
+                    "an agent_invoke_failed ERROR with its recovery bundle, continues in "
+                    "place when its identity and lock digest match. Otherwise a new "
+                    "Attempt is appended. Recomputes pass@k / pass^k. Combine with "
+                    "--task to top up one task. With --retry-errors, continue fatal invoke "
+                    "errors and re-run other ERROR slots in this filter. "
                     "With --replace-slot, re-run one named finished slot instead."
                 ),
             ),
@@ -216,9 +219,10 @@ def register(app: typer.Typer) -> None:
             typer.Option(
                 "--retry-errors",
                 help=(
-                    "With --resume-suite: re-run finished ERROR slots in this filter. "
-                    "PASS and FAIL stay skipped. Each retry is a new Attempt; "
-                    "the old row stays in previous[]. Does not require --replace-slot."
+                    "With --resume-suite: continue agent_invoke_failed in the same "
+                    "Attempt and re-run every other ERROR slot in this filter as a new "
+                    "Attempt. PASS and FAIL stay skipped. The old row for a new Attempt "
+                    "stays in previous[]. Does not require --replace-slot."
                 ),
             ),
         ] = False,
@@ -312,7 +316,8 @@ def register(app: typer.Typer) -> None:
                 help=(
                     "After result.json and trajectory.jsonl exist, keep activity.jsonl "
                     "and checkpoints/ (default: delete). Interrupted Attempts always "
-                    "keep them. Unset falls back to AGEVAL_KEEP_RECOVERY_STATE. "
+                    "keep them, and agent_invoke_failed retains them for same-Attempt "
+                    "resume. Unset falls back to AGEVAL_KEEP_RECOVERY_STATE. "
                     "Independent of --keep-workspace."
                 ),
             ),

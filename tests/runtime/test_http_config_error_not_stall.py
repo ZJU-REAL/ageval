@@ -7,12 +7,18 @@ from types import SimpleNamespace
 import pytest
 
 from ageval.model.errors import (
+    FATAL_INVOKE_TITLE,
     FormatError,
     ModelConfigError,
     ProtocolError,
+    StallExhausted,
     TransportStall,
+    fatal_invoke_failure,
     http_status_is_config_error,
+    is_fatal_invoke_payload,
+    is_recoverable_agent_invoke_error,
 )
+from ageval.plugins.agent_result import fatal_failure_from_worker
 from ageval.runtime.parent_agent import _result_repeatable
 
 
@@ -46,3 +52,50 @@ def test_parent_retries_only_a_transport_stall() -> None:
     assert _result_repeatable(SimpleNamespace(ok=False, error="HTTPError:503")) is False
     assert _result_repeatable(SimpleNamespace(ok=False, error="HTTPError:400")) is False
     assert _result_repeatable(SimpleNamespace(ok=False, error="URLError")) is False
+
+
+def test_fatal_invoke_classification_is_narrow_and_stable() -> None:
+    class StallExhausted(Exception):
+        pass
+
+    assert fatal_invoke_failure(failure=ModelConfigError("HTTPError:403")) == (
+        "ModelConfigError",
+        "ModelConfigError:HTTPError:403",
+    )
+    assert fatal_invoke_failure(
+        error="stall_exhausted",
+        failure=StallExhausted("TransportStall:TimeoutError:180"),
+        metadata={"stall_exhausted": True},
+    ) == ("StallExhausted", "StallExhausted:stall_exhausted")
+    assert fatal_invoke_failure(failure=TransportStall("HTTPError:503")) == (
+        "TransportStall",
+        "TransportStall:HTTPError:503",
+    )
+    assert fatal_invoke_failure(failure=ProtocolError("bad_json")) is None
+    assert fatal_invoke_failure(error="scripted_failure") is None
+
+    completed = {"ok": False, "error": "ModelConfigError:HTTPError:403"}
+    assert is_fatal_invoke_payload(completed) is True
+    assert is_fatal_invoke_payload({"ok": True, "error": None}) is False
+    error = {"phase": "run", "title": FATAL_INVOKE_TITLE, "message": "ModelConfigError:403"}
+    assert is_recoverable_agent_invoke_error(error) is True
+    assert is_recoverable_agent_invoke_error({**error, "phase": "evaluate"}) is False
+    assert is_recoverable_agent_invoke_error({**error, "title": "task_run_failed"}) is False
+
+
+def test_worker_fatal_marker_round_trips_to_a_typed_failure() -> None:
+    failure, detail = fatal_failure_from_worker(
+        {"kind": "ModelConfigError", "detail": "HTTP 403: insufficient balance"}
+    )
+    assert isinstance(failure, ModelConfigError)
+    assert detail == "ModelConfigError:HTTP 403: insufficient balance"
+
+    failure, detail = fatal_failure_from_worker(
+        {"kind": "StallExhausted", "detail": "timeout budget exhausted"}
+    )
+    assert isinstance(failure, StallExhausted)
+    assert detail == "StallExhausted:timeout budget exhausted"
+
+    assert fatal_failure_from_worker({"kind": "ProtocolError", "detail": "bad"}) == (None, None)
+    assert fatal_failure_from_worker({"kind": "TransportStall"})[0] is not None
+    assert fatal_failure_from_worker(None) == (None, None)

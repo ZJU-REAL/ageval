@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -36,6 +37,58 @@ from ageval.plugins.contrib.acp.hooks import store_entry_argv0  # noqa: E402
 from ageval.plugins.contrib.acp.registry import clear_registry_cache  # noqa: E402
 
 ECHO = ROOT / "tests" / "fixtures" / "acp" / "echo_agent.py"
+
+
+def _load_worker() -> Any:
+    path = ROOT / "plugins" / "acp-oneshot" / "worker" / "ageval_acp_oneshot.py"
+    spec = importlib.util.spec_from_file_location("ageval_acp_oneshot_under_test", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_worker_classifies_auth_model_and_transport_failures() -> None:
+    worker = _load_worker()
+    auth = worker._failure_from_exception(
+        worker._RpcError({"code": -32000, "message": "Authentication required"})
+    )
+    assert auth == {
+        "kind": "ModelConfigError",
+        "detail": "Authentication required",
+    }
+    assert worker._failure_from_exception(RuntimeError("acp_model_unavailable")) == {
+        "kind": "ModelConfigError",
+        "detail": "acp_model_unavailable",
+    }
+    assert worker._failure_from_exception(TimeoutError("acp_timeout")) == {
+        "kind": "TransportStall",
+        "detail": "acp_timeout",
+    }
+
+
+def test_fatal_worker_marker_survives_container_boundary() -> None:
+    from ageval.model.errors import ModelConfigError
+
+    host = local_box("/nowhere")
+    payload = {
+        "ok": False,
+        "error": "ModelConfigError:Authentication required",
+        "text": "",
+        "events": [],
+        "fatal_invoke": {
+            "kind": "ModelConfigError",
+            "detail": "Authentication required",
+        },
+    }
+    result = _executor(host)._result_from(
+        SimpleNamespace(stdout=json.dumps(payload), stderr="", exit_code=1),
+        collect_dir=None,
+        payload=payload,
+    )
+    assert result.ok is False
+    assert isinstance(result.failure, ModelConfigError)
+    assert result.error == "ModelConfigError:Authentication required"
 
 
 class SpyHost:

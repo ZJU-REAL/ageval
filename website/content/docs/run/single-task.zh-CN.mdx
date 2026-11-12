@@ -33,9 +33,11 @@ TTY 下 stdout 是短 recap（单题含 `logs` 路径）；管道或 `--json` �
 ageval run <dataset> --task <task_id> --resume <attempt_id>
 ```
 
-父进程在写出 `result.json` 之前停掉时，用这条命令继续同一次 Attempt。ageval 保留原来的 Attempt id。已经完成的步骤留在 `.ageval/runs/<attempt_id>/activity.jsonl`。仍与最后完成步骤对齐的环境会被原地接回。环境已经丢失时，会重新启动，并从最近的检查点恢复 `/attempt/workspace` 和 `/attempt/home`。已经完成的调用不会再执行。已经消耗的墙钟时间和调用次数仍然计入限额。
+父进程在写出 `result.json` 之前停掉，或 run 阶段的 Agent 调用以 `agent_invoke_failed` 封成 `ERROR` 时，用这条命令继续同一次 Attempt。致命类型是不可重试的 `ModelConfigError`、未恢复的 `TransportStall`，以及任一 Agent session 抛出的 `StallExhausted`。这类错误会跳过 `evaluate`，上游故障不会被打成 `FAIL`。
 
-`result.json` 已经存在、锁定配置摘要对不上、或环境还在跑这次 Attempt 时，命令以 exit 2 结束，不写 `result.json`。
+ageval 保留原来的 Attempt id。已经完成的步骤留在 `.ageval/runs/<attempt_id>/activity.jsonl`。仍与最后完成步骤对齐的环境会被原地接回。环境已经丢失时，会重新启动，并从最近的检查点恢复 `/attempt/workspace` 和 `/attempt/home`。已经完成的调用不会再执行。已经消耗的墙钟时间仍然计入限额。失败的那次调用会从头重试，不会永久吃掉 `agent_invocations`；被接纳的重试占一个逻辑额度。成功接续会原地覆盖 `result.json`，不增加 `previous[]`。
+
+不是可恢复类型的 `result.json` 已经存在、锁定配置摘要对不上、或环境还在跑这次 Attempt 时，命令以 exit 2 结束，不写 `result.json`。
 
 ## 从保留的检查点 fork
 

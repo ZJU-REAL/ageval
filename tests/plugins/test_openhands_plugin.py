@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -353,6 +354,61 @@ def _load_worker() -> Any:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_worker_reads_conversation_error_classification() -> None:
+    worker = _load_worker()
+
+    class QuotaFailure(RuntimeError):
+        conversation_error = SimpleNamespace(
+            classification=SimpleNamespace(kind="quota"),
+            code="MaxBudgetReached",
+            detail="account balance is insufficient",
+        )
+
+    class TransientFailure(RuntimeError):
+        conversation_error = SimpleNamespace(
+            classification=SimpleNamespace(kind="transient"),
+            code="LLMServiceUnavailableError",
+            detail="upstream unavailable",
+        )
+
+    assert worker._conversation_failure(QuotaFailure()) == {
+        "kind": "ModelConfigError",
+        "detail": "account balance is insufficient",
+    }
+    assert worker._conversation_failure(TransientFailure()) == {
+        "kind": "TransportStall",
+        "detail": "upstream unavailable",
+    }
+
+
+def test_fatal_worker_marker_survives_container_boundary() -> None:
+    from ageval.model.errors import ModelConfigError
+
+    host = FakeHost()
+    executor = build_executor(host=host, placement=host.placement(), model="openai/gpt-4.1-mini")
+    document = {
+        "schema": "openhands.trajectory/1",
+        "model": "openai/gpt-4.1-mini",
+        "ok": False,
+        "text": "",
+        "error": "ModelConfigError:insufficient balance",
+        "steps": [],
+        "usage": None,
+        "fatal_invoke": {
+            "kind": "ModelConfigError",
+            "detail": "insufficient balance",
+        },
+    }
+    result = executor._box._result_from(
+        SimpleNamespace(stderr="", exit_code=1),
+        document,
+        sentinels=(),
+    )
+    assert result.ok is False
+    assert isinstance(result.failure, ModelConfigError)
+    assert result.error == "ModelConfigError:insufficient balance"
 
 
 def test_steps_keep_thought_between_tool_calls() -> None:
