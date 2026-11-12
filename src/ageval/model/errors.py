@@ -35,6 +35,15 @@ class TransportStall(Exception):
         self.message = message
 
 
+class StallExhausted(Exception):
+    """A parent-loop executor exhausted its transport retry budget."""
+
+    def __init__(self, message: str, *, kind: str = "stall_exhausted") -> None:
+        super().__init__(message)
+        self.kind = kind
+        self.message = message
+
+
 class ProtocolError(Exception):
     """A provider payload the client cannot decode. Not a stall."""
 
@@ -79,7 +88,9 @@ def classify_fatal_invoke(
     this classifier. Exhausted stall budgets and non-retryable 4xx model
     configuration errors do.
     """
-    if type(failure).__name__ == "StallExhausted" or error == "stall_exhausted":
+    if isinstance(failure, StallExhausted) or type(failure).__name__ == "StallExhausted":
+        return "StallExhausted"
+    if error == "stall_exhausted":
         return "StallExhausted"
     if metadata is not None and metadata.get("stall_exhausted") is True:
         return "StallExhausted"
@@ -91,6 +102,17 @@ def classify_fatal_invoke(
         isinstance(error, str) and error.startswith("TransportStall")
     ):
         return "TransportStall"
+    return None
+
+
+def typed_fatal_failure(kind: str, detail: str) -> BaseException | None:
+    """Build the typed failure for a worker-reported fatal invoke kind."""
+    if kind == "ModelConfigError":
+        return ModelConfigError(detail)
+    if kind == "TransportStall":
+        return TransportStall(detail, kind="worker")
+    if kind == "StallExhausted":
+        return StallExhausted(detail)
     return None
 
 

@@ -22,7 +22,7 @@ from typing import Any, cast
 from ageval import __version__ as AGEVAL_VERSION
 from ageval.environments.protocol import Placement, StdioTransport
 from ageval.model import ModelSpec, require_model_support, spec_from_factory
-from ageval.model.errors import TransportStall
+from ageval.model.errors import ModelConfigError, TransportStall
 from ageval.model.usage import adopt_usage
 from ageval.plugins.agent_result import (
     AgentResult,
@@ -81,6 +81,13 @@ _JOURNAL_PARTIAL = frozenset(
 
 # Non-ok kinds the parent may stall-retry when the workspace is still unchanged.
 _TRANSPORT_STALL_ERRORS = _JOURNAL_PARTIAL
+_MODEL_CONFIG_ERRORS = frozenset(
+    {
+        "acp_auth_required",
+        "acp_model_unavailable",
+        "acp_reasoning_effort_unavailable",
+    }
+)
 
 
 def _acp_transport_stall(error: str | None) -> TransportStall | None:
@@ -88,6 +95,23 @@ def _acp_transport_stall(error: str | None) -> TransportStall | None:
     if error is None or error not in _TRANSPORT_STALL_ERRORS:
         return None
     return TransportStall(error, kind=error)
+
+
+def _acp_invoke_failure(error: str | None, detail: str | None = None) -> BaseException | None:
+    """Typed terminal failure for an ACP invoke that cannot be a capability result."""
+    if error in _MODEL_CONFIG_ERRORS:
+        return ModelConfigError(detail or error or "acp_model_config_error")
+    return _acp_transport_stall(error)
+
+
+def _acp_error_kind(exc: BaseException) -> str:
+    """Stable invoke error kind from the ACP request code or transport shape."""
+    message = str(exc).lower()
+    if getattr(exc, "code", None) == -32000 or "auth" in message:
+        return "acp_auth_required"
+    if "eof" in message or "closed" in message:
+        return "acp_unexpected_eof"
+    return "acp_protocol_error"
 
 
 def _usage_source_label(sources: Any) -> str:
@@ -511,13 +535,7 @@ class AcpExecutor(BaseExecutor):
         except _IdleTimeout:
             return self._timeout_agent_result(started, error="acp_idle_timeout")
         except Exception as exc:  # noqa: BLE001
-            msg = str(exc).lower()
-            if "auth" in msg:
-                err = "acp_auth_required"
-            elif "eof" in msg or "closed" in msg:
-                err = "acp_unexpected_eof"
-            else:
-                err = "acp_protocol_error"
+            err = _acp_error_kind(exc)
             detail = self._exc_detail(exc)
             if detail:
                 self._client.record(
@@ -649,7 +667,7 @@ class AcpExecutor(BaseExecutor):
             extra=extra,
             metadata=meta,
             repeatable=_workspace_unchanged(mapped),
-            failure=_acp_transport_stall(error),
+            failure=_acp_invoke_failure(error),
         )
 
     def _result(
@@ -704,7 +722,7 @@ class AcpExecutor(BaseExecutor):
             extra=extra,
             metadata=meta,
             repeatable=_workspace_unchanged(mapped),
-            failure=_acp_transport_stall(error),
+            failure=_acp_invoke_failure(error, error_detail),
         )
 
     def _ensure_session(self, *, timeout: float) -> str | None:
@@ -729,10 +747,7 @@ class AcpExecutor(BaseExecutor):
             return str(exc) or "acp_protocol_error"
         except Exception as exc:  # noqa: BLE001
             self._last_error_detail = self._exc_detail(exc)
-            msg = str(exc).lower()
-            if "auth" in msg:
-                return "acp_auth_required"
-            return "acp_protocol_error"
+            return _acp_error_kind(exc)
         return None
 
     def _mapped_events(self) -> tuple[dict[str, Any], ...]:
@@ -806,7 +821,7 @@ class AcpExecutor(BaseExecutor):
                 error=err,
                 events=(event,),
                 metadata=meta,
-                failure=_acp_transport_stall(err),
+                failure=_acp_invoke_failure(err, detail),
             )
 
         started = time.monotonic()

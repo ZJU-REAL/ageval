@@ -11,12 +11,14 @@ from ageval.model.errors import (
     FormatError,
     ModelConfigError,
     ProtocolError,
+    StallExhausted,
     TransportStall,
     fatal_invoke_failure,
     http_status_is_config_error,
     is_fatal_invoke_payload,
     is_recoverable_agent_invoke_error,
 )
+from ageval.plugins.agent_result import fatal_failure_from_worker
 from ageval.runtime.parent_agent import _result_repeatable
 
 
@@ -79,3 +81,21 @@ def test_fatal_invoke_classification_is_narrow_and_stable() -> None:
     assert is_recoverable_agent_invoke_error(error) is True
     assert is_recoverable_agent_invoke_error({**error, "phase": "evaluate"}) is False
     assert is_recoverable_agent_invoke_error({**error, "title": "task_run_failed"}) is False
+
+
+def test_worker_fatal_marker_round_trips_to_a_typed_failure() -> None:
+    failure, detail = fatal_failure_from_worker(
+        {"kind": "ModelConfigError", "detail": "HTTP 403: insufficient balance"}
+    )
+    assert isinstance(failure, ModelConfigError)
+    assert detail == "ModelConfigError:HTTP 403: insufficient balance"
+
+    failure, detail = fatal_failure_from_worker(
+        {"kind": "StallExhausted", "detail": "timeout budget exhausted"}
+    )
+    assert isinstance(failure, StallExhausted)
+    assert detail == "StallExhausted:timeout budget exhausted"
+
+    assert fatal_failure_from_worker({"kind": "ProtocolError", "detail": "bad"}) == (None, None)
+    assert fatal_failure_from_worker({"kind": "TransportStall"})[0] is not None
+    assert fatal_failure_from_worker(None) == (None, None)

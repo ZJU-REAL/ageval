@@ -19,7 +19,34 @@ from urllib.parse import urlparse
 TRAJECTORY_SCHEMA = "openhands.trajectory/1"
 _CLIP = 8_000
 _LOOPBACK = frozenset({"127.0.0.1", "localhost", "::1"})
-_RUN_ERRORS = (ImportError, OSError, ValueError, RuntimeError, TypeError, KeyError)
+_CONFIG_EXCEPTION_NAMES = frozenset(
+    {
+        "AuthenticationError",
+        "BadRequestError",
+        "LLMAuthenticationError",
+        "LLMBadRequestError",
+        "NotFoundError",
+        "PermissionDeniedError",
+        "UnprocessableEntityError",
+    }
+)
+_TRANSPORT_EXCEPTION_NAMES = frozenset(
+    {
+        "APIConnectionError",
+        "APITimeoutError",
+        "ConnectionError",
+        "InternalServerError",
+        "LLMRateLimitError",
+        "LLMServiceUnavailableError",
+        "LLMTimeoutError",
+        "RateLimitError",
+        "ServiceUnavailableError",
+        "Timeout",
+        "TimeoutError",
+        "TransportClosedError",
+        "URLError",
+    }
+)
 
 
 def _loopback(url: str | None) -> bool:
@@ -220,8 +247,9 @@ def _document(
     error: str | None,
     steps: list[dict[str, Any]],
     usage: dict[str, Any] | None,
+    fatal_invoke: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    return {
+    document = {
         "schema": TRAJECTORY_SCHEMA,
         "model": model,
         "ok": ok,
@@ -230,10 +258,113 @@ def _document(
         "steps": steps,
         "usage": usage,
     }
+    if fatal_invoke is not None:
+        document["fatal_invoke"] = fatal_invoke
+    return document
 
 
-def _failed(model: str, error: str) -> dict[str, Any]:
-    return _document(model=model, ok=False, text="", error=error, steps=[], usage=None)
+def _failed(
+    model: str,
+    error: str,
+    *,
+    fatal_kind: str | None = None,
+) -> dict[str, Any]:
+    fatal = {"kind": fatal_kind, "detail": error[:500]} if fatal_kind is not None else None
+    return _document(
+        model=model,
+        ok=False,
+        text="",
+        error=error,
+        steps=[],
+        usage=None,
+        fatal_invoke=fatal,
+    )
+
+
+def _status_code(exc: BaseException) -> int | None:
+    for owner in (exc, getattr(exc, "response", None)):
+        for name in ("status_code", "status"):
+            value = getattr(owner, name, None)
+            if isinstance(value, int) and not isinstance(value, bool) and 100 <= value < 600:
+                return value
+    return None
+
+
+def _exception_chain(exc: BaseException) -> list[BaseException]:
+    chain: list[BaseException] = []
+    current: BaseException | None = exc
+    while current is not None and current not in chain and len(chain) < 6:
+        chain.append(current)
+        current = (
+            getattr(current, "original_exception", None) or current.__cause__ or current.__context__
+        )
+    return chain
+
+
+def _failure_kind(
+    *,
+    code: str | None = None,
+    classification: object = None,
+    exc: BaseException | None = None,
+) -> str | None:
+    if classification in {"auth", "quota", "config"} or code == "LLMAuthenticationError":
+        return "ModelConfigError"
+    if classification in {"rate_limit", "transient"}:
+        return "TransportStall"
+    if code in {"MaxBudgetReached", "LLMBadRequestError", "LLMContextWindowTooSmallError"}:
+        return "ModelConfigError"
+    if code == "stall_exhausted":
+        return "StallExhausted"
+    if exc is None:
+        return None
+    for item in _exception_chain(exc):
+        name = type(item).__name__
+        if name == "StallExhausted":
+            return "StallExhausted"
+        if name == "ModelConfigError":
+            return "ModelConfigError"
+        if name == "TransportStall":
+            return "TransportStall"
+        status = _status_code(item)
+        if status is not None:
+            if 400 <= status < 500 and status not in {408, 429}:
+                return "ModelConfigError"
+            if status in {408, 429} or 500 <= status < 600:
+                return "TransportStall"
+        if name in _CONFIG_EXCEPTION_NAMES:
+            return "ModelConfigError"
+        if name in _TRANSPORT_EXCEPTION_NAMES:
+            return "TransportStall"
+    return None
+
+
+def _conversation_failure(exc: BaseException) -> dict[str, str] | None:
+    for item in _exception_chain(exc):
+        event = getattr(item, "conversation_error", None)
+        if event is None:
+            continue
+        classification = getattr(getattr(event, "classification", None), "kind", None)
+        code = getattr(event, "code", None)
+        kind = _failure_kind(
+            code=str(code) if isinstance(code, str) else None,
+            classification=str(classification) if classification is not None else None,
+        )
+        if kind is None:
+            continue
+        detail = getattr(event, "detail", None)
+        detail_s = detail.strip() if isinstance(detail, str) else ""
+        return {
+            "kind": kind,
+            "detail": (detail_s or f"{type(exc).__name__}:{exc}")[:500],
+        }
+    return None
+
+
+def _exception_failure(exc: BaseException) -> dict[str, str] | None:
+    kind = _failure_kind(exc=exc)
+    if kind is None:
+        return None
+    return {"kind": kind, "detail": f"{type(exc).__name__}:{exc}"[:500]}
 
 
 def _step_log() -> Path:
@@ -320,14 +451,18 @@ def run_agent(instruction: str, *, workdir: str) -> dict[str, Any]:
 
     model = os.environ.get("OH_MODEL", "").strip()
     if not model:
-        return _failed("", "openhands_model_missing")
+        return _failed("", "openhands_model_missing", fatal_kind="ModelConfigError")
     base = (os.environ.get("OPENAI_BASE_URL") or os.environ.get("LLM_BASE_URL") or "").strip()
     key = (os.environ.get("OPENAI_API_KEY") or os.environ.get("LLM_API_KEY") or "").strip()
     if not key:
         if _loopback(base or None):
             key = "unused"
         else:
-            return _failed(model, "openhands_api_key_missing")
+            return _failed(
+                model,
+                "openhands_api_key_missing",
+                fatal_kind="ModelConfigError",
+            )
     llm_kwargs: dict[str, Any] = {"model": model, "api_key": key}
     if base:
         llm_kwargs["base_url"] = base
@@ -410,9 +545,17 @@ def main(argv: list[str] | None = None) -> int:
     try:
         instruction = Path(args.instruction_file).read_text(encoding="utf-8")
         document = run_agent(instruction, workdir=str(args.workdir))
-    except _RUN_ERRORS as exc:
+    except Exception as exc:  # noqa: BLE001 — worker boundary records the failure
         detail = f"{type(exc).__name__}: {exc}"
-        document = _failed(model, detail[:500])
+        failure = _conversation_failure(exc) or _exception_failure(exc)
+        if failure is None:
+            document = _failed(model, detail[:500])
+        else:
+            document = _failed(
+                model,
+                f"{failure['kind']}:{failure['detail']}",
+                fatal_kind=failure["kind"],
+            )
     _write(trajectory, document)
     return 0 if document.get("ok") else 1
 

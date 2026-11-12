@@ -7,7 +7,7 @@ executor surfaced only ``acp_protocol_error``.
 
 from __future__ import annotations
 
-from ageval.plugins.contrib.acp.executor import AcpExecutor
+from ageval.plugins.contrib.acp.executor import AcpExecutor, _acp_error_kind
 
 
 class _RequestErrorLike(Exception):
@@ -38,3 +38,10 @@ def test_exc_detail_truncates_long_payloads() -> None:
     exc = _RequestErrorLike("Internal error", {"details": "x" * 1000})
     detail = AcpExecutor._exc_detail(exc)
     assert detail is not None and len(detail) == 300
+
+
+def test_auth_request_code_is_stable_without_an_english_message() -> None:
+    class AuthRequestError(RuntimeError):
+        code = -32000
+
+    assert _acp_error_kind(AuthRequestError("request rejected")) == "acp_auth_required"

@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,32 @@ if _PLUGIN_ROOT.is_dir() and str(_PLUGIN_ROOT) not in sys.path:
 
 _OK_REASONS = frozenset({"completed", "max-tokens"})
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+_CONFIG_CODES = frozenset({"AUTH", "QUOTA", "ACCOUNT_QUOTA", "NO_ADAPTER"})
+_TRANSPORT_CODES = frozenset({"RATE_LIMIT", "SERVER", "TIMEOUT", "TRANSPORT", "EMPTY_RESPONSE"})
+_CONFIG_EXCEPTION_NAMES = frozenset(
+    {
+        "AuthenticationError",
+        "BadRequestError",
+        "NotFoundError",
+        "PermissionDeniedError",
+        "UnprocessableEntityError",
+    }
+)
+_TRANSPORT_EXCEPTION_NAMES = frozenset(
+    {
+        "APIConnectionError",
+        "APITimeoutError",
+        "ConnectionError",
+        "InternalServerError",
+        "JsonRpcError",
+        "RateLimitError",
+        "ServiceUnavailableError",
+        "Timeout",
+        "TimeoutError",
+        "TransportClosedError",
+        "URLError",
+    }
+)
 
 
 def _is_http_loopback(url: str | None) -> bool:
@@ -86,6 +113,98 @@ def _parse_structured(text: str) -> dict[str, Any] | None:
     except json.JSONDecodeError:
         return None
     return val if isinstance(val, dict) else None
+
+
+def _status_code(value: Mapping[str, object]) -> int | None:
+    for key in ("status", "status_code"):
+        status = value.get(key)
+        if isinstance(status, int) and not isinstance(status, bool) and 100 <= status < 600:
+            return status
+    return None
+
+
+def _provider_failure(value: object) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    code = value.get("code")
+    code_s = code.strip().upper() if isinstance(code, str) else ""
+    status = _status_code(value)
+    if code_s in _CONFIG_CODES or (
+        status is not None and 400 <= status < 500 and status not in {408, 429}
+    ):
+        kind = "ModelConfigError"
+    elif code_s in _TRANSPORT_CODES or (
+        status is not None and (status in {408, 429} or 500 <= status < 600)
+    ):
+        kind = "TransportStall"
+    else:
+        return None
+    detail = [part for part in (code_s, str(status) if status is not None else "") if part]
+    message = value.get("message")
+    if isinstance(message, str) and message.strip():
+        detail.append(message.strip())
+    return {"kind": kind, "detail": ":".join(detail)[:500] or kind}
+
+
+def _exception_chain(exc: BaseException) -> list[BaseException]:
+    chain: list[BaseException] = []
+    current: BaseException | None = exc
+    while current is not None and current not in chain and len(chain) < 6:
+        chain.append(current)
+        current = current.__cause__ or current.__context__
+    return chain
+
+
+def _failure_from_exception(exc: BaseException) -> dict[str, str] | None:
+    for item in _exception_chain(exc):
+        failure = _provider_failure(getattr(item, "failure", None))
+        if failure is not None:
+            return failure
+        failure = _provider_failure(getattr(item, "data", None))
+        if failure is not None:
+            return failure
+        code = getattr(item, "code", None)
+        if isinstance(code, str):
+            failure = _provider_failure({"code": code, "message": str(item)})
+            if failure is not None:
+                return failure
+        status = getattr(item, "status", None)
+        if isinstance(status, int) and not isinstance(status, bool):
+            failure = _provider_failure({"status": status, "message": str(item)})
+            if failure is not None:
+                return failure
+        name = type(item).__name__
+        if name in _CONFIG_EXCEPTION_NAMES:
+            return {"kind": "ModelConfigError", "detail": f"{name}:{item}"[:500]}
+        if name in _TRANSPORT_EXCEPTION_NAMES:
+            return {"kind": "TransportStall", "detail": f"{name}:{item}"[:500]}
+    return None
+
+
+def _failure_from_events(events: Sequence[Mapping[str, Any]]) -> dict[str, str] | None:
+    for raw in reversed(events):
+        event_type = raw.get("type")
+        data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
+        reason: object = None
+        if event_type == "turn/end":
+            reason = data.get("reason")
+        elif event_type == "assistant/chunk":
+            chunk = data.get("chunk")
+            if isinstance(chunk, dict) and chunk.get("type") == "finish":
+                reason = chunk.get("reason")
+        if not isinstance(reason, dict) or reason.get("kind") != "error":
+            continue
+        for key in ("failure", "error"):
+            failure = _provider_failure(reason.get(key))
+            if failure is not None:
+                return failure
+    return None
+
+
+def _fatal_error(failure: dict[str, str]) -> str:
+    kind = failure["kind"]
+    detail = failure.get("detail") or kind
+    return detail if detail.startswith(kind) else f"{kind}:{detail}"
 
 
 def _emit(doc: dict[str, Any], *, code: int) -> int:
@@ -160,6 +279,10 @@ def main() -> int:
                     "error": "dsh_missing_credential",
                     "model": model,
                     "text": "",
+                    "fatal_invoke": {
+                        "kind": "ModelConfigError",
+                        "detail": "dsh_missing_credential",
+                    },
                     "metadata": {"plugin": "dsh"},
                 },
                 code=2,
@@ -263,13 +386,23 @@ def main() -> int:
         text = str(result.final_response or "")
         reason = result.finish_reason
         ok = _ok_from_reason(reason, text)
+        failure = _failure_from_events(native)
+        if failure is not None:
+            ok = False
         return _emit(
             {
                 "model": model,
                 "text": text,
                 "structured": _parse_structured(text),
                 "ok": ok,
-                "error": None if ok else str(reason or "dsh_error"),
+                "error": (
+                    _fatal_error(failure)
+                    if failure is not None
+                    else None
+                    if ok
+                    else str(reason or "dsh_error")
+                ),
+                "fatal_invoke": failure,
                 "events": mapped,
                 "native_events": native,
                 "usage": usage,
@@ -287,21 +420,24 @@ def main() -> int:
             },
             code=0 if ok else 1,
         )
-    except Exception as exc:  # noqa: BLE001
-        return _emit(
-            {
-                "model": model,
-                "text": "",
-                "structured": None,
-                "ok": False,
-                "error": f"{type(exc).__name__}:{exc}",
-                "metadata": {
-                    "plugin": "dsh",
-                    "execution_location": "attempt-container",
-                },
+    except Exception as exc:  # noqa: BLE001 — worker boundary records the failure
+        failure = _failure_from_exception(exc)
+        payload: dict[str, object] = {
+            "model": model,
+            "text": "",
+            "structured": None,
+            "ok": False,
+            "error": _fatal_error(failure)
+            if failure is not None
+            else f"{type(exc).__name__}:{exc}",
+            "metadata": {
+                "plugin": "dsh",
+                "execution_location": "attempt-container",
             },
-            code=1,
-        )
+        }
+        if failure is not None:
+            payload["fatal_invoke"] = failure
+        return _emit(payload, code=1)
 
 
 def open_dsh_session(

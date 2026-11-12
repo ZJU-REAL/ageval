@@ -6,6 +6,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from ageval.model.errors import (
+    FATAL_INVOKE_KINDS,
+    fatal_invoke_detail,
+    typed_fatal_failure,
+)
 from ageval.model.usage import (
     NOT_REPORTED,
     Usage,
@@ -15,6 +20,29 @@ from ageval.model.usage import (
 )
 
 RESULT_HEALTH_NOOP_TURN: str = "noop_turn"
+
+
+def fatal_failure_from_worker(
+    payload: object,
+) -> tuple[BaseException | None, str | None]:
+    """Decode one worker's bounded ``fatal_invoke`` marker.
+
+    Workers serialize only the stable kind and an already-bounded detail.
+    Container executors turn that back into a typed failure before the parent
+    decides whether the invoke is a capability result.
+    """
+    if not isinstance(payload, Mapping):
+        return None, None
+    kind = payload.get("kind")
+    if not isinstance(kind, str) or kind not in FATAL_INVOKE_KINDS:
+        return None, None
+    raw_detail = payload.get("detail")
+    detail = raw_detail.strip() if isinstance(raw_detail, str) else ""
+    detail = detail or kind
+    return (
+        typed_fatal_failure(kind, detail),
+        fatal_invoke_detail(kind, error=detail),
+    )
 
 
 @dataclass(frozen=True, slots=True)

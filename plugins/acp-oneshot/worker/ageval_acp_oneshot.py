@@ -17,6 +17,69 @@ from pathlib import Path
 from queue import Empty, Queue
 from typing import Any
 
+_MODEL_CONFIG_MESSAGES = frozenset(
+    {
+        "acp_model_unavailable",
+        "acp_reasoning_effort_unavailable",
+    }
+)
+_TRANSPORT_EXCEPTION_NAMES = frozenset(
+    {
+        "BrokenPipeError",
+        "ConnectionError",
+        "ConnectionResetError",
+        "EOFError",
+        "Timeout",
+        "TimeoutError",
+    }
+)
+
+
+class _RpcError(RuntimeError):
+    def __init__(self, error: object) -> None:
+        if isinstance(error, dict):
+            code = error.get("code")
+            message = str(error.get("message") or "ACP request failed")
+            data = error.get("data")
+        else:
+            code = None
+            message = str(error or "ACP request failed")
+            data = None
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.data = data
+
+
+def _failure_from_exception(exc: BaseException) -> dict[str, str] | None:
+    text = str(exc).strip()
+    lowered = text.lower()
+    if (
+        getattr(exc, "code", None) == -32000
+        or text in _MODEL_CONFIG_MESSAGES
+        or "authentication required" in lowered
+        or "invalid api key" in lowered
+        or "unauthorized" in lowered
+    ):
+        return {"kind": "ModelConfigError", "detail": text[:500] or "acp_auth_required"}
+    if type(exc).__name__ in _TRANSPORT_EXCEPTION_NAMES or "acp_timeout" in lowered:
+        return {"kind": "TransportStall", "detail": text[:500] or type(exc).__name__}
+    data = getattr(exc, "data", None)
+    if isinstance(data, dict):
+        status = data.get("status_code") or data.get("status")
+        if isinstance(status, int) and not isinstance(status, bool):
+            if 400 <= status < 500 and status not in {408, 429}:
+                return {"kind": "ModelConfigError", "detail": text[:500] or str(status)}
+            if status in {408, 429} or 500 <= status < 600:
+                return {"kind": "TransportStall", "detail": text[:500] or str(status)}
+    return None
+
+
+def _fatal_error(failure: dict[str, str]) -> str:
+    kind = failure["kind"]
+    detail = failure.get("detail") or kind
+    return detail if detail.startswith(kind) else f"{kind}:{detail}"
+
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
@@ -61,18 +124,28 @@ def main(argv: list[str] | None = None) -> int:
         )
     except TimeoutError:
         return _emit(
-            {"ok": False, "error": "acp_timeout", "text": "", "model": model},
+            {
+                "ok": False,
+                "error": "TransportStall:acp_timeout",
+                "text": "",
+                "model": model,
+                "fatal_invoke": {"kind": "TransportStall", "detail": "acp_timeout"},
+            },
             1,
             result_path=result_path,
         )
     except Exception as exc:  # noqa: BLE001 — wrapper boundary
+        failure = _failure_from_exception(exc)
+        payload: dict[str, object] = {
+            "ok": False,
+            "error": _fatal_error(failure) if failure is not None else "acp_protocol_error",
+            "text": "",
+            "detail": f"{type(exc).__name__}:{exc}"[:300],
+        }
+        if failure is not None:
+            payload["fatal_invoke"] = failure
         return _emit(
-            {
-                "ok": False,
-                "error": "acp_protocol_error",
-                "text": "",
-                "detail": f"{type(exc).__name__}:{exc}"[:300],
-            },
+            payload,
             1,
             result_path=result_path,
         )
@@ -296,7 +369,7 @@ class _NdjsonClient:
             raise TimeoutError("acp_timeout") from exc
         if "error" in msg and not ignore_error:
             err = msg.get("error")
-            raise RuntimeError(str(err) if err else "acp_protocol_error")
+            raise _RpcError(err if err is not None else "acp_protocol_error")
         result = msg.get("result")
         return result if isinstance(result, dict) else {}
 

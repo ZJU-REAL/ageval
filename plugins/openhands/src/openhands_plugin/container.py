@@ -18,7 +18,11 @@ from typing import Any
 from ageval.environments.protocol import HOME_PATH, WORKSPACE_PATH, EnvironmentFailure, ExecResult
 from ageval.evidence.redaction import redact_value
 from ageval.model.usage import adopt_usage
-from ageval.plugins.agent_result import AgentResult, parse_validated_text_structured
+from ageval.plugins.agent_result import (
+    AgentResult,
+    fatal_failure_from_worker,
+    parse_validated_text_structured,
+)
 from ageval.plugins.errors import ExtensionMaterializeError
 from openhands_plugin import PLUGIN_ID
 from openhands_plugin.pin import requirement
@@ -314,6 +318,10 @@ class OpenHandsBoxExecutor:
         text = str(document.get("text") or "")
         error = document.get("error")
         ok = bool(document.get("ok")) and exit_code == 0 and not error
+        failure, fatal_error = fatal_failure_from_worker(document.get("fatal_invoke"))
+        if fatal_error is not None:
+            error = fatal_error
+            ok = False
         return AgentResult(
             model=str(document.get("model") or self.model),
             text=text,
@@ -323,6 +331,7 @@ class OpenHandsBoxExecutor:
             stderr=stderr[-2000:],
             events=events,
             usage=adopt_usage(document.get("usage")),
+            failure=failure,
             repeatable=False,
             metadata=metadata,
         )

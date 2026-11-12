@@ -79,6 +79,12 @@ The `acp` plugin declares `inject: [service: environment, capabilities: [attach_
 ### 2.2 `executor: acp-oneshot` (In-Environment Wrapper)
 `acp-oneshot` (`plugins/acp-oneshot`) requires only `exec`. Each `invoke` runs a single `host.exec` wrapper inside the environment that spawns the target `entry`'s ACP stdio server, completes `initialize` → `session/new` → `session/prompt`, and exits; `trajectory_collect` maps the recorded events into `ageval.trajectory.event/1`.
 
+### 2.3 Fatal Invoke Propagation
+
+`AgentResult.failure` is the executor-to-parent signal for an invoke that cannot produce a capability verdict. It carries `ModelConfigError` for authentication, quota, bad request/model binding, or another non-retryable 4xx; `TransportStall` for timeouts, rate limits, connection failures, or 5xx responses; and `StallExhausted` when a parent-loop executor has consumed its retry budget. `agent_invoke_failed` is the Core error title derived from that typed failure, so `evaluator.py` never turns an upstream outage into `FAIL`.
+
+Worker-based executors (`openhands`, `dsh`, `nooa`, and `acp-oneshot`) serialize an optional bounded `fatal_invoke: {kind, detail}` object beside their ordinary JSON result. The in-environment worker derives `kind` from provider-native signals: OpenHands conversation-error classification, DSH `turn/end` failure `code`/`status`, ACP request or binding errors, and LiteLLM/OpenAI status codes. The container decoder turns the marker back into a typed `AgentResult.failure`; it never promotes an unknown exception or ordinary task failure into a fatal provider error. The parent `acp` executor creates the same typed failure directly from its session and prompt errors.
+
 ---
 
 <a id="executor-placement"></a>
