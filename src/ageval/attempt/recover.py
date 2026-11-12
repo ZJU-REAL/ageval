@@ -13,10 +13,11 @@ from ageval.config.errors import ConfigError
 from ageval.environments.box_state import read_partial_output, write_cursor, write_nonce
 from ageval.environments.protocol import ProbeStatus
 from ageval.evidence.activity import ActivityLog, ActivityRecord
-from ageval.evidence.attempt_record import RESULT_FILENAME
+from ageval.evidence.attempt_record import RESULT_FILENAME, read_attempt_result
 from ageval.evidence.checkpoints import CheckpointStore
 from ageval.evidence.locators import default_runs_root
 from ageval.evidence.store import ACTIVITY_LOG_REL, AGENT_BOX_REL
+from ageval.model.errors import is_recoverable_agent_invoke_result
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,44 @@ def find_unsealed_attempt(
     found: list[Path] = []
     for path in runs.iterdir():
         if not path.is_dir() or (path / RESULT_FILENAME).is_file():
+            continue
+        header = _header(path)
+        if header is None:
+            continue
+        payload = header.payload
+        if payload.get("suite_run_id") != suite_run_id:
+            continue
+        if payload.get("task_id") != task_id:
+            continue
+        if payload.get("attempt_index") != attempt_index:
+            continue
+        if payload.get("locked_config_digest") != digest:
+            continue
+        found.append(path)
+    if not found:
+        return None
+    found.sort(key=lambda item: item.stat().st_mtime)
+    return found[-1]
+
+
+def find_recoverable_invoke_attempt(
+    dataset_root: Path,
+    *,
+    suite_run_id: str,
+    task_id: str,
+    attempt_index: int,
+    digest: str,
+) -> Path | None:
+    """Sealed fatal-invoke ERROR with matching slot identity and recovery state."""
+    runs = default_runs_root(dataset_root)
+    if not runs.is_dir():
+        return None
+    found: list[Path] = []
+    for path in runs.iterdir():
+        if not path.is_dir() or not (path / ACTIVITY_LOG_REL).is_file():
+            continue
+        result = read_attempt_result(path)
+        if result is None or not is_recoverable_agent_invoke_result(result):
             continue
         header = _header(path)
         if header is None:

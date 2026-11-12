@@ -139,3 +139,10 @@ def is_recoverable_agent_invoke_error(error: object) -> bool:
     if not isinstance(error, Mapping):
         return False
     return error.get("phase") == "run" and error.get("title") == FATAL_INVOKE_TITLE
+
+
+def is_recoverable_agent_invoke_result(result: object) -> bool:
+    """True for a sealed ERROR result whose failed invoke can resume in place."""
+    if not isinstance(result, Mapping) or result.get("status") != "ERROR":
+        return False
+    return is_recoverable_agent_invoke_error(result.get("error"))
