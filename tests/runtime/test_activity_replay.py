@@ -9,6 +9,8 @@ from tests.helpers.agent_binding import ScriptedBinder, ScriptedExecutor
 
 from ageval.evidence.activity import ActivityLog
 from ageval.evidence.store import AttemptEvidenceStore
+from ageval.model.errors import ModelConfigError
+from ageval.plugins.agent_result import AgentResult
 from ageval.runtime.parent_agent import ParentAgentService
 
 
@@ -68,6 +70,60 @@ def test_completed_invoke_replay_does_not_spend_another_slot(tmp_path: Path) -> 
     assert again.invoke_quota.remaining == 0
     refused = again.invoke(session_id=session_id, prompt="another", request_id="req_new")
     assert refused["error"] == "agent_invocation_limit"
+
+
+def test_fatal_completed_invoke_is_retried_with_one_logical_quota_slot(tmp_path: Path) -> None:
+    evidence = AttemptEvidenceStore(
+        root=tmp_path / "attempt", attempt_id="attempt_a", run_id="run_a"
+    )
+    log = ActivityLog.open(tmp_path / "attempt" / "activity.jsonl")
+    failure = ModelConfigError("chat_http_403:insufficient balance")
+    failing = ScriptedExecutor(
+        script=[
+            AgentResult(
+                model="scripted-model",
+                text="",
+                structured=None,
+                ok=False,
+                error="ModelConfigError:chat_http_403:insufficient balance",
+                failure=failure,
+            )
+        ]
+    )
+    first = _service(evidence, log, failing, limit=1)
+    opened = first.open_session(profile_id="solver")
+    session_id = opened["session_id"]
+    request_id = f"req_{session_id}_turn_1"
+    failed = first.invoke(
+        session_id=session_id, prompt="hello", request_id=request_id, turn_index=1
+    )
+    assert failed["ok"] is False
+    assert first.fatal_invoke == (
+        "ModelConfigError",
+        "ModelConfigError:chat_http_403:insufficient balance",
+    )
+    reopened_log = ActivityLog.open(log.path)
+    assert reopened_log.admitted_run_invoke_count() == 0
+    fatal_payload = reopened_log.records_for(kind="invoke", request_id=request_id)[-1].payload
+    assert fatal_payload["fatal_invoke_kind"] == "ModelConfigError"
+
+    second_executor = ScriptedExecutor()
+    again = _service(evidence, reopened_log, second_executor, limit=1)
+    assert again.fatal_invoke is None
+    assert again.invoke_quota is not None
+    again.invoke_quota.restore_used(reopened_log.admitted_run_invoke_count())
+    again.open_session(profile_id="solver")
+    retried = again.invoke(
+        session_id=session_id, prompt="hello", request_id=request_id, turn_index=1
+    )
+    assert retried["ok"] is True
+    assert second_executor.prompts == ["hello"]
+    assert again.invoke_quota.remaining == 0
+    completed = reopened_log.records_for(kind="invoke", request_id=request_id)
+    assert [record.payload["ok"] for record in completed if record.status == "completed"] == [
+        False,
+        True,
+    ]
 
 
 def test_conflicting_prompt_is_alignment_mismatch(tmp_path: Path) -> None:

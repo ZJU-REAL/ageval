@@ -24,7 +24,12 @@ from typing import Any
 
 from ageval.evidence.redaction import RedactionError, redact_and_assert
 from ageval.evidence.store import AttemptEvidenceStore, InvocationHandle
-from ageval.model.errors import TransportStall
+from ageval.model.errors import (
+    FATAL_INVOKE_PAYLOAD_KEY,
+    TransportStall,
+    fatal_invoke_failure,
+    is_fatal_invoke_payload,
+)
 from ageval.plugins.protocol import ExtensionGraph
 from ageval.plugins.slots import (
     AFTER_AGENT_CLOSE,
@@ -188,6 +193,8 @@ class ParentAgentService:
     elapsed_ms_provider: Any = None
     read_partial: Any = None
     fatal_error: str | None = None
+    # First fatal run-phase invoke in this Attempt. Sticky across sessions.
+    fatal_invoke: tuple[str, str] | None = None
     _ordinals: dict[tuple[str, str, str], int] = field(default_factory=dict, repr=False)
     _phase_clock_frozen: bool = field(default=False, repr=False)
     _stall_freezes: int = field(default=0, repr=False)
@@ -563,6 +570,7 @@ class ParentAgentService:
 
         stall: UpstreamStall | None = None
         token: Any = None
+        fatal_invoke: tuple[str, str] | None = None
         try:
             if ticket.cancel.is_set():
                 raise InvokeCancelled()
@@ -602,6 +610,9 @@ class ParentAgentService:
                     stall.wait()
                     continue
                 break
+            if ticket.run_phase and not _result_ok(result):
+                fatal_invoke = _fatal_invoke_of(result)
+                self._remember_fatal_invoke(fatal_invoke)
             result = self._chain(binding, AFTER_AGENT_INVOKE, result)
             result = self._chain(binding, NORMALIZE_AGENT_RESULT, result)
         except InvokeCancelled:
@@ -622,6 +633,12 @@ class ParentAgentService:
             latency = (time.monotonic() - started) * 1000.0
             kind = str(getattr(exc, "kind", None) or type(exc).__name__)
             detail = str(getattr(exc, "message", None) or exc).strip()[:500]
+            if ticket.run_phase:
+                fatal_invoke = fatal_invoke or fatal_invoke_failure(
+                    error=f"{type(exc).__name__}:{detail or exc}",
+                    failure=exc,
+                )
+                self._remember_fatal_invoke(fatal_invoke)
             if handle is not None:
                 event = {
                     "type": "lifecycle",
@@ -635,7 +652,11 @@ class ParentAgentService:
                 handle.append_event(event)
                 seal_failure(handle, status="crash", error=kind, latency_ms=latency)
             return self._settle_invoke(
-                binding, ticket, handle, self._failed(binding, handle, error=kind)
+                binding,
+                ticket,
+                handle,
+                self._failed(binding, handle, error=kind),
+                fatal_invoke=fatal_invoke,
             )
         finally:
             if token is not None:
@@ -652,6 +673,7 @@ class ParentAgentService:
                     ticket,
                     handle,
                     self._failed(binding, handle, error=redaction_error),
+                    fatal_invoke=fatal_invoke,
                 )
 
         with self._lock:
@@ -676,6 +698,7 @@ class ParentAgentService:
                 "tool_calls": _public_tool_calls(result),
                 "usage": _activity_usage(result.usage),
             },
+            fatal_invoke=fatal_invoke,
         )
 
     def _cancelled(
@@ -776,10 +799,8 @@ class ParentAgentService:
             return {"ok": False, "error": "executor_not_concurrent"}
         if ticket.run_phase:
             assert self.invoke_quota is not None
-            already = self._invoke_is_inflight(ticket.request_id) or (
-                self.activity is not None
-                and self.activity.latest_status(kind="invoke", request_id=ticket.request_id)
-                == "completed"
+            already = self._invoke_is_inflight(ticket.request_id) or self._invoke_is_replayable(
+                ticket.request_id
             )
             if not already and not self.invoke_quota.try_consume():
                 self._note_run_limit("agent_invocations")
@@ -953,6 +974,8 @@ class ParentAgentService:
         payload = completed.payload
         if payload.get("session_id") != session_id:
             return None
+        if is_fatal_invoke_payload(payload):
+            return None
         inv = payload.get("invocation_id")
         if isinstance(inv, str):
             self._reopen_logged_invocation_id(session_id, inv)
@@ -1014,6 +1037,14 @@ class ParentAgentService:
         if self.activity is None:
             return False
         return self.activity.latest_status(kind="invoke", request_id=request_id) == "in_flight"
+
+    def _invoke_is_replayable(self, request_id: str) -> bool:
+        if self.activity is None:
+            return False
+        records = self.activity.records_for(kind="invoke", request_id=request_id)
+        if not records or records[-1].status != "completed":
+            return False
+        return not is_fatal_invoke_payload(records[-1].payload)
 
     def _turn_of(self, binding: SessionBinding, ticket: _Ticket) -> int:
         if isinstance(ticket.turn_index, int) and not isinstance(ticket.turn_index, bool):
@@ -1086,7 +1117,10 @@ class ParentAgentService:
         ticket: _Ticket,
         handle: InvocationHandle | None,
         response: dict[str, Any],
+        *,
+        fatal_invoke: tuple[str, str] | None = None,
     ) -> dict[str, Any]:
+        self._remember_fatal_invoke(fatal_invoke)
         if self.activity is None:
             return response
         if self.activity.latest_status(kind="invoke", request_id=ticket.request_id) != "in_flight":
@@ -1109,6 +1143,8 @@ class ParentAgentService:
             if handle is not None
             else response.get("invocation_id"),
         }
+        if fatal_invoke is not None:
+            payload[FATAL_INVOKE_PAYLOAD_KEY] = fatal_invoke[0]
         if isinstance(elapsed, int | float) and not isinstance(elapsed, bool):
             payload["elapsed_ms"] = float(elapsed)
         self.activity.append(
@@ -1119,6 +1155,10 @@ class ParentAgentService:
             prepare=self._checkpoint_prepare(),
         )
         return response
+
+    def _remember_fatal_invoke(self, failure: tuple[str, str] | None) -> None:
+        if self.fatal_invoke is None and failure is not None:
+            self.fatal_invoke = failure
 
     def _reopen_logged_invocation(
         self, binding: SessionBinding, request_id: str
@@ -1505,6 +1545,16 @@ def _result_repeatable(result: Any) -> bool:
 def _result_reason(result: Any) -> str:
     error = getattr(result, "error", None)
     return "" if error is None else str(error)
+
+
+def _fatal_invoke_of(result: Any) -> tuple[str, str] | None:
+    failure = getattr(result, "failure", None)
+    metadata = getattr(result, "metadata", None)
+    return fatal_invoke_failure(
+        error=_result_reason(result) or None,
+        failure=failure if isinstance(failure, BaseException) else None,
+        metadata=metadata if isinstance(metadata, Mapping) else None,
+    )
 
 
 def _result_stall_exhausted(result: Any) -> bool:

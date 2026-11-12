@@ -8,6 +8,13 @@ enter the stall loop.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
+FATAL_INVOKE_TITLE = "agent_invoke_failed"
+FATAL_INVOKE_PAYLOAD_KEY = "fatal_invoke_kind"
+FATAL_INVOKE_KINDS = frozenset({"ModelConfigError", "TransportStall", "StallExhausted"})
+
 
 class ModelConfigError(Exception):
     """Malformed or unsupported model profile. Not a stall."""
@@ -58,3 +65,77 @@ def http_status_is_config_error(code: int) -> bool:
     succeed, so it must not go through upstream stall.
     """
     return 400 <= code < 500 and code not in _RETRYABLE_4XX
+
+
+def classify_fatal_invoke(
+    *,
+    error: str | None = None,
+    failure: BaseException | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> str | None:
+    """Return the fatal run-invoke kind, or None for an ordinary task failure.
+
+    A stall that the parent recovered ends with ``ok=True`` and never reaches
+    this classifier. Exhausted stall budgets and non-retryable 4xx model
+    configuration errors do.
+    """
+    if type(failure).__name__ == "StallExhausted" or error == "stall_exhausted":
+        return "StallExhausted"
+    if metadata is not None and metadata.get("stall_exhausted") is True:
+        return "StallExhausted"
+    if isinstance(failure, ModelConfigError) or (
+        isinstance(error, str) and error.startswith("ModelConfigError")
+    ):
+        return "ModelConfigError"
+    if isinstance(failure, TransportStall) or (
+        isinstance(error, str) and error.startswith("TransportStall")
+    ):
+        return "TransportStall"
+    return None
+
+
+def fatal_invoke_detail(
+    kind: str,
+    *,
+    error: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> str:
+    """Bounded operator detail; the stable title stays ``agent_invoke_failed``."""
+    reason = metadata.get("reason") if isinstance(metadata, Mapping) else None
+    detail = error or (reason if isinstance(reason, str) else "") or kind
+    if not detail.startswith(kind):
+        detail = f"{kind}:{detail}"
+    return detail[:500]
+
+
+def fatal_invoke_failure(
+    *,
+    error: str | None = None,
+    failure: BaseException | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> tuple[str, str] | None:
+    kind = classify_fatal_invoke(error=error, failure=failure, metadata=metadata)
+    if kind is None:
+        return None
+    detail = error
+    if detail is None and kind != "StallExhausted" and failure is not None:
+        detail = str(getattr(failure, "message", None) or failure)
+    return kind, fatal_invoke_detail(kind, error=detail, metadata=metadata)
+
+
+def is_fatal_invoke_payload(payload: Mapping[str, Any]) -> bool:
+    """True for one completed activity invoke that must not be replayed."""
+    if payload.get("ok") is True:
+        return False
+    stored = payload.get(FATAL_INVOKE_PAYLOAD_KEY)
+    if isinstance(stored, str) and stored in FATAL_INVOKE_KINDS:
+        return True
+    error = payload.get("error")
+    return classify_fatal_invoke(error=error if isinstance(error, str) else None) is not None
+
+
+def is_recoverable_agent_invoke_error(error: object) -> bool:
+    """True for the sealed ERROR shape that resumes in the same Attempt."""
+    if not isinstance(error, Mapping):
+        return False
+    return error.get("phase") == "run" and error.get("title") == FATAL_INVOKE_TITLE
