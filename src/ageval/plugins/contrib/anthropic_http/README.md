@@ -42,9 +42,10 @@ SDK `tools=` / `messages=` remain OpenAI-shaped. Translation to
 
 | Name | Default | Purpose |
 | --- | --- | --- |
-| `model` | `{id: claude-sonnet-4-6}` | Nested spec. `supported_apis`: `chat` (Messages, not Responses). `supported_model_fields`: `id`, `api`, `timeout`, `watchdog`, `extra`. `extra_allowlist`: `thinking`. `reasoning.effort` is rejected. |
+| `model` | `{id: claude-sonnet-4-6}` | Nested spec. `supported_apis`: `chat` (Messages, not Responses). `supported_model_fields`: `id`, `api`, `timeout`, `watchdog`, `extra`. `extra_allowlist`: `thinking`, `output_config`. `reasoning.effort` is rejected. |
 | `model.timeout` / `model.watchdog` | `180` / `180` | Same clocks as openai-http. Omit uses the clock table. `0` is rejected. Watchdog expiry is a repeatable transport error. |
 | `model.extra.thinking` | omit | Copied onto the Messages body. |
+| `model.extra.output_config` | omit | Copied onto the Messages body. `output_config.effort: max` is the Messages effort field. |
 | `base_url` | unset (executor default `https://api.anthropic.com/v1`) | `${ENV_NAME}` (lock stores the locator) or a literal `http(s)` URL. Host `AGEVAL_ANTHROPIC_BASE_URL` is the fallback when the field is omitted. |
 | `api_key` | `ANTHROPIC_API_KEY` | Env **locator name**, not the secret. Empty key is allowed only when `base_url` host is `127.0.0.1` / `localhost` / `::1`. |
 
@@ -58,6 +59,8 @@ model:
     thinking:
       type: enabled
       budget_tokens: 2000
+    output_config:
+      effort: max
 base_url: https://api.anthropic.com/v1
 api_key: ${ANTHROPIC_API_KEY}
 options:
@@ -109,7 +112,9 @@ sealed after invocation, with separate thinking and answer content. Use
 `backend_raw/stream-progress.jsonl` diagnostic journal.
 
 A complete stream requires closed blocks, a usable text/tool response, a valid
-stop reason, and `message_stop`. Premature EOF, malformed tool JSON, provider
+stop reason, and `message_stop`. `stop_reason: refusal` is a finished exchange:
+the invocation is `model_refusal` (`ok: false`, not retried) and is not
+`stream_incomplete` or `stream_empty_answer`. Premature EOF, malformed tool JSON, provider
 error events, thinking-only responses, and `max_tokens` truncation fail explicitly;
 partial text is never published as a successful answer. Provider error details
 are bounded and redacted. Received usage on failure is marked partial, not billed

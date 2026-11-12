@@ -165,7 +165,7 @@ To configure model parameters independently of the agent harness and prevent sil
    - Chat Completions (`api: chat`) encodes top-level `reasoning_effort`, whereas Responses (`api: responses`) encodes nested `reasoning.effort`.
    - When set to `"max"`, `ageval lock` resolves the profile's `model.id` against the canonical models catalog ([08-hub-registry-and-agents.md](08-hub-registry-and-agents.md)) and substitutes the highest tier from that model's `reasoning_options` list into the locked configuration; if the model cannot be uniquely joined or declares no `reasoning_options`, `lock` fails fast.
 2. **`extra` and `extra_allowlist`**:
-   - `extra` passes vendor-specific parameters (such as `reasoning.summary`, `thinking`, or `provider`) and MUST NOT shadow first-class keys (`id`, `api`, `timeout`, `watchdog`, `reasoning_effort`, or `extra.reasoning.effort`).
+   - `extra` passes vendor-specific parameters (such as `reasoning.summary`, `thinking`, `output_config`, or `provider`) and MUST NOT shadow first-class keys (`id`, `api`, `timeout`, `watchdog`, `reasoning_effort`, or `extra.reasoning.effort`).
    - Every `BaseExecutor` subclass explicitly declares `extra_allowlist: frozenset[str]` on the class body (`frozenset()` rejects all `extra` keys). `BaseExecutor.supports_model(spec)` verifies `supported_apis`, `supported_model_fields`, and `extra_allowlist` statically during `ageval lock` ([05-executors-and-acp.md](05-executors-and-acp.md)).
 
 ### 4.2 `--set` override allowlist

@@ -12,7 +12,7 @@ import pytest
 
 from ageval.config.errors import ConfigError
 from ageval.evidence.activity import ActivityLog, ActivityScope
-from ageval.model.usage import UsageUnavailable
+from ageval.model.usage import Usage, UsageUnavailable
 from ageval.plugins.contrib.anthropic_http.executor import AnthropicHTTPExecutor
 from ageval.plugins.contrib.anthropic_http.messages_stream import (
     MessagesAssembler,
@@ -517,6 +517,106 @@ def test_interleaved_block_indices_and_ping():
     assert result["content"][0].get("text") == "ok"
     assert result["content"][1].get("input") == {"q": "v"}
     assert [event["channel"] for event in assembler.events] == ["assistant"]
+
+
+def test_stream_refusal_is_a_model_refusal_not_an_incomplete_stream(tmp_path):
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: Any) -> None:
+            del format, args
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            frames = [
+                text_events()[0],
+                event("content_block_start", index=0, content_block={"type": "text", "text": ""}),
+                event(
+                    "content_block_delta",
+                    index=0,
+                    delta={"type": "text_delta", "text": "I will not do that."},
+                ),
+                event("content_block_stop", index=0),
+                event(
+                    "message_delta",
+                    delta={"stop_reason": "refusal"},
+                    usage={"output_tokens": 6},
+                ),
+                event("message_stop"),
+            ]
+            for value in frames:
+                self.wfile.write(("data: " + value + "\n\n").encode())
+            self.wfile.flush()
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    ex = AnthropicHTTPExecutor(
+        model={"id": "test", "extra": {"output_config": {"effort": "max"}}},
+        base_url=f"http://127.0.0.1:{server.server_port}/v1",
+        options={"stream": True, "max_tokens": 128000, "omit_temperature": True},
+    )
+    try:
+        result = ex.invoke("hi", timeout=3, collect_dir=str(tmp_path))
+        assert not result.ok
+        assert result.error == "model_refusal"
+        assert result.repeatable is False
+        assert result.text == "I will not do that."
+        assert "stream_incomplete" not in (result.error or "")
+        assert result.metadata is not None
+        assert result.metadata["stop_reason"] == "refusal"
+        assert result.metadata["error_origin"] == "model_refusal"
+        assert result.metadata["stream_outcome"] == "ok"
+        assert isinstance(result.usage, Usage)
+        assert result.usage["prompt_tokens"] == 9
+        assert result.usage["completion_tokens"] == 6
+        request = json.loads((tmp_path / "request.json").read_text(encoding="utf-8"))
+        assert request["output_config"] == {"effort": "max"}
+        assert request["max_tokens"] == 128000
+        assert request["stream"] is True
+        assert "temperature" not in request
+    finally:
+        ex.close()
+        server.shutdown()
+        server.server_close()
+
+
+def test_empty_stream_refusal_is_not_an_empty_answer(tmp_path):
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: Any) -> None:
+            del format, args
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            frames = [
+                text_events()[0],
+                event("message_delta", delta={"stop_reason": "refusal"}),
+                event("message_stop"),
+            ]
+            for value in frames:
+                self.wfile.write(("data: " + value + "\n\n").encode())
+            self.wfile.flush()
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    ex = AnthropicHTTPExecutor(
+        model={"id": "test"},
+        base_url=f"http://127.0.0.1:{server.server_port}/v1",
+        options={"stream": True},
+    )
+    try:
+        result = ex.invoke("hi", timeout=3, collect_dir=str(tmp_path))
+        assert not result.ok
+        assert result.error == "model_refusal"
+        assert result.error != "ProtocolError:stream_empty_answer"
+        assert not result.text
+    finally:
+        ex.close()
+        server.shutdown()
+        server.server_close()
 
 
 def test_max_tokens_preserves_partial_events_and_usage(tmp_path):
