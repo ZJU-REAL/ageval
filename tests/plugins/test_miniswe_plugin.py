@@ -120,6 +120,59 @@ def test_official_mini_yaml_loads() -> None:
     assert "{{task}}" in str(agent.get("instance_template") or "")
 
 
+def test_max_tokens_option_reaches_litellm_kwargs() -> None:
+    chat = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={"max_tokens": 4096},
+        model=_model(),
+    )
+    kwargs = chat._litellm_model_kwargs(key="sk-x", base="https://example.invalid/v1")
+    assert kwargs["max_tokens"] == 4096
+    assert "max_output_tokens" not in kwargs
+
+    omitted = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        model=_model(),
+    )
+    omitted_kwargs = omitted._litellm_model_kwargs(key=None, base=None)
+    assert "max_tokens" not in omitted_kwargs
+    assert "max_output_tokens" not in omitted_kwargs
+
+    responses = build_executor(
+        host=SimpleNamespace(kind="local"),
+        placement=_placement(),
+        options={"max_tokens": 128000},
+        model=_model(api="responses"),
+    )
+    responses_kwargs = responses._litellm_model_kwargs(key=None, base=None)
+    assert responses_kwargs["max_output_tokens"] == 128000
+    assert "max_tokens" not in responses_kwargs
+
+
+@pytest.mark.parametrize("raw", [True, False, "4096", 1.5, 0, -3])
+def test_invalid_max_tokens(raw: object) -> None:
+    from ageval.plugins.errors import ExtensionMaterializeError
+
+    with pytest.raises(ExtensionMaterializeError, match="miniswe_max_tokens_invalid"):
+        build_executor(
+            host=SimpleNamespace(kind="local"),
+            placement=_placement(),
+            options={"max_tokens": raw},
+            model=_model(),
+        )
+
+
+def test_blank_max_tokens_stays_unset() -> None:
+    from miniswe_plugin.options import MinisweOptions
+
+    assert MinisweOptions.parse({}).max_tokens is None
+    assert MinisweOptions.parse({"max_tokens": None}).max_tokens is None
+    assert MinisweOptions.parse({"max_tokens": ""}).max_tokens is None
+    assert MinisweOptions.parse({"max_tokens": "  "}).max_tokens is None
+
+
 def test_invalid_step_limit() -> None:
     from ageval.plugins.errors import ExtensionMaterializeError
 

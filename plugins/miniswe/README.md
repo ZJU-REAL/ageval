@@ -48,6 +48,7 @@ These limits are agent knobs, not Model fields.
 <!-- ageval:param-table executor=miniswe -->
 | Name | Default | Purpose |
 | --- | --- | --- |
+| `options.max_tokens` | unset | Omit, blank, or null does not pass a token cap. A positive int is max_tokens on api: chat and max_output_tokens on api: responses. A non-positive int, bool, string, or float is rejected. |
 | `options.stream` | `true` on `api: chat` | Chat Completions use SSE when true. false sends one JSON body. An omitted key is true, so AGEVAL_MINISWE_CHAT_STREAM=0 does not turn a profile run off. Responses ignores this. |
 | `options.step_limit` | 30 | Agent step cap. 0 is unlimited. Negative values are rejected. |
 | `options.cost_limit` | 0 | Cost cap. 0 is unlimited. Negative values are rejected. |
@@ -82,6 +83,7 @@ One profile binds one nested `model:`. The field table is [docs/design/02-schema
 | `reasoning.effort` omit | `reasoning_effort` is absent | `reasoning.effort` is absent. `extra.reasoning` keys such as `summary` are still sent |
 | `timeout` | HTTP client argument | HTTP client argument |
 | `watchdog` | Future abort. Stall reads this clock only | Future abort. Stall reads this clock only |
+| `options.max_tokens` | JSON `max_tokens` | JSON `max_output_tokens` |
 
 HTTP 400, 401, 403, 404, and 422 stop the call as `ModelConfigError`. 408, 429, and 5xx stay transport failures and may stall. An api that cannot represent a declared effort fails the same way, before stall retries.
 
@@ -124,6 +126,7 @@ agent_profiles:
           step_limit: 30          # 0 = unlimited
           cost_limit: 0           # 0 = unlimited
           cmd_timeout: 30
+          max_tokens: 128000      # omit to leave the token cap unset
       - plugin: docker
 ```
 

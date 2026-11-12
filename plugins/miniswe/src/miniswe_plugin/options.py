@@ -48,6 +48,17 @@ def parse_cost(raw: Any) -> float:
     return value
 
 
+def parse_max_tokens(raw: Any) -> int | None:
+    """Omit, blank, or null does not send a token cap."""
+    if raw is None:
+        return None
+    if isinstance(raw, str) and not raw.strip():
+        return None
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
+        raise _invalid("max_tokens", raw)
+    return raw
+
+
 def parse_stream(raw: Any) -> bool:
     if raw is None or raw == "":
         return True
@@ -68,6 +79,18 @@ def parse_stream(raw: Any) -> bool:
 class MinisweOptions:
     """Profile ``options`` for ``executor: miniswe``."""
 
+    max_tokens: int | None = field(
+        default=None,
+        metadata={
+            "type_name": "int | unset",
+            "parse": parse_max_tokens,
+            "description": (
+                "Omit, blank, or null does not pass a token cap. A positive int is "
+                "max_tokens on api: chat and max_output_tokens on api: responses. "
+                "A non-positive int, bool, string, or float is rejected."
+            ),
+        },
+    )
     stream: bool = field(
         default=True,
         metadata={
