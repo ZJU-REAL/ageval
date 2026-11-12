@@ -13,7 +13,7 @@ import asyncio
 import contextlib
 import json
 import uuid
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from dataclasses import replace as replace_plan
 from datetime import UTC, datetime
@@ -308,7 +308,7 @@ def _error_attempt_keys(attempts: list[dict[str, Any]]) -> set[tuple[str, int]]:
     return keys
 
 
-def _recoverable_invoke_keys(attempts: list[dict[str, Any]]) -> set[tuple[str, int]]:
+def _recoverable_invoke_keys(attempts: Sequence[Mapping[str, Any]]) -> set[tuple[str, int]]:
     """Fatal invoke ERROR slots that plain or retry resume attaches in place."""
     keys: set[tuple[str, int]] = set()
     for row in attempts:

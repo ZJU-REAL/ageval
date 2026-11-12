@@ -173,11 +173,11 @@ class Terminus2ExecutorSPI(BaseExecutor):
         try:
             episode = self._run(prompt, timeout=timeout, workdir=workdir, collect_dir=collect_dir)
         except StallExhausted as exc:
-            return self._failed("stall_exhausted", repeatable=False, detail=exc.code)
+            return self._failed("stall_exhausted", repeatable=False, detail=exc.code, failure=exc)
         except TransportFailure as exc:
-            return self._failed(exc.code, repeatable=True)
+            return self._failed(exc.code, repeatable=True, failure=exc)
         except ModelConfigError as exc:
-            return self._failed(str(exc), repeatable=True)
+            return self._failed(str(exc), repeatable=False, failure=exc)
         except EnvironmentFailure as exc:
             return self._failed(exc.message, repeatable=False)
         except ExtensionMaterializeError as exc:
@@ -264,6 +264,7 @@ class Terminus2ExecutorSPI(BaseExecutor):
         *,
         repeatable: bool,
         detail: str | None = None,
+        failure: BaseException | None = None,
     ) -> AgentResult:
         metadata = self._metadata()
         if detail:
@@ -275,6 +276,7 @@ class Terminus2ExecutorSPI(BaseExecutor):
             ok=False,
             error=error,
             repeatable=repeatable,
+            failure=failure,
             metadata=metadata,
         )
 

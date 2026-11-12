@@ -20,6 +20,7 @@ from ageval.environments.protocol import (
     Placement,
 )
 from ageval.model import ModelSpec
+from ageval.model.errors import ModelConfigError, classify_fatal_invoke
 from ageval.plugins.defaults import register_defaults
 from ageval.plugins.errors import InjectUnsatisfiedError
 from ageval.plugins.protocol import BindingIntent, InjectRequirement
@@ -34,7 +35,12 @@ if str(_SRC) not in sys.path:
 
 from terminus2_plugin.episode import run_episode  # noqa: E402
 from terminus2_plugin.factory import Terminus2ExecutorSPI, build_executor  # noqa: E402
-from terminus2_plugin.model_client import ModelReply, complete  # noqa: E402
+from terminus2_plugin.model_client import (  # noqa: E402
+    ModelReply,
+    StallExhausted,
+    TransportFailure,
+    complete,
+)
 from terminus2_plugin.tmux import TmuxSession  # noqa: E402
 from terminus2_plugin.trajectory import SCHEMA  # noqa: E402
 
@@ -165,12 +171,16 @@ def test_invoke_records_events_and_is_not_repeatable_after_keys(monkeypatch) -> 
     assert result.usage.prompt_tokens == 4  # type: ignore[union-attr]
 
 
-def test_http_401_is_a_config_error(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("status", [401, 402, 403])
+def test_http_config_status_is_a_config_error(
+    monkeypatch: pytest.MonkeyPatch,
+    status: int,
+) -> None:
     def boom(request, timeout=0):
         del request, timeout
         raise urllib.error.HTTPError(
             "http://127.0.0.1/v1/chat/completions",
-            401,
+            status,
             "no",
             hdrs=None,  # type: ignore[arg-type]
             fp=io.BytesIO(b"{}"),
@@ -178,7 +188,7 @@ def test_http_401_is_a_config_error(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(urllib.request, "urlopen", boom)
     spec = ModelSpec(id="mock", api="chat", reasoning_effort=None, timeout=5, watchdog=5, extra={})
-    with pytest.raises(Exception, match="terminus2_http_401") as raised:
+    with pytest.raises(Exception, match=f"terminus2_http_{status}") as raised:
         complete(
             [{"role": "user", "content": "hi"}],
             spec=spec,
@@ -187,6 +197,39 @@ def test_http_401_is_a_config_error(monkeypatch: pytest.MonkeyPatch) -> None:
             invoke_timeout=5,
         )
     assert type(raised.value).__name__ == "ModelConfigError"
+
+
+@pytest.mark.parametrize(
+    ("error", "kind"),
+    [
+        (ModelConfigError("terminus2_http_403"), "ModelConfigError"),
+        (TransportFailure("terminus2_transport:URLError"), "TransportStall"),
+        (StallExhausted("terminus2_http_503"), "StallExhausted"),
+    ],
+)
+def test_invoke_retains_fatal_failure_kind(
+    monkeypatch: pytest.MonkeyPatch,
+    error: BaseException,
+    kind: str,
+) -> None:
+    monkeypatch.delenv("AGEVAL_OFFLINE_AGENT", raising=False)
+    host = FakeHost()
+    spi = Terminus2ExecutorSPI(
+        host=host,
+        placement=Placement(target_id="box", workdir=WORKSPACE_PATH),
+        options={"parser": "json", "step_limit": 2, "cmd_timeout": 30},
+        model={"id": "mock", "api": "chat"},
+        base_url="http://127.0.0.1:9/v1",
+    )
+
+    def fail(*args, **kwargs):
+        del args, kwargs
+        raise error
+
+    monkeypatch.setattr(spi, "_run", fail)
+    result = spi.invoke("write hello.txt", timeout=30)
+
+    assert classify_fatal_invoke(error=result.error, failure=result.failure) == kind
 
 
 def test_lock_fails_when_environment_cannot_exec() -> None:

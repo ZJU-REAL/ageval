@@ -33,6 +33,7 @@ from ageval.plugins.slots import (
 )
 
 PHASE = "record"
+type TrajectoryRow = dict[str, object]
 
 
 async def run(ctx: AttemptCtx) -> None:
@@ -162,11 +163,11 @@ def inherited_display_rows(ctx: AttemptCtx) -> list[dict[str, object]]:
     return [{**row, "inherited": True} for row in _read_trajectory_rows(path, strict=False)]
 
 
-def sealed_display_turns(ctx: AttemptCtx) -> list[list[dict[str, Any]]]:
+def sealed_display_turns(ctx: AttemptCtx) -> list[list[TrajectoryRow]]:
     """Rows from the prior seal that still describe already-slimmed invokes."""
     rows = _read_trajectory_rows(ctx.evidence.root / TRAJECTORY_FILENAME, strict=True)
-    turns: list[list[dict[str, Any]]] = []
-    current: list[dict[str, Any]] = []
+    turns: list[list[TrajectoryRow]] = []
+    current: list[TrajectoryRow] = []
     for row in rows:
         current.append(row)
         if row.get("type") == "terminal":
@@ -177,10 +178,10 @@ def sealed_display_turns(ctx: AttemptCtx) -> list[list[dict[str, Any]]]:
     return turns
 
 
-def _read_trajectory_rows(path: Path, *, strict: bool) -> list[dict[str, Any]]:
+def _read_trajectory_rows(path: Path, *, strict: bool) -> list[TrajectoryRow]:
     if not path.is_file():
         return []
-    rows: list[dict[str, Any]] = []
+    rows: list[TrajectoryRow] = []
     for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
