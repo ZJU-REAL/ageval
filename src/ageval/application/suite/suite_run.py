@@ -379,7 +379,7 @@ async def _run_one(
             on_progress=on_progress,
             attempt_index=attempt_index,
             layout=plan.layout,
-            suite_run_id=plan.suite_run_id if recover_unsealed else None,
+            suite_run_id=plan.suite_run_id,
             recover_unsealed=recover_unsealed,
             resume_recorded_invoke_error=resume_recorded_invoke_error,
             **({"allow_prepare": True} if allow_prepare else {}),

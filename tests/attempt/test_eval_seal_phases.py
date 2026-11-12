@@ -10,6 +10,7 @@ import pytest
 from ageval.attempt.ctx import AttemptCtx
 from ageval.attempt.phases import evaluate, record
 from ageval.environments.protocol import EVALUATION_PATH
+from ageval.evidence.invariants import assert_sealed_invariants
 from ageval.evidence.store import AttemptEvidenceStore
 from ageval.plugins.defaults import register_defaults
 from ageval.plugins.protocol import BindingIntent, ExplicitBinding, HandlerRef
@@ -243,6 +244,75 @@ async def test_record_seals_evaluate_invokes_to_observation_not_trajectory(
     assert not any(
         json.loads(line).get("role") == "user" for line in obs.splitlines() if line.strip()
     )
+
+
+@pytest.mark.asyncio
+async def test_record_preserves_sealed_rows_for_slimmed_invocations(tmp_path: Path) -> None:
+    import json
+
+    registry = ExtensionRegistry()
+    register_defaults(registry)
+    graph = resolve(BindingIntent(profile_id="solver"), registry)
+    ctx = _ctx(tmp_path, registry=registry, graph=graph)
+    (ctx.evidence.root / "trajectory.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "turn",
+                        "role": "user",
+                        "content": "old prompt",
+                        "turn_index": 1,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "terminal",
+                        "ok": True,
+                        "usage": {"unavailable": "not_reported"},
+                        "turn_index": 1,
+                    }
+                ),
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (ctx.evidence.root / "agent" / "invocations" / "0001-slimmed").mkdir()
+    fresh = ctx.evidence.root / "agent" / "invocations" / "0002-live"
+    fresh.mkdir()
+    (fresh / "metadata.json").write_text(
+        '{"seq": 2, "status": "completed", "profile_id": "solver"}',
+        encoding="utf-8",
+    )
+    (fresh / "final-response.json").write_text(
+        '{"content": "done", "usage": {"unavailable": "not_reported"}}',
+        encoding="utf-8",
+    )
+    (fresh / "request.json").write_text(
+        '{"messages": [{"content": "new prompt"}]}',
+        encoding="utf-8",
+    )
+    (fresh / "events.jsonl").write_text("", encoding="utf-8")
+
+    await record.run(ctx)
+
+    rows = [
+        json.loads(line)
+        for line in (ctx.evidence.root / "trajectory.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert [row["content"] for row in rows if row.get("role") == "user"] == [
+        "old prompt",
+        "new prompt",
+    ]
+    assert all(
+        row.get("usage") == {"unavailable": "not_reported"}
+        for row in rows
+        if row.get("type") == "terminal"
+    )
+    assert_sealed_invariants(ctx.evidence.root, keep_vendor_raw=False)
 
 
 @pytest.mark.asyncio
