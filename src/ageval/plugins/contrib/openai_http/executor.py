@@ -484,6 +484,11 @@ class OpenAIHTTPExecutor(BaseExecutor):
         # The HTTP clock is ``http_timeout``. The JSON body does not repeat it.
         wire.pop("timeout", None)
         payload.update(wire)
+        if self.options.omit_temperature:
+            payload.pop("temperature", None)
+        if self.options.max_tokens is not None:
+            token_key = "max_output_tokens" if responses else "max_tokens"
+            payload[token_key] = self.options.max_tokens
         if self.options.stream:
             payload["stream"] = True
             if not responses:
