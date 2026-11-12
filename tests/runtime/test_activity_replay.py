@@ -130,6 +130,60 @@ def test_fatal_completed_invoke_is_retried_with_one_logical_quota_slot(tmp_path:
     ]
 
 
+def test_repeated_fatal_retries_keep_one_logical_quota_slot(tmp_path: Path) -> None:
+    evidence = AttemptEvidenceStore(
+        root=tmp_path / "attempt", attempt_id="attempt_a", run_id="run_a"
+    )
+    log_path = tmp_path / "attempt" / "activity.jsonl"
+    request_id = "req_sess_solver_default_main_1_turn_1"
+
+    for _ in range(2):
+        failing = ScriptedExecutor(
+            script=[
+                AgentResult(
+                    model="scripted-model",
+                    text="",
+                    structured=None,
+                    ok=False,
+                    error="ModelConfigError:chat_http_403:insufficient balance",
+                    failure=ModelConfigError("chat_http_403:insufficient balance"),
+                )
+            ]
+        )
+        service = _service(evidence, ActivityLog.open(log_path), failing, limit=1)
+        opened = service.open_session(profile_id="solver")
+        service.invoke(
+            session_id=opened["session_id"],
+            prompt="hello",
+            request_id=request_id,
+            turn_index=1,
+        )
+        assert ActivityLog.open(log_path).admitted_run_invoke_count() == 0
+
+    passing = ScriptedExecutor()
+    resumed = _service(evidence, ActivityLog.open(log_path), passing, limit=1)
+    assert resumed.invoke_quota is not None
+    resumed.invoke_quota.restore_used(ActivityLog.open(log_path).admitted_run_invoke_count())
+    opened = resumed.open_session(profile_id="solver")
+    result = resumed.invoke(
+        session_id=opened["session_id"],
+        prompt="hello",
+        request_id=request_id,
+        turn_index=1,
+    )
+
+    assert result["ok"] is True
+    assert passing.prompts == ["hello"]
+    assert resumed.invoke_quota is not None
+    assert resumed.invoke_quota.remaining == 0
+    completed = ActivityLog.open(log_path).records_for(kind="invoke", request_id=request_id)
+    assert [record.payload["ok"] for record in completed if record.status == "completed"] == [
+        False,
+        False,
+        True,
+    ]
+
+
 @pytest.mark.parametrize(
     ("error", "failure", "metadata", "expected"),
     [
