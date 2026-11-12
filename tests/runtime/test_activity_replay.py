@@ -9,9 +9,13 @@ from tests.helpers.agent_binding import ScriptedBinder, ScriptedExecutor
 
 from ageval.evidence.activity import ActivityLog
 from ageval.evidence.store import AttemptEvidenceStore
-from ageval.model.errors import ModelConfigError
+from ageval.model.errors import ModelConfigError, TransportStall
 from ageval.plugins.agent_result import AgentResult
 from ageval.runtime.parent_agent import ParentAgentService
+
+
+class StallExhausted(Exception):
+    pass
 
 
 @pytest.fixture(autouse=True)
@@ -126,6 +130,171 @@ def test_fatal_completed_invoke_is_retried_with_one_logical_quota_slot(tmp_path:
     ]
 
 
+@pytest.mark.parametrize(
+    ("error", "failure", "metadata", "expected"),
+    [
+        pytest.param(
+            "ModelConfigError:chat_http_403:insufficient balance",
+            ModelConfigError("chat_http_403:insufficient balance"),
+            None,
+            ("ModelConfigError", "ModelConfigError:chat_http_403:insufficient balance"),
+            id="model-config",
+        ),
+        pytest.param(
+            "TransportStall:HTTPError:503",
+            TransportStall("HTTPError:503", kind="http"),
+            None,
+            ("TransportStall", "TransportStall:HTTPError:503"),
+            id="transport-stall",
+        ),
+        pytest.param(
+            "stall_exhausted",
+            StallExhausted("TransportStall:TimeoutError:180"),
+            {"stall_exhausted": True},
+            ("StallExhausted", "StallExhausted:stall_exhausted"),
+            id="stall-exhausted",
+        ),
+    ],
+)
+def test_every_fatal_result_class_is_recorded(
+    tmp_path: Path,
+    error: str,
+    failure: BaseException,
+    metadata: dict[str, object] | None,
+    expected: tuple[str, str],
+) -> None:
+    evidence = AttemptEvidenceStore(
+        root=tmp_path / "attempt", attempt_id="attempt_a", run_id="run_a"
+    )
+    log = ActivityLog.open(tmp_path / "attempt" / "activity.jsonl")
+    executor = ScriptedExecutor(
+        script=[
+            AgentResult(
+                model="scripted-model",
+                text="",
+                structured=None,
+                ok=False,
+                error=error,
+                failure=failure,
+                metadata=metadata,
+                repeatable=False,
+            )
+        ]
+    )
+    service = _service(evidence, log, executor, limit=1)
+    opened = service.open_session(profile_id="solver")
+    request_id = f"req_{opened['session_id']}_turn_1"
+
+    failed = service.invoke(
+        session_id=opened["session_id"],
+        prompt="hello",
+        request_id=request_id,
+        turn_index=1,
+    )
+
+    assert failed["ok"] is False
+    assert service.fatal_invoke == expected
+    assert log.admitted_run_invoke_count() == 0
+    payload = log.records_for(kind="invoke", request_id=request_id)[-1].payload
+    assert payload["fatal_invoke_kind"] == expected[0]
+
+
+@pytest.mark.parametrize(
+    ("failure", "kind"),
+    [
+        pytest.param(
+            ModelConfigError("chat_http_403:insufficient balance"),
+            "ModelConfigError",
+            id="model-config",
+        ),
+        pytest.param(
+            TransportStall("HTTPError:503", kind="http"),
+            "TransportStall",
+            id="transport-stall",
+        ),
+        pytest.param(
+            StallExhausted("TransportStall:TimeoutError:180"),
+            "StallExhausted",
+            id="stall-exhausted",
+        ),
+    ],
+)
+def test_raised_fatal_invoke_crash_is_recorded(
+    tmp_path: Path,
+    failure: BaseException,
+    kind: str,
+) -> None:
+    evidence = AttemptEvidenceStore(
+        root=tmp_path / "attempt", attempt_id="attempt_a", run_id="run_a"
+    )
+    log = ActivityLog.open(tmp_path / "attempt" / "activity.jsonl")
+    service = _service(evidence, log, ScriptedExecutor(raises=failure), limit=1)
+    opened = service.open_session(profile_id="solver")
+    request_id = f"req_{opened['session_id']}_turn_1"
+
+    failed = service.invoke(
+        session_id=opened["session_id"],
+        prompt="hello",
+        request_id=request_id,
+        turn_index=1,
+    )
+
+    assert failed["ok"] is False
+    assert service.fatal_invoke is not None
+    assert service.fatal_invoke[0] == kind
+    payload = log.records_for(kind="invoke", request_id=request_id)[-1].payload
+    assert payload["fatal_invoke_kind"] == kind
+
+
+def test_fatal_invoke_is_sticky_across_agent_sessions(tmp_path: Path) -> None:
+    evidence = AttemptEvidenceStore(
+        root=tmp_path / "attempt", attempt_id="attempt_a", run_id="run_a"
+    )
+    log = ActivityLog.open(tmp_path / "attempt" / "activity.jsonl")
+    executor = ScriptedExecutor(
+        script=[
+            AgentResult(
+                model="scripted-model",
+                text="",
+                structured=None,
+                ok=False,
+                error="TransportStall:HTTPError:503",
+                failure=TransportStall("HTTPError:503", kind="http"),
+                repeatable=False,
+            ),
+            AgentResult(
+                model="scripted-model",
+                text="",
+                structured=None,
+                ok=False,
+                error="ModelConfigError:chat_http_403:insufficient balance",
+                failure=ModelConfigError("chat_http_403:insufficient balance"),
+                repeatable=False,
+            ),
+        ]
+    )
+    service = _service(evidence, log, executor, extra_profiles=("reviewer",))
+    reviewer = service.open_session(profile_id="reviewer")
+    service.invoke(
+        session_id=reviewer["session_id"],
+        prompt="review",
+        request_id=f"req_{reviewer['session_id']}_turn_1",
+        turn_index=1,
+    )
+    solver = service.open_session(profile_id="solver")
+    service.invoke(
+        session_id=solver["session_id"],
+        prompt="solve",
+        request_id=f"req_{solver['session_id']}_turn_1",
+        turn_index=1,
+    )
+
+    assert service.fatal_invoke == (
+        "TransportStall",
+        "TransportStall:HTTPError:503",
+    )
+
+
 def test_conflicting_prompt_is_alignment_mismatch(tmp_path: Path) -> None:
     evidence = AttemptEvidenceStore(
         root=tmp_path / "attempt", attempt_id="attempt_a", run_id="run_a"
@@ -152,8 +321,9 @@ def _service(
     executor: ScriptedExecutor,
     *,
     limit: int = 4,
+    extra_profiles: tuple[str, ...] = (),
 ) -> ParentAgentService:
-    binder = ScriptedBinder(executor)
+    binder = ScriptedBinder(executor, extra_profiles=extra_profiles)
     service = ParentAgentService(
         attempt_id=evidence.attempt_id,
         binder=binder,
