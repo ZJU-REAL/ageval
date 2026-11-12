@@ -574,6 +574,45 @@ def test_chat_stream_disabled_keeps_one_json_body() -> None:
     assert "stream_options" not in recorder.body
 
 
+def test_chat_stream_forwards_max_tokens_and_drops_temperature() -> None:
+    recorder = _Recorder()
+    frames = _sse(_chat_frame({"content": "ok"}, finish="stop"), "[DONE]")
+    server, base = _serve(_stream_success_handler(frames, recorder))
+    try:
+        result = _executor(base, max_tokens=4096, omit_temperature=True).invoke("hi")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result.ok is True
+    assert result.text == "ok"
+    assert recorder.body["max_tokens"] == 4096
+    assert "max_output_tokens" not in recorder.body
+    assert "temperature" not in recorder.body
+    assert recorder.body["stream"] is True
+
+
+def test_responses_stream_forwards_max_output_tokens() -> None:
+    recorder = _Recorder()
+    frames = _sse(_responses_completed([_response_message("ok")]))
+    server, base = _serve(_stream_success_handler(frames, recorder))
+    try:
+        result = _executor(base, api="responses", max_tokens=128000, omit_temperature=True).invoke(
+            "hi"
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert recorder.path.endswith("/responses")
+    assert recorder.body["max_output_tokens"] == 128000
+    assert "max_tokens" not in recorder.body
+    assert "temperature" not in recorder.body
+    assert recorder.body["stream"] is True
+    assert result.ok is True
+    assert result.text == "ok"
+
+
 def _responses_completed(output: list[dict[str, Any]], **extra: Any) -> str:
     response = {
         "id": "resp_1",

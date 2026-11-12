@@ -26,11 +26,17 @@ profile sets `options.stream: true`.
 <!-- ageval:param-table executor=openai-http -->
 | Name | Default | Purpose |
 | --- | --- | --- |
+| `options.max_tokens` | unset | Omit, blank, or null does not pass a token cap. A positive int is max_tokens on api: chat and max_output_tokens on api: responses. A non-positive int, bool, string, or float is rejected. |
+| `options.omit_temperature` | false | When true, do not send temperature. Default false keeps temperature 0 on api: chat. Responses does not send temperature. |
 | `options.stream` | false | Opt-in native SSE for api: chat and api: responses. false keeps one JSON body. |
 | `options.stream_first_event_timeout_seconds` | unset | Deadline from request start to the first SSE data event. Comments and heartbeats do not satisfy it. Unset disables. |
 | `options.stream_idle_timeout_seconds` | unset | Deadline from the last meaningful text/thought/tool fragment. Heartbeats do not reset it. Unset disables. |
 | `options.upstream_stall_seconds` | 3600 | Parent stall budget in seconds. Omit uses the upstream_stall clock. 0 disables. A negative value or a non-integer is rejected. |
 <!-- /ageval:param-table -->
+
+`options.max_tokens` is absent unless set. A positive integer is `max_tokens` on
+`api: chat` and `max_output_tokens` on `api: responses`. `options.omit_temperature: true`
+drops chat `temperature: 0`. Responses does not send `temperature`.
 
 | Name | Default | Purpose |
 | --- | --- | --- |

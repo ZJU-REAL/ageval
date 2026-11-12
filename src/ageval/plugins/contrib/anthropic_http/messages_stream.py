@@ -393,6 +393,9 @@ class MessagesAssembler:
         if not self.done:
             raise StreamProtocolError("stream_missing_message_stop")
         stop_reason = self.stop_reason
+        # A finished refusal is a model decision. It is not a cut stream.
+        if stop_reason == "refusal":
+            return self._document(stop_reason)
         if not isinstance(stop_reason, str) or stop_reason not in {
             "end_turn",
             "stop_sequence",
@@ -409,6 +412,10 @@ class MessagesAssembler:
         has_tools = any(block.get("type") == "tool_use" for block in blocks)
         if (stop_reason == "tool_use") != has_tools:
             raise StreamProtocolError("stream_tool_stop_mismatch")
+        return self._document(stop_reason)
+
+    def _document(self, stop_reason: str) -> MessagesResponse:
+        blocks = [self.blocks[i] for i in sorted(self.blocks)]
         raw = cast(
             MessagesResponse,
             {

@@ -237,6 +237,58 @@ def test_default_stream_round_trip_on_loopback(capsys: pytest.CaptureFixture[str
     assert result.usage.total_tokens == 3
 
 
+def test_max_tokens_is_on_the_chat_body(capsys: pytest.CaptureFixture[str]) -> None:
+    _require_chat_http()
+    captured: dict[str, Any] = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length") or 0)
+            captured["body"] = json.loads(self.rfile.read(length).decode("utf-8"))
+            payload = {
+                "id": "chatcmpl-json",
+                "object": "chat.completion",
+                "created": 1,
+                "model": "m",
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "stop",
+                        "message": {"role": "assistant", "content": "ok"},
+                    }
+                ],
+            }
+            raw = json.dumps(payload).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    server, base = _serve(Handler)
+    try:
+        result = post_chat_completions(
+            api_base=base,
+            api_key=None,
+            model="m",
+            messages=[{"role": "user", "content": "hi"}],
+            extra_body={"max_tokens": 4096, "drop_params": True},
+            stream=False,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert capsys.readouterr().out == ""
+    assert captured["body"]["max_tokens"] == 4096
+    assert "drop_params" not in captured["body"]
+    assert "stream" not in captured["body"]
+    assert result.choices[0].message.content == "ok"
+
+
 def test_stream_false_posts_one_json_body(capsys: pytest.CaptureFixture[str]) -> None:
     _require_chat_http()
     captured: dict[str, Any] = {}

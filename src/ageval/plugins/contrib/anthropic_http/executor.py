@@ -265,7 +265,7 @@ class AnthropicHTTPExecutor(BaseExecutor):
     requires_environment = False
     supported_apis = frozenset({"chat"})
     supported_model_fields = frozenset({"id", "api", "timeout", "watchdog", "extra"})
-    extra_allowlist = frozenset({"thinking"})
+    extra_allowlist = frozenset({"thinking", "output_config"})
     Options = AnthropicHTTPOptions
 
     def __init__(
@@ -333,7 +333,13 @@ class AnthropicHTTPExecutor(BaseExecutor):
             metadata.update(self._stream_meta)
             if metadata:
                 kwargs["metadata"] = metadata
-            if not kwargs.get("ok") and self._stream_partial_usage:
+            # A refusal finished the exchange. Keep the reported usage.
+            # Other stream failures only have a partial counter.
+            if (
+                not kwargs.get("ok")
+                and kwargs.get("error") != "model_refusal"
+                and self._stream_partial_usage
+            ):
                 partial_usage, _ = normalize_anthropic_http_usage(self._stream_partial_usage)
                 kwargs["usage"] = adopt_usage(partial_usage, partial=True)
             kwargs["events"] = tuple(self._stream_events) + tuple(kwargs.get("events") or ())
@@ -555,7 +561,8 @@ class AnthropicHTTPExecutor(BaseExecutor):
         text = _parse_text(blocks)
         thought = _parse_thought(blocks)
         tool_calls = _parse_tool_use(blocks)
-        if not text and not tool_calls and isinstance(raw, dict):
+        refused = isinstance(raw, dict) and raw.get("stop_reason") == "refusal"
+        if not refused and not text and not tool_calls and isinstance(raw, dict):
             text = json.dumps(raw)[:4000]
         structured = None
         try:
@@ -604,6 +611,24 @@ class AnthropicHTTPExecutor(BaseExecutor):
             raw.get("usage") if isinstance(raw, dict) else None,
             response_id=raw.get("id") if isinstance(raw, dict) else None,
         )
+        if refused:
+            return self._seal_turn(
+                model=self.model,
+                text=(text or "")[-8000:],
+                structured=None,
+                ok=False,
+                error="model_refusal",
+                repeatable=False,
+                events=tuple(events),
+                tool_calls=tool_calls,
+                usage=adopt_usage(usage),
+                extra=extra,
+                metadata={
+                    "executor_kind": "anthropic-http",
+                    "stop_reason": "refusal",
+                    "error_origin": "model_refusal",
+                },
+            )
         return self._seal_turn(
             model=self.model,
             text=(text or "")[-8000:],

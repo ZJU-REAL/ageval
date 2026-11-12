@@ -343,6 +343,10 @@ class MinisweExecutorSPI(BaseExecutor):
             model_kwargs["api_base"] = base
         # Unset effort and timeout stay absent. extra cannot carry those keys.
         model_kwargs.update(wire_body(self.spec))
+        if self.options.max_tokens is not None:
+            # Chat Completions uses max_tokens. Responses uses max_output_tokens.
+            token_key = "max_output_tokens" if self.api == "responses" else "max_tokens"
+            model_kwargs[token_key] = self.options.max_tokens
         # Force Connection: close on the wire so gateways / httpx do not keep a
         # sticky ESTAB that later turns hang on (_receive_response_headers +
         # large Send-Q). Merged last over extra headers except we still

@@ -472,6 +472,115 @@ def test_responses_sends_reasoning_effort_only_nested() -> None:
     assert "temperature" not in captured["body"]
 
 
+def _json_handler(
+    captured: dict[str, Any], payload: dict[str, Any]
+) -> type[BaseHTTPRequestHandler]:
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length") or 0)
+            captured["path"] = self.path
+            captured["body"] = json.loads(self.rfile.read(length).decode("utf-8"))
+            raw = json.dumps(payload).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    return Handler
+
+
+def test_chat_sends_max_tokens_and_can_omit_temperature() -> None:
+    captured: dict[str, Any] = {}
+    server, base = _serve(
+        _json_handler(captured, {"choices": [{"message": {"role": "assistant", "content": "ok"}}]})
+    )
+    try:
+        result = OpenAIHTTPExecutor(
+            model={"id": "mock", "api": "chat"},
+            base_url=base,
+            options={"max_tokens": 4096, "omit_temperature": True, "stream": False},
+        ).invoke("hi")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result.ok is True
+    assert captured["path"].endswith("/chat/completions")
+    assert captured["body"]["max_tokens"] == 4096
+    assert "max_output_tokens" not in captured["body"]
+    assert "temperature" not in captured["body"]
+    assert "stream" not in captured["body"]
+
+
+def test_chat_default_keeps_temperature_and_omits_max_tokens() -> None:
+    captured: dict[str, Any] = {}
+    server, base = _serve(
+        _json_handler(captured, {"choices": [{"message": {"role": "assistant", "content": "ok"}}]})
+    )
+    try:
+        result = OpenAIHTTPExecutor(model={"id": "mock"}, base_url=base).invoke("hi")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result.ok is True
+    assert captured["body"]["temperature"] == 0
+    assert "max_tokens" not in captured["body"]
+    assert "max_output_tokens" not in captured["body"]
+
+
+def test_responses_sends_max_output_tokens_without_temperature() -> None:
+    captured: dict[str, Any] = {}
+    server, base = _serve(_json_handler(captured, {"output_text": "ok", "output": []}))
+    try:
+        result = OpenAIHTTPExecutor(
+            model={"id": "mock", "api": "responses"},
+            base_url=base,
+            options={"max_tokens": 128000, "omit_temperature": True},
+        ).invoke("hi")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result.ok is True
+    assert captured["path"].endswith("/responses")
+    assert captured["body"]["max_output_tokens"] == 128000
+    assert "max_tokens" not in captured["body"]
+    assert "temperature" not in captured["body"]
+    assert "stream" not in captured["body"]
+
+
+@pytest.mark.parametrize("raw", [True, False, "4096", 1.5, 0, -1])
+def test_max_tokens_rejects_bool_string_float_and_non_positive(raw: object) -> None:
+    from ageval.config.errors import ConfigError
+    from ageval.plugins.contrib.openai_http.options import OpenAIHTTPOptions
+
+    with pytest.raises(ConfigError, match="openai_max_tokens_invalid"):
+        OpenAIHTTPOptions.parse({"max_tokens": raw})
+
+
+@pytest.mark.parametrize("raw", ["true", 1, 0, 1.0, None])
+def test_omit_temperature_requires_bool(raw: object) -> None:
+    from ageval.plugins.errors import ExtensionMaterializeError
+
+    with pytest.raises(ExtensionMaterializeError, match="omit_temperature_requires_bool"):
+        OpenAIHTTPExecutor(model={"id": "mock"}, options={"omit_temperature": raw})
+
+
+def test_blank_max_tokens_is_unset() -> None:
+    from ageval.plugins.contrib.openai_http.options import OpenAIHTTPOptions
+
+    assert OpenAIHTTPOptions.parse({}).max_tokens is None
+    assert OpenAIHTTPOptions.parse({"max_tokens": None}).max_tokens is None
+    assert OpenAIHTTPOptions.parse({"max_tokens": ""}).max_tokens is None
+    assert OpenAIHTTPOptions.parse({"max_tokens": "  "}).max_tokens is None
+    assert OpenAIHTTPOptions.parse({}).omit_temperature is False
+
+
 def test_watchdog_expiry_is_a_repeatable_transport_error(monkeypatch: pytest.MonkeyPatch) -> None:
     import time
     import urllib.request

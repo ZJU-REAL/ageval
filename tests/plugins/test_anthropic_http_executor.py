@@ -306,6 +306,94 @@ def test_extra_body_and_max_tokens() -> None:
     assert captured["version"] == "2023-06-01"
 
 
+def test_output_config_is_copied_onto_the_messages_body() -> None:
+    from ageval.plugins.contrib.anthropic_http import build_anthropic_http_executor
+
+    captured: dict[str, Any] = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length") or 0)
+            captured["body"] = json.loads(self.rfile.read(length).decode("utf-8"))
+            payload = {"content": [{"type": "text", "text": "ok"}], "stop_reason": "end_turn"}
+            raw = json.dumps(payload).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    server, base = _serve(Handler)
+    try:
+        ex = build_anthropic_http_executor(
+            model={
+                "id": "claude-haiku-5-5",
+                "extra": {"output_config": {"effort": "max"}},
+            },
+            base_url=base,
+            options={"max_tokens": 4096, "omit_temperature": True},
+        )
+        result = ex.invoke("hi")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result.ok is True
+    assert captured["body"]["output_config"] == {"effort": "max"}
+    assert captured["body"]["max_tokens"] == 4096
+    assert "temperature" not in captured["body"]
+
+
+def test_json_refusal_is_a_model_refusal(tmp_path: Path) -> None:
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length") or 0)
+            self.rfile.read(length)
+            payload = {
+                "id": "msg_refuse",
+                "stop_reason": "refusal",
+                "content": [{"type": "text", "text": "I will not do that."}],
+                "usage": {"input_tokens": 3, "output_tokens": 5},
+            }
+            raw = json.dumps(payload).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    server, base = _serve(Handler)
+    collect = tmp_path / "raw"
+    try:
+        result = AnthropicHTTPExecutor(model={"id": "mock"}, base_url=base).invoke(
+            "hi", collect_dir=str(collect)
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result.ok is False
+    assert result.error == "model_refusal"
+    assert result.repeatable is False
+    assert result.text == "I will not do that."
+    assert result.failure is None
+    assert "stream_incomplete" not in (result.error or "")
+    metadata = result.metadata or {}
+    assert metadata["stop_reason"] == "refusal"
+    assert metadata["error_origin"] == "model_refusal"
+    assert result.usage is not None
+    assert result.usage["prompt_tokens"] == 3
+    assert result.usage["completion_tokens"] == 5
+    dumped = json.loads((collect / "request.json").read_text(encoding="utf-8"))
+    assert dumped["max_tokens"] == 4096
+
+
 def test_watchdog_seals_lost_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "ageval.plugins.contrib.anthropic_http.executor._exchange",
