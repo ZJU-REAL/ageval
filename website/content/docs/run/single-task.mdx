@@ -33,9 +33,11 @@ On a TTY, stdout is a short recap (single task: `logs` path). A pipe or `--json`
 ageval run <dataset> --task <task_id> --resume <attempt_id>
 ```
 
-Use this when the parent process stopped before `result.json` was written. ageval keeps that Attempt id. Completed steps stay in `.ageval/runs/<attempt_id>/activity.jsonl`. A live environment that still matches the last completed step is reused. A lost environment is started again and restored from the latest checkpoint of `/attempt/workspace` and `/attempt/home`. Completed calls are not run again. Wall-clock time and invocation count already spent stay charged.
+Use this when the parent process stopped before `result.json` was written, or when a run-phase Agent invoke sealed `ERROR` with title `agent_invoke_failed`. The fatal classes are a non-retryable `ModelConfigError`, an unrecovered `TransportStall`, and `StallExhausted` from any Agent session. They skip `evaluate`, so a provider failure is never scored as `FAIL`.
 
-The command exits 2 and does not write `result.json` when that file already exists, the locked configuration digest does not match, or the environment is still running this Attempt.
+ageval keeps the Attempt id. Completed steps stay in `.ageval/runs/<attempt_id>/activity.jsonl`. A live environment that still matches the last completed step is reused. A lost environment is started again and restored from the latest checkpoint of `/attempt/workspace` and `/attempt/home`. Completed calls are not run again. Wall-clock time already spent stays charged. The failed invoke restarts from its beginning; it does not permanently consume `agent_invocations`, and its admitted retry takes one logical slot. A successful continuation overwrites `result.json` in place without adding a `previous[]` entry.
+
+The command exits 2 and does not write `result.json` when a non-recoverable result already exists, the locked configuration digest does not match, or the environment is still running this Attempt.
 
 ## Fork a retained checkpoint
 

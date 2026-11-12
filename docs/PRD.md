@@ -36,7 +36,7 @@ Evaluating autonomous coding and tool-using agents across benchmarks typically s
 | --- | --- | --- |
 | **Benchmark Author / Converter** | Package tasks with `task.yaml`, `run.py`, `evaluator.py`, `data/`, `evaluation/`, and optional `environment/Dockerfile` without managing container lifecycles or host credentials. | `ageval lock`, `ageval prepare`, `ageval publish` |
 | **Plugin Author** | Extend `environment` or `executor` exclusive slots and lifecycle chain slots by protocol or execution mechanism (`acp`, `docker`, `e2b`, `daytona`, `ssh`, `openai-http`, `miniswe`, `terminus-2`, `openhands`). | `BaseEnvironment`, `BaseExecutor`, `ageval plugin` |
-| **Evaluation Operator** | Run single tasks, full dataset suites, or parameter campaigns across different agents, models, and environments using CLI flags or hosted jobs. Continue an unsealed Attempt in place. | `ageval run`, `ageval campaign`, `--agent`, `--model`, `--resume`, `--resume-suite` |
+| **Evaluation Operator** | Run single tasks, full dataset suites, or parameter campaigns across different agents, models, and environments using CLI flags or hosted jobs. Continue an unsealed Attempt, or a recoverable fatal Agent invoke, in place. | `ageval run`, `ageval campaign`, `--agent`, `--model`, `--resume`, `--resume-suite` |
 | **Result Analyzer / Reviewer** | Inspect sealed trajectories, run read-only post-run analyzers (`stats`, `hack`, `review`), regrade archived artifacts (`regrade`), and curate public Leaderboards on Hub. | `ageval view`, `ageval results analyze`, `ageval results regrade`, Hub SPA |
 
 ---
@@ -104,7 +104,7 @@ Task authors provide `run.py`, `evaluator.py`, `data/`, `evaluation/`, and optio
 7. **No mock executors**: There is no product `executor: mock`, and mocked environments or stubbed agents do not count as acceptance evidence.
 8. **Unconditional cleanup**: `cleanup` always runs inside `try/finally`. Plugins cannot bypass `cleanup` or issue `PASS`.
 9. **Single composition root**: Production wiring lives exclusively in `build_*` functions in `src/ageval/application/composition.py`; `cli/` imports only `composition`.
-10. **Single identity mint per Attempt**: `IdentityFactory.new_run` is called once per Attempt; settled Attempt directories are never overwritten in place.
+10. **Single identity mint per Attempt**: `IdentityFactory.new_run` is called once per Attempt. Settled Attempt directories are never overwritten in place, except when a `run`-phase `agent_invoke_failed` ERROR continues with its retained recovery bundle and matching lock digest.
 11. **Static dependency verification**: Plugin `inject` service and capability requirements are verified during `ageval lock` before any environment starts.
 
 ---

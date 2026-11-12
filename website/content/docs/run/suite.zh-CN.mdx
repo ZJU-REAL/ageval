@@ -25,7 +25,7 @@ ageval run examples/datasets/minimal-demo -k 5 --max-concurrent-tasks 2
 # 只对一题 Always-k
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg -k 5
 
-# 继续已有 suite：尚未写出 result.json 的槽位原地继续，已以 PASS / FAIL / ERROR 结束的跳过
+# 继续已有 suite：未结束或 Agent 调用致命失败的槽位原地继续
 ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task terminal-jsonl-agg -k 5
 
 # 指定要换的成员（PASS / FAIL / ERROR）：新的一次运行，同一个 `suite_run_id`
@@ -33,7 +33,7 @@ ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task t
 # Always-k：只换一格 (task_id, attempt_index)
 # ageval run examples/datasets/minimal-demo --resume-suite <id> --task terminal-jsonl-agg --replace-slot --attempt-index 1
 
-# 重跑本次过滤里已完成的 ERROR（PASS / FAIL 仍跳过）
+# 致命调用原地接续；其余 ERROR 新开 Attempt 重跑（PASS / FAIL 仍跳过）
 ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --retry-errors
 
 # 用已收获的 task-artifacts 再评分：新的一次运行，不跑 agent
@@ -49,7 +49,7 @@ ageval run <dataset> --resume-suite <suite_run_id> --max-tasks 5 -k 2
 ageval run <dataset> --resume-suite <suite_run_id> -k 2
 ```
 
-`--max-tasks N` 要求整数 ≥ 1，按不同任务计数。选中的任务会执行全部剩余 Always-k 槽位。续跑先跳过已结算为 PASS / FAIL / ERROR 的槽位，再取后续 N 个 未完成任务；部分完成的任务占一个任务额度。`--retry-errors` 让 ERROR 槽位重新 进入待执行集合，再按计划顺序应用额度。
+`--max-tasks N` 要求整数 ≥ 1，按不同任务计数。选中的任务会执行全部剩余 Always-k 槽位。续跑先跳过 PASS / FAIL 和普通 ERROR，再取后续 N 个未完成任务；可恢复的 `agent_invoke_failed` ERROR 仍在原 Attempt 里参与。部分完成的任务占一个任务额度。`--retry-errors` 让其余 ERROR 槽位重新进入待执行集合，再按计划顺序应用额度。
 
 并发 worker 启动前就确定本轮任务集合。额度外的任务保持未调度，不生成结果行或 取消占位。本轮完成后写出正常的 `complete` 摘要，退出码继续由任务结果决定。 摘要记录本轮的 `max_tasks`；`task_ids` 和指标覆盖历史已记录任务及本轮新结算 任务，连续续跑后的累计任务数可以超过 N。Hub 的公开排行榜继续检查结果是否覆盖 所绑定 dataset 版本的全部任务。
 
@@ -62,8 +62,9 @@ ageval run <harbor-set> --layout harbor --task a --task b --task c --max-tasks 2
 规则：
 
 - `n_attempts` **禁止**写进 `task.yaml`；也不进 `config_fingerprint`  
-- 不加 `--replace-slot`、也不加 `--retry-errors` 时，已以 PASS / FAIL / ERROR 结束的槽位跳过。`activity.jsonl` 头与本次 suite、task、attempt index 及锁定摘要一致、且尚未写出 `result.json` 的槽位原地继续。没有匹配的活动日志，或摘要对不上，则新开一次 Attempt。缺失的 Always-k index 仍会补上  
-- `--retry-errors` 配合 `--resume-suite`：重跑本次过滤里的 ERROR 格，不必逐个 `--replace-slot`。PASS / FAIL 仍跳过。每一格是新的一次运行，旧行进 `previous[]`  
+- 不加 `--replace-slot`、也不加 `--retry-errors` 时，PASS / FAIL 和普通 ERROR 跳过。`activity.jsonl` 头与本次 suite、task、attempt index 及锁定摘要一致、且尚未写出 `result.json` 的槽位原地继续。run 阶段的 `agent_invoke_failed` ERROR 只要恢复文件还在，也在原 Attempt 里继续：这类错误没有跑 `evaluate`，失败的那次调用会从头重试。没有匹配头或恢复文件、或摘要对不上，则新开一次 Attempt。缺失的 Always-k index 仍会补上
+- `--retry-errors` 配合 `--resume-suite`：`agent_invoke_failed` 原地接续，其余 ERROR 新开 Attempt 重跑。PASS / FAIL 仍跳过。新 Attempt 会把旧行进 `previous[]`；同 Attempt 接续只覆盖当前行，不增加样本，也不增加历史项
+- 一次致命调用不会永久吃掉 `agent_invocations`。它的重试占一个逻辑额度，连续失败的续跑不会改变进度，也不会耗光配额。`--replace-slot` 仍然新开 Attempt
 - `--replace-slot` 写**新**的一次运行；旧行留在盘上并进入 `previous[]`；指标只按现行指针重算  
 - `ageval results regrade` 铸造新的一次运行，把该次的 `task-artifacts/` 拷进打分环境，只跑评分。评分材料与 `evaluator.py` 来自当前 dataset。来源 `result.json` 保持原样。harvest 不够就是 ERROR。轨迹文本不是裁决。`task.yaml` 里没有开关字段  
 - 默认瘦身之后 `task-artifacts/` 仍在。清掉活的工作目录不会删掉这份快照  

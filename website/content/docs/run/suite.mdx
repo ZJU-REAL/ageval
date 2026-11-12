@@ -25,7 +25,7 @@ ageval run examples/datasets/minimal-demo -k 5 --max-concurrent-tasks 2
 # Always-k on one task
 ageval run examples/datasets/minimal-demo --task terminal-jsonl-agg -k 5
 
-# Continue an existing suite: recover unfinished slots in place, skip settled PASS / FAIL / ERROR
+# Continue an existing suite: recover unfinished or fatal-invoke slots in place
 ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task terminal-jsonl-agg -k 5
 
 # Replace one finished row (PASS / FAIL / ERROR): new Attempt, same suite id
@@ -33,7 +33,7 @@ ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --task t
 # Always-k: one (task_id, attempt_index)
 # ageval run examples/datasets/minimal-demo --resume-suite <id> --task terminal-jsonl-agg --replace-slot --attempt-index 1
 
-# Retry every finished ERROR in this filter (PASS / FAIL stay skipped)
+# Continue fatal invokes in place; retry other ERRORs as new Attempts (PASS / FAIL stay skipped)
 ageval run examples/datasets/minimal-demo --resume-suite <suite_run_id> --retry-errors
 
 # Regrade one finished Attempt from its harvested artifacts (new Attempt; the agent does not run)
@@ -49,7 +49,7 @@ ageval run <dataset> --resume-suite <suite_run_id> --max-tasks 5 -k 2
 ageval run <dataset> --resume-suite <suite_run_id> -k 2
 ```
 
-`--max-tasks N` requires an integer ≥ 1 and counts distinct tasks. Each selected task runs all its remaining Always-k slots. Resume skips settled PASS / FAIL / ERROR slots before selecting the next N unfinished tasks. A partially finished task uses one task budget. `--retry-errors` makes ERROR slots eligible again; the cap applies to the resulting pending work in plan order.
+`--max-tasks N` requires an integer ≥ 1 and counts distinct tasks. Each selected task runs all its remaining Always-k slots. Resume skips PASS / FAIL and ordinary ERROR slots before selecting the next N unfinished tasks. A recoverable `agent_invoke_failed` ERROR remains eligible in its existing Attempt. A partially finished task uses one task budget. `--retry-errors` makes other ERROR slots eligible again; the cap applies to the resulting pending work in plan order.
 
 The slice is selected before concurrent workers start. Tasks beyond it remain unscheduled, with no result rows or cancellation placeholders. Finishing the slice writes a normal `complete` summary and preserves the usual result-derived exit code. The summary records this invocation's `max_tasks`; its `task_ids` and metrics include earlier recorded tasks plus the newly settled slice. The cumulative task count can exceed N after resume. The Hub still checks coverage against every task in the bound dataset version for public Leaderboards.
 
@@ -62,8 +62,9 @@ ageval run <harbor-set> --layout harbor --task a --task b --task c --max-tasks 2
 Hard rules:
 
 - `n_attempts` is **not** allowed in `task.yaml` and is **not** part of `config_fingerprint`  
-- Resume without `--replace-slot` or `--retry-errors` skips settled PASS / FAIL / ERROR. An unfinished slot whose `activity.jsonl` header matches this suite, task, attempt index, and lock digest continues in place. A slot with no matching header, or a digest mismatch, starts a new Attempt. Missing Always-k indices are still appended  
-- `--retry-errors` (with `--resume-suite`) re-runs finished ERROR rows in this filter. PASS and FAIL stay skipped. Each retry is a new Attempt; the old row stays in `previous[]`  
+- Resume without `--replace-slot` or `--retry-errors` skips PASS / FAIL and ordinary ERROR. An unfinished slot whose `activity.jsonl` header matches this suite, task, attempt index, and lock digest continues in place. A `run`-phase `agent_invoke_failed` ERROR with its recovery bundle also continues in its existing Attempt: `evaluate` did not run, and the failed invoke restarts from its beginning. A slot with no matching header or bundle, or a digest mismatch, starts a new Attempt. Missing Always-k indices are still appended
+- `--retry-errors` (with `--resume-suite`) continues `agent_invoke_failed` in place and re-runs every other finished ERROR row in this filter. PASS and FAIL stay skipped. A new Attempt keeps the old row in `previous[]`; same-Attempt continuation overwrites its current row and adds no sample or history entry
+- A fatal invoke does not permanently consume `agent_invocations`. Its retry occupies one logical slot, so repeated failed resumes leave both progress and quota where they were. `--replace-slot` still mints a new Attempt
 - `--replace-slot` writes a **new** Attempt; the old row stays on disk and in `previous[]`; metrics use the new current only  
 - `ageval results regrade` mints a new Attempt, copies the source Attempt’s `task-artifacts/` onto the scoring host, and runs evaluate only. Gold and `evaluator.py` come from the dataset. The source `result.json` stays. A missing harvest is ERROR. Trajectory text is not a verdict. There is no task field that turns regrade on or off  
 - `task-artifacts/` stays after the default slim. Cleaning up the live workspace does not remove that snapshot  

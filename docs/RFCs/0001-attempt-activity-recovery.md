@@ -4,7 +4,7 @@
 | --- | --- |
 | Status | Accepted |
 | Date | 2026-10-25 |
-| Decides | `.ageval/runs/<attempt_id>/activity.jsonl` (`ageval.activity/1`) and `.ageval/runs/<attempt_id>/checkpoints/` (`ageval.checkpoint/1`) form the authoritative durability store for an unsealed Attempt. Recovery preserves the `attempt_id` when `result.json` is absent and the lock digest matches. Every `BaseExecutor` streams step boundaries into `activity.jsonl` and restores context on recovery either by projecting `activity.jsonl` (including `compaction` records) or by resuming its native session journal under `/attempt/home` (covering `acp`, `openhands`, `dsh`, `nooa`, `miniswe`, `terminus-2`, `openai-http`, and `anthropic-http`). `EnvironmentProvider` adds `probe(handle)` and `attach(handle)` paired with incremental `/attempt/{workspace,home}` checkpoints so live environments are reused in place and lost environments are restored to the exact step snapshot without fragile bash stdout matching. |
+| Decides | `.ageval/runs/<attempt_id>/activity.jsonl` (`ageval.activity/1`) and `.ageval/runs/<attempt_id>/checkpoints/` (`ageval.checkpoint/1`) form the authoritative durability store for an unsealed Attempt. Recovery preserves the `attempt_id` when `result.json` is absent, or when a fatal provider invoke sealed `agent_invoke_failed`, and the lock digest matches. Every `BaseExecutor` streams step boundaries into `activity.jsonl` and restores context on recovery either by projecting `activity.jsonl` (including `compaction` records) or by resuming its native session journal under `/attempt/home` (covering `acp`, `openhands`, `dsh`, `nooa`, `miniswe`, `terminus-2`, `openai-http`, and `anthropic-http`). `EnvironmentProvider` adds `probe(handle)` and `attach(handle)` paired with incremental `/attempt/{workspace,home}` checkpoints so live environments are reused in place and lost environments are restored to the exact step snapshot without fragile bash stdout matching. |
 | Does not decide | The CLI command and selection UX for `fork`. A fork creates a new Attempt from a chosen historical `seq`; it consumes the `activity.jsonl` prefix and `checkpoints/seq_<N>.json` snapshot defined in this RFC. |
 
 The rules in this RFC are folded into the design pages listed in the final section.
@@ -25,7 +25,7 @@ Today, `ageval run --task` mints three identifiers once per Attempt via `Identit
 4. `record`: runs in `finally` once the environment has started, invoking `trajectory_collect`, `trajectory_enrich`, and `trajectory_seal` to write `trajectory.jsonl` and `summary.json`.
 5. `cleanup`: runs in `finally` to stop any isolated scoring environments and call `host.stop`.
 
-When an Attempt finishes normally or with a handled phase error, it writes `result.json`. Once `result.json` exists, the Attempt directory is immutable: `--retry-errors`, `--replace-slot`, and `ageval results regrade` always allocate a new Attempt and move the previous Attempt reference into `previous[]` on the suite slot.
+When an Attempt finishes normally or with a handled phase error, it writes `result.json`. A settled Attempt is immutable, except that a `run`-phase `agent_invoke_failed` ERROR with its recovery bundle may continue in the same directory. `--replace-slot` and `ageval results regrade` always allocate a new Attempt. `--retry-errors` also allocates a new Attempt for every other ERROR and moves the previous Attempt reference into `previous[]` on the suite slot.
 
 ### 1.2 What breaks when the parent process dies mid-Attempt
 
@@ -247,7 +247,7 @@ To support cold environment rebuilds (`probe == "absent"`), rollback of interrup
 1. **Scope**: Checkpoints cover `workspace/` (`/attempt/workspace`), `home/` (`/attempt/home`), and `artifacts/` (`/attempt/artifacts`). Plaintext credential files (such as `.codex/auth.json` or `.claude/.credentials.json` copied from the host during `keyless_auth`) are excluded from `checkpoints/blobs/` by the `keyless_auth_paths` denylist and are re-injected by `after_environment_ready` when a new environment starts.
 2. **Capture on `local` and `docker`**: Because `local` and `docker` mount `/attempt` directly from `.ageval/runs/<attempt_id>/box/` on the host, the parent process scans `box/` directly on the host filesystem. An in-memory stat cache `(rel_path -> (mtime_ns, size, sha256))` avoids hashing unchanged files; only files whose `mtime_ns` or `size` changed since the previous checkpoint are hashed and copied into `checkpoints/blobs/`.
 3. **Capture on `e2b`, `daytona`, and `ssh`**: A helper script at `/tmp/.ageval-state/checkpoint_sync.py` (outside `/attempt`) compares current file `(mtime_ns, size)` against `/tmp/.ageval-state/stat_index.json`, packs changed files and a manifest delta into a stream, and transfers them to the parent via `host.download`.
-4. **Pruning upon Attempt settlement**: Once `trajectory.jsonl` and `result.json` both exist, Core removes the recovery bundle (`activity.jsonl` and `checkpoints/`) unless `--keep-recovery-state` (or `AGEVAL_KEEP_RECOVERY_STATE`) is set. `--keep-workspace` retains `box/` and `<attempt>/state` only. Unsealed Attempts always keep the bundle.
+4. **Pruning upon Attempt settlement**: Once `trajectory.jsonl` and `result.json` both exist, Core removes the recovery bundle (`activity.jsonl` and `checkpoints/`) unless `--keep-recovery-state` (or `AGEVAL_KEEP_RECOVERY_STATE`) is set. A recoverable `agent_invoke_failed` ERROR is the automatic exception: it retains the bundle for same-Attempt continuation. `--keep-workspace` retains `box/` and `<attempt>/state` only. Unsealed Attempts always keep the bundle.
 
 ---
 
@@ -529,18 +529,24 @@ def reconcile_inflight_tail(scope, host, executor):
 
 | Command | How unsealed Attempts are handled |
 | --- | --- |
-| `ageval run <dataset> --resume-suite <suite_run_id>` | Scans `.ageval/runs/*/activity.jsonl` headers matching `(suite_run_id, task_id, attempt_index)`. If a matching directory has no `result.json` and its `locked_config_digest` matches, the suite recovers that Attempt in place. A slot with no `activity.jsonl` (such as a `suite_cancelled` placeholder that never started) allocates a new Attempt. |
+| `ageval run <dataset> --resume-suite <suite_run_id>` | Scans `.ageval/runs/*/activity.jsonl` headers matching `(suite_run_id, task_id, attempt_index)`. If a matching directory has no `result.json`, or its result is an `agent_invoke_failed` ERROR with a retained bundle, and its `locked_config_digest` matches, the suite continues that Attempt in place. A slot with no `activity.jsonl` (such as a `suite_cancelled` placeholder that never started) allocates a new Attempt. Other settled ERROR slots remain skipped unless `--retry-errors` is set. |
 | `ageval run <dataset> --task <id>` (default) | Allocates a new Attempt so repeated interactive runs always start clean unless recovery is requested. |
-| `ageval run <dataset> --task <id> --resume <attempt_id>` | Recovers the specified unsealed Attempt directory `.ageval/runs/<attempt_id>/` in place. Fails with exit code `2` if `result.json` already exists or `locked_config_digest` does not match. |
+| `ageval run <dataset> --task <id> --resume <attempt_id>` | Recovers the specified unsealed Attempt directory, or its retained `agent_invoke_failed` ERROR, in place. Fails with exit code `2` if any other `result.json` exists or `locked_config_digest` does not match. |
 
 ### 6.2 Quotas (`limits`) and phase clocks across recovery
 
 Recovery must never reset resource budgets or allow an Attempt to bypass `limits` through repeated crashes:
 
-1. **Invocation quota (`limits.agent_invocations`)**: When `ParentAgentService` initializes on recovery, `AgentInvocationQuota._used` is set to the number of `kind: "invoke"` records already admitted in `activity.jsonl`. Resuming an already-admitted `in_flight` `invoke` (including re-sending a cut-off `model_turn` inside that invoke) does not consume an additional quota slot.
+1. **Invocation quota (`limits.agent_invocations`)**: When `ParentAgentService` initializes on recovery, `AgentInvocationQuota._used` is set to the number of `kind: "invoke"` records already admitted in `activity.jsonl`. Resuming an already-admitted `in_flight` `invoke` (including re-sending a cut-off `model_turn` inside that invoke) does not consume an additional quota slot. A completed fatal invoke does not keep a quota slot while it waits for continuation; its next admitted retry takes the one logical slot. Repeated failed continuations therefore leave the restored count unchanged.
 2. **Phase wall-clock budgets (`environment_seconds`, `wall_time_seconds`, `evaluate_seconds`)**: Each completed step and `phase` record logs `elapsed_ms` (active non-stalled phase time). On recovery, `AttemptCtx.arm_phase_budget` subtracts the accumulated active time already spent in the current phase from `limits.<phase_key>`. If the remaining budget is already `<= 0`, the `run` phase immediately records `limit_reached: "wall_time_seconds"` and transitions to `seal_run` and `evaluate`.
 
-### 6.3 Deterministic failure handling (preventing infinite resume loops)
+### 6.3 Fatal provider invoke continuation
+
+A run-phase invoke that ends on `ModelConfigError`, an unrecovered `TransportStall`, or `StallExhausted` is not a capability result. The first such failure in any Agent session makes the Attempt `ERROR` with `error.phase: "run"` and `error.title: "agent_invoke_failed"`; `evaluate` does not start. The failed invoke is recorded as completed, not replayed; its provider detail is bounded and redacted.
+
+The sealed ERROR keeps `activity.jsonl`, `checkpoints/`, and `replay-input.json`. With the same lock digest, an explicit `--resume`, ordinary `--resume-suite`, or `--retry-errors` attaches to the same Attempt and restarts the failed invoke from its beginning. Completed earlier invokes return from the activity log. The current `result.json` and suite row are overwritten in place, without a replacement sample or a `previous[]` entry. This continuation is not an automatic retry; it requires an explicit resume command. `--replace-slot` remains the operation that mints a new Attempt for that slot.
+
+### 6.4 Deterministic failure handling (preventing infinite resume loops)
 
 A critical distinction separates **transient contention** (where another process still owns the environment) from **terminal recovery failure** (where the Attempt state is permanently broken):
 
@@ -552,7 +558,7 @@ A critical distinction separates **transient contention** (where another process
 | Cold environment rebuild or checkpoint restore fails | **Write `result.json`** (`status: "ERROR"`, `title: "recovery_rebuild_failed"`) | Attempt `ERROR` | Marks the Attempt as terminally failed and stops the environment in `finally`. |
 | Header `locked_config_digest` differs from current lock | Leave old directory untouched; **allocate a new Attempt** | Normal run | Config changed; replaying old tool calls on a new config would corrupt evaluation validity. |
 
-### 6.4 How this design enables Fork later (and how it relates to Pi Durable)
+### 6.5 How this design enables Fork later (and how it relates to Pi Durable)
 
 [Pi Durable](https://earendil.com/posts/pi-durable/) establishes four core durability rules that this RFC adopts directly into Core and `BaseExecutor`:
 1. Every step records its intent (`in_flight`) before performing an external effect.

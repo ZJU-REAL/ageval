@@ -71,13 +71,13 @@ ageval results revoke-snapshot <token-or-url>
 | `--max-concurrent-tasks N` | 并行上限；**只加速**，不改 k / PASS |
 | `--max-tasks N` | 按计划顺序最多执行 N 个符合条件的不同任务（整数 ≥ 1）。续跑先跳过已结算槽位，选中任务执行全部剩余 Always-k 槽位。未调度任务没有结果或取消占位。只属于 CLI / job，不进入配置指纹或 Dataset defaults；与 `--replace-slot` 互斥。省略时执行全部符合条件的任务 |
 | `--n-attempts` / `-k N` | Always-k：每题 N 次独立运行（默认 1）；只写在 CLI / job 上 |
-| `--resume <attempt_id>` | 原地继续这一次尚未封存的 Attempt。必须配一个 `--task`。`result.json` 已存在、锁定摘要不一致、或环境仍在跑这次 Attempt 时 exit 2，不写 `result.json` |
-| `--resume-suite <suite_run_id>` | 继续已有 suite：跳过已以 PASS / FAIL / ERROR 结束的槽位。活动日志与本次 suite、task、attempt index 匹配的未结束槽位原地继续；没有匹配日志则新开一次 Attempt。重算 pass@k / pass^k |
-| `--retry-errors` | 配合 `--resume-suite`：重跑本次过滤里的 ERROR 格。PASS / FAIL 仍跳过。新的一次运行；旧行进 `previous[]` |
+| `--resume <attempt_id>` | 原地继续这一次尚未封存的 Attempt，或已保留恢复文件的 `agent_invoke_failed` ERROR。必须配一个 `--task`。其它 `result.json` 已存在、锁定摘要不一致、或环境仍在跑这次 Attempt 时 exit 2，不写 `result.json` |
+| `--resume-suite <suite_run_id>` | 继续已有 suite：跳过 PASS / FAIL 和普通 ERROR。活动日志与本次 suite、task、attempt index 及锁定摘要匹配的未结束槽位原地继续；带恢复文件的 `agent_invoke_failed` ERROR 也在原 Attempt 继续。没有匹配头或恢复文件则新开一次 Attempt。重算 pass@k / pass^k |
+| `--retry-errors` | 配合 `--resume-suite`：`agent_invoke_failed` 原地接续，本次过滤里的其它 ERROR 格新开 Attempt 重跑。PASS / FAIL 仍跳过。新 Attempt 的旧行进 `previous[]` |
 | `--replace-slot` | 配合 `--resume-suite --task`：重跑那一行；新的一次运行；旧行进 `previous[]` |
 | `--attempt-index N` | Always-k 要换的格（默认 0）。只与 `--replace-slot` 一起用 |
 | `--keep-workspace` | 清理后保留环境工作根（默认删除）。不保留 `activity.jsonl` 或 `checkpoints/`。 |
-| `--keep-recovery-state` / `--no-keep-recovery-state` | `result.json` 和 `trajectory.jsonl` 都写出之后，保留或删除 `activity.jsonl`、`checkpoints/` 与 `replay-input.json`。默认删除。中断的 Attempt 始终保留这些文件，`--resume` 不依赖这个开关。未显式指定时回退到 `AGEVAL_KEEP_RECOVERY_STATE`。与 `--keep-workspace` 独立 |
+| `--keep-recovery-state` / `--no-keep-recovery-state` | `result.json` 和 `trajectory.jsonl` 都写出之后，保留或删除 `activity.jsonl`、`checkpoints/` 与 `replay-input.json`。默认删除。中断的 Attempt 始终保留这些文件；`agent_invoke_failed` 也会为同 Attempt 续跑保留。未显式指定时回退到 `AGEVAL_KEEP_RECOVERY_STATE`。与 `--keep-workspace` 独立 |
 | `--keep-vendor-raw` | 封存后保留 vendor raw 与中间调用事件文件；默认丢掉。`task-artifacts/` 两种情况下都保留。与 `--keep-workspace` 独立 |
 | `--dir <path>` | 只配合 Hub ref：在 `<path>/<dataset_id>/` 找包；已匹配则复用 |
 | `--agent` | 绑定 `ageval.agent/1` Agent 包（`pi`、`org/name@version` 或本地路径）；与 `--profiles` 互斥 |

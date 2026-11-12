@@ -10,6 +10,7 @@ description: Result 怎么读；pass@k 是 job 指标，不是整份 dataset 的
 3. PASS / FAIL 仅来自 `evaluator.py` 的返回值  
 4. 整份 dataset / job 汇总（含 pass@k）**≠** 整份 dataset 的 PASS  
 5. 跑完之后的 analyzer 报告 **≠** 分数，也不改写 `evaluation/checks.json`  
+6. run 阶段的上游调用失败不是能力裁决。它跳过 `evaluate`，并以 title 为 `agent_invoke_failed` 的 `ERROR` 封存
 
 ## 终端上
 
@@ -80,6 +81,7 @@ Attempt 页可有 **Timing**（及有数据时的 **Tokens**）条。存在 `ana
 | --- | --- |
 | 配置 / lock | 还没进入正式执行 |
 | 执行 ERROR | 执行边界内出错。`error` 记下 phase、title、message。`ScriptError` 保留你传入的 title；其它异常用类名。Viewer 和 Hub 在 ERROR 旁显示这个 title。PASS 和 FAIL 的 `error` 为空 |
+| Agent 调用 ERROR | run 阶段任一 Agent session 遇到 `ModelConfigError`、未恢复的 `TransportStall` 或 `StallExhausted`。`evaluate` 不运行，恢复文件保留。显式续跑会在同一次 Attempt 里重试失败调用，并覆盖旧的 ERROR |
 | FAIL | 评测认为没过 |
 | PASS | 评测通过 |
 | run 阶段 limit | evaluator 照常打分；`limit` 为 `wall_time_seconds` 或 `agent_invocations` |
