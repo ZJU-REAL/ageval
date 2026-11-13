@@ -436,6 +436,48 @@ def _chunk_has_choices(obj: dict[str, Any]) -> bool:
     return isinstance(choices, list) and len(choices) > 0
 
 
+def _has_nonempty_text(value: Any) -> bool:
+    if isinstance(value, str):
+        return bool(value)
+    if isinstance(value, list):
+        return any(_has_nonempty_text(item) for item in value)
+    if isinstance(value, dict):
+        return any(_has_nonempty_text(value.get(key)) for key in ("text", "content", "value"))
+    return False
+
+
+def _chunk_has_content(obj: dict[str, Any]) -> bool:
+    """Return whether an SSE chunk carries useful model output."""
+    choices = obj.get("choices")
+    if not isinstance(choices, list):
+        return False
+    for choice in choices:
+        if not isinstance(choice, dict):
+            continue
+        delta = choice.get("delta")
+        if not isinstance(delta, dict):
+            continue
+        if any(
+            _has_nonempty_text(delta.get(key))
+            for key in ("content", "reasoning", "reasoning_content")
+        ):
+            return True
+        tool_calls = delta.get("tool_calls")
+        if not isinstance(tool_calls, list):
+            continue
+        for tool_call in tool_calls:
+            if not isinstance(tool_call, dict):
+                continue
+            if tool_call.get("id") or tool_call.get("type"):
+                return True
+            function = tool_call.get("function")
+            if isinstance(function, dict) and any(
+                _has_nonempty_text(function.get(key)) for key in ("name", "arguments")
+            ):
+                return True
+    return False
+
+
 def dump_failed_stream(
     dump_dir: str | None,
     reason: str,
@@ -469,6 +511,22 @@ def dump_failed_stream(
         path.write_bytes(encoded + b"\n")
     except (OSError, ValueError, TypeError):
         return
+
+
+def _raise_content_idle(
+    client: Any,
+    dump_dir: str | None,
+    tail: Iterable[str],
+    *,
+    sentinels: Iterable[str] = (),
+    cause: BaseException | None = None,
+) -> NoReturn:
+    dump_failed_stream(dump_dir, "content_idle", tail, sentinels=sentinels)
+    close_llm_client(client)
+    error = TransportStall("chat_http_content_idle", kind="timeout")
+    if cause is None:
+        raise error
+    raise error from cause
 
 
 def _no_choices_chat_stream() -> NoReturn:
@@ -1000,8 +1058,10 @@ def post_chat_completions(
     ``reasoning_effort=max``. Chunks are assembled into one final assistant
     message including ``tool_calls`` and reasoning fields the non-stream path
     already preserved. ``timeout`` is applied as httpx read idle-between-chunks
-    (and connect), not as a total-generation wall alone — long generations stay
-    healthy as long as chunks keep arriving. Set ``stream=False`` or
+    and useful-content idle (and connect), not as a total-generation wall alone
+    — long generations stay healthy as long as useful chunks keep arriving.
+    Keepalive, empty-delta, and usage-only frames do not refresh the content-idle
+    clock. Set ``stream=False`` or
     ``AGEVAL_MINISWE_CHAT_STREAM=0`` to force the legacy non-stream POST.
     Responses API is untouched (``post_responses_api`` stays non-stream).
 
@@ -1109,49 +1169,57 @@ def post_chat_completions(
         saw_choices = False
         event: str | None = None
         tail: deque[str] = deque(maxlen=_SSE_TAIL_LINES)
-        with client.stream("POST", url, headers=headers, content=body_bytes) as response:
-            if response.status_code >= 400:
-                err_body = (response.read() or b"").decode("utf-8", "replace")[:800]
-                raise_for_http_status("chat_http", response.status_code, err_body)
-            for line in response.iter_lines():
-                if not line:
-                    # Blank line ends one SSE event; the event name does not carry over.
-                    event = None
-                    continue
-                tail.append(line)
-                if ttfb is None:
-                    ttfb = time.perf_counter() - t0
-                    # Suite logs read stderr. stdout is the run result document.
-                    print(
-                        f"miniswe_chat_stream_ttfb:{ttfb:.3f}",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-                if line.startswith("event:"):
-                    event = line[6:].strip() or None
-                    continue
-                if not line.startswith("data:"):
-                    continue
-                data_s = line[5:].strip()
-                if not data_s:
-                    continue
-                if data_s == "[DONE]":
-                    saw_done = True
-                    break
-                try:
-                    obj = json.loads(data_s)
-                except json.JSONDecodeError as exc:
-                    _bad_payload(f"chat_http_bad_json:{data_s[:400]}", exc)
-                if not isinstance(obj, dict):
-                    _bad_payload(f"chat_http_stream_not_object:{type(obj).__name__}")
-                if is_stream_error_chunk(obj, event):
-                    # Even after partial tool_calls: a turn that ended in an
-                    # upstream error is not a completed turn (openai-python
-                    # raises here too). Do not assemble what came before.
-                    dump_failed_stream(sse_dump_dir, "stream_error", tail, sentinels=secrets)
-                    raise_stream_error("chat_http_stream_error", obj, sentinels=secrets)
-                saw_choices = saw_choices or _chunk_has_choices(obj)
-                chunks.append(obj)
+        last_content = t0
+        try:
+            with client.stream("POST", url, headers=headers, content=body_bytes) as response:
+                if response.status_code >= 400:
+                    err_body = (response.read() or b"").decode("utf-8", "replace")[:800]
+                    raise_for_http_status("chat_http", response.status_code, err_body)
+                for line in response.iter_lines():
+                    if time.perf_counter() - last_content >= _timeout_s:
+                        _raise_content_idle(client, sse_dump_dir, tail, sentinels=secrets)
+                    if not line:
+                        # Blank line ends one SSE event; the event name does not carry over.
+                        event = None
+                        continue
+                    tail.append(line)
+                    if ttfb is None:
+                        ttfb = time.perf_counter() - t0
+                        # Suite logs read stderr. stdout is the run result document.
+                        print(
+                            f"miniswe_chat_stream_ttfb:{ttfb:.3f}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    if line.startswith("event:"):
+                        event = line[6:].strip() or None
+                        continue
+                    if not line.startswith("data:"):
+                        continue
+                    data_s = line[5:].strip()
+                    if not data_s:
+                        continue
+                    if data_s == "[DONE]":
+                        saw_done = True
+                        break
+                    try:
+                        obj = json.loads(data_s)
+                    except json.JSONDecodeError as exc:
+                        _bad_payload(f"chat_http_bad_json:{data_s[:400]}", exc)
+                    if not isinstance(obj, dict):
+                        _bad_payload(f"chat_http_stream_not_object:{type(obj).__name__}")
+                    if is_stream_error_chunk(obj, event):
+                        # Even after partial tool_calls: a turn that ended in an
+                        # upstream error is not a completed turn (openai-python
+                        # raises here too). Do not assemble what came before.
+                        dump_failed_stream(sse_dump_dir, "stream_error", tail, sentinels=secrets)
+                        raise_stream_error("chat_http_stream_error", obj, sentinels=secrets)
+                    saw_choices = saw_choices or _chunk_has_choices(obj)
+                    if _chunk_has_content(obj):
+                        last_content = time.perf_counter()
+                    chunks.append(obj)
+        except httpx.ReadTimeout as exc:
+            _raise_content_idle(client, sse_dump_dir, tail, sentinels=secrets, cause=exc)
 
         if not chunks:
             _bad_payload("chat_http_stream_empty")
