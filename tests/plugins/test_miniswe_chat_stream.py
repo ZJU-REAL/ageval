@@ -389,3 +389,86 @@ def test_env_disables_default_stream(
     assert "stream" not in captured["body"]
     assert result.choices[0].message.content == "plain"
     assert capsys.readouterr().out == ""
+
+
+def test_recorded_actions_are_assistant_tool_calls_on_the_wire(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _require_chat_http()
+    captured: dict[str, Any] = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length") or 0)
+            captured["body"] = json.loads(self.rfile.read(length).decode("utf-8"))
+            payload = {
+                "id": "chatcmpl-json",
+                "object": "chat.completion",
+                "created": 1,
+                "model": "m",
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "stop",
+                        "message": {"role": "assistant", "content": "ok"},
+                    }
+                ],
+            }
+            raw = json.dumps(payload).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    recorded = {
+        "role": "assistant",
+        "content": "run",
+        "extra": {
+            "actions": [
+                {"command": "echo one", "tool_call_id": "toolu_a"},
+                {"command": "echo two", "tool_call_id": "toolu_b"},
+            ]
+        },
+    }
+    messages = [
+        {"role": "user", "content": "go"},
+        recorded,
+        {"role": "tool", "tool_call_id": "toolu_a", "content": "one\n"},
+        {"role": "tool", "tool_call_id": "toolu_b", "content": "two\n"},
+    ]
+    server, base = _serve(Handler)
+    try:
+        post_chat_completions(
+            api_base=base,
+            api_key=None,
+            model="m",
+            messages=messages,
+            stream=False,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert capsys.readouterr().out == ""
+    body = captured["body"]["messages"]
+    assert [item["role"] for item in body] == ["user", "assistant", "tool", "tool"]
+    assert "extra" not in body[1]
+    assert body[1]["tool_calls"] == [
+        {
+            "id": "toolu_a",
+            "type": "function",
+            "function": {"name": "bash", "arguments": '{"command": "echo one"}'},
+        },
+        {
+            "id": "toolu_b",
+            "type": "function",
+            "function": {"name": "bash", "arguments": '{"command": "echo two"}'},
+        },
+    ]
+    assert body[-1]["tool_call_id"] == "toolu_b"
+    assert "tool_calls" not in recorded
+    assert recorded["role"] == "assistant"

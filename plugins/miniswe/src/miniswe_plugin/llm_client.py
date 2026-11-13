@@ -31,6 +31,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import Any, NoReturn
 
+from ageval.evidence.activity import chat_messages_for_wire
 from ageval.model.errors import (
     ModelConfigError,
     ProtocolError,
@@ -1027,7 +1028,7 @@ def post_chat_completions(
 
     payload: dict[str, Any] = {
         "model": wire_model,
-        "messages": messages,
+        "messages": chat_messages_for_wire(messages),
     }
     if tools is not None:
         payload["tools"] = tools
@@ -1191,6 +1192,9 @@ def bind_direct_completion_client(
     """
     if not hasattr(model, "_query"):
         return
+    # Set before the tool import. A failed import still leaves a chat model,
+    # and the resume wrapper uses this to decide whether to attach tool_calls.
+    model._ageval_wire = "chat"  # type: ignore[attr-defined]
     try:
         from minisweagent.models.utils.actions_toolcall import BASH_TOOL
     except ImportError:  # pragma: no cover
@@ -1295,6 +1299,9 @@ def bind_direct_responses_client(
     """
     if not hasattr(model, "_query"):
         return
+    # Responses input is not Chat Completions tool_calls. Mark it even when the
+    # direct client cannot bind, so resume does not attach a chat tool_calls list.
+    model._ageval_wire = "responses"  # type: ignore[attr-defined]
     try:
         from minisweagent.models.utils.actions_toolcall_response import (
             BASH_TOOL_RESPONSE_API,

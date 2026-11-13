@@ -12,6 +12,7 @@ from ageval.evidence.activity import (
     ACTIVITY_FORMAT,
     ActivityLog,
     ActivityScope,
+    chat_messages_for_wire,
     project_messages,
     reconcile_inflight_tail,
 )
@@ -179,6 +180,210 @@ def test_project_messages_respects_compaction(tmp_path: Path) -> None:
     assert projected[2]["role"] == "assistant"
     assert projected[2]["content"] == "next-answer"
     assert all("old" not in json.dumps(item) for item in projected)
+
+
+def test_project_messages_pairs_provider_ids_once_after_abort(tmp_path: Path) -> None:
+    """Each tool result is emitted once, under the assistant's provider id.
+
+    The next model turn's in-flight tail repeats those results with the
+    provider id. After the process is cut, that tail is not folded, so the
+    completed tool record has to carry the provider id itself.
+    """
+    log = ActivityLog.open(tmp_path / "activity.jsonl")
+    scope = ActivityScope(log, session_id="sess_a", invoke_request_id="req_a")
+    scope.record_model_turn_in_flight(1, [{"role": "user", "content": "go"}])
+    scope.record_model_turn_completed(
+        1,
+        assistant_text="run two",
+        tool_calls=[
+            {"command": "echo one", "tool_call_id": "toolu_a"},
+            {"command": "echo two", "tool_call_id": "toolu_b"},
+        ],
+    )
+    scope.record_tool_call_in_flight("bash_1", "bash", "execute", {"command": "echo one"})
+    scope.record_tool_call_completed("bash_1", outcome="ok", exit_code=0, content="one\n")
+    scope.record_tool_call_in_flight("bash_2", "bash", "execute", {"command": "echo two"})
+    scope.record_tool_call_completed("bash_2", outcome="ok", exit_code=0, content="two\n")
+    scope.record_model_turn_in_flight(
+        2,
+        [
+            {"role": "tool", "tool_call_id": "toolu_a", "content": "TEMPLATE one"},
+            {"role": "tool", "tool_call_id": "toolu_b", "content": "TEMPLATE two"},
+            {"role": "user", "content": "keep-this-note"},
+        ],
+    )
+    scope.record_model_turn_completed(
+        2,
+        assistant_text="run three",
+        tool_calls=[{"command": "echo three", "tool_call_id": "toolu_c"}],
+    )
+    scope.record_tool_call_in_flight("bash_3", "bash", "execute", {"command": "echo three"})
+    scope.record_tool_call_completed("bash_3", outcome="ok", exit_code=0, content="three\n")
+    scope.record_model_turn_in_flight(
+        3,
+        [{"role": "tool", "tool_call_id": "toolu_c", "content": "TEMPLATE three"}],
+    )
+    scope.record_model_turn_aborted(3, reason="process_interrupted")
+
+    projected = project_messages(log.records, "sess_a")
+    assert [item["role"] for item in projected] == [
+        "user",
+        "assistant",
+        "tool",
+        "tool",
+        "user",
+        "assistant",
+        "tool",
+    ]
+    assert [item["tool_call_id"] for item in projected if item["role"] == "tool"] == [
+        "toolu_a",
+        "toolu_b",
+        "toolu_c",
+    ]
+    assert [item["content"] for item in projected if item["role"] == "tool"] == [
+        "one\n",
+        "two\n",
+        "three\n",
+    ]
+    blob = json.dumps(projected)
+    assert "bash_" not in blob
+    assert "TEMPLATE" not in blob
+    assert projected[-2]["role"] == "assistant"
+    assert projected[-1]["role"] == "tool"
+    assert projected[1]["tool_calls"] == [
+        {
+            "id": "toolu_a",
+            "type": "function",
+            "function": {"name": "bash", "arguments": '{"command": "echo one"}'},
+        },
+        {
+            "id": "toolu_b",
+            "type": "function",
+            "function": {"name": "bash", "arguments": '{"command": "echo two"}'},
+        },
+    ]
+    assert projected[5]["tool_calls"] == [
+        {
+            "id": "toolu_c",
+            "type": "function",
+            "function": {"name": "bash", "arguments": '{"command": "echo three"}'},
+        }
+    ]
+    assert projected[4] == {"role": "user", "content": "keep-this-note"}
+
+    from ageval.plugins.contrib.anthropic_http.executor import anthropic_messages
+
+    _system, chat = anthropic_messages("unused", projected)
+    uses: list[str] = []
+    results: list[tuple[str, str]] = []
+    for turn in chat:
+        content = turn["content"]
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if block.get("type") == "tool_use":
+                assert turn["role"] == "assistant"
+                uses.append(str(block["id"]))
+            elif block.get("type") == "tool_result":
+                assert turn["role"] == "user"
+                results.append((str(block["tool_use_id"]), str(block["content"])))
+    assert uses == ["toolu_a", "toolu_b", "toolu_c"]
+    assert results == [
+        ("toolu_a", "one\n"),
+        ("toolu_b", "two\n"),
+        ("toolu_c", "three\n"),
+    ]
+    assert chat[-1]["role"] == "user"
+    assert chat[-1]["content"][0]["type"] == "tool_result"
+
+
+def test_project_messages_leaves_local_id_when_the_assistant_has_none(tmp_path: Path) -> None:
+    log = ActivityLog.open(tmp_path / "activity.jsonl")
+    scope = ActivityScope(log, session_id="sess_a", invoke_request_id="req_a")
+    scope.record_model_turn_in_flight(1, [{"role": "user", "content": "go"}])
+    scope.record_model_turn_completed(1, assistant_text="run", tool_calls=[{"command": "echo hi"}])
+    scope.record_tool_call_in_flight("bash_1", "bash", "execute", {"command": "echo hi"})
+    scope.record_tool_call_completed("bash_1", outcome="ok", exit_code=0, content="hi\n")
+
+    projected = project_messages(log.records, "sess_a")
+    assistant = next(item for item in projected if item["role"] == "assistant")
+    tool = next(item for item in projected if item["role"] == "tool")
+    assert "tool_calls" not in assistant
+    assert tool["tool_call_id"] == "bash_1"
+    assert tool["content"] == "hi\n"
+
+
+def test_chat_messages_for_wire_puts_tool_calls_on_the_assistant() -> None:
+    recorded = {
+        "role": "assistant",
+        "content": "run",
+        "extra": {
+            "actions": [
+                {"command": "echo one", "tool_call_id": "toolu_a"},
+                {"command": "echo two", "tool_call_id": "toolu_b"},
+            ]
+        },
+    }
+    wired = chat_messages_for_wire([{"role": "user", "content": "go"}, recorded])
+    assert "tool_calls" not in recorded
+    assert recorded["extra"]["actions"][0]["tool_call_id"] == "toolu_a"
+    assert [item["role"] for item in wired] == ["user", "assistant"]
+    assert "extra" not in wired[1]
+    assert wired[1]["tool_calls"] == [
+        {
+            "id": "toolu_a",
+            "type": "function",
+            "function": {"name": "bash", "arguments": '{"command": "echo one"}'},
+        },
+        {
+            "id": "toolu_b",
+            "type": "function",
+            "function": {"name": "bash", "arguments": '{"command": "echo two"}'},
+        },
+    ]
+    stripped = {key: value for key, value in wired[1].items() if key != "extra"}
+    assert stripped["role"] == "assistant"
+    assert stripped["tool_calls"][0]["id"] == "toolu_a"
+
+    preferred = chat_messages_for_wire(
+        [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "toolu_real",
+                        "type": "function",
+                        "function": {"name": "bash", "arguments": '{"command": "ls"}'},
+                    }
+                ],
+                "extra": {"actions": [{"command": "ls", "tool_call_id": "bash_1"}]},
+            }
+        ]
+    )
+    assert preferred[0]["role"] == "assistant"
+    assert preferred[0]["tool_calls"][0]["id"] == "toolu_real"
+    assert "extra" not in preferred[0]
+
+    named = chat_messages_for_wire(
+        [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "toolu_n", "name": "bash", "arguments": {"command": "pwd"}}],
+            }
+        ]
+    )
+    assert named[0]["tool_calls"] == [
+        {
+            "id": "toolu_n",
+            "type": "function",
+            "function": {"name": "bash", "arguments": '{"command": "pwd"}'},
+        }
+    ]
+    assert chat_messages_for_wire([{"role": "user", "content": "hi"}]) == [
+        {"role": "user", "content": "hi"}
+    ]
 
 
 def test_reconcile_aborts_model_and_interrupts_unsafe_tool(tmp_path: Path) -> None:
