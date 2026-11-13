@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 from tests.helpers.box import local_box
 
@@ -111,6 +112,98 @@ def test_miniswe_tail_keeps_every_tool_result() -> None:
         {"role": "tool", "content": "second"},
     ]
     assert [item["content"] for item in _tail(messages)] == ["first", "second"]
+
+
+def _provider_actions() -> list[dict[str, str]]:
+    return [
+        {"command": "echo one", "tool_call_id": "toolu_a"},
+        {"command": "echo two", "tool_call_id": "toolu_b"},
+    ]
+
+
+def _resume_history(actions: list[dict[str, str]]) -> list[dict[str, Any]]:
+    return [
+        {"role": "user", "content": "go"},
+        {"role": "assistant", "content": "run", "extra": {"actions": actions}},
+        {"role": "tool", "tool_call_id": "toolu_a", "content": "one\n"},
+        {"role": "tool", "tool_call_id": "toolu_b", "content": "two\n"},
+    ]
+
+
+class _RecordingModel:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.seen: list[Any] = []
+
+    def query(self, messages: Any, **kwargs: Any) -> Any:
+        del kwargs
+        self.calls += 1
+        self.seen.append(messages)
+        return {
+            "role": "assistant",
+            "content": "later",
+            "extra": {"actions": [{"command": "true", "tool_call_id": "toolu_z"}], "cost": 0.1},
+        }
+
+
+def test_miniswe_resume_sends_openai_tool_calls_before_extra_is_stripped(tmp_path: Path) -> None:
+    log = ActivityLog.open(tmp_path / "activity.jsonl")
+    scope = ActivityScope(log, session_id="sess", invoke_request_id="req")
+    actions = _provider_actions()
+    scope.record_model_turn_in_flight(1, [{"role": "user", "content": "go"}])
+    scope.record_model_turn_completed(1, assistant_text="run", tool_calls=actions)
+    model = _RecordingModel()
+    install_activity(model, _Env(), type("Ex", (), {"activity": scope})())
+
+    replayed = model.query(_resume_history(actions))
+    assert model.calls == 0
+    assert replayed["role"] == "assistant"
+    assert replayed["extra"]["actions"] == actions
+    assert [call["id"] for call in replayed["tool_calls"]] == ["toolu_a", "toolu_b"]
+    assert replayed["tool_calls"][0]["type"] == "function"
+    assert replayed["tool_calls"][0]["function"] == {
+        "name": "bash",
+        "arguments": '{"command": "echo one"}',
+    }
+
+    live = _resume_history(actions)
+    model.query(live)
+    assert model.calls == 1
+    outgoing = model.seen[0]
+    assert isinstance(outgoing, list)
+    assistant = outgoing[1]
+    assert assistant["role"] == "assistant"
+    assert "extra" not in assistant
+    assert [call["id"] for call in assistant["tool_calls"]] == ["toolu_a", "toolu_b"]
+    assert [item["role"] for item in outgoing] == ["user", "assistant", "tool", "tool"]
+    assert outgoing[-1]["tool_call_id"] == "toolu_b"
+    assert live[1]["role"] == "assistant"
+    assert "tool_calls" not in live[1]
+    assert live[1]["extra"]["actions"][0]["tool_call_id"] == "toolu_a"
+
+
+def test_miniswe_responses_resume_does_not_attach_chat_tool_calls(tmp_path: Path) -> None:
+    log = ActivityLog.open(tmp_path / "activity.jsonl")
+    scope = ActivityScope(log, session_id="sess", invoke_request_id="req")
+    actions = _provider_actions()
+    scope.record_model_turn_in_flight(1, [{"role": "user", "content": "go"}])
+    scope.record_model_turn_completed(1, assistant_text="run", tool_calls=actions)
+    model = _RecordingModel()
+    model._ageval_wire = "responses"  # type: ignore[attr-defined]
+    install_activity(model, _Env(), type("Ex", (), {"activity": scope})())
+
+    replayed = model.query(_resume_history(actions))
+    assert model.calls == 0
+    assert replayed["role"] == "assistant"
+    assert "tool_calls" not in replayed
+    assert replayed["extra"]["actions"][0]["tool_call_id"] == "toolu_a"
+
+    live = _resume_history(actions)
+    model.query(live)
+    outgoing = model.seen[0]
+    assert outgoing[1] is live[1]
+    assert outgoing[1]["role"] == "assistant"
+    assert "tool_calls" not in outgoing[1]
 
 
 def test_terminus_restore_does_not_replay_keystrokes(tmp_path: Path) -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ageval.evidence.activity import chat_messages_for_wire, openai_tool_calls
 from ageval.plugins.step_activity import (
     StepReplay,
     checkpoint_prepare,
@@ -29,20 +30,29 @@ def install_activity(model: Any, env: Any, executor: Any) -> None:
             )
             inherited = cached.payload.get("inherited") is True
             cost = 0.0 if inherited else usage.get("cost_usd") if isinstance(usage, dict) else 0.0
-            return {
+            recorded = list(cached.payload.get("tool_calls") or [])
+            replayed = {
                 "role": "assistant",
                 "content": cached.payload.get("assistant_text") or "",
                 "extra": {
-                    "actions": list(cached.payload.get("tool_calls") or []),
+                    "actions": recorded,
                     "cost": 0.0 if inherited else (cost or 0.0),
                     "inherited": inherited,
                 },
             }
+            # Chat Completions strips ``extra`` before the HTTP body. The provider
+            # ids have to live on ``tool_calls`` or the next request has none.
+            if _chat_wire(model):
+                wire = openai_tool_calls(recorded)
+                if wire:
+                    replayed["tool_calls"] = wire
+            return replayed
         step = next_step(scope)
         tail = _tail(messages)
         scope.record_model_turn_in_flight(step, tail)
+        outgoing = chat_messages_for_wire(messages) if _chat_wire(model) else messages
         try:
-            message = orig_query(messages, **kwargs)
+            message = orig_query(outgoing, **kwargs)
         except Exception:  # noqa: BLE001 — a cut-off model turn stays in the log
             scope.record_model_turn_aborted(step, reason="process_interrupted")
             raise
@@ -119,6 +129,11 @@ def install_activity(model: Any, env: Any, executor: Any) -> None:
         return out
 
     env.execute = execute
+
+
+def _chat_wire(model: Any) -> bool:
+    """Responses input is not Chat Completions ``tool_calls``."""
+    return getattr(model, "_ageval_wire", "chat") != "responses"
 
 
 def _bash_ordinal(scope: Any) -> int:

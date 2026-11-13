@@ -16,7 +16,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NoReturn, TypedDict
 
 from ageval.config.errors import ERROR_INVALID_FORMAT, ConfigError
 from ageval.evidence.redaction import redact_and_assert
@@ -649,8 +649,110 @@ def _float_or_zero(value: Any) -> float:
     return float(value)
 
 
+_TOOL_RESULT_ROLES = frozenset({"tool", "function"})
+
+
+def _provider_tool_id(raw: Mapping[str, Any]) -> str:
+    for key in ("id", "tool_call_id", "call_id"):
+        value = raw.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _arguments_text(raw: object) -> str:
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, dict):
+        return json.dumps(raw, ensure_ascii=False)
+    return "{}"
+
+
+class _WireFunction(TypedDict):
+    name: str
+    arguments: str
+
+
+class _WireToolCall(TypedDict):
+    id: str
+    type: str
+    function: _WireFunction
+
+
+def openai_tool_calls(raw: object) -> list[_WireToolCall]:
+    """Recorded calls or miniswe actions → OpenAI ``tool_calls`` rows.
+
+    A row without a provider id is skipped. Local ``bash_N`` ids are not invented.
+    """
+    if not isinstance(raw, list):
+        return []
+    out: list[_WireToolCall] = []
+    for item in raw:
+        if not isinstance(item, Mapping):
+            continue
+        call_id = _provider_tool_id(item)
+        if not call_id:
+            continue
+        function = item.get("function")
+        name = ""
+        arguments: object = None
+        if isinstance(function, Mapping) and function.get("name"):
+            name = str(function["name"])
+            arguments = function.get("arguments")
+        elif isinstance(item.get("name"), str) and str(item.get("name") or "").strip():
+            name = str(item["name"]).strip()
+            arguments = item.get("arguments")
+        elif "command" in item or item.get("tool_call_id"):
+            name = "bash"
+            command = item.get("command")
+            arguments = {"command": command if isinstance(command, str) else ""}
+        if not name:
+            continue
+        out.append(
+            {
+                "id": call_id,
+                "type": "function",
+                "function": {"name": name, "arguments": _arguments_text(arguments)},
+            }
+        )
+    return out
+
+
+def chat_messages_for_wire(messages: object) -> Any:
+    """Copy chat messages into the shape a provider accepts.
+
+    Recorded assistant turns may be ``{role, content, extra.actions}``. Stripping
+    ``extra`` before the HTTP body leaves no ``tool_calls``, and providers that
+    reject assistant prefill then return 400. This attaches real OpenAI
+    ``tool_calls`` and drops ``extra`` on the copy that is sent.
+    """
+    if not isinstance(messages, list):
+        return messages
+    out: list[Any] = []
+    for item in messages:
+        if not isinstance(item, dict):
+            out.append(item)
+            continue
+        copied = {key: value for key, value in item.items() if key != "extra"}
+        if copied.get("role") == "assistant":
+            wire = openai_tool_calls(item.get("tool_calls"))
+            if not wire:
+                extra = item.get("extra")
+                actions = extra.get("actions") if isinstance(extra, dict) else None
+                wire = openai_tool_calls(actions)
+            if wire:
+                copied["tool_calls"] = wire
+        out.append(copied)
+    return out
+
+
 def project_messages(records: list[ActivityRecord], session_id: str) -> list[dict[str, Any]]:
-    """Fold one session's log into a message list, honoring compaction."""
+    """Fold one session's log into a message list, honoring compaction.
+
+    Each completed tool result is emitted once. Its ``tool_call_id`` is the
+    provider id on the preceding assistant message, paired in order. The next
+    model turn's in-flight tail is the same result again and is not copied.
+    """
     session = [record for record in records if record.payload.get("session_id") == session_id]
     skip_through = 0
     out: list[dict[str, Any]] = []
@@ -670,6 +772,9 @@ def project_messages(records: list[ActivityRecord], session_id: str) -> list[dic
         for record in session
         if record.kind == "model_turn" and record.status == "in_flight"
     }
+    pending_ids: list[str] = []
+    pending_index = 0
+    tools_since_assistant = 0
     for record in session:
         if record.seq <= skip_through or record.status != "completed":
             continue
@@ -678,7 +783,13 @@ def project_messages(records: list[ActivityRecord], session_id: str) -> list[dic
             if delta is not None:
                 messages = delta.payload.get("delta_messages")
                 if isinstance(messages, list):
-                    out.extend(dict(item) for item in messages if isinstance(item, dict))
+                    for item in messages:
+                        if not isinstance(item, dict):
+                            continue
+                        role = str(item.get("role") or "")
+                        if tools_since_assistant > 0 and role in _TOOL_RESULT_ROLES:
+                            continue
+                        out.append(dict(item))
             assistant: dict[str, Any] = {
                 "role": "assistant",
                 "content": record.payload.get("assistant_text") or "",
@@ -686,18 +797,26 @@ def project_messages(records: list[ActivityRecord], session_id: str) -> list[dic
             thought = record.payload.get("thought")
             if isinstance(thought, str) and thought:
                 assistant["thought"] = thought
-            calls = record.payload.get("tool_calls")
-            if isinstance(calls, list) and calls:
-                assistant["tool_calls"] = calls
+            wire = openai_tool_calls(record.payload.get("tool_calls"))
+            if wire:
+                assistant["tool_calls"] = wire
             out.append(assistant)
+            pending_ids = [str(call["id"]) for call in wire]
+            pending_index = 0
+            tools_since_assistant = 0
         elif record.kind == "tool_call":
+            call_id = record.payload.get("tool_call_id")
+            if pending_index < len(pending_ids):
+                call_id = pending_ids[pending_index]
+                pending_index += 1
             out.append(
                 {
                     "role": "tool",
-                    "tool_call_id": record.payload.get("tool_call_id"),
+                    "tool_call_id": call_id,
                     "content": record.payload.get("content") or "",
                 }
             )
+            tools_since_assistant += 1
     return out
 
 
