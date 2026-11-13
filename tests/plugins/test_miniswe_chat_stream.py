@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
@@ -24,6 +25,8 @@ from miniswe_plugin.llm_client import (  # noqa: E402
     assemble_chat_completion_from_stream,
     post_chat_completions,
 )
+
+from ageval.model.errors import TransportStall  # noqa: E402
 
 
 def _serve(handler: type[BaseHTTPRequestHandler]) -> tuple[ThreadingHTTPServer, str]:
@@ -235,6 +238,91 @@ def test_default_stream_round_trip_on_loopback(capsys: pytest.CaptureFixture[str
     assert message.tool_calls[0].function.arguments == '{"cmd":"ls"}'
     assert result.usage is not None
     assert result.usage.total_tokens == 3
+
+
+def test_keepalive_and_empty_sse_frames_do_not_refresh_content_idle(
+    tmp_path: Path,
+) -> None:
+    _require_chat_http()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length") or 0)
+            self.rfile.read(length)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            frames = [
+                b": ping\n\n",
+                b'data: {"choices":[]}\n\n',
+                b'data: {"choices":[{"delta":{}}]}\n\n',
+                b'data: {"choices":[],"usage":{"total_tokens":1}}\n\n',
+            ] * 4
+            try:
+                for frame in frames:
+                    self.wfile.write(frame)
+                    self.wfile.flush()
+                    time.sleep(0.03)
+            except (BrokenPipeError, ConnectionResetError):
+                return
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    server, base = _serve(Handler)
+    started = time.perf_counter()
+    try:
+        with pytest.raises(TransportStall, match="chat_http_content_idle"):
+            post_chat_completions(
+                api_base=base,
+                api_key=None,
+                model="m",
+                messages=[{"role": "user", "content": "hi"}],
+                timeout=0.12,
+                sse_dump_dir=str(tmp_path),
+            )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert time.perf_counter() - started < 1.5
+    dumps = list((tmp_path / "miniswe-sse-failures").glob("*.sse.txt"))
+    assert len(dumps) == 1
+    assert ": ping" in dumps[0].read_text(encoding="utf-8")
+
+
+def test_content_idle_after_token_is_a_retryable_stream_failure() -> None:
+    _require_chat_http()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length") or 0)
+            self.rfile.read(length)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(b'data: {"choices":[{"delta":{"content":"token"}}]}\n\n')
+            self.wfile.flush()
+            time.sleep(0.5)
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    server, base = _serve(Handler)
+    try:
+        with pytest.raises(TransportStall, match="chat_http_content_idle"):
+            post_chat_completions(
+                api_base=base,
+                api_key=None,
+                model="m",
+                messages=[{"role": "user", "content": "hi"}],
+                timeout=0.12,
+            )
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_max_tokens_is_on_the_chat_body(capsys: pytest.CaptureFixture[str]) -> None:
