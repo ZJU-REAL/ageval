@@ -27,7 +27,7 @@ import itertools
 import json
 import sys
 import threading
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import Any, NoReturn
 
@@ -340,6 +340,139 @@ def raise_for_http_status(
 def _incomplete_chat_stream() -> NoReturn:
     """A chat SSE body ended before ``data: [DONE]``."""
     raise TransportStall("chat_http_stream_incomplete", kind="transport")
+
+
+# Raw SSE kept for a failure dump: the tail of the stream, bounded.
+_SSE_TAIL_LINES = 400
+_SSE_DUMP_MAX_BYTES = 64 * 1024
+_SSE_DUMP_MAX_FILES = 50
+_SSE_DUMP_SUBDIR = "miniswe-sse-failures"
+_STREAM_ERROR_FIELDS: tuple[tuple[str, int], ...] = (
+    ("type", 128),
+    ("code", 128),
+    ("status_code", 16),
+    ("message", 500),
+)
+
+
+def _redact(value: str, *, limit: int, sentinels: Iterable[str] = ()) -> str:
+    """Shared secret/URL redaction plus the exact credentials of this request."""
+    from ageval.evidence.redaction import redact_text
+    from ageval.plugins.http_stream import redact_provider_text
+
+    keep = [s for s in sentinels if isinstance(s, str) and len(s) >= 8]
+    if keep:
+        value = redact_text(value, extra_sentinels=keep)
+    return redact_provider_text(value, limit=limit) or ""
+
+
+def _stream_error_status(details: dict[str, Any]) -> int | None:
+    for key in ("status_code", "code"):
+        raw = details.get(key)
+        if isinstance(raw, bool):
+            continue
+        if isinstance(raw, int):
+            return raw
+        if isinstance(raw, str) and raw.strip().isdigit():
+            return int(raw.strip())
+    return None
+
+
+def stream_error_details(obj: dict[str, Any], *, sentinels: Iterable[str] = ()) -> dict[str, Any]:
+    """Allowlisted, redacted fields of an in-stream (or 200-body) error object."""
+    nested = obj.get("error")
+    sources: list[dict[str, Any]] = []
+    if isinstance(nested, dict):
+        sources.append(nested)
+    sources.append(obj)
+    details: dict[str, Any] = {}
+    for key, limit in _STREAM_ERROR_FIELDS:
+        for source in sources:
+            raw = source.get(key)
+            if raw is None or isinstance(raw, bool):
+                continue
+            if isinstance(raw, int):
+                details[key] = raw
+                break
+            if isinstance(raw, str) and raw:
+                details[key] = _redact(raw, limit=limit, sentinels=sentinels)
+                break
+    if not details and isinstance(nested, str) and nested:
+        details["message"] = _redact(nested, limit=500, sentinels=sentinels)
+    return details
+
+
+def is_stream_error_chunk(obj: dict[str, Any], event: str | None) -> bool:
+    """True for an SSE frame that reports an upstream error instead of a delta.
+
+    OpenAI-compatible gateways put ``{"error": {...}}`` in a ``data:`` frame
+    once the 200 headers are committed; Anthropic-shaped streams use
+    ``event: error`` / ``"type": "error"``. openai-python raises on a truthy
+    ``error``; this matches it.
+    """
+    return bool(obj.get("error")) or event == "error" or obj.get("type") == "error"
+
+
+def raise_stream_error(
+    prefix: str, obj: dict[str, Any], *, sentinels: Iterable[str] = ()
+) -> NoReturn:
+    """Classify an upstream error frame like an HTTP rejection.
+
+    A non-retryable 4xx status → ``ModelConfigError``. Anything else (no
+    status, 408/429, 5xx, gateway-specific codes) → ``TransportStall`` so the
+    parent stall retries the same messages. Never an empty assistant message.
+    """
+    details = stream_error_details(obj, sentinels=sentinels)
+    message = f"{prefix}:{json.dumps(details, ensure_ascii=False, sort_keys=True)}"
+    status = _stream_error_status(details)
+    if status is not None and http_status_is_config_error(status):
+        raise ModelConfigError(message)
+    raise TransportStall(message, kind="upstream_stream_error")
+
+
+def _chunk_has_choices(obj: dict[str, Any]) -> bool:
+    choices = obj.get("choices")
+    return isinstance(choices, list) and len(choices) > 0
+
+
+def dump_failed_stream(
+    dump_dir: str | None,
+    reason: str,
+    lines: Iterable[str],
+    *,
+    sentinels: Iterable[str] = (),
+) -> None:
+    """Write the redacted tail of a failed SSE body under ``dump_dir``.
+
+    Best effort and bounded: at most ``_SSE_DUMP_MAX_BYTES`` per file and
+    ``_SSE_DUMP_MAX_FILES`` files per directory. Never raises.
+    """
+    if not dump_dir:
+        return
+    import time
+    from pathlib import Path
+
+    try:
+        root = Path(dump_dir) / _SSE_DUMP_SUBDIR
+        root.mkdir(parents=True, exist_ok=True)
+        if sum(1 for _ in root.glob("*.sse.txt")) >= _SSE_DUMP_MAX_FILES:
+            return
+        text = "\n".join(str(line) for line in lines)
+        text = _redact(text, limit=1 << 30, sentinels=sentinels) if text else ""
+        encoded = text.encode("utf-8", "replace")
+        if len(encoded) > _SSE_DUMP_MAX_BYTES:
+            encoded = encoded[-_SSE_DUMP_MAX_BYTES:]
+        safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in reason)[:64]
+        stamp = f"{time.time():.6f}".replace(".", "_")
+        path = root / f"{stamp}-{safe}.sse.txt"
+        path.write_bytes(encoded + b"\n")
+    except (OSError, ValueError, TypeError):
+        return
+
+
+def _no_choices_chat_stream() -> NoReturn:
+    """A chat SSE body reached ``[DONE]`` without a single choice frame."""
+    raise TransportStall("chat_http_stream_no_choices", kind="upstream_stream_error")
 
 
 def _reraise_transport(exc: BaseException) -> NoReturn:
@@ -852,6 +985,7 @@ def post_chat_completions(
     extra_headers: dict[str, str] | None = None,
     extra_body: dict[str, Any] | None = None,
     stream: bool | None = None,
+    sse_dump_dir: str | None = None,
 ) -> Any:
     """POST ``/v1/chat/completions`` with an ephemeral no-keepalive httpx client.
 
@@ -869,8 +1003,16 @@ def post_chat_completions(
     healthy as long as chunks keep arriving. Set ``stream=False`` or
     ``AGEVAL_MINISWE_CHAT_STREAM=0`` to force the legacy non-stream POST.
     Responses API is untouched (``post_responses_api`` stays non-stream).
+
+    An in-stream upstream error (``data: {"error": ...}``, ``event: error``)
+    or a ``[DONE]`` stream that never carried a choice raises
+    ``TransportStall`` (or ``ModelConfigError`` for a non-retryable 4xx
+    code), never an empty assistant message. On those failures and on an
+    incomplete stream, the redacted tail of the raw SSE is written under
+    ``sse_dump_dir`` when given.
     """
     import time
+    from collections import deque
 
     import httpx
     from openai.types.chat import ChatCompletion
@@ -931,6 +1073,7 @@ def post_chat_completions(
     # read= timeout → idle gap between streamed chunks (or full-body wait when
     # non-stream). connect stays capped so DNS/TCP failures fail fast.
     http_timeout, _timeout_s = client_timeout(timeout)
+    secrets = tuple(s for s in (api_key,) if s)
     client = httpx.Client(
         limits=httpx.Limits(max_keepalive_connections=0, max_connections=10),
         timeout=http_timeout,
@@ -954,19 +1097,27 @@ def post_chat_completions(
                 _bad_payload(f"chat_http_bad_json:{response.text[:400]}", exc)
             if not isinstance(data, dict):
                 _bad_payload(f"chat_http_not_object:{type(data).__name__}")
+            if data.get("error") and not data.get("choices"):
+                raise_stream_error("chat_http_body_error", data, sentinels=secrets)
             return ChatCompletion.model_validate(data)
 
         t0 = time.perf_counter()
         ttfb: float | None = None
         chunks: list[dict[str, Any]] = []
         saw_done = False
+        saw_choices = False
+        event: str | None = None
+        tail: deque[str] = deque(maxlen=_SSE_TAIL_LINES)
         with client.stream("POST", url, headers=headers, content=body_bytes) as response:
             if response.status_code >= 400:
                 err_body = (response.read() or b"").decode("utf-8", "replace")[:800]
                 raise_for_http_status("chat_http", response.status_code, err_body)
             for line in response.iter_lines():
                 if not line:
+                    # Blank line ends one SSE event; the event name does not carry over.
+                    event = None
                     continue
+                tail.append(line)
                 if ttfb is None:
                     ttfb = time.perf_counter() - t0
                     # Suite logs read stderr. stdout is the run result document.
@@ -975,6 +1126,9 @@ def post_chat_completions(
                         file=sys.stderr,
                         flush=True,
                     )
+                if line.startswith("event:"):
+                    event = line[6:].strip() or None
+                    continue
                 if not line.startswith("data:"):
                     continue
                 data_s = line[5:].strip()
@@ -989,6 +1143,13 @@ def post_chat_completions(
                     _bad_payload(f"chat_http_bad_json:{data_s[:400]}", exc)
                 if not isinstance(obj, dict):
                     _bad_payload(f"chat_http_stream_not_object:{type(obj).__name__}")
+                if is_stream_error_chunk(obj, event):
+                    # Even after partial tool_calls: a turn that ended in an
+                    # upstream error is not a completed turn (openai-python
+                    # raises here too). Do not assemble what came before.
+                    dump_failed_stream(sse_dump_dir, "stream_error", tail, sentinels=secrets)
+                    raise_stream_error("chat_http_stream_error", obj, sentinels=secrets)
+                saw_choices = saw_choices or _chunk_has_choices(obj)
                 chunks.append(obj)
 
         if not chunks:
@@ -996,7 +1157,14 @@ def post_chat_completions(
         # EOF without the SSE terminator is a cut socket (macOS often reports
         # that as a clean end, Linux as EBADF). It is not a finished completion.
         if not saw_done:
+            dump_failed_stream(sse_dump_dir, "stream_incomplete", tail, sentinels=secrets)
             _incomplete_chat_stream()
+        # Usage-only (``choices: []``) or other choice-less frames + [DONE]:
+        # the gateway produced no model turn. Assembling would yield an empty
+        # assistant that the harness misreads as "no tool call" (FormatError).
+        if not saw_choices:
+            dump_failed_stream(sse_dump_dir, "stream_no_choices", tail, sentinels=secrets)
+            _no_choices_chat_stream()
         data = assemble_chat_completion_from_stream(chunks)
         return ChatCompletion.model_validate(data)
     except Exception as exc:  # noqa: BLE001 — _reraise_transport always raises
@@ -1013,6 +1181,7 @@ def bind_direct_completion_client(
     api_base: str | None,
     timeout: float | None,
     stream: bool | None = None,
+    sse_dump_dir: str | None = None,
 ) -> None:
     """Replace ``LitellmModel._query`` with curl-equivalent httpx chat POST.
 
@@ -1056,6 +1225,7 @@ def bind_direct_completion_client(
                 extra_headers=headers,
                 extra_body=extra_body or None,
                 stream=stream,
+                sse_dump_dir=sse_dump_dir,
             )
         finally:
             recycle_llm_clients()
