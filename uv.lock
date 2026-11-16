@@ -85,8 +85,8 @@ dev = [
 requires-dist = [
     { name = "agent-client-protocol", specifier = "==0.12.0" },
     { name = "boto3", marker = "extra == 'registry'", specifier = ">=1.35.0" },
-    { name = "daytona", marker = "extra == 'all'", specifier = ">=0.21.0" },
-    { name = "daytona", marker = "extra == 'daytona'", specifier = ">=0.21.0" },
+    { name = "daytona", marker = "extra == 'all'", specifier = ">=0.21.0,<1" },
+    { name = "daytona", marker = "extra == 'daytona'", specifier = ">=0.21.0,<1" },
     { name = "deepseek-harness-sdk", marker = "extra == 'all'", specifier = "==0.1.0rc6" },
     { name = "deepseek-harness-sdk", marker = "extra == 'dsh'", specifier = "==0.1.0rc6" },
     { name = "e2b", marker = "extra == 'all'", specifier = ">=2.25.0" },
