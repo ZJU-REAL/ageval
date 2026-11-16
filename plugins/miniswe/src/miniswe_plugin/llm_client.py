@@ -28,7 +28,7 @@ import json
 import sys
 import threading
 import time
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, NoReturn
 
@@ -368,7 +368,7 @@ def _redact(value: str, *, limit: int, sentinels: Iterable[str] = ()) -> str:
     return redact_provider_text(value, limit=limit) or ""
 
 
-def _stream_error_status(details: dict[str, Any]) -> int | None:
+def _stream_error_status(details: Mapping[str, Any]) -> int | None:
     for key in ("status_code", "code"):
         raw = details.get(key)
         if isinstance(raw, bool):
@@ -380,14 +380,16 @@ def _stream_error_status(details: dict[str, Any]) -> int | None:
     return None
 
 
-def stream_error_details(obj: dict[str, Any], *, sentinels: Iterable[str] = ()) -> dict[str, Any]:
+def stream_error_details(
+    obj: Mapping[str, Any], *, sentinels: Iterable[str] = ()
+) -> dict[str, str | int]:
     """Allowlisted, redacted fields of an in-stream (or 200-body) error object."""
     nested = obj.get("error")
-    sources: list[dict[str, Any]] = []
+    sources: list[Mapping[str, Any]] = []
     if isinstance(nested, dict):
         sources.append(nested)
     sources.append(obj)
-    details: dict[str, Any] = {}
+    details: dict[str, str | int] = {}
     for key, limit in _STREAM_ERROR_FIELDS:
         for source in sources:
             raw = source.get(key)
@@ -404,7 +406,7 @@ def stream_error_details(obj: dict[str, Any], *, sentinels: Iterable[str] = ()) 
     return details
 
 
-def is_stream_error_chunk(obj: dict[str, Any], event: str | None) -> bool:
+def is_stream_error_chunk(obj: Mapping[str, Any], event: str | None) -> bool:
     """True for an SSE frame that reports an upstream error instead of a delta.
 
     OpenAI-compatible gateways put ``{"error": {...}}`` in a ``data:`` frame
@@ -416,7 +418,7 @@ def is_stream_error_chunk(obj: dict[str, Any], event: str | None) -> bool:
 
 
 def raise_stream_error(
-    prefix: str, obj: dict[str, Any], *, sentinels: Iterable[str] = ()
+    prefix: str, obj: Mapping[str, Any], *, sentinels: Iterable[str] = ()
 ) -> NoReturn:
     """Classify an upstream error frame like an HTTP rejection.
 
@@ -432,7 +434,7 @@ def raise_stream_error(
     raise TransportStall(message, kind="upstream_stream_error")
 
 
-def _chunk_has_choices(obj: dict[str, Any]) -> bool:
+def _chunk_has_choices(obj: Mapping[str, Any]) -> bool:
     choices = obj.get("choices")
     return isinstance(choices, list) and len(choices) > 0
 
@@ -451,7 +453,7 @@ def _nonempty_text(value: Any) -> bool:
     return False
 
 
-def _tool_call_has_token(delta: dict[str, Any]) -> bool:
+def _tool_call_has_token(delta: Mapping[str, Any]) -> bool:
     calls = delta.get("tool_calls")
     if not isinstance(calls, list):
         return False
@@ -469,7 +471,7 @@ def _tool_call_has_token(delta: dict[str, Any]) -> bool:
     return False
 
 
-def _chunk_resets_content_idle(obj: dict[str, Any]) -> bool:
+def _chunk_resets_content_idle(obj: Mapping[str, Any]) -> bool:
     """True when a chat chunk has content, reasoning, or a tool-call fragment.
 
     Role, finish reason, an empty delta, an index-only tool call, and a
