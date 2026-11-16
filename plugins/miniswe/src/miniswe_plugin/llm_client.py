@@ -516,7 +516,9 @@ class _ContentIdleWatch:
         self._started = False
         self._stop = False
         self._expired = False
-        # Reader finished inside the budget. A later ``budget_spent`` stays false.
+        # Last in-loop check saw the budget still open. ``stop`` keeps that
+        # decision so a slow ``response.close()`` cannot relabel a finished body.
+        self._seen_open = False
         self._settled = False
         self._thread: threading.Thread | None = None
 
@@ -540,19 +542,33 @@ class _ContentIdleWatch:
             self._deadline = time.monotonic() + self._seconds
             self._cond.notify()
 
-    def budget_spent(self) -> bool:
+    def observe_open(self) -> bool:
+        """True when this line is still inside the budget. Remembers that fact."""
         with self._cond:
-            if self._settled or not self._started:
+            if not self._started or self._expired or self._settled:
                 return False
-            return self._expired or time.monotonic() >= self._deadline
+            if time.monotonic() >= self._deadline:
+                return False
+            self._seen_open = True
+            return True
+
+    def fired(self) -> bool:
+        with self._cond:
+            return self._expired and not self._settled
 
     def stop(self) -> None:
-        """Latch a reader that finished inside the budget, then join the timer."""
+        """Stop the timer before the response body is closed, then join it."""
         thread: threading.Thread | None
         with self._cond:
             self._stop = True
-            if not self._expired and time.monotonic() < self._deadline:
-                self._settled = True
+            if not self._expired:
+                if self._seen_open and time.monotonic() < self._deadline:
+                    self._settled = True
+                elif self._started and time.monotonic() >= self._deadline:
+                    # No line was accepted in time, and the timer has not
+                    # published expiry yet (a socket read timeout woke the
+                    # reader first).
+                    self._expired = True
             self._cond.notify()
             thread = self._thread
         if thread is not None and thread is not threading.current_thread():
@@ -1257,15 +1273,15 @@ def post_chat_completions(
         event: str | None = None
         stream_tail = deque(maxlen=_SSE_TAIL_LINES)
         stream_idle = _ContentIdleWatch(client, _timeout_s)
-        try:
-            with client.stream("POST", url, headers=headers, content=body_bytes) as response:
+        with client.stream("POST", url, headers=headers, content=body_bytes) as response:
+            try:
                 if response.status_code >= 400:
                     err_body = (response.read() or b"").decode("utf-8", "replace")[:800]
                     raise_for_http_status("chat_http", response.status_code, err_body)
                 # Header wait used the socket read timeout. Content idle starts now.
                 stream_idle.start()
                 for line in response.iter_lines():
-                    if stream_idle.budget_spent():
+                    if not stream_idle.observe_open():
                         _content_idle_timeout()
                     if not line:
                         # Blank line ends one SSE event; the event name does not carry over.
@@ -1309,9 +1325,12 @@ def post_chat_completions(
                     if _chunk_resets_content_idle(obj):
                         stream_idle.touch()
                     chunks.append(obj)
-        finally:
-            stream_idle.stop()
-        if stream_idle.budget_spent():
+            finally:
+                # Latch the timer before ``response.close()``. A slow close
+                # must not turn a body that already finished inside the
+                # budget into content idle.
+                stream_idle.stop()
+        if stream_idle.fired():
             _content_idle_timeout()
 
         if not chunks:
@@ -1330,7 +1349,7 @@ def post_chat_completions(
         data = assemble_chat_completion_from_stream(chunks)
         return ChatCompletion.model_validate(data)
     except Exception as exc:  # noqa: BLE001 — _reraise_transport always raises
-        if stream_idle is not None and stream_idle.budget_spent():
+        if stream_idle is not None and stream_idle.fired():
             dump_failed_stream(sse_dump_dir, "content_idle", stream_tail, sentinels=secrets)
             if isinstance(exc, TransportStall) and exc.message == "chat_http_content_idle":
                 raise

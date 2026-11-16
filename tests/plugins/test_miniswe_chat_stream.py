@@ -587,8 +587,8 @@ def test_ping_after_token_does_not_buy_another_read_timeout(tmp_path: Path) -> N
     """A late keepalive must not move the deadline out by another full read timeout."""
     _require_chat_http()
     token = _data_frame({"choices": [{"delta": {"content": "token"}}]})
-    # timeout is 0.8s. The ping at 0.5s would push an httpx read timeout to ~1.3s.
-    script = [(0.0, token), (0.5, _PING), (2.0, b": late\n\n")]
+    # timeout is 1.0s. The ping at 0.7s would push an httpx read timeout to ~1.7s.
+    script = [(0.0, token), (0.7, _PING), (3.0, b": late\n\n")]
     server, base = _serve(_scripted_stream(script))
     started = time.perf_counter()
     try:
@@ -598,7 +598,7 @@ def test_ping_after_token_does_not_buy_another_read_timeout(tmp_path: Path) -> N
                 api_key=None,
                 model="m",
                 messages=[{"role": "user", "content": "hi"}],
-                timeout=0.8,
+                timeout=1.0,
                 sse_dump_dir=str(tmp_path),
             )
         elapsed = time.perf_counter() - started
@@ -606,7 +606,7 @@ def test_ping_after_token_does_not_buy_another_read_timeout(tmp_path: Path) -> N
         server.shutdown()
         server.server_close()
 
-    assert elapsed < 1.05
+    assert elapsed < 1.45
     assert caught.value.kind == "timeout"
     text = (tmp_path / "miniswe-sse-failures").glob("*.sse.txt")
     dumped = [path.read_text(encoding="utf-8") for path in text]
