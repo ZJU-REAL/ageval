@@ -27,7 +27,8 @@ import itertools
 import json
 import sys
 import threading
-from collections.abc import Iterable, Iterator
+import time
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, NoReturn
 
@@ -367,7 +368,7 @@ def _redact(value: str, *, limit: int, sentinels: Iterable[str] = ()) -> str:
     return redact_provider_text(value, limit=limit) or ""
 
 
-def _stream_error_status(details: dict[str, Any]) -> int | None:
+def _stream_error_status(details: Mapping[str, Any]) -> int | None:
     for key in ("status_code", "code"):
         raw = details.get(key)
         if isinstance(raw, bool):
@@ -379,14 +380,16 @@ def _stream_error_status(details: dict[str, Any]) -> int | None:
     return None
 
 
-def stream_error_details(obj: dict[str, Any], *, sentinels: Iterable[str] = ()) -> dict[str, Any]:
+def stream_error_details(
+    obj: Mapping[str, Any], *, sentinels: Iterable[str] = ()
+) -> dict[str, str | int]:
     """Allowlisted, redacted fields of an in-stream (or 200-body) error object."""
     nested = obj.get("error")
-    sources: list[dict[str, Any]] = []
+    sources: list[Mapping[str, Any]] = []
     if isinstance(nested, dict):
         sources.append(nested)
     sources.append(obj)
-    details: dict[str, Any] = {}
+    details: dict[str, str | int] = {}
     for key, limit in _STREAM_ERROR_FIELDS:
         for source in sources:
             raw = source.get(key)
@@ -403,7 +406,7 @@ def stream_error_details(obj: dict[str, Any], *, sentinels: Iterable[str] = ()) 
     return details
 
 
-def is_stream_error_chunk(obj: dict[str, Any], event: str | None) -> bool:
+def is_stream_error_chunk(obj: Mapping[str, Any], event: str | None) -> bool:
     """True for an SSE frame that reports an upstream error instead of a delta.
 
     OpenAI-compatible gateways put ``{"error": {...}}`` in a ``data:`` frame
@@ -415,7 +418,7 @@ def is_stream_error_chunk(obj: dict[str, Any], event: str | None) -> bool:
 
 
 def raise_stream_error(
-    prefix: str, obj: dict[str, Any], *, sentinels: Iterable[str] = ()
+    prefix: str, obj: Mapping[str, Any], *, sentinels: Iterable[str] = ()
 ) -> NoReturn:
     """Classify an upstream error frame like an HTTP rejection.
 
@@ -431,9 +434,161 @@ def raise_stream_error(
     raise TransportStall(message, kind="upstream_stream_error")
 
 
-def _chunk_has_choices(obj: dict[str, Any]) -> bool:
+def _chunk_has_choices(obj: Mapping[str, Any]) -> bool:
     choices = obj.get("choices")
     return isinstance(choices, list) and len(choices) > 0
+
+
+def _nonempty_text(value: Any) -> bool:
+    """True when ``value`` carries text, including nested thinking blocks."""
+    if isinstance(value, str):
+        return value != ""
+    if isinstance(value, list):
+        return any(_nonempty_text(item) for item in value)
+    if isinstance(value, dict):
+        return any(
+            _nonempty_text(value.get(key))
+            for key in ("text", "content", "thinking", "reasoning", "value")
+        )
+    return False
+
+
+def _tool_call_has_token(delta: Mapping[str, Any]) -> bool:
+    calls = delta.get("tool_calls")
+    if not isinstance(calls, list):
+        return False
+    for call in calls:
+        if not isinstance(call, dict):
+            continue
+        ident = call.get("id")
+        if isinstance(ident, str) and ident != "":
+            return True
+        function = call.get("function")
+        if isinstance(function, dict) and (
+            _nonempty_text(function.get("name")) or _nonempty_text(function.get("arguments"))
+        ):
+            return True
+    return False
+
+
+def _chunk_resets_content_idle(obj: Mapping[str, Any]) -> bool:
+    """True when a chat chunk has content, reasoning, or a tool-call fragment.
+
+    Role, finish reason, an empty delta, an index-only tool call, and a
+    usage object are not tokens. SSE comments never reach this function.
+    """
+    choices = obj.get("choices")
+    if not isinstance(choices, list):
+        return False
+    for choice in choices:
+        if not isinstance(choice, dict):
+            continue
+        delta = choice.get("delta")
+        if not isinstance(delta, dict):
+            continue
+        if any(
+            _nonempty_text(delta.get(key))
+            for key in ("content", "reasoning", "reasoning_content", "thinking")
+        ):
+            return True
+        if _nonempty_text(delta.get("thinking_blocks")):
+            return True
+        fields = delta.get("provider_specific_fields")
+        if isinstance(fields, dict) and _nonempty_text(fields.get("thinking_blocks")):
+            return True
+        if _tool_call_has_token(delta):
+            return True
+    return False
+
+
+class _ContentIdleWatch:
+    """Close ``client`` when no useful chat token arrives within ``seconds``.
+
+    ``Response.iter_lines`` returns only when a line arrives, and httpx restarts
+    its read timeout on that line. A comment or an empty delta therefore keeps
+    the socket open past the configured budget. This timer closes the socket
+    from another thread so the reader wakes even if the next line never comes.
+    """
+
+    def __init__(self, client: Any, seconds: float) -> None:
+        self._client = client
+        self._seconds = seconds
+        self._cond = threading.Condition()
+        self._deadline = 0.0
+        self._started = False
+        self._stop = False
+        self._expired = False
+        # Last in-loop check saw the budget still open. ``stop`` keeps that
+        # decision so a slow ``response.close()`` cannot relabel a finished body.
+        self._seen_open = False
+        self._settled = False
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        with self._cond:
+            if self._started:
+                return
+            self._started = True
+            self._deadline = time.monotonic() + self._seconds
+            self._thread = threading.Thread(
+                target=self._run,
+                name="miniswe-content-idle",
+                daemon=True,
+            )
+            self._thread.start()
+
+    def touch(self) -> None:
+        with self._cond:
+            if self._stop or self._expired or self._settled or not self._started:
+                return
+            self._deadline = time.monotonic() + self._seconds
+            self._cond.notify()
+
+    def observe_open(self) -> bool:
+        """True when this line is still inside the budget. Remembers that fact."""
+        with self._cond:
+            if not self._started or self._expired or self._settled:
+                return False
+            if time.monotonic() >= self._deadline:
+                return False
+            self._seen_open = True
+            return True
+
+    def fired(self) -> bool:
+        with self._cond:
+            return self._expired and not self._settled
+
+    def stop(self) -> None:
+        """Stop the timer before the response body is closed, then join it."""
+        thread: threading.Thread | None
+        with self._cond:
+            self._stop = True
+            if not self._expired:
+                if self._seen_open and time.monotonic() < self._deadline:
+                    self._settled = True
+                elif self._started and time.monotonic() >= self._deadline:
+                    # No line was accepted in time, and the timer has not
+                    # published expiry yet (a socket read timeout woke the
+                    # reader first).
+                    self._expired = True
+            self._cond.notify()
+            thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=1.0)
+
+    def _run(self) -> None:
+        close = False
+        with self._cond:
+            while not self._stop and not self._settled:
+                remaining = self._deadline - time.monotonic()
+                if remaining <= 0:
+                    self._expired = True
+                    close = True
+                    break
+                self._cond.wait(remaining)
+            close = close and not self._settled
+        if close:
+            close_llm_client(self._client)
 
 
 def dump_failed_stream(
@@ -474,6 +629,11 @@ def dump_failed_stream(
 def _no_choices_chat_stream() -> NoReturn:
     """A chat SSE body reached ``[DONE]`` without a single choice frame."""
     raise TransportStall("chat_http_stream_no_choices", kind="upstream_stream_error")
+
+
+def _content_idle_timeout() -> NoReturn:
+    """The chat SSE body produced no useful token within ``timeout``."""
+    raise TransportStall("chat_http_content_idle", kind="timeout")
 
 
 def _reraise_transport(exc: BaseException) -> NoReturn:
@@ -999,20 +1159,22 @@ def post_chat_completions(
     tokens arrive in seconds even when non-stream TTFB is minutes under
     ``reasoning_effort=max``. Chunks are assembled into one final assistant
     message including ``tool_calls`` and reasoning fields the non-stream path
-    already preserved. ``timeout`` is applied as httpx read idle-between-chunks
-    (and connect), not as a total-generation wall alone — long generations stay
-    healthy as long as chunks keep arriving. Set ``stream=False`` or
+    already preserved. ``timeout`` is the httpx per-read socket bound (and
+    connect) and, once response headers have arrived, the content-idle budget.
+    Only a non-empty content, reasoning, or tool-call fragment resets that
+    budget. Comments, blank lines, empty deltas, and usage-only frames do not.
+    When the budget expires the client closes the socket and raises
+    ``TransportStall`` ``chat_http_content_idle``. Set ``stream=False`` or
     ``AGEVAL_MINISWE_CHAT_STREAM=0`` to force the legacy non-stream POST.
     Responses API is untouched (``post_responses_api`` stays non-stream).
 
     An in-stream upstream error (``data: {"error": ...}``, ``event: error``)
     or a ``[DONE]`` stream that never carried a choice raises
     ``TransportStall`` (or ``ModelConfigError`` for a non-retryable 4xx
-    code), never an empty assistant message. On those failures and on an
-    incomplete stream, the redacted tail of the raw SSE is written under
-    ``sse_dump_dir`` when given.
+    code), never an empty assistant message. On those failures, on content
+    idle, and on an incomplete stream, the redacted tail of the raw SSE is
+    written under ``sse_dump_dir`` when given.
     """
-    import time
     from collections import deque
 
     import httpx
@@ -1071,8 +1233,9 @@ def post_chat_completions(
                 headers[key] = value
         headers.setdefault("Connection", "close")
 
-    # read= timeout → idle gap between streamed chunks (or full-body wait when
-    # non-stream). connect stays capped so DNS/TCP failures fail fast.
+    # read= timeout → per-read socket bound (full-body wait when non-stream).
+    # Chat SSE also uses it as the content-idle budget. connect stays capped
+    # so DNS/TCP failures fail fast.
     http_timeout, _timeout_s = client_timeout(timeout)
     secrets = tuple(s for s in (api_key,) if s)
     client = httpx.Client(
@@ -1082,6 +1245,8 @@ def post_chat_completions(
         headers={"Connection": "close"},
     )
     register_in_flight_client(client)
+    stream_idle: _ContentIdleWatch | None = None
+    stream_tail: deque[str] = deque()
     try:
         body_bytes = json.dumps(payload).encode("utf-8")
         if not use_stream:
@@ -1108,67 +1273,89 @@ def post_chat_completions(
         saw_done = False
         saw_choices = False
         event: str | None = None
-        tail: deque[str] = deque(maxlen=_SSE_TAIL_LINES)
+        stream_tail = deque(maxlen=_SSE_TAIL_LINES)
+        stream_idle = _ContentIdleWatch(client, _timeout_s)
         with client.stream("POST", url, headers=headers, content=body_bytes) as response:
-            if response.status_code >= 400:
-                err_body = (response.read() or b"").decode("utf-8", "replace")[:800]
-                raise_for_http_status("chat_http", response.status_code, err_body)
-            for line in response.iter_lines():
-                if not line:
-                    # Blank line ends one SSE event; the event name does not carry over.
-                    event = None
-                    continue
-                tail.append(line)
-                if ttfb is None:
-                    ttfb = time.perf_counter() - t0
-                    # Suite logs read stderr. stdout is the run result document.
-                    print(
-                        f"miniswe_chat_stream_ttfb:{ttfb:.3f}",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-                if line.startswith("event:"):
-                    event = line[6:].strip() or None
-                    continue
-                if not line.startswith("data:"):
-                    continue
-                data_s = line[5:].strip()
-                if not data_s:
-                    continue
-                if data_s == "[DONE]":
-                    saw_done = True
-                    break
-                try:
-                    obj = json.loads(data_s)
-                except json.JSONDecodeError as exc:
-                    _bad_payload(f"chat_http_bad_json:{data_s[:400]}", exc)
-                if not isinstance(obj, dict):
-                    _bad_payload(f"chat_http_stream_not_object:{type(obj).__name__}")
-                if is_stream_error_chunk(obj, event):
-                    # Even after partial tool_calls: a turn that ended in an
-                    # upstream error is not a completed turn (openai-python
-                    # raises here too). Do not assemble what came before.
-                    dump_failed_stream(sse_dump_dir, "stream_error", tail, sentinels=secrets)
-                    raise_stream_error("chat_http_stream_error", obj, sentinels=secrets)
-                saw_choices = saw_choices or _chunk_has_choices(obj)
-                chunks.append(obj)
+            try:
+                if response.status_code >= 400:
+                    err_body = (response.read() or b"").decode("utf-8", "replace")[:800]
+                    raise_for_http_status("chat_http", response.status_code, err_body)
+                # Header wait used the socket read timeout. Content idle starts now.
+                stream_idle.start()
+                for line in response.iter_lines():
+                    if not stream_idle.observe_open():
+                        _content_idle_timeout()
+                    if not line:
+                        # Blank line ends one SSE event; the event name does not carry over.
+                        event = None
+                        continue
+                    stream_tail.append(line)
+                    if ttfb is None:
+                        ttfb = time.perf_counter() - t0
+                        # Suite logs read stderr. stdout is the run result document.
+                        print(
+                            f"miniswe_chat_stream_ttfb:{ttfb:.3f}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    if line.startswith("event:"):
+                        event = line[6:].strip() or None
+                        continue
+                    if not line.startswith("data:"):
+                        continue
+                    data_s = line[5:].strip()
+                    if not data_s:
+                        continue
+                    if data_s == "[DONE]":
+                        saw_done = True
+                        break
+                    try:
+                        obj = json.loads(data_s)
+                    except json.JSONDecodeError as exc:
+                        _bad_payload(f"chat_http_bad_json:{data_s[:400]}", exc)
+                    if not isinstance(obj, dict):
+                        _bad_payload(f"chat_http_stream_not_object:{type(obj).__name__}")
+                    if is_stream_error_chunk(obj, event):
+                        # Even after partial tool_calls: a turn that ended in an
+                        # upstream error is not a completed turn (openai-python
+                        # raises here too). Do not assemble what came before.
+                        dump_failed_stream(
+                            sse_dump_dir, "stream_error", stream_tail, sentinels=secrets
+                        )
+                        raise_stream_error("chat_http_stream_error", obj, sentinels=secrets)
+                    saw_choices = saw_choices or _chunk_has_choices(obj)
+                    if _chunk_resets_content_idle(obj):
+                        stream_idle.touch()
+                    chunks.append(obj)
+            finally:
+                # Latch the timer before ``response.close()``. A slow close
+                # must not turn a body that already finished inside the
+                # budget into content idle.
+                stream_idle.stop()
+        if stream_idle.fired():
+            _content_idle_timeout()
 
         if not chunks:
             _bad_payload("chat_http_stream_empty")
         # EOF without the SSE terminator is a cut socket (macOS often reports
         # that as a clean end, Linux as EBADF). It is not a finished completion.
         if not saw_done:
-            dump_failed_stream(sse_dump_dir, "stream_incomplete", tail, sentinels=secrets)
+            dump_failed_stream(sse_dump_dir, "stream_incomplete", stream_tail, sentinels=secrets)
             _incomplete_chat_stream()
         # Usage-only (``choices: []``) or other choice-less frames + [DONE]:
         # the gateway produced no model turn. Assembling would yield an empty
         # assistant that the harness misreads as "no tool call" (FormatError).
         if not saw_choices:
-            dump_failed_stream(sse_dump_dir, "stream_no_choices", tail, sentinels=secrets)
+            dump_failed_stream(sse_dump_dir, "stream_no_choices", stream_tail, sentinels=secrets)
             _no_choices_chat_stream()
         data = assemble_chat_completion_from_stream(chunks)
         return ChatCompletion.model_validate(data)
     except Exception as exc:  # noqa: BLE001 — _reraise_transport always raises
+        if stream_idle is not None and stream_idle.fired():
+            dump_failed_stream(sse_dump_dir, "content_idle", stream_tail, sentinels=secrets)
+            if isinstance(exc, TransportStall) and exc.message == "chat_http_content_idle":
+                raise
+            raise TransportStall("chat_http_content_idle", kind="timeout") from exc
         _reraise_transport(exc)
     finally:
         unregister_in_flight_client(client)

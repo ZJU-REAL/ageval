@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
@@ -11,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from ageval.model.errors import TransportStall
 from ageval.plugins.errors import ExtensionMaterializeError
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,6 +23,7 @@ if str(_SRC) not in sys.path:
 from miniswe_plugin.factory import MinisweExecutorSPI  # noqa: E402
 from miniswe_plugin.llm_client import (  # noqa: E402
     _chat_stream_enabled,
+    _chunk_resets_content_idle,
     assemble_chat_completion_from_stream,
     post_chat_completions,
 )
@@ -472,3 +475,241 @@ def test_recorded_actions_are_assistant_tool_calls_on_the_wire(
     assert body[-1]["tool_call_id"] == "toolu_b"
     assert "tool_calls" not in recorded
     assert recorded["role"] == "assistant"
+
+
+def test_only_content_reasoning_and_tool_fragments_reset_content_idle() -> None:
+    assert _chunk_resets_content_idle({"choices": [{"delta": {"content": "x"}}]})
+    assert _chunk_resets_content_idle({"choices": [{"delta": {"content": " "}}]})
+    assert _chunk_resets_content_idle({"choices": [{"delta": {"reasoning": "x"}}]})
+    assert _chunk_resets_content_idle({"choices": [{"delta": {"reasoning_content": "x"}}]})
+    assert _chunk_resets_content_idle(
+        {"choices": [{"delta": {"thinking_blocks": [{"thinking": "x"}]}}]}
+    )
+    assert _chunk_resets_content_idle(
+        {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "call_1"}]}}]}
+    )
+    assert _chunk_resets_content_idle(
+        {"choices": [{"delta": {"tool_calls": [{"function": {"name": "bash"}}]}}]}
+    )
+    assert _chunk_resets_content_idle(
+        {"choices": [{"delta": {"tool_calls": [{"function": {"arguments": "{"}}]}}]}
+    )
+    assert not _chunk_resets_content_idle({"choices": []})
+    assert not _chunk_resets_content_idle({"choices": [{"delta": {}}]})
+    assert not _chunk_resets_content_idle({"choices": [{"delta": {"content": ""}}]})
+    assert not _chunk_resets_content_idle({"choices": [{"delta": {"role": "assistant"}}]})
+    assert not _chunk_resets_content_idle(
+        {"choices": [{"delta": {"tool_calls": [{"index": 0, "type": "function"}]}}]}
+    )
+    assert not _chunk_resets_content_idle({"usage": {"total_tokens": 1}})
+    assert not _chunk_resets_content_idle(
+        {"choices": [], "usage": {"prompt_tokens": 1, "total_tokens": 1}}
+    )
+
+
+def _data_frame(payload: Any) -> bytes:
+    text = payload if isinstance(payload, str) else json.dumps(payload, separators=(",", ":"))
+    return f"data: {text}\n\n".encode()
+
+
+_PING = b": ping\n\n"
+
+
+def _scripted_stream(frames: list[tuple[float, bytes]]) -> type[BaseHTTPRequestHandler]:
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length") or 0)
+            self.rfile.read(length)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            try:
+                for delay, frame in frames:
+                    if delay > 0:
+                        time.sleep(delay)
+                    self.wfile.write(frame)
+                    self.wfile.flush()
+            except OSError:
+                return
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    return Handler
+
+
+def _keepalive(seconds: float, step: float = 0.05) -> list[tuple[float, bytes]]:
+    frames = (
+        _PING,
+        _data_frame({"choices": []}),
+        _data_frame({"choices": [{"delta": {}}]}),
+        _data_frame({"choices": [], "usage": {"total_tokens": 1}}),
+        b"\n",
+    )
+    script: list[tuple[float, bytes]] = []
+    elapsed = 0.0
+    index = 0
+    while elapsed < seconds:
+        script.append((step, frames[index % len(frames)]))
+        elapsed += step
+        index += 1
+    return script
+
+
+def test_keepalive_and_empty_frames_do_not_extend_content_idle(tmp_path: Path) -> None:
+    _require_chat_http()
+    server, base = _serve(_scripted_stream(_keepalive(3.0)))
+    started = time.perf_counter()
+    try:
+        with pytest.raises(TransportStall, match="chat_http_content_idle") as caught:
+            post_chat_completions(
+                api_base=base,
+                api_key=None,
+                model="m",
+                messages=[{"role": "user", "content": "hi"}],
+                timeout=0.5,
+                sse_dump_dir=str(tmp_path),
+            )
+        elapsed = time.perf_counter() - started
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert elapsed < 1.3
+    assert caught.value.kind == "timeout"
+    dumps = list((tmp_path / "miniswe-sse-failures").glob("*.sse.txt"))
+    assert len(dumps) == 1
+    assert dumps[0].name.endswith("-content_idle.sse.txt")
+    assert ": ping" in dumps[0].read_text(encoding="utf-8")
+
+
+def test_ping_after_token_does_not_buy_another_read_timeout(tmp_path: Path) -> None:
+    """A late keepalive must not move the deadline out by another full read timeout."""
+    _require_chat_http()
+    token = _data_frame({"choices": [{"delta": {"content": "token"}}]})
+    # timeout is 1.0s. The ping at 0.7s would push an httpx read timeout to ~1.7s.
+    script = [(0.0, token), (0.7, _PING), (3.0, b": late\n\n")]
+    server, base = _serve(_scripted_stream(script))
+    started = time.perf_counter()
+    try:
+        with pytest.raises(TransportStall, match="chat_http_content_idle") as caught:
+            post_chat_completions(
+                api_base=base,
+                api_key=None,
+                model="m",
+                messages=[{"role": "user", "content": "hi"}],
+                timeout=1.0,
+                sse_dump_dir=str(tmp_path),
+            )
+        elapsed = time.perf_counter() - started
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert elapsed < 1.45
+    assert caught.value.kind == "timeout"
+    text = (tmp_path / "miniswe-sse-failures").glob("*.sse.txt")
+    dumped = [path.read_text(encoding="utf-8") for path in text]
+    assert len(dumped) == 1
+    assert "token" in dumped[0]
+    assert ": ping" in dumped[0]
+
+
+def test_header_wait_stays_a_socket_timeout(tmp_path: Path) -> None:
+    _require_chat_http()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length") or 0)
+            self.rfile.read(length)
+            time.sleep(1.5)
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                self.wfile.write(_data_frame("[DONE]"))
+            except OSError:
+                return
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    server, base = _serve(Handler)
+    started = time.perf_counter()
+    try:
+        with pytest.raises(TransportStall) as caught:
+            post_chat_completions(
+                api_base=base,
+                api_key=None,
+                model="m",
+                messages=[{"role": "user", "content": "hi"}],
+                timeout=0.4,
+                sse_dump_dir=str(tmp_path),
+            )
+        elapsed = time.perf_counter() - started
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert elapsed < 1.0
+    assert "chat_http_content_idle" not in caught.value.message
+    assert "ReadTimeout" in caught.value.message
+    assert not list((tmp_path / "miniswe-sse-failures").glob("*.sse.txt"))
+
+
+def test_reasoning_tool_and_content_tokens_reset_content_idle() -> None:
+    _require_chat_http()
+    reasoning = _data_frame({"choices": [{"delta": {"reasoning_content": "think"}}]})
+    tool = _data_frame(
+        {
+            "choices": [
+                {
+                    "delta": {
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {"name": "bash", "arguments": "ls"},
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    )
+    content = _data_frame({"choices": [{"delta": {"content": "z"}, "finish_reason": "tool_calls"}]})
+    usage = _data_frame(
+        {"choices": [], "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}}
+    )
+    script = [
+        (0.8, _PING),
+        (0.0, reasoning),
+        (0.8, _PING),
+        (0.0, tool),
+        (0.8, _PING),
+        (0.0, content),
+        (0.8, _data_frame({"choices": [{"delta": {}}]})),
+        (0.0, usage),
+        (0.0, _data_frame("[DONE]")),
+    ]
+    server, base = _serve(_scripted_stream(script))
+    try:
+        result = post_chat_completions(
+            api_base=base,
+            api_key=None,
+            model="m",
+            messages=[{"role": "user", "content": "hi"}],
+            timeout=1.5,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    message = result.choices[0].message
+    assert message.content == "z"
+    assert message.tool_calls is not None
+    assert message.tool_calls[0].function.name == "bash"
+    assert message.tool_calls[0].function.arguments == "ls"
+    dumped = message.model_dump()
+    assert dumped.get("reasoning_content") == "think"
