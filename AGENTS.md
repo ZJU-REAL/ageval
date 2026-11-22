@@ -200,7 +200,7 @@ uv run ruff check src tests plugins services scripts
 uv run pyright
 ```
 
-Install the same ruff and pyright commands as a commit hook once per clone:
+Install the same ruff and pyright commands as a commit hook once per clone. `pre-commit` is in the `dev` dependency group, so this records `.venv/bin/python` in `.git/hooks/pre-commit`. Installing the hook with `uvx`, or with `uv run` before that dependency is synced, records a uv cache interpreter. After uv deletes that cache, the next commit stops because the hook cannot find `pre-commit`.
 
 ```bash
 uv run pre-commit install
