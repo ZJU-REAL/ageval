@@ -146,6 +146,10 @@ class AgentSession:
         inv = resp.get("invocation_id")
         if isinstance(inv, str) and inv:
             self._last_invocation_id = inv
+        if resp.get("preempted") is True or resp.get("error") == "attempt_preempted":
+            from ageval_sdk.errors import AttemptPreempted
+
+            raise AttemptPreempted()
         return {
             "text": resp.get("text") or "",
             "structured": resp.get("structured"),

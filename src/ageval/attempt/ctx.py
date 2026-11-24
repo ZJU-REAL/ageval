@@ -94,6 +94,10 @@ class AttemptCtx:
     replay_source_dir: Any = None
     replay_evaluate: bool = False
     replay_provenance: Any = None
+    # Suite job this Attempt belongs to. Preempt reads that job's request file.
+    suite_run_id: str | None = None
+    # Cooperative preempt finished the run phase without a verdict or result.json.
+    suspended: bool = False
     _budget_seconds: float | None = None
     _spent_offset: float = 0.0
     _writers_stopped: bool = False

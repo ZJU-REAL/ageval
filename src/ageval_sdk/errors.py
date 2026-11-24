@@ -7,6 +7,20 @@ envelope. The parent stores that document. It does not import the dataset.
 from __future__ import annotations
 
 
+class AttemptPreempted(Exception):
+    """The parent stopped this session after the last completed turn.
+
+    The task worker turns this into a preempt envelope. It is not a script
+    failure and it does not seal ``result.json``.
+    """
+
+    def __init__(self, message: str = "attempt preempted after the last completed turn") -> None:
+        if not isinstance(message, str):
+            raise TypeError("AttemptPreempted message must be a string")
+        super().__init__(message)
+        self.message = message
+
+
 class ScriptError(Exception):
     """A stable title plus the text for this occurrence.
 

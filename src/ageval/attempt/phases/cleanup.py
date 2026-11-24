@@ -16,6 +16,11 @@ PHASE = "cleanup"
 async def run(ctx: AttemptCtx) -> None:
     previous = ctx.phase
     ctx.phase = PHASE
+    if ctx.suspended:
+        # Leave the box running so resume can attach. A checkpoint already exists.
+        ctx.record_fact("environment_suspended", {"deleted": False, "kept_running": True})
+        await emit(ctx, CLEANUP_REPORT, ctx.facts_as_list())
+        return
     delete = not ctx.keep_workspace
     errors: list[str] = []
     scoring = ctx.evaluate_host

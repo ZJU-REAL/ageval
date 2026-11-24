@@ -128,6 +128,7 @@ async def _run(frames: _Frames) -> int:
 
     from ageval_sdk.agent import Agent
     from ageval_sdk.context import RunContext, RunParameterView, RunScope
+    from ageval_sdk.errors import AttemptPreempted
     from ageval_sdk.terminal import RunTerminal
 
     artifact_dir = _box_dir("AGEVAL_ARTIFACTS")
@@ -161,6 +162,15 @@ async def _run(frames: _Frames) -> int:
                 "ok": True,
                 "terminal": terminal,
                 "published": {k: str(v) for k, v in (ctx.published or {}).items()},
+                "attempt_id": attempt_id,
+            }
+        )
+        return 0
+    except AttemptPreempted:
+        frames.send(
+            {
+                "ok": True,
+                "preempted": True,
                 "attempt_id": attempt_id,
             }
         )
