@@ -23,6 +23,7 @@ from ageval.cli import (
     cmd_executors_publish_login,
     cmd_jobs,
     cmd_plugin,
+    cmd_preempt,
     cmd_registry,
     cmd_replay,
     cmd_results,
@@ -66,6 +67,7 @@ cmd_checkpoints.register(app)
 cmd_replay.register(app)
 cmd_evidence_status.register(app)
 cmd_cancel.register(app)
+cmd_preempt.register(app)
 cmd_executors_publish_login.register(app)
 cmd_plugin.register(app)
 cmd_agent.register(app)

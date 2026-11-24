@@ -90,12 +90,13 @@ With `--layout harbor`, the built-in run sends `instruction.md` once to role `so
 | `--probe` | Feasibility only: plan + readiness for this binding/`environment`. No Agent, no image write, no lock digest change. Exit 1 if the selected path is unsatisfied. |
 | `--json` | Write the full result document on stdout. A TTY defaults to a short recap (suite: `summary` path plus `ageval view` / `upload-suite`); a pipe still defaults to JSON. |
 
-## `status` / `cancel`
+## `status` / `cancel` / `preempt`
 
 | Command | Meaning |
 | --- | --- |
 | `ageval status <run_id\|suite_run_id>` | ControlStore; add `--dataset` for suite `progress.json` (system suite id defaults to 8 hex) |
-| `ageval cancel <run_id\|suite_…>` | One Run or suite job; suite may use `--dataset` → `cancel.requested` |
+| `ageval cancel <run_id\|suite_…>` | One Run or suite job; suite may use `--dataset` → `cancel.requested`. In-flight units finish. |
+| `ageval preempt <suite_…> [--task <id>]` | Suite only. `--dataset` writes `preempt.requested`. Does not signal the controller. In-flight units stop after the current turn and stay unsealed; `--resume-suite` continues them. |
 
 ## `--set`
 

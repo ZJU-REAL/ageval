@@ -63,7 +63,9 @@ def test_cli_skill_commands_exist_in_production_cli() -> None:
     skill = (SKILLS / "ageval-cli" / "SKILL.md").read_text(encoding="utf-8")
     cli_dir = REPO / "src" / "ageval" / "cli"
     sources = "\n".join(p.read_text(encoding="utf-8") for p in cli_dir.glob("*.py"))
-    claimed = set(re.findall(r"`ageval (lock|run|campaign|evidence|status|submit|cancel)\b", skill))
+    claimed = set(
+        re.findall(r"`ageval (lock|run|campaign|evidence|status|submit|cancel|preempt)\b", skill)
+    )
     assert claimed, "cli skill must document ageval commands"
     for cmd in claimed:
         assert f'@app.command("{cmd}")' in sources, cmd

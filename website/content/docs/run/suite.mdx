@@ -89,15 +89,18 @@ Tasks with too few samples are **omitted** from that k’s denominator.
 
 Same directory: `progress.json`. Attempt `result.json` may include `phase_timing` (`environment` / `run` / `evaluate` / `record` / `cleanup`).
 
-## Progress and cancel
+## Progress, cancel, and preempt
 
 ```bash
 ageval status <suite_run_id> --dataset examples/datasets/minimal-demo
 ageval cancel <suite_run_id> --dataset examples/datasets/minimal-demo
+ageval preempt <suite_run_id> --dataset examples/datasets/minimal-demo
+ageval preempt <suite_run_id> --dataset examples/datasets/minimal-demo --task <task_id>
 ```
 
-- **status** — ControlStore record + suite progress when present  
-- **cancel** — writes `cancel.requested` (no new units); SIGTERM stored pid if any  
+- **status** — ControlStore record + suite progress when present
+- **cancel** — writes `cancel.requested` (no new units); in-flight units finish; SIGTERM stored pid if any
+- **preempt** — writes `preempt.requested` and does not signal the controller. In-flight units stop after the current model turn, keep their workspace, and stay unsealed. `--resume-suite` continues those same Attempts. Repeat `--task` to name specific tasks. Omit it to preempt the whole suite. Units that have not started get the same placeholders as cancel. Settled PASS and FAIL rows stay.  
 
 Running the whole dataset is the **task axis**; campaign sweeps **parameters on one task**. Always-k is **not** the campaign matrix axis.
 

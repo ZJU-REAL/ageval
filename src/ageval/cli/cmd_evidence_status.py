@@ -96,6 +96,7 @@ def register(app: typer.Typer) -> None:
                         out["progress"] = data
             cancel_p = prog.parent / "cancel.requested"
             out["cancel_requested"] = cancel_p.is_file()
+            out["preempt_requested"] = (prog.parent / "preempt.requested").is_file()
         if rec is None and "progress" not in out and not (db_root is not None and is_suite):
             emit({"ok": False, "error": "unknown_run", "run_id": run_id})
             raise typer.Exit(code=2)

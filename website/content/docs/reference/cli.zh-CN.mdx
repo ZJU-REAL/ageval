@@ -90,12 +90,13 @@ ageval results revoke-snapshot <token-or-url>
 | `--probe` | 只做可行性：按绑定 / `environment` 打印 plan + readiness。不 invoke Agent、不写入镜像、不改 lock digest。选中路径不满足则 exit 1。 |
 | `--json` | stdout 打完整结果文档。TTY 默认是短 recap（整份跑完时含 `summary` 路径与 `ageval view` / `upload-suite`）；管道默认仍是 JSON。 |
 
-## `status` / `cancel`
+## `status` / `cancel` / `preempt`
 
 | 命令 | 含义 |
 | --- | --- |
 | `ageval status <run_id\|suite_run_id>` | 进度记录；整份跑完时可加 `--dataset` 读 `progress.json` |
-| `ageval cancel <run_id\|suite_…>` | 一次运行或整份 job；整份跑完时可加 `--dataset` 写 `cancel.requested` |
+| `ageval cancel <run_id\|suite_…>` | 一次运行或整份 job；整份跑完时可加 `--dataset` 写 `cancel.requested`。已经在跑的 unit 会跑完。 |
+| `ageval preempt <suite_…> [--task <id>]` | 只用于整份 job。`--dataset` 写 `preempt.requested`。不向控制进程发信号。正在跑的 unit 在当前回合后停下且不封存；`--resume-suite` 继续同一个 Attempt。 |
 
 ## `--set`
 

@@ -302,6 +302,8 @@ class RunProgress:
             self._on_complete(ev)
         elif kind == "suite_cancelled":
             self._on_cancelled(ev)
+        elif kind == "suite_preempted":
+            self._on_preempted(ev)
 
     def _on_start(self, ev: Mapping[str, Any]) -> None:
         total = int(ev.get("total") or 0)
@@ -316,7 +318,10 @@ class RunProgress:
                 extra += f"  skipped={skipped}"
             if retried:
                 extra += f"  retried={retried}"
-            header = f"{header}{extra}  cancel: ageval cancel {self.suite_run_id}"
+            header = (
+                f"{header}{extra}  cancel: ageval cancel {self.suite_run_id}"
+                f"  preempt: ageval preempt {self.suite_run_id}"
+            )
         self._emit(header)
         if self._use_bar:
             self._suite_started = float(self._now())
@@ -402,6 +407,14 @@ class RunProgress:
         total = ev.get("total")
         skipped = ev.get("cancelled_units")
         self._emit(f"suite cancelled  done={done}/{total}  skipped={skipped}")
+
+    def _on_preempted(self, ev: Mapping[str, Any]) -> None:
+        if self._use_bar:
+            return
+        done = ev.get("done")
+        total = ev.get("total")
+        suspended = ev.get("suspended_units")
+        self._emit(f"suite suspended  done={done}/{total}  suspended={suspended}")
 
     def _duration_for(self, key: tuple[str, int], ev: Mapping[str, Any]) -> str:
         raw = ev.get("duration")
