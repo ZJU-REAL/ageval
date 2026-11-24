@@ -63,6 +63,63 @@ tasks/task-00/
   data/ … evaluation/
 ```
 
+## Durable `run-meta` (and other required evaluation inputs)
+
+If a member declares `run-meta` (or any other post-invoke metadata) as a published artifact / `evaluation_inputs` entry, the shared runner (`shared/lib/run_core.py` or equivalent) must still produce that file after a normal return, a raised error, a wall-clock or invocation timeout, and SIGTERM.
+
+Do not write it only after `invoke()` returns. A killed or crashing worker never reaches that line, and evaluate then records `missing_evaluation_input` instead of calling the evaluator.
+
+1. Publish a neutral placeholder **before** `invoke`. The parent may `SIGKILL` the run worker at `limits.wall_time_seconds`; `finally` and signal traps do not run in that case.
+2. Refresh the same artifact in `try` / `finally` (or an equivalent `trap` / SIGTERM handler for shell runners) so normal completion, raised errors, cooperative cancellation, and SIGTERM overwrite the placeholder with terminal details.
+
+On interrupt, record at least:
+
+| Field | Meaning |
+| --- | --- |
+| `exit_reason` | Why the run stopped: `completed`, `error`, `cancelled`, `sigterm`, or `timeout` |
+| `timed_out` | `true` when the stop was a wall-clock or invocation timeout |
+| `ok` | Whether the invoke itself succeeded |
+| `error` | Error string when one is available; otherwise `null` |
+
+Keep any dataset-specific fields already in the placeholder (`seeded`, `upstream_task_id`, …).
+
+```python
+meta = {
+    "ok": False,
+    "error": None,
+    "text_len": 0,
+    "exit_reason": "running",
+    "timed_out": False,
+    "upstream_task_id": params.get("upstream_task_id"),
+}
+ctx.publish_json("run-meta", meta)
+try:
+    async with agent.session(profile_id, max_turns=max_turns) as session:
+        inv = await session.invoke(instruction)
+    meta.update({
+        "ok": bool(inv.get("ok")),
+        "error": inv.get("error"),
+        "text_len": len(str(inv.get("text") or "")),
+        "exit_reason": "completed",
+    })
+except asyncio.CancelledError:
+    meta["exit_reason"] = "cancelled"
+    meta["timed_out"] = True  # set only when this cancel is a timeout
+    raise
+except Exception as exc:
+    meta["exit_reason"] = "error"
+    meta["error"] = str(exc)
+    raise
+finally:
+    ctx.publish_json("run-meta", meta)
+```
+
+A SIGTERM handler should set `exit_reason` to `sigterm` (and `timed_out` if that signal is the wall-clock stop), publish, then re-raise or exit.
+
+## Conversion checklist
+
+- Required evaluation inputs such as `run-meta` still exist when the worker is killed or the runner raises (placeholder before invoke; final write in `finally` / trap).
+
 ## Official base `ageval-attempt:base`
 
 When the port `FROM`s the official tag (historical name, CPython 3.12) instead of the vendor instance image, re-check every migrated `RUN pip` / `apt` against this base. A green `docker build` that never imports the hidden tests still ERROR at collection.
