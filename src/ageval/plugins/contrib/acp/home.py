@@ -11,6 +11,7 @@ entry declared, only into this Attempt's box, never into the lock or evidence.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import shutil
 import tempfile
@@ -51,16 +52,7 @@ async def prepare_home(
 ) -> dict[str, Any]:
     """Create the entry's HOME layout in the box and copy declared auth files."""
     dirs = [*_BASE_HOME_DIRS, *descriptor.home_dirs]
-    result = await host.exec(
-        ["sh", "-c", " ".join(["mkdir", "-p", *(f"'{rel}'" for rel in dirs)])],
-        cwd=HOME_PATH,
-        timeout_sec=timeout_sec,
-    )
-    if result.exit_code != 0:
-        raise EnvironmentFailure(
-            "acp_home_prepare_failed",
-            f"could not create the attempt HOME layout: {result.stderr.strip()[-300:]}",
-        )
+    await _ensure_home_dirs(host, dirs, timeout_sec=timeout_sec)
     return {"dirs": dirs, "auth_files": await _copy_keyless_auth(host, descriptor)}
 
 
@@ -81,16 +73,7 @@ async def write_lock_overlays(
             )
         parent = str(Path(dest).parent)
         if parent not in (".", ""):
-            mkdir = await host.exec(
-                ["mkdir", "-p", parent],
-                cwd=HOME_PATH,
-                timeout_sec=timeout_sec,
-            )
-            if mkdir.exit_code != 0:
-                raise EnvironmentFailure(
-                    "acp_home_prepare_failed",
-                    f"could not create overlay dir {parent}: {mkdir.stderr.strip()[-300:]}",
-                )
+            await _ensure_home_dirs(host, [parent], timeout_sec=timeout_sec)
         if item.kind == "json":
             body = json.dumps(item.payload, indent=2, ensure_ascii=False) + "\n"
         else:
@@ -104,6 +87,46 @@ async def write_lock_overlays(
             shutil.rmtree(tmp_dir, ignore_errors=True)
         written.append(dest)
     return written
+
+
+def _attempt_dir_maker(host: Any) -> Any | None:
+    """Docker hosts create bind-mount directories as the host user."""
+    maker = getattr(host, "ensure_attempt_dirs", None)
+    if callable(maker):
+        return maker
+    return None
+
+
+async def _ensure_home_dirs(
+    host: Any,
+    rels: list[str],
+    *,
+    timeout_sec: float | None,
+) -> None:
+    """Create HOME-relative directories.
+
+    A host with ``ensure_attempt_dirs`` creates them on the bind mount as the
+    host user, so a later upload is not blocked by a root-owned ``0755`` parent.
+    Other environment kinds, and a bind mount the host user cannot write, keep
+    ``mkdir`` inside the box.
+    """
+    maker = _attempt_dir_maker(host)
+    if maker is not None:
+        with contextlib.suppress(PermissionError):
+            maker([f"{HOME_PATH}/{rel}" for rel in rels])
+            return
+    if len(rels) == 1:
+        command: list[str] = ["mkdir", "-p", rels[0]]
+    else:
+        command = ["sh", "-c", " ".join(["mkdir", "-p", *(f"'{rel}'" for rel in rels)])]
+    result = await host.exec(command, cwd=HOME_PATH, timeout_sec=timeout_sec)
+    if result.exit_code != 0:
+        shown = ", ".join(rels)
+        detail = result.stderr.strip()[-300:]
+        raise EnvironmentFailure(
+            "acp_home_prepare_failed",
+            f"could not create the attempt HOME layout ({shown}): {detail}",
+        )
 
 
 async def _copy_keyless_auth(host: Any, descriptor: AcpEntryDescriptor) -> list[str]:
