@@ -1,10 +1,13 @@
 """Content-addressed workspace, home, and artifacts checkpoints.
 
 ``local`` and ``docker`` scan the host bind root. Remote kinds upload a delta
-into the same layout. After ``result.json`` and ``trajectory.jsonl`` both exist,
-the recovery bundle (``checkpoints/`` and ``activity.jsonl``) is removed unless
-the run asked to keep recovery state. ``<attempt>/state`` follows workspace
-retention, not that flag.
+into the same layout. A file or directory the host process cannot list, stat,
+or read is omitted: it is absent from the manifest, and capture does not change
+its mode or owner. That snapshot is not a complete copy of private files.
+Other I/O errors still abort the capture. After ``result.json`` and
+``trajectory.jsonl`` both exist, the recovery bundle (``checkpoints/`` and
+``activity.jsonl``) is removed unless the run asked to keep recovery state.
+``<attempt>/state`` follows workspace retention, not that flag.
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -123,7 +127,13 @@ class CheckpointStore:
         self._cache: dict[str, tuple[int, int, str]] = {}
 
     def capture(self, seq: int) -> Path:
-        """Write ``seq_<NNNNNN>.json`` and any new blobs. Return the manifest path."""
+        """Write ``seq_<NNNNNN>.json`` and any new blobs. Return the manifest path.
+
+        Permission-denied entries are left out of this manifest. They are not
+        stored as empty placeholders, and their mode and owner on the bind
+        source stay as the agent wrote them. A file that disappears between
+        the walk and the read is also omitted. Any other I/O error aborts.
+        """
         if isinstance(seq, bool) or not isinstance(seq, int) or seq < 1:
             _invalid(f"checkpoint seq must be a positive int, got {seq!r}")
         self.redaction_notes = []
@@ -136,24 +146,28 @@ class CheckpointStore:
                 payload = self._checkpoint_bytes(rel, path)
                 if payload is None:
                     continue
-                stat = path.stat()
+                info = path.stat()
             except FileNotFoundError:
                 # The agent can delete a home file (sqlite sidecars, staging
                 # dirs) between the walk and the read. It is not part of this seq.
                 continue
+            except PermissionError:
+                # Root in the container can leave 0600 files on the bind mount.
+                # Omitting them keeps the rest of the attempt. Do not chmod.
+                continue
             seen.add(rel)
             cached = self._cache.get(rel)
-            if cached is not None and cached[0] == stat.st_mtime_ns and cached[1] == stat.st_size:
+            if cached is not None and cached[0] == info.st_mtime_ns and cached[1] == info.st_size:
                 digest = cached[2]
             else:
                 digest = hashlib.sha256(payload).hexdigest()
-                self._cache[rel] = (stat.st_mtime_ns, stat.st_size, digest)
+                self._cache[rel] = (info.st_mtime_ns, info.st_size, digest)
                 _write_blob_bytes(self.root, digest, payload)
             entries[rel] = {
                 "kind": "file",
-                "mode": stat.st_mode & 0o777,
+                "mode": info.st_mode & 0o777,
                 "size": len(payload),
-                "mtime_ns": stat.st_mtime_ns,
+                "mtime_ns": info.st_mtime_ns,
                 "sha256": digest,
             }
         self._cache = {key: value for key, value in self._cache.items() if key in seen}
@@ -235,18 +249,47 @@ def _excluded(rel: str, exclude: set[str]) -> bool:
     return rel in exclude
 
 
+def _on_walk_error(error: OSError) -> None:
+    """Skip a directory the host cannot list. Any other I/O error aborts."""
+    if isinstance(error, (PermissionError, FileNotFoundError)):
+        return
+    raise error
+
+
+def _lstat_kind(path: Path) -> os.stat_result | None:
+    """Stat one entry without following links.
+
+    ``None`` means the entry vanished or the host cannot stat it, so the
+    caller omits it. Other ``OSError`` values propagate. ``Path.is_file``
+    swallows every ``OSError``, which would hide a non-permission failure.
+    """
+    try:
+        return path.lstat()
+    except (PermissionError, FileNotFoundError):
+        return None
+
+
 def _iter_files(box: Path) -> list[tuple[str, Path]]:
     found: list[tuple[str, Path]] = []
     for prefix in _ROOTS:
         base = box / prefix
-        if not base.is_dir() or base.is_symlink():
+        info = _lstat_kind(base)
+        if info is None or not stat.S_ISDIR(info.st_mode):
             continue
-        for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
+        for dirpath, dirnames, filenames in os.walk(
+            base, followlinks=False, onerror=_on_walk_error
+        ):
             current = Path(dirpath)
-            dirnames[:] = sorted(name for name in dirnames if not (current / name).is_symlink())
+            kept: list[str] = []
+            for name in sorted(dirnames):
+                child = _lstat_kind(current / name)
+                if child is not None and stat.S_ISDIR(child.st_mode):
+                    kept.append(name)
+            dirnames[:] = kept
             for name in sorted(filenames):
                 path = current / name
-                if path.is_symlink() or not path.is_file():
+                child = _lstat_kind(path)
+                if child is None or not stat.S_ISREG(child.st_mode):
                     continue
                 rel = f"{prefix}/{path.relative_to(base).as_posix()}"
                 found.append((rel, path))
