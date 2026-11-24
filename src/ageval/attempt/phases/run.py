@@ -122,9 +122,11 @@ def _suspend_for_preempt(ctx: AttemptCtx, outcome: dict[str, object]) -> bool:
         return False
     if outcome.get("preempted") is True:
         return True
-    suite_run_id = ctx.suite_run_id
-    task_id = getattr(ctx.lock, "task_id", None)
-    if not suite_run_id or not isinstance(task_id, str) or not task_id:
+    suite_run_id = getattr(ctx, "suite_run_id", None)
+    if not isinstance(suite_run_id, str) or not suite_run_id:
+        return False
+    task_id = getattr(getattr(ctx, "lock", None), "task_id", None)
+    if not isinstance(task_id, str) or not task_id:
         return False
     if not preempt_blocks_task(ctx.dataset_root, suite_run_id, task_id):
         return False

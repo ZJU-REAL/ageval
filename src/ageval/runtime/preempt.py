@@ -46,7 +46,7 @@ def request_suite_preempt(
     path = preempt_request_path(dataset_root, suite_run_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     named = _task_ids(tasks)
-    payload: dict[str, Any] = {
+    payload: dict[str, object] = {
         "schema": PREEMPT_SCHEMA,
         "suite_run_id": suite_run_id,
         "requested_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),

@@ -72,7 +72,7 @@ class SuspendedAttempt:
     metrics: Mapping[str, Any] | None = None
     preempted: bool = True
 
-    def as_dict(self) -> dict[str, Any]:
+    def as_dict(self) -> dict[str, object]:
         return {
             "status": self.status,
             "score": self.score,

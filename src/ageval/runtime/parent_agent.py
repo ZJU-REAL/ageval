@@ -1587,7 +1587,7 @@ def _refusal(error: str) -> dict[str, Any]:
     }
 
 
-def _preempt_refusal() -> dict[str, Any]:
+def _preempt_refusal():
     """The next turn must not start. The completed turn is already in the log."""
     body = _refusal("attempt_preempted")
     body["preempted"] = True
