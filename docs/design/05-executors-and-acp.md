@@ -129,6 +129,7 @@ All four harnesses implement the `executor` exclusive slot and reference credent
 3. **ACP runtime configuration and probe (`after_environment_ready`)**:
    - Merges packaged `src/ageval/plugins/contrib/acp/acp_entries.json` with optional `$AGEVAL_HOME/acp-entries.json` (user entries cannot override packaged IDs).
    - Writes secret-free config overlays under `/attempt/home` (`.pi/agent/models.json`, `.config/opencode/opencode.json`, `.codex/config.toml`, `.claude/settings.json`). When the environment exposes `ensure_attempt_dirs`, HOME and overlay parents are created on the bind mount as the host user. Other kinds, and a bind mount the host user cannot write, still `mkdir` inside the box.
+   - OpenCode on a disposable evaluation environment (`docker`, `e2b`, `daytona`) also writes the v1 `permission` object (`*`, `bash`, `edit`, `webfetch`, and `external_directory` set to `allow`). `local` and `ssh` omit it. OpenCode asks for `external_directory` inside the process and does not send ACP `session/request_permission`. A packaged OpenCode whose config major is not 1 fails lock with `opencode_permission_schema_unsupported` instead of writing a `permissions` array that OpenCode 1.x rejects.
    - Runs `node -v` (failing with `acp_runtime_node` if below `runtime.node`), checks `npm ls -g --depth=0` and binary `realpath`, and performs a stdio JSON-RPC `initialize` handshake. On a miss, runs the pinned `install_command` once and re-probes, failing with `acp_runtime_install_failed` or `acp_runtime_missing` if still unsatisfied.
 
 ---

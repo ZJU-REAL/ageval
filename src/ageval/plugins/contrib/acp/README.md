@@ -58,6 +58,30 @@ Bake compares `node -v` with the floor before `npm install -g`. Below the floor 
 
 Rejected on `options` (entry-registry truth): `command`, `args`, `detect_command`, `install_command`, `version`, `acp_command`, `engine_command`, `acp_version`, `credential_env_names`.
 
+## OpenCode permission
+
+`after_environment_ready` writes `.config/opencode/opencode.json` under the Attempt HOME. The model and provider blocks are the same for every environment kind. The permission policy is not.
+
+When the locked environment is a disposable evaluation container (`docker`, `e2b`, or `daytona`), the file includes the OpenCode 1.x `permission` object:
+
+```json
+{
+  "permission": {
+    "*": "allow",
+    "bash": "allow",
+    "edit": "allow",
+    "webfetch": "allow",
+    "external_directory": "allow"
+  }
+}
+```
+
+OpenCode evaluates `external_directory` inside the process. That ask does not become ACP `session/request_permission`, so the client's batch auto-approve never sees it. A non-interactive run then waits until the wall limit. The five keys are written explicitly. `*` does not replace them: `external_directory` defaults to `ask`, and an agent rule can keep that ask when the key is omitted.
+
+`local` and `ssh` omit `permission` and keep OpenCode's own defaults. An absent environment kind does the same.
+
+The pinned entry accepts this v1 object. A `permissions` array is an unrecognized key on that build. If the packaged OpenCode version is not 1.x, lock fails with `opencode_permission_schema_unsupported` and no overlay is written. The same check runs again while preparing Attempt HOME.
+
 Python ACP SDK stays on the parent. It does not go into the Attempt image.
 
 Pi: official registry `pi-acp` (`pi --mode rpc`). Do not confuse it with

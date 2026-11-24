@@ -346,12 +346,16 @@ async def _write_lock_overlays(
     timeout_sec: float | None,
 ) -> list[str]:
     """Materialize engine overlays from the locked job. No host HOME copy."""
+    from ageval.config.errors import ConfigError
     from ageval.plugins.contrib.acp.home import write_lock_overlays
     from ageval.plugins.contrib.acp.lock_overlay import overlays_for_entry
 
     lock = getattr(ctx, "lock", None)
     job_overlay = getattr(lock, "job_overlay", None) if lock is not None else None
-    files = overlays_for_entry(descriptor.entry_id, job_overlay)
+    try:
+        files = overlays_for_entry(descriptor.entry_id, job_overlay)
+    except ConfigError as exc:
+        raise EnvironmentFailure(exc.error_code, exc.message) from exc
     if not files:
         return []
     written = await write_lock_overlays(

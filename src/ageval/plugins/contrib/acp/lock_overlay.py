@@ -5,6 +5,11 @@ host. After lock, provider / model / locator / optional base_url are known;
 ``after_environment_ready`` writes the engine's own file so docker, local,
 and other kinds bind the same id. Host ``~/.pi`` / ``~/.config`` is never
 copied. Locator *values* never enter the file.
+
+OpenCode's ``permission`` object is the exception to "same file everywhere".
+A disposable evaluation container has no operator to answer an internal
+``external_directory`` ask, so that kind gets an explicit allow policy.
+``local`` and ``ssh`` keep OpenCode's own defaults.
 """
 
 from __future__ import annotations
@@ -13,7 +18,25 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from ageval.config.errors import ConfigError
 from ageval.environments.protocol import HOME_PATH
+
+# Thrown away with the Attempt. ``local`` and ``ssh`` are persistent hosts.
+DISPOSABLE_EVALUATION_KINDS = frozenset({"docker", "e2b", "daytona"})
+
+# OpenCode 1.x key. ``*`` does not replace the named keys: ``external_directory``
+# defaults to ask, and an agent rule can keep that ask when the key is omitted.
+OPENCODE_V1_PERMISSION: dict[str, str] = {
+    "*": "allow",
+    "bash": "allow",
+    "edit": "allow",
+    "webfetch": "allow",
+    "external_directory": "allow",
+}
+
+# OpenCode 2.x reads a ``permissions`` array. 1.x rejects that key, and this
+# writer does not emit it. Any major other than 1 fails closed.
+OPENCODE_PERMISSION_SCHEMA_UNSUPPORTED = "opencode_permission_schema_unsupported"
 
 _SKIP_MODELS = frozenset({"", "entry-default"})
 
@@ -193,7 +216,84 @@ def build_pi_overlays(rows: list[Mapping[str, Any]]) -> list[OverlayFile]:
     return files
 
 
-def build_opencode_overlays(rows: list[Mapping[str, Any]]) -> list[OverlayFile]:
+def is_disposable_evaluation_environment(kind: str | None) -> bool:
+    """True when *kind* is a disposable evaluation container.
+
+    An absent or unknown kind is not disposable. The allow policy is opt-in
+    by this set, so a missing job field keeps OpenCode's defaults.
+    """
+    if not isinstance(kind, str):
+        return False
+    return kind.strip() in DISPOSABLE_EVALUATION_KINDS
+
+
+def _environment_kind(job_overlay: Mapping[str, Any] | None) -> str:
+    if not isinstance(job_overlay, Mapping):
+        return ""
+    kind = job_overlay.get("environment")
+    return kind.strip() if isinstance(kind, str) else ""
+
+
+def opencode_config_major(version: str | None) -> int | None:
+    """Major of an OpenCode package version. ``None`` when it is not numeric."""
+    if not isinstance(version, str):
+        return None
+    text = version.strip()
+    if text[:1] in {"v", "V"}:
+        text = text[1:]
+    head = text.split(".", 1)[0]
+    if not head.isdigit():
+        return None
+    return int(head)
+
+
+def packaged_opencode_version() -> str | None:
+    """Version of the packaged ``opencode`` entry, engine pin preferred."""
+    from ageval.plugins.contrib.acp.registry import get_entry
+
+    desc = get_entry("opencode")
+    if desc is None:
+        return None
+    return desc.engine_version or desc.acp_version
+
+
+def require_opencode_v1_permission_schema(version: str | None) -> None:
+    """Refuse to write a v1 ``permission`` object for any other schema.
+
+    OpenCode 1.x accepts ``permission``. OpenCode 2.x accepts a ``permissions``
+    array, which 1.x rejects as an unrecognized key. Emitting either shape for
+    the other major would be an invalid policy.
+    """
+    if opencode_config_major(version) == 1:
+        return
+    text = version.strip() if isinstance(version, str) else ""
+    shown = text or "unknown"
+    raise ConfigError(
+        OPENCODE_PERMISSION_SCHEMA_UNSUPPORTED,
+        f"OpenCode {shown} does not accept the v1 permission object "
+        "(OpenCode 2.x uses a permissions array). Refusing to write opencode.json.",
+        location="/environment",
+    )
+
+
+def validate_opencode_permission_schema(job_overlay: Mapping[str, Any] | None) -> None:
+    """Lock gate: a disposable OpenCode run must be writable as v1 config.
+
+    ``local`` and ``ssh`` do not receive the policy, so their OpenCode version
+    is not checked here. An absent environment kind is treated as not disposable.
+    """
+    if not is_disposable_evaluation_environment(_environment_kind(job_overlay)):
+        return
+    if not _profiles_for_entry(job_overlay, "opencode"):
+        return
+    require_opencode_v1_permission_schema(packaged_opencode_version())
+
+
+def build_opencode_overlays(
+    rows: list[Mapping[str, Any]],
+    *,
+    environment: str | None = None,
+) -> list[OverlayFile]:
     providers: dict[str, dict[str, Any]] = {}
     default_model: str | None = None
     for row in rows:
@@ -225,11 +325,17 @@ def build_opencode_overlays(rows: list[Mapping[str, Any]]) -> list[OverlayFile]:
             options["baseURL"] = base
         if options:
             bucket["options"] = options
-    if default_model is None:
+    disposable = is_disposable_evaluation_environment(environment)
+    if default_model is None and not disposable:
         return []
-    payload: dict[str, Any] = {"$schema": "https://opencode.ai/config.json", "model": default_model}
+    payload: dict[str, Any] = {"$schema": "https://opencode.ai/config.json"}
+    if default_model is not None:
+        payload["model"] = default_model
     if providers:
         payload["provider"] = providers
+    if disposable:
+        require_opencode_v1_permission_schema(packaged_opencode_version())
+        payload["permission"] = dict(OPENCODE_V1_PERMISSION)
     return [
         OverlayFile(
             dest=".config/opencode/opencode.json",
@@ -378,4 +484,6 @@ def overlays_for_entry(
     rows = _profiles_for_entry(job_overlay, entry_id)
     if not rows:
         return []
+    if entry_id == "opencode":
+        return build_opencode_overlays(rows, environment=_environment_kind(job_overlay))
     return builder(rows)

@@ -208,6 +208,11 @@ class ConfigCore:
             evaluate_host=job_doc.evaluate_host,
             role_ids=role_ids,
         )
+        from ageval.plugins.contrib.acp.lock_overlay import validate_opencode_permission_schema
+
+        # Before the environment starts. A v2-only OpenCode pin must not lock
+        # a disposable run that would then write a rejected permission object.
+        validate_opencode_permission_schema(job_overlay)
         extension_bindings = self._resolve_extension_bindings(
             profiles_rows,
             environment=job_doc.environment,

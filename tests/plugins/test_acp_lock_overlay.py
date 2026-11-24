@@ -2,18 +2,28 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pytest
+from tests.helpers.lock import lock_with_profiles
 
-from ageval.environments.protocol import HOME_PATH, ExecResult
+from ageval.config.errors import ConfigError
+from ageval.config.model import thaw
+from ageval.environments.protocol import HOME_PATH, EnvironmentFailure, ExecResult
 from ageval.plugins.contrib.acp.home import write_lock_overlays
 from ageval.plugins.contrib.acp.hooks import _write_lock_overlays
 from ageval.plugins.contrib.acp.lock_overlay import (
+    DISPOSABLE_EVALUATION_KINDS,
+    OPENCODE_PERMISSION_SCHEMA_UNSUPPORTED,
+    OPENCODE_V1_PERMISSION,
     OverlayFile,
+    opencode_config_major,
     overlays_for_entry,
+    packaged_opencode_version,
+    require_opencode_v1_permission_schema,
     split_model,
 )
 from ageval.plugins.contrib.acp.registry import get_entry
@@ -98,6 +108,7 @@ def test_opencode_overlay_model_and_locator() -> None:
     assert provider["options"]["apiKey"] == "{env:litellm_api_key}"
     assert provider["options"]["baseURL"] == "https://example.invalid/v1"
     assert "glm-5.3" in provider["models"]
+    assert "permission" not in payload
 
 
 def test_codex_overlay_toml_with_provider() -> None:
@@ -264,3 +275,218 @@ async def test_hook_skips_without_lock() -> None:
     assert desc is not None
     assert await _write_lock_overlays(ctx, desc, timeout_sec=30.0) == []
     assert host.uploads == []
+
+
+def _with_environment(job: dict[str, Any], kind: str) -> dict[str, Any]:
+    return {**job, "environment": kind}
+
+
+def _opencode_job(*, model: str) -> dict[str, Any]:
+    return _job(
+        entry="opencode",
+        model=model,
+        api_key="litellm_api_key",
+        base_url="https://example.invalid/v1",
+    )
+
+
+def _opencode_payload(job: dict[str, Any]) -> dict[str, Any]:
+    files = overlays_for_entry("opencode", job)
+    assert len(files) == 1
+    assert files[0].dest == ".config/opencode/opencode.json"
+    payload = files[0].payload
+    assert isinstance(payload, dict)
+    return payload
+
+
+def test_opencode_permission_follows_environment_kind() -> None:
+    base = _opencode_job(model="litellm/glm-5.3")
+    for kind in DISPOSABLE_EVALUATION_KINDS:
+        payload = _opencode_payload(_with_environment(base, kind))
+        assert payload["permission"] == OPENCODE_V1_PERMISSION
+        assert payload["model"] == "litellm/glm-5.3"
+    for kind in ("", "local", "ssh", "podman"):
+        payload = _opencode_payload(_with_environment(base, kind))
+        assert "permission" not in payload
+    assert "permission" not in _opencode_payload(base)
+    absent = _opencode_job(model="litellm/glm-5.3")
+    absent["environment"] = None
+    assert "permission" not in _opencode_payload(absent)
+
+
+def test_entry_default_permission_only_on_disposable_kind() -> None:
+    bare = _opencode_job(model="entry-default")
+    assert overlays_for_entry("opencode", bare) == []
+    local = _with_environment(bare, "local")
+    assert overlays_for_entry("opencode", local) == []
+    payload = _opencode_payload(_with_environment(bare, "docker"))
+    assert list(payload) == ["$schema", "permission"]
+    assert payload["permission"] == OPENCODE_V1_PERMISSION
+
+
+def test_pi_overlay_ignores_disposable_kind() -> None:
+    job = _with_environment(_job(entry="pi", model="zai-coding-cn/glm-5.3"), "docker")
+    dumped = str({item.dest: item.payload for item in overlays_for_entry("pi", job)})
+    assert "permission" not in dumped
+    assert "external_directory" not in dumped
+
+
+@pytest.mark.parametrize("version", ["1.18.12", "v1.2.3", "V1.0.0", "1"])
+def test_opencode_v1_permission_schema_accepted(version: str) -> None:
+    assert opencode_config_major(version) == 1
+    require_opencode_v1_permission_schema(version)
+
+
+@pytest.mark.parametrize("version", ["2.0.0", "2.2.5", "2", "0.9.0", "", None, "opencode"])
+def test_opencode_non_v1_permission_schema_rejected(version: str | None) -> None:
+    with pytest.raises(ConfigError) as caught:
+        require_opencode_v1_permission_schema(version)
+    assert caught.value.error_code == OPENCODE_PERMISSION_SCHEMA_UNSUPPORTED
+    assert caught.value.location == "/environment"
+
+
+def test_packaged_opencode_accepts_v1_permission_schema() -> None:
+    version = packaged_opencode_version()
+    assert isinstance(version, str) and version
+    assert opencode_config_major(version) == 1
+    require_opencode_v1_permission_schema(version)
+
+
+def test_v2_overlay_refuses_disposable_and_skips_local(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "ageval.plugins.contrib.acp.lock_overlay.packaged_opencode_version",
+        lambda: "2.0.0",
+    )
+    docker = _with_environment(_opencode_job(model="litellm/glm-5.3"), "docker")
+    with pytest.raises(ConfigError) as caught:
+        overlays_for_entry("opencode", docker)
+    assert caught.value.error_code == OPENCODE_PERMISSION_SCHEMA_UNSUPPORTED
+    local = _opencode_payload(_with_environment(_opencode_job(model="litellm/glm-5.3"), "local"))
+    assert "permission" not in local
+    ssh = _opencode_payload(_with_environment(_opencode_job(model="litellm/glm-5.3"), "ssh"))
+    assert "permission" not in ssh
+
+
+@dataclass
+class _CaptureHost(_Host):
+    bodies: list[str] = field(default_factory=list)
+
+    async def upload(self, source: str | Path, dest: str) -> None:
+        self.bodies.append(Path(source).read_text(encoding="utf-8"))
+        await super().upload(source, dest)
+
+
+@pytest.mark.asyncio
+async def test_hook_uploads_permission_only_overlay_for_docker() -> None:
+    host = _CaptureHost()
+    job = _with_environment(_opencode_job(model="entry-default"), "docker")
+    ctx = _Ctx(host=host, lock=_Lock(job_overlay=job))
+    desc = get_entry("opencode")
+    assert desc is not None
+    written = await _write_lock_overlays(ctx, desc, timeout_sec=30.0)
+    assert written == [".config/opencode/opencode.json"]
+    assert host.uploads[0][1] == f"{HOME_PATH}/.config/opencode/opencode.json"
+    body = json.loads(host.bodies[0])
+    assert body["permission"] == OPENCODE_V1_PERMISSION
+    assert "model" not in body
+
+
+@pytest.mark.asyncio
+async def test_hook_v2_disposable_fails_before_upload(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "ageval.plugins.contrib.acp.lock_overlay.packaged_opencode_version",
+        lambda: "2.0.0",
+    )
+    host = _Host()
+    job = _with_environment(_opencode_job(model="litellm/glm-5.3"), "docker")
+    ctx = _Ctx(host=host, lock=_Lock(job_overlay=job))
+    desc = get_entry("opencode")
+    assert desc is not None
+    with pytest.raises(EnvironmentFailure) as caught:
+        await _write_lock_overlays(ctx, desc, timeout_sec=30.0)
+    assert caught.value.kind == OPENCODE_PERMISSION_SCHEMA_UNSUPPORTED
+    assert host.uploads == []
+    assert ctx.facts == []
+
+
+_LOCK_TASK = """\
+format: ageval.task/1
+task_id: oc-perm
+parameters: {}
+agent_profiles:
+  - id: solver
+limits:
+  wall_time_seconds: 60
+  agent_invocations: 2
+artifacts:
+  publishable: []
+evaluation:
+  entrypoint: evaluator:evaluate
+  inputs: []
+"""
+
+_OPENCODE_PROFILE = {
+    "executor": "acp",
+    "model": {"id": "entry-default"},
+    "extensions": [{"plugin": "acp", "options": {"entry": "opencode"}}],
+}
+
+
+def _lock_task(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "task.yaml").write_text(_LOCK_TASK, encoding="utf-8")
+    (root / "run.py").write_text("def run(ctx):\n    pass\n", encoding="utf-8")
+    (root / "evaluator.py").write_text(
+        "def evaluate(inputs):\n    return {'verdict': 'PASS'}\n", encoding="utf-8"
+    )
+    return root
+
+
+def test_lock_opencode_docker_accepts_packaged_pin(tmp_path: Path) -> None:
+    locked = lock_with_profiles(
+        _lock_task(tmp_path / "task"),
+        "oc-perm",
+        {"solver": _OPENCODE_PROFILE},
+        environment="docker",
+    )
+    assert locked.environment == "docker"
+    overlay = thaw(locked.job_overlay)
+    assert overlay["environment"] == "docker"
+    payload = _opencode_payload(overlay)
+    assert list(payload) == ["$schema", "permission"]
+    assert payload["permission"] == OPENCODE_V1_PERMISSION
+
+
+def test_lock_opencode_docker_rejects_v2_pin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "ageval.plugins.contrib.acp.lock_overlay.packaged_opencode_version",
+        lambda: "2.0.0",
+    )
+    with pytest.raises(ConfigError) as caught:
+        lock_with_profiles(
+            _lock_task(tmp_path / "task"),
+            "oc-perm",
+            {"solver": _OPENCODE_PROFILE},
+            environment="docker",
+        )
+    assert caught.value.error_code == OPENCODE_PERMISSION_SCHEMA_UNSUPPORTED
+
+
+def test_lock_opencode_local_accepts_v2_pin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "ageval.plugins.contrib.acp.lock_overlay.packaged_opencode_version",
+        lambda: "2.0.0",
+    )
+    locked = lock_with_profiles(
+        _lock_task(tmp_path / "task"),
+        "oc-perm",
+        {"solver": _OPENCODE_PROFILE},
+        environment="local",
+    )
+    assert locked.environment == "local"
+    overlay = thaw(locked.job_overlay)
+    assert overlays_for_entry("opencode", overlay) == []
