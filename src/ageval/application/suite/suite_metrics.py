@@ -32,6 +32,13 @@ def _normalize_status(raw: object) -> str:
     return str(raw or "").strip().upper()
 
 
+def _is_suspended_attempt(row: Mapping[str, Any]) -> bool:
+    """Preempt left this sample unsealed. It is not a PASS, FAIL, or ERROR."""
+    if str(row.get("phase") or "") == "preempted":
+        return True
+    return _normalize_status(row.get("status")) == "SUSPENDED"
+
+
 def _numeric_score_or_none(raw: object) -> float | None:
     """Return a real number score, or None if missing / bool / non-numeric.
 
@@ -71,13 +78,14 @@ def aggregate_task_metrics(task_rows: Sequence[Mapping[str, Any]]) -> dict[str, 
         ``pass_rate``, ``mean_score``, ``n_tasks``, ``n_pass``,
         ``n_fail``, ``n_error``, ``missing_score_as``.
     """
-    n = len(task_rows)
+    graded = [row for row in task_rows if _normalize_status(row.get("status")) != "SUSPENDED"]
+    n = len(graded)
     n_pass = 0
     n_fail = 0
     n_error = 0
     scores: list[float] = []
 
-    for row in task_rows:
+    for row in graded:
         st = _normalize_status(row.get("status"))
         if st == "PASS":
             n_pass += 1
@@ -375,7 +383,7 @@ def rollup_task_from_attempts(
     k_values: Sequence[int] | None = None,
 ) -> dict[str, Any]:
     """Collapse attempt samples for one task into a summary row + k-metrics."""
-    ordered = sorted(
+    ordered_all = sorted(
         from_scratch_attempts(attempt_rows),
         key=lambda r: (
             int(r["attempt_index"])
@@ -385,6 +393,24 @@ def rollup_task_from_attempts(
             str(r.get("run_id") or ""),
         ),
     )
+    ordered = [row for row in ordered_all if not _is_suspended_attempt(row)]
+    if not ordered and ordered_all:
+        return {
+            "task_id": task_id,
+            "status": "suspended",
+            "score": None,
+            "n": 0,
+            "c": 0,
+            "run_id": ordered_all[0].get("run_id"),
+            "attempt_indices": [
+                row.get("attempt_index")
+                for row in ordered_all
+                if row.get("attempt_index") is not None
+            ],
+            "pass_at_k": {},
+            "pass_power_k": {},
+            "attempts": list(ordered_all),
+        }
     n, c = count_passes(ordered)
     ks = list(k_values) if k_values is not None else default_k_values(n if n else 1)
     pass_at, pass_pow = _metrics_map_for_nc(n, c, ks)

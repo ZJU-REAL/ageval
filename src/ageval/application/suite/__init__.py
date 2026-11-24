@@ -18,6 +18,7 @@ from ageval.application.suite.suite_run import (
     is_suite_run_locator,
     plan_suite_run,
     request_suite_cancel,
+    request_suite_preempt,
 )
 
 __all__ = [
@@ -31,6 +32,7 @@ __all__ = [
     "metrics_and_refs",
     "plan_suite_run",
     "request_suite_cancel",
+    "request_suite_preempt",
     "summary_path",
     "suite_dir",
     "task_refs_for_summary",
