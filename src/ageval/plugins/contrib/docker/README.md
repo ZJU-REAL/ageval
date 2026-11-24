@@ -68,5 +68,9 @@ environment: docker
 The host needs a working Docker engine. Gold isolation is mount +
 upload-before-evaluate, not “delete the field in YAML”.
 
+`ensure_attempt_dirs` creates paths under `/attempt` on the bind mount as the host user. Each directory on that chain is mode `0777` when this process can chmod it. A symlink or `..` is rejected before any directory is created. Files off the chain are not chmodded.
+
+`upload` of a `/attempt` path copies on the host. If that copy raises `PermissionError`, or a `shutil.Error` made only of permission failures, the same upload uses `docker cp`. Other copy errors stay errors. The container user is unchanged.
+
 Not a Hub install. `ageval plugin install docker` is rejected: the id is
 reserved.

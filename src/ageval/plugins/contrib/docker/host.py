@@ -8,9 +8,12 @@ executor and the Attempt phases see only the environment Protocol.
 Files under ``/attempt`` are copied from the bind mount. When that copy cannot
 read a root-owned private file, download deletes the destination and replaces
 it from one ``docker cp`` tar stream. Source modes on the mount stay as the
-agent wrote them. Other absolute paths use ``docker cp``. A compose service
-uses ``docker compose cp``. ``/attempt/evaluation`` therefore appears exactly
-when the evaluate phase uploads it, and not one moment earlier.
+agent wrote them. Upload keeps the host copy and uses ``docker cp`` only when
+that copy fails with a permission error. ``ensure_attempt_dirs`` creates
+directories on the bind mount as the host user. Other absolute paths use
+``docker cp``. A compose service uses ``docker compose cp``.
+``/attempt/evaluation`` therefore appears exactly when the evaluate phase
+uploads it, and not one moment earlier.
 """
 
 from __future__ import annotations
@@ -386,7 +389,13 @@ class DockerHost(BaseEnvironment):
         return result
 
     async def upload(self, source: Path, dest: str, *, service: str | None = None) -> None:
-        """Copy into the box. ``/attempt`` stays on the bind mount."""
+        """Copy into the box. ``/attempt`` stays on the bind mount.
+
+        The host copy is the fast path. A ``PermissionError``, or a
+        ``shutil.Error`` whose reasons are all permission failures, falls
+        back to ``docker cp``. Other copy failures propagate. The fallback
+        does not chmod the bind source.
+        """
         self._assert_started()
         if service is None and str(dest or "").strip().startswith(BOX_ROOT):
             src = Path(source).expanduser()
@@ -396,17 +405,16 @@ class DockerHost(BaseEnvironment):
                     f"upload source does not exist: {source}",
                 )
             target = self.host_path(dest)
-            if src.is_dir():
-                if target.exists():
-                    if target.is_dir():
-                        shutil.rmtree(target)
-                    else:
-                        target.unlink()
-                target.parent.mkdir(parents=True, exist_ok=True)
-                copy_bind_tree(src, target)
-            else:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, target)
+            try:
+                _copy_onto_bind(src, target)
+            except PermissionError:
+                await self._cp_into(src, dest, service=None)
+                return
+            except shutil.Error as exc:
+                if not _shutil_error_is_only_permission(exc):
+                    raise
+                await self._cp_into(src, dest, service=None)
+                return
             _make_box_writable(target)
             return
         await self._cp_into(Path(source), dest, service=service)
@@ -649,6 +657,68 @@ class DockerHost(BaseEnvironment):
                 f"box path escapes the work root: {box_path!r}",
             )
         return (self._root / rel) if rel else self._root
+
+    def ensure_attempt_dirs(self, paths: Sequence[str]) -> None:
+        """Create directories under ``/attempt`` as the host user.
+
+        Every path is checked before any directory is created. ``..``, a path
+        outside this attempt, and a symlink on the chain are rejected. Each
+        directory on a requested chain is mode ``0777`` when this process can
+        chmod it. Files and directories off that chain are left unchanged.
+        """
+        self._assert_started()
+        if isinstance(paths, str | bytes):
+            raise EnvironmentFailure(
+                "environment_path_invalid",
+                "attempt directories must be a sequence of box paths",
+            )
+        targets = [self.host_path(raw) for raw in paths]
+        for target in targets:
+            self._probe_attempt_dir(target)
+        for target in targets:
+            self._make_attempt_dir(target)
+
+    def _probe_attempt_dir(self, target: Path) -> None:
+        """Reject a symlink or a non-directory before ``_make_attempt_dir`` runs."""
+        current = self._root
+        info = _lstat_existing(current)
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise EnvironmentFailure(
+                "environment_path_invalid",
+                f"attempt root is not a directory: {current}",
+            )
+        for part in target.relative_to(self._root).parts:
+            current = current / part
+            try:
+                info = current.lstat()
+            except FileNotFoundError:
+                return
+            if stat.S_ISLNK(info.st_mode):
+                raise EnvironmentFailure(
+                    "environment_path_invalid",
+                    f"refusing to follow a symlink in the attempt tree: {current}",
+                )
+            if not stat.S_ISDIR(info.st_mode):
+                raise EnvironmentFailure(
+                    "environment_path_invalid",
+                    f"attempt path is not a directory: {current}",
+                )
+
+    def _make_attempt_dir(self, target: Path) -> None:
+        current = self._root
+        _chmod_attempt_dir(current)
+        for part in target.relative_to(self._root).parts:
+            current = current / part
+            try:
+                current.mkdir()
+            except FileExistsError:
+                info = current.lstat()
+                if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                    raise EnvironmentFailure(
+                        "environment_path_invalid",
+                        f"attempt path is not a directory: {current}",
+                    ) from None
+            _chmod_attempt_dir(current)
 
     def _prepare_work_root(self) -> None:
         """Create the in-box layout, writable by the box's non-root user."""
@@ -1301,6 +1371,67 @@ def _box_user(raw: object) -> str:
         "environment_options_invalid",
         f"docker environment_options.user must be root, a uid, or uid:gid, got {text!r}",
     )
+
+
+def _copy_onto_bind(src: Path, target: Path) -> None:
+    """Host-side copy onto the bind mount. Permission errors propagate."""
+    if src.is_dir():
+        if target.exists():
+            if target.is_dir():
+                shutil.rmtree(target)
+            else:
+                target.unlink()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        copy_bind_tree(src, target)
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, target)
+
+
+def _reason_is_permission(reason: object) -> bool:
+    if isinstance(reason, PermissionError):
+        return True
+    text = reason if isinstance(reason, str) else str(reason)
+    lowered = text.lower()
+    return "permission denied" in lowered or "operation not permitted" in lowered
+
+
+def _shutil_error_is_only_permission(exc: shutil.Error) -> bool:
+    """True only when every ``copytree`` reason is a permission failure.
+
+    ``shutil.Error`` stores those reasons as strings. An empty list, a mixed
+    list, or any non-permission reason must not take the ``docker cp`` path.
+    """
+    reasons = exc.args[0] if exc.args else None
+    if not isinstance(reasons, list) or not reasons:
+        return False
+    for item in reasons:
+        if not isinstance(item, tuple) or len(item) < 3:
+            return False
+        if not _reason_is_permission(item[2]):
+            return False
+    return True
+
+
+def _lstat_existing(path: Path) -> os.stat_result:
+    try:
+        return path.lstat()
+    except FileNotFoundError as exc:
+        raise EnvironmentFailure(
+            "environment_path_invalid",
+            f"attempt path does not exist: {path}",
+        ) from exc
+
+
+def _chmod_attempt_dir(path: Path) -> None:
+    """Mode ``0777`` on this directory. Children off the chain stay as they are.
+
+    A directory owned by the container user cannot be chmodded by the host
+    process. Leave it. Upload falls back to ``docker cp`` when the host
+    cannot write there.
+    """
+    with contextlib.suppress(PermissionError):
+        path.chmod(0o777)
 
 
 def _make_box_writable(path: Path) -> None:
