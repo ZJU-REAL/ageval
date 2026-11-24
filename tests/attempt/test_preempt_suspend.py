@@ -159,10 +159,7 @@ def test_mark_preempt_aborts_the_open_turn_and_checkpoints(tmp_path: Any) -> Non
     ctx.activity = log
     mark_attempt_preempted(ctx)
     assert log.latest_status(kind="model_turn", request_id="mt_req_inv_0") == "aborted"
-    assert log.latest_status(kind="invoke", request_id="req_inv") == "completed"
-    completed = log.records_for(kind="invoke", request_id="req_inv")[-1]
-    assert completed.payload["ok"] is True
-    assert completed.payload["error"] is None
+    assert log.latest_status(kind="invoke", request_id="req_inv") == "in_flight"
     assert log.has_completed_phase("preempted")
     assert (store.root / "checkpoints").is_dir()
     assert not (store.root / "result.json").is_file()

@@ -8,7 +8,6 @@ and leaves that Attempt unsealed so ``--resume-suite`` attaches the same one.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -133,8 +132,9 @@ def mark_attempt_preempted(ctx: Any) -> None:
     ctx.suspended = True
     log = getattr(ctx, "activity", None)
     if log is not None:
+        # Abort a cut-off model turn. Leave the invoke in-flight so resume
+        # sends that turn again instead of replaying an empty success.
         _reconcile_open_steps(ctx, log)
-        _close_open_invokes(ctx, log)
         if not log.has_completed_phase("preempted"):
             elapsed = ctx.active_elapsed_ms() if hasattr(ctx, "active_elapsed_ms") else 0.0
             limit = ctx.limit_name() if hasattr(ctx, "limit_name") else None
@@ -178,41 +178,3 @@ def _reconcile_open_steps(ctx: Any, log: Any) -> None:
         seen.add((session_id, invoke_id))
         scope = ActivityScope(log, session_id=session_id, invoke_request_id=invoke_id)
         reconcile_inflight_tail(scope, prepare=_checkpoint_prepare(ctx))
-
-
-def _close_open_invokes(ctx: Any, log: Any) -> None:
-    """Finish invoke rows the worker never sealed. They are not fatal failures."""
-    open_ids: list[str] = []
-    for record in log.records:
-        if record.kind != "invoke" or record.status != "in_flight":
-            continue
-        if record.request_id not in open_ids:
-            open_ids.append(record.request_id)
-    for request_id in open_ids:
-        if log.latest_status(kind="invoke", request_id=request_id) != "in_flight":
-            continue
-        source = log.records_for(kind="invoke", request_id=request_id)[-1]
-        payload = _completed_invoke_payload(source.payload)
-        log.append(
-            request_id=request_id,
-            kind="invoke",
-            status="completed",
-            payload=payload,
-            prepare=_checkpoint_prepare(ctx),
-        )
-
-
-def _completed_invoke_payload(source: Mapping[str, Any]) -> dict[str, Any]:
-    turn = source.get("turn_index")
-    turn_index = turn if isinstance(turn, int) and not isinstance(turn, bool) else 0
-    return {
-        "session_id": str(source.get("session_id") or ""),
-        "turn_index": turn_index,
-        "ok": True,
-        "text": "",
-        "structured": None,
-        "tool_calls": [],
-        "usage": None,
-        "error": None,
-        "checkpoint_seq": None,
-    }
