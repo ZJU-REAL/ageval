@@ -131,6 +131,22 @@ def test_unbound_session_reports_failure_instead_of_answering(
     assert answer["structured"] is None
 
 
+def test_preempted_parent_response_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ageval_sdk.errors import AttemptPreempted
+
+    monkeypatch.delenv("AGEVAL_OFFLINE_AGENT", raising=False)
+
+    async def _call(payload: dict) -> dict:
+        if payload.get("op") == "open":
+            return {"ok": True, "session_id": "sess_test"}
+        return {"ok": False, "error": "attempt_preempted", "preempted": True}
+
+    monkeypatch.setattr("ageval_sdk.agent._parent_call", _call)
+    session = AgentSession(attempt_id="attempt_x", profile_id="p", max_turns=2)
+    with pytest.raises(AttemptPreempted):
+        asyncio.run(session.invoke("one"))
+
+
 def test_offline_gate_refuses_before_the_socket(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AGEVAL_OFFLINE_AGENT", "1")
     session = AgentSession(attempt_id="attempt_x", profile_id="p", max_turns=2)

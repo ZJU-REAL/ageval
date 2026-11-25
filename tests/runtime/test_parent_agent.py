@@ -58,6 +58,19 @@ def _open(service: ParentAgentService, profile_id: str = "solver") -> str:
     return str(opened["session_id"])
 
 
+def test_preempt_refuses_the_next_turn_before_the_executor(tmp_path: Path) -> None:
+    service, backend = _service(tmp_path)
+    session = _open(service)
+    assert service.invoke(session_id=session, prompt="one")["ok"] is True
+    service.preempt_requested = lambda: True
+    refused = service.invoke(session_id=session, prompt="two")
+    assert refused["ok"] is False
+    assert refused["error"] == "attempt_preempted"
+    assert refused["preempted"] is True
+    assert backend.prompts == ["one"]
+    assert service.fatal_invoke is None
+
+
 def test_invoke_forwards_tools_and_returns_tool_calls(tmp_path: Path) -> None:
     backend = ScriptedExecutor(
         tool_calls=({"id": "call_1", "name": "lookup", "arguments": {"q": "a"}},)

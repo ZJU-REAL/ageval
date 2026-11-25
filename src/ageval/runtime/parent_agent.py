@@ -184,6 +184,8 @@ class ParentAgentService:
     on_progress: Any = None
     on_phase: Any = None
     on_phase_clock: Callable[[bool], None] | None = None
+    # Suite preempt. Checked before a new model turn; an in-flight turn is not cut.
+    preempt_requested: Callable[[], bool] | None = None
     record_stall_fact: Callable[[str, dict[str, Any]], None] | None = None
     task_id: str = ""
     attempt_index: int = 0
@@ -793,6 +795,8 @@ class ParentAgentService:
         if ticket.run_phase and self._wall_expired():
             self._note_run_limit("wall_time_seconds")
             return _refusal("wall_time_exceeded")
+        if ticket.run_phase and self._preempt_now():
+            return _preempt_refusal()
         if is_offline_agent(env_name=self.offline_env):
             return _refusal("offline_forced")
         if self._overlap_blocked(ticket, binding):
@@ -1279,6 +1283,8 @@ class ParentAgentService:
         if self._wall_expired():
             self._note_run_limit("wall_time_seconds")
             return _refusal("wall_time_exceeded")
+        if self._preempt_now():
+            return _preempt_refusal()
         if is_offline_agent(env_name=self.offline_env):
             return _refusal("offline_forced")
         with self._lock:
@@ -1290,6 +1296,12 @@ class ParentAgentService:
         if binding.attempt_id != self.attempt_id:
             return {"ok": False, "error": "cross_attempt_session"}
         return None
+
+    def _preempt_now(self) -> bool:
+        probe = self.preempt_requested
+        if not callable(probe):
+            return False
+        return bool(probe())
 
     def _wall_expired(self) -> bool:
         if self._phase_clock_frozen:
@@ -1573,6 +1585,13 @@ def _refusal(error: str) -> dict[str, Any]:
         "provider_session_handle": None,
         "tool_calls": [],
     }
+
+
+def _preempt_refusal():
+    """The next turn must not start. The completed turn is already in the log."""
+    body = _refusal("attempt_preempted")
+    body["preempted"] = True
+    return body
 
 
 def _drive(coro: Any) -> Any:

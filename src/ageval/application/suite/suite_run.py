@@ -39,6 +39,15 @@ from ageval.evaluation.error_record import error_record_from_exception
 from ageval.model.errors import ModelConfigError, is_recoverable_agent_invoke_error
 from ageval.plugins.errors import PluginContractError
 from ageval.registry.resolve import resolve_dataset_root
+from ageval.runtime.preempt import (
+    clear_suite_preempt,
+    is_suite_preempt_requested,
+    preempt_blocks_task,
+    preempt_stops_suite,
+)
+from ageval.runtime.preempt import (
+    request_suite_preempt as request_suite_preempt,  # noqa: F401 — CLI via build_suite_runner
+)
 
 # Instrumentation for tests: peaks concurrent in-flight workers.
 _inflight_lock = asyncio.Lock()
@@ -263,9 +272,18 @@ def planned_units(plan: SuitePlan) -> list[tuple[str, int]]:
 
 def _is_cancelled_placeholder(row: Mapping[str, Any]) -> bool:
     """Synthetic suite-cancel rows (never ran) — retriable on resume."""
+    if _is_suspended_row(row):
+        return False
     if str(row.get("phase") or "") == "cancelled":
         return True
     return str(row.get("error") or "") == "suite_cancelled"
+
+
+def _is_suspended_row(row: Mapping[str, Any]) -> bool:
+    """In-flight unit left unsealed by preempt. Resume attaches the same Attempt."""
+    if str(row.get("phase") or "") == "preempted":
+        return True
+    return str(row.get("status") or "").strip().lower() == "suspended"
 
 
 _FINISHED_PROGRESS = frozenset(
@@ -282,7 +300,7 @@ def _existing_attempt_keys(attempts: list[dict[str, Any]]) -> set[tuple[str, int
     """
     keys: set[tuple[str, int]] = set()
     for row in attempts:
-        if _is_cancelled_placeholder(row):
+        if _is_cancelled_placeholder(row) or _is_suspended_row(row):
             continue
         tid, idx = slot_key(row)
         if not tid:
@@ -325,8 +343,10 @@ def _recoverable_invoke_keys(attempts: Sequence[Mapping[str, Any]]) -> set[tuple
 
 
 def suite_is_settled(dataset_root: Path, suite_run_id: str) -> bool:
-    """True when the suite is not in-flight and has no pending cancel request."""
+    """True when the suite is not in-flight and has no pending stop request."""
     if is_suite_cancel_requested(dataset_root, suite_run_id):
+        return False
+    if is_suite_preempt_requested(dataset_root, suite_run_id):
         return False
     progress_path = (
         document.suite_dir(dataset_root.expanduser().resolve(strict=False), suite_run_id)
@@ -391,17 +411,24 @@ async def _run_one(
             getattr(result, "logs", None),
         )
         raw_metrics = getattr(result, "metrics", None)
+        suspended = str(status).strip().lower() == "suspended" or bool(
+            getattr(result, "preempted", False)
+        )
         return {
             "task_id": task_id,
             "attempt_index": attempt_index,
-            "exit_code": code,
-            "status": status,
-            "score": getattr(result, "score", None),
+            "exit_code": 0 if suspended else code,
+            "status": "suspended" if suspended else status,
+            "score": None if suspended else getattr(result, "score", None),
             "limit": getattr(result, "limit", None),
-            "metrics": dict(raw_metrics) if isinstance(raw_metrics, dict) else {},
+            "metrics": {}
+            if suspended
+            else (dict(raw_metrics) if isinstance(raw_metrics, dict) else {}),
             "run_id": run_id,
-            "error": None if code != 2 else _copy_error(getattr(result, "error", None)),
-            "phase": "terminal",
+            "error": None
+            if suspended or code != 2
+            else _copy_error(getattr(result, "error", None)),
+            "phase": "preempted" if suspended else "terminal",
             "fork": bool(getattr(result, "fork", None)),
             "replay": bool(getattr(result, "replay", None)),
         }
@@ -516,6 +543,7 @@ def _write_suite_progress(
         "running": running,
         "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "cancel_requested": is_suite_cancel_requested(plan.dataset_root, plan.suite_run_id),
+        "preempt_requested": is_suite_preempt_requested(plan.dataset_root, plan.suite_run_id),
     }
     out = suite_dir / "progress.json"
     tmp = out.with_suffix(".tmp")
@@ -605,16 +633,21 @@ def _task_row_from_rollup(t: Mapping[str, Any]) -> dict[str, Any]:
 
 def _counts_and_exit_code(tasks_out: list[dict[str, Any]]) -> tuple[dict[str, int], int]:
     counts = {"pass": 0, "fail": 0, "error": 0, "skipped": 0}
+    suspended = 0
     for row in tasks_out:
         st = str(row.get("status") or "").upper()
         if st == "PASS":
             counts["pass"] += 1
         elif st == "FAIL":
             counts["fail"] += 1
+        elif st == "SUSPENDED":
+            suspended += 1
         else:
             counts["error"] += 1
 
-    if counts["error"] > 0:
+    if suspended:
+        counts["suspended"] = suspended
+    if counts["error"] > 0 or suspended:
         exit_code = 2
     elif counts["fail"] > 0:
         exit_code = 1
@@ -962,12 +995,13 @@ async def _execute_suite_run(
                 raise ConfigError(
                     "suite_in_progress",
                     "cannot replace a slot while the suite is in progress "
-                    "or cancel.requested is set",
+                    "or a cancel or preempt request is set",
                     location=str(suite_dir_for(plan)),
                 )
         else:
-            # Allow re-scheduling after a previous cancel.
+            # Allow re-scheduling after a previous cancel or preempt.
             clear_suite_cancel(plan.dataset_root, plan.suite_run_id)
+            clear_suite_preempt(plan.dataset_root, plan.suite_run_id)
         old_summary = load_suite_summary(plan.dataset_root, plan.suite_run_id)
         raw_attempts = old_summary.get("attempts")
         if isinstance(raw_attempts, list) and raw_attempts:
@@ -1012,6 +1046,7 @@ async def _execute_suite_run(
     skipped_n = completed_count
     retried_n = len(retried_keys)
     cancelled = False
+    preempting = False
     new_results: list[dict[str, Any]] = []
     skipped_cancelled: list[dict[str, Any]] = []
 
@@ -1103,20 +1138,37 @@ async def _execute_suite_run(
             for (t, i), ph in inflight_labels.items()
         ]
 
+    def _claim_stopped() -> str | None:
+        """Why the pool must not claim another unit. Named-task preempt does not."""
+        if is_suite_cancel_requested(plan.dataset_root, plan.suite_run_id):
+            return "cancel"
+        if preempt_stops_suite(plan.dataset_root, plan.suite_run_id):
+            return "preempt"
+        return None
+
     async def _worker() -> None:
-        nonlocal completed_count, cancelled, claim_index
+        nonlocal completed_count, cancelled, preempting, claim_index
         while True:
-            if is_suite_cancel_requested(plan.dataset_root, plan.suite_run_id):
+            stopped = _claim_stopped()
+            if stopped == "cancel":
                 cancelled = True
+                return
+            if stopped == "preempt":
+                preempting = True
                 return
             async with claim_lock:
                 if claim_index >= len(todo_list):
                     return
                 tid, idx = todo_list[claim_index]
                 claim_index += 1
-            # Re-check after claim: do not start new work once cancel is requested.
-            if is_suite_cancel_requested(plan.dataset_root, plan.suite_run_id):
-                cancelled = True
+            # Re-check after claim: do not start a unit this stop now covers.
+            stopped = _claim_stopped()
+            targeted = preempt_blocks_task(plan.dataset_root, plan.suite_run_id, tid)
+            if stopped is not None or targeted:
+                if stopped == "preempt" or targeted:
+                    preempting = True
+                else:
+                    cancelled = True
                 async with progress_lock:
                     skipped_cancelled.append(_cancelled_row(tid, idx))
                     completed_count += 1
@@ -1163,8 +1215,21 @@ async def _execute_suite_run(
                 new_results.append(row)
                 inflight_labels.pop((tid, idx), None)
                 completed_count += 1
+                if row.get("phase") == "preempted":
+                    preempting = True
                 cancel_now = is_suite_cancel_requested(plan.dataset_root, plan.suite_run_id)
-                if cancel_now:
+                preempt_now = is_suite_preempt_requested(plan.dataset_root, plan.suite_run_id)
+                if preempt_now or preempting:
+                    preempting = True
+                    if inflight_labels:
+                        st = "preempting"
+                    elif claim_index < len(todo_list) and not preempt_stops_suite(
+                        plan.dataset_root, plan.suite_run_id
+                    ):
+                        st = "running"
+                    else:
+                        st = "preempting"
+                elif cancel_now:
                     cancelled = True
                     st = "cancelling"
                 elif claim_index < len(todo_list) or inflight_labels:
@@ -1312,7 +1377,33 @@ async def _execute_suite_run(
                     if row.get("phase") != "cancelled" and slot_key(row) in retried_keys
                 ]
             )
-    if cancelled or is_suite_cancel_requested(plan.dataset_root, plan.suite_run_id):
+    preempted_rows = [row for row in new_results if row.get("phase") == "preempted"]
+    if preempting or is_suite_preempt_requested(plan.dataset_root, plan.suite_run_id):
+        summary["preempted"] = True
+        summary["status"] = "suspended"
+        summary["suspended_attempts"] = len(preempted_rows)
+        if summary.get("exit_code") == 0 and (skipped_cancelled or preempted_rows):
+            summary["exit_code"] = 2
+        _write_suite_progress(
+            plan,
+            done=completed_count,
+            total=total_units,
+            running=[],
+            status="suspended",
+            skipped=skipped_n,
+            retried=retried_n,
+        )
+        _emit(
+            {
+                "type": "suite_preempted",
+                "suite_run_id": plan.suite_run_id,
+                "done": completed_count,
+                "total": total_units,
+                "suspended_units": len(preempted_rows),
+                "cancelled_units": len(skipped_cancelled),
+            }
+        )
+    elif cancelled or is_suite_cancel_requested(plan.dataset_root, plan.suite_run_id):
         summary["cancelled"] = True
         summary["status"] = "cancelled"
         # Prefer non-zero exit when cancelled with incomplete work.

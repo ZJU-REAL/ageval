@@ -21,6 +21,7 @@ from ageval.attempt.phases import cleanup, environment, evaluate, record, run
 from ageval.evaluation.error_record import error_record_from_exception
 from ageval.evidence.invariants import SealInvariantError, assert_sealed_invariants
 from ageval.evidence.trajectory import TRAJECTORY_FILENAME
+from ageval.runtime.preempt import AttemptSuspended
 
 _ATTEMPT_PHASES = frozenset({"environment", "run", "evaluate", "record"})
 
@@ -71,10 +72,12 @@ async def run_attempt(ctx: AttemptCtx) -> None:
                 await _timed(ctx, evaluate.PHASE, evaluate.run)
         except Exception as exc:  # noqa: BLE001 — evaluate ERROR still seals
             _note_phase_failed(ctx, exc)
+    except AttemptSuspended:
+        ctx.suspended = True
     except Exception as exc:  # noqa: BLE001 — the phase name is the operator's answer
         _note_phase_failed(ctx, exc)
     finally:
-        if should_record:
+        if should_record and not ctx.suspended:
             try:
                 await _timed(ctx, record.PHASE, record.run)
             except Exception as exc:  # noqa: BLE001 — do not hide an earlier phase
@@ -240,7 +243,8 @@ async def _timed(ctx: AttemptCtx, name: str, phase: Phase) -> None:
                 "finished_at": _utc_now(),
             },
         )
-        _log_phase(ctx, name, "completed")
+        if not ctx.suspended:
+            _log_phase(ctx, name, "completed")
 
 
 __all__ = ["AttemptCtx", "run_attempt", "run_regrade"]

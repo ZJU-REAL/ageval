@@ -51,7 +51,7 @@ Stdout JSON (high level):
 - **Suite**: omit `--task` → all members.
 - **`--max-concurrent-tasks`**: speeds wall time only; does not change k or PASS.
 - **`--resume <attempt_id>`**: continue one unsealed Attempt in place. Requires a single `--task` and `k=1`. Keeps that `attempt_id` when `result.json` is absent and the lock digest matches. Exit 2 with no new `result.json` on `attempt_already_settled`, `locked_config_mismatch`, `attempt_still_busy`, or a missing activity header. Completed steps are not run again. Wall time and invocation count already spent stay charged.
-- **`--resume-suite` / `--replace-slot` / `--attempt-index` / `--retry-errors`**: suite resume. Default resume skips finished PASS / FAIL / ERROR and continues a matching unsealed slot in place (same `activity.jsonl` header: suite, task, attempt index, lock digest). A slot with no matching header, or a digest mismatch, starts a new Attempt. Missing Always-k indices are still appended. `--retry-errors` re-runs ERROR slots in the filter without `--replace-slot` (PASS / FAIL stay skipped; each retry is a new Attempt, old row in `previous[]`). `--replace-slot` still replaces one named finished slot. See `ageval run --help`.
+- **`--resume-suite` / `--replace-slot` / `--attempt-index` / `--retry-errors`**: suite resume. Default resume skips finished PASS / FAIL / ERROR and continues a matching unsealed slot in place (same `activity.jsonl` header: suite, task, attempt index, lock digest). A preempted slot is unsealed, so resume attaches that Attempt and does not mint a new one. A slot with no matching header, or a digest mismatch, starts a new Attempt. Missing Always-k indices are still appended. `--retry-errors` re-runs ERROR slots in the filter without `--replace-slot` (PASS / FAIL stay skipped; each retry is a new Attempt, old row in `previous[]`). `--replace-slot` still replaces one named finished slot. See `ageval run --help`.
 - **`--keep-workspace`**: after cleanup, do not delete the environment work root (host residual may still be named `l1-work/` — historical directory name, not an isolation tier). Default off. Docker volumes are still removed. Upload packs never include `l1-work/**`. Does not retain `activity.jsonl` or `checkpoints/`.
 - **`--keep-recovery-state` / `--no-keep-recovery-state`**: after `result.json` and `trajectory.jsonl` both exist, keep or delete `activity.jsonl`, `checkpoints/`, and `replay-input.json` together. Default: delete. Unsealed Attempts always keep that bundle, so `--resume` does not need the flag. Unset falls back to `AGEVAL_KEEP_RECOVERY_STATE` (`1/0`, `true/false`, `yes/no`, `on/off`). Explicit CLI wins. Independent of `--keep-workspace`.
 - **`--keep-vendor-raw`**: after a successful trajectory seal, keep invocation `backend_raw/` and intermediate invocation files (`request.json`, `events.jsonl`, `final-response.json`, `metadata.json`) and `evaluation/evaluator_raw.json`. Default off: those files are dropped; Hub archives skip them even if residuals remain. `task-artifacts/` (the harvest snapshot), `verifier-collect/` (the `evaluation.collect` snapshot), `evaluation/observation.jsonl` (evaluate-phase SDK invoke), and `evaluation/checks.json` (evaluator `checks`) are **kept** either way. Cleanup of the live workspace does not remove `task-artifacts/`. Independent of `--keep-workspace`.
@@ -88,8 +88,10 @@ Stdout JSON (high level):
 
 ## Control surface
 
-- `status` / `cancel` operate on ControlStore records.
-- Suite jobs may take `--dataset` to read `progress.json` or write `cancel.requested`.
+- `status` / `cancel` / `preempt` operate on a suite job. `status` and `cancel` also read ControlStore records.
+- Suite jobs may take `--dataset` to read `progress.json`, write `cancel.requested`, or write `preempt.requested`.
+- `ageval cancel` lets in-flight units finish, then SIGTERMs the stored controller pid when one is recorded.
+- `ageval preempt` does not signal the controller. Targeted in-flight units stop after the current model turn, keep the workspace, and stay unsealed. `--resume-suite` continues those Attempts. Repeat `--task` to name tasks; omit it for the whole suite. Unstarted units get `suite_cancelled` placeholders. Settled PASS and FAIL rows stay.
 - There is no `submit`.
 
 ## Always-k vs campaign

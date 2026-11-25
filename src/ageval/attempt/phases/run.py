@@ -16,6 +16,7 @@ from ageval.attempt.emit import emit
 from ageval.evaluation.error_record import RecordedError, message_from_envelope
 from ageval.model.errors import FATAL_INVOKE_TITLE
 from ageval.plugins.slots import AFTER_RUN, BEFORE_RUN
+from ageval.runtime.preempt import AttemptSuspended, mark_attempt_preempted, preempt_blocks_task
 
 PHASE = "run"
 
@@ -52,6 +53,9 @@ async def run(ctx: AttemptCtx) -> None:
         if outcome.get("error") == _RUN_WORKER_TIMEOUT:
             ctx.note_limit_reached("wall_time_seconds")
         ctx.record_fact("task_run", outcome)
+        if ctx.limit_name() is None and _suspend_for_preempt(ctx, outcome):
+            mark_attempt_preempted(ctx)
+            raise AttemptSuspended()
         if ctx.limit_name() is None:
             _raise_fatal_invoke(ctx)
             if outcome.get("ok") is not True:
@@ -106,6 +110,27 @@ def _raise_fatal_invoke(ctx: AttemptCtx) -> None:
     if isinstance(marker, tuple) and len(marker) == 2 and isinstance(marker[0], str) and marker[0]:
         detail = marker[1] if isinstance(marker[1], str) and marker[1] else marker[0]
         raise RecordedError(FATAL_INVOKE_TITLE, detail)
+
+
+def _suspend_for_preempt(ctx: AttemptCtx, outcome: dict[str, object]) -> bool:
+    """Stop before evaluate when preempt closed this unit cleanly.
+
+    ``task_worker_no_result`` stays an ordinary ERROR. A wall-clock limit still
+    grades. A script failure still seals.
+    """
+    if outcome.get("error") == "task_worker_no_result":
+        return False
+    if outcome.get("preempted") is True:
+        return True
+    suite_run_id = getattr(ctx, "suite_run_id", None)
+    if not isinstance(suite_run_id, str) or not suite_run_id:
+        return False
+    task_id = getattr(getattr(ctx, "lock", None), "task_id", None)
+    if not isinstance(task_id, str) or not task_id:
+        return False
+    if not preempt_blocks_task(ctx.dataset_root, suite_run_id, task_id):
+        return False
+    return outcome.get("ok") is True
 
 
 async def _run_task_entry(ctx: AttemptCtx) -> dict[str, object]:

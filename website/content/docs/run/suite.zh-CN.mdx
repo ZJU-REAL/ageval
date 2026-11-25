@@ -89,15 +89,18 @@ ageval run <harbor-set> --layout harbor --task a --task b --task c --max-tasks 2
 
 同目录还有 `progress.json`（多 unit 进度）；一次运行的 `result.json` 可含 `phase_timing`（environment / run / evaluate / record / cleanup）。
 
-## 进度与取消
+## 进度、取消与抢占
 
 ```bash
 ageval status <suite_run_id> --dataset examples/datasets/minimal-demo
 ageval cancel <suite_run_id> --dataset examples/datasets/minimal-demo
+ageval preempt <suite_run_id> --dataset examples/datasets/minimal-demo
+ageval preempt <suite_run_id> --dataset examples/datasets/minimal-demo --task <task_id>
 ```
 
-- **status**：ControlStore 记录 + 可读 progress  
-- **cancel**：写 `cancel.requested`，不再开新 unit；有 pid 则 SIGTERM  
+- **status**：ControlStore 记录 + 可读 progress
+- **cancel**：写 `cancel.requested`，不再开新 unit；已经在跑的 unit 跑完；有 pid 则 SIGTERM
+- **preempt**：写 `preempt.requested`，不向控制进程发信号。正在跑的 unit 在当前模型回合结束后停下，保留工作区，不写 `result.json`。`--resume-suite` 接着同一个 Attempt 继续。重复 `--task` 只抢占点名的任务；不写则抢占整份 suite。还没开始的 unit 与 cancel 一样留下占位。已经得出的 PASS / FAIL 不变。  
 
 整份 dataset 一次跑完是 **task 轴**（多题）；campaign 是 **同一题扫参数**。Always-k **不是** campaign 矩阵轴。
 

@@ -57,6 +57,33 @@ from ageval.runtime.cancellation import CancellationSignal
 from ageval.runtime.identity import IdentityFactory
 from ageval.runtime.parent_agent import ParentAgentService, resolve_invoke_timeout_seconds
 
+
+@dataclass(frozen=True)
+class SuspendedAttempt:
+    """Unsealed preempt. Not a PASS, FAIL, or ERROR document."""
+
+    evidence_path: str
+    logs: str
+    kind: str
+    status: str = "suspended"
+    score: None = None
+    error: None = None
+    limit: None = None
+    metrics: Mapping[str, Any] | None = None
+    preempted: bool = True
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "status": self.status,
+            "score": self.score,
+            "error": None,
+            "evidence_path": self.evidence_path,
+            "logs": self.logs,
+            "kind": self.kind,
+            "preempted": True,
+        }
+
+
 EXIT_PASS = 0
 EXIT_FAIL = 1
 EXIT_ERROR = 2
@@ -153,7 +180,7 @@ async def run_attempt(
     resume_recorded_invoke_error: bool = False,
     fork: Any = None,
     replay: Any = None,
-) -> tuple[int, AttemptResult]:
+) -> tuple[int, AttemptResult | SuspendedAttempt]:
     """Run one foreground Attempt and return its exit code and result."""
     from ageval.application.composition import build_lock_command
     from ageval.application.fork import (
@@ -388,6 +415,7 @@ async def run_attempt(
         replay_source_id="" if replay is None else str(replay.source_attempt_id),
         replay_source_dir=replay_source,
         replay_evaluate=bool(getattr(replay, "evaluate", False)),
+        suite_run_id=suite_run_id,
     )
     _bind_evaluate_session_target(ctx, agent_service)
     parent = agent_service.service
@@ -408,6 +436,12 @@ async def run_attempt(
                 title="attempt_still_busy",
                 message="the environment is still running this Attempt",
             )
+    if suite_run_id:
+        from ageval.runtime.preempt import preempt_blocks_task
+
+        parent.preempt_requested = lambda: preempt_blocks_task(
+            dataset_root, suite_run_id, lock.task_id
+        )
     parent.on_limit_reached = ctx.note_limit_reached
     parent.on_phase_clock = lambda frozen: (
         ctx.freeze_phase_clock() if frozen else ctx.thaw_phase_clock()
@@ -423,6 +457,14 @@ async def run_attempt(
     finally:
         # The run phase stops it too; this is the guarantee for earlier failures.
         agent_service.stop()
+
+    if ctx.suspended:
+        # Same Attempt, no result.json. Resume attaches through the activity header.
+        return 0, SuspendedAttempt(
+            evidence_path=evidence.locator,
+            logs=evidence.locator,
+            kind=str(host.kind),
+        )
 
     fork_doc = ctx.fork_provenance if isinstance(ctx.fork_provenance, dict) else None
     replay_doc = ctx.replay_provenance if isinstance(ctx.replay_provenance, dict) else None
